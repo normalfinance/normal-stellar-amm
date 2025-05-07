@@ -22,9 +22,9 @@ impl Events {
 //  when liquidity is withdrawn from the pool, and when a trade occurs in the pool.
 // Events structured to ease integration with third party tools.
 pub trait LiquidityPoolEvents {
-    fn deposit_liquidity(&self, tokens: Vec<Address>, amounts: Vec<u128>, share_amount: u128);
+    fn deposit_liquidity(&self, tokens: Vec<Address>, amount: u128, share_amount: u128);
 
-    fn withdraw_liquidity(&self, tokens: Vec<Address>, amounts: Vec<u128>, share_amount: u128);
+    fn withdraw_liquidity(&self, tokens: Vec<Address>, amount: u128, share_amount: u128);
 
     fn trade(
         &self,
@@ -53,7 +53,7 @@ pub trait LiquidityPoolEvents {
 // It provides methods for emitting events when liquidity is deposited into the pool,
 //  when liquidity is withdrawn from the pool, and when a trade occurs in the pool.
 impl LiquidityPoolEvents for Events {
-    fn deposit_liquidity(&self, tokens: Vec<Address>, amounts: Vec<u128>, share_amount: u128) {
+    fn deposit_liquidity(&self, tokens: Vec<Address>, amount: u128, share_amount: u128) {
         // topics
         // [
         //   "deposit_liquidity": Symbol, // event identifier
@@ -74,13 +74,13 @@ impl LiquidityPoolEvents for Events {
         let mut topics: Vec<Val> = Vec::from_array(e, [fn_name.to_val()]);
         let mut body: Vec<Val> = Vec::from_array(e, [(share_amount as i128).into_val(e)]);
         for i in 0..tokens.len() {
-            body.push_back((amounts.get(i).unwrap() as i128).into_val(e));
+            body.push_back((amount as i128).into_val(e));
             topics.push_back(tokens.get(i).unwrap().into_val(e));
         }
         e.events().publish(topics, body);
     }
 
-    fn withdraw_liquidity(&self, tokens: Vec<Address>, amounts: Vec<u128>, share_amount: u128) {
+    fn withdraw_liquidity(&self, tokens: Vec<Address>, amount: u128, share_amount: u128) {
         // topics
         // [
         //   "withdraw_liquidity": Symbol, // event identifier
@@ -101,7 +101,7 @@ impl LiquidityPoolEvents for Events {
         let mut topics: Vec<Val> = Vec::from_array(e, [fn_name.to_val()]);
         let mut body: Vec<Val> = Vec::from_array(e, [(share_amount as i128).into_val(e)]);
         for i in 0..tokens.len() {
-            body.push_back((amounts.get(i).unwrap() as i128).into_val(e));
+            body.push_back((amount as i128).into_val(e));
             topics.push_back(tokens.get(i).unwrap().into_val(e));
         }
         e.events().publish(topics, body);

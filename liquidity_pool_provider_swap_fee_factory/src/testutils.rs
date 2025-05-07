@@ -153,8 +153,7 @@ pub fn create_contract<'a>(
 
 pub mod swap_router {
     soroban_sdk::contractimport!(
-        file =
-            "../target/wasm32v1-none/release/soroban_liquidity_pool_router_contract.wasm"
+        file = "../target/wasm32v1-none/release/soroban_liquidity_pool_router_contract.wasm"
     );
 }
 
@@ -176,17 +175,16 @@ fn install_liq_pool_hash(e: &Env) -> BytesN<32> {
     e.deployer().upload_contract_wasm(WASM)
 }
 
-fn install_stableswap_liq_pool_hash(e: &Env) -> BytesN<32> {
-    soroban_sdk::contractimport!(
-        file = "../target/wasm32v1-none/release/soroban_liquidity_pool_stableswap_contract.wasm"
-    );
-    e.deployer().upload_contract_wasm(WASM)
-}
+// fn install_stableswap_liq_pool_hash(e: &Env) -> BytesN<32> {
+//     soroban_sdk::contractimport!(
+//         file = "../target/wasm32v1-none/release/soroban_liquidity_pool_stableswap_contract.wasm"
+//     );
+//     e.deployer().upload_contract_wasm(WASM)
+// }
 
 fn deploy_plane_contract<'a>(e: &Env) -> Address {
     soroban_sdk::contractimport!(
-        file =
-            "../target/wasm32v1-none/release/soroban_liquidity_pool_plane_contract.wasm"
+        file = "../target/wasm32v1-none/release/soroban_liquidity_pool_plane_contract.wasm"
     );
     Client::new(e, &e.register(WASM, ())).address
 }

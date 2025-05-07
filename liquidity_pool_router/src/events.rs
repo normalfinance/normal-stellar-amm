@@ -21,7 +21,7 @@ pub(crate) trait LiquidityPoolRouterEvents {
         tokens: Vec<Address>,
         user: Address,
         pool_id: Address,
-        amounts: Vec<u128>,
+        amount: u128,
         share_amount: u128,
     );
 
@@ -41,7 +41,7 @@ pub(crate) trait LiquidityPoolRouterEvents {
         tokens: Vec<Address>,
         user: Address,
         pool_id: Address,
-        amounts: Vec<u128>,
+        amount: u128,
         share_amount: u128,
     );
 
@@ -78,12 +78,12 @@ impl LiquidityPoolRouterEvents for Events {
         tokens: Vec<Address>,
         user: Address,
         pool_id: Address,
-        amounts: Vec<u128>,
+        amount: u128,
         share_amount: u128,
     ) {
         self.env().events().publish(
             (Symbol::new(self.env(), "deposit"), tokens, user),
-            (pool_id, amounts.clone(), share_amount),
+            (pool_id, amount, share_amount),
         );
     }
 
@@ -108,12 +108,12 @@ impl LiquidityPoolRouterEvents for Events {
         tokens: Vec<Address>,
         user: Address,
         pool_id: Address,
-        amounts: Vec<u128>,
+        amount: u128,
         share_amount: u128,
     ) {
         self.env().events().publish(
             (Symbol::new(self.env(), "withdraw"), tokens, user),
-            (pool_id, share_amount, amounts),
+            (pool_id, share_amount, amount),
         );
     }
 

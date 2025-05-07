@@ -1,4 +1,4 @@
-use crate::constants::{MAX_POOLS_FOR_PAIR, STABLESWAP_MAX_POOLS};
+use crate::constants::MAX_POOLS_FOR_PAIR;
 use crate::errors::LiquidityPoolRouterError;
 use crate::pool_utils::get_tokens_salt;
 use paste::paste;
@@ -19,7 +19,7 @@ use utils::{
 pub enum LiquidityPoolType {
     MissingPool = 0,
     ConstantProduct = 1,
-    StableSwap = 2,
+    // StableSwap = 2,
     Custom = 3,
 }
 
@@ -51,13 +51,9 @@ enum DataKey {
     TokensSet(u128),
     TokensSetCounter,
     TokensSetPools(BytesN<32>),
+    PoolsVec,
     TokenHash,
-    InitPoolPaymentToken,
-    InitStandardPoolPaymentAmount,
-    InitStablePoolPaymentAmount,
-    InitPoolsPaymentsAddress,
     ConstantPoolHash,
-    StableSwapPoolHash,
     PoolCounter,
     PoolPlane,
     LiquidityCalculator,
@@ -72,6 +68,7 @@ enum DataKey {
 #[derive(Copy, Clone)]
 #[repr(u32)]
 pub enum PoolError {
+    #[doc = "PoolError: PoolAlreadyExists"]
     PoolAlreadyExists = 401,
     PoolNotFound = 404,
 }
@@ -87,32 +84,29 @@ fn get_pools(e: &Env, salt: BytesN<32>) -> Map<BytesN<32>, LiquidityPoolData> {
     }
 }
 
+pub fn get_pools_vec(e: &Env) -> Vec<Address> {
+    let key = DataKey::PoolsVec;
+    match e.storage().persistent().get(&key) {
+        Some(value) => {
+            bump_persistent(e, &key);
+            value
+        }
+        None => Vec::new(e),
+    }
+}
+
+fn put_pools_vec(e: &Env, pools: &Vec<Address>) {
+    let key = DataKey::PoolsVec;
+    e.storage().persistent().set(&key, pools);
+    bump_persistent(e, &key);
+}
+
 generate_instance_storage_getter_and_setter!(
     constant_product_pool_hash,
     DataKey::ConstantPoolHash,
     BytesN<32>
 );
 generate_instance_storage_getter_and_setter!(token_hash, DataKey::TokenHash, BytesN<32>);
-generate_instance_storage_getter_and_setter!(
-    init_pool_payment_token,
-    DataKey::InitPoolPaymentToken,
-    Address
-);
-generate_instance_storage_getter_and_setter!(
-    init_stable_pool_payment_amount,
-    DataKey::InitStablePoolPaymentAmount,
-    u128
-);
-generate_instance_storage_getter_and_setter!(
-    init_standard_pool_payment_amount,
-    DataKey::InitStandardPoolPaymentAmount,
-    u128
-);
-generate_instance_storage_getter_and_setter!(
-    init_pool_payment_address,
-    DataKey::InitPoolsPaymentsAddress,
-    Address
-);
 generate_instance_storage_getter_and_setter_with_default!(
     pool_counter,
     DataKey::PoolCounter,
@@ -190,22 +184,6 @@ pub fn set_reward_tokens_detailed(
     result
 }
 
-// pool hash
-pub fn get_stableswap_pool_hash(e: &Env) -> BytesN<32> {
-    bump_instance(e);
-    match e.storage().instance().get(&DataKey::StableSwapPoolHash) {
-        Some(v) => v,
-        None => panic_with_error!(&e, LiquidityPoolRouterError::StableswapHashMissing),
-    }
-}
-
-pub fn set_stableswap_pool_hash(e: &Env, pool_hash: &BytesN<32>) {
-    bump_instance(e);
-    e.storage()
-        .instance()
-        .set(&DataKey::StableSwapPoolHash, pool_hash)
-}
-
 pub fn get_pools_plain(e: &Env, salt: BytesN<32>) -> Map<BytesN<32>, Address> {
     let pools = get_pools(e, salt);
     let mut pools_plain = Map::new(e);
@@ -246,26 +224,18 @@ pub fn add_pool(
         pool_index,
         LiquidityPoolData {
             pool_type,
-            address: pool_address,
+            address: pool_address.clone(),
         },
     );
-
-    if pool_type == LiquidityPoolType::StableSwap {
-        let mut stableswap_pools_amt = 0;
-        for (_key, value) in pools.iter() {
-            if value.pool_type == LiquidityPoolType::StableSwap {
-                stableswap_pools_amt += 1;
-            }
-        }
-        if stableswap_pools_amt > STABLESWAP_MAX_POOLS {
-            panic_with_error!(&e, LiquidityPoolRouterError::StableswapPoolsOverMax);
-        }
-    }
 
     if pools.len() > MAX_POOLS_FOR_PAIR {
         panic_with_error!(&e, LiquidityPoolRouterError::PoolsOverMax);
     }
     put_pools(e, salt, &pools);
+
+    let mut pools_vec = get_pools_vec(&e);
+    pools_vec.push_back(pool_address.clone());
+    put_pools_vec(&e, &pools_vec);
 }
 
 // remember unique tokens set
@@ -308,4 +278,33 @@ pub fn put_tokens_set(e: &Env, index: u128, tokens: &Vec<Address>) {
     let key = DataKey::TokensSet(index);
     e.storage().persistent().set(&key, tokens);
     bump_persistent(e, &key);
+}
+
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AddressAndAmount {
+    /// Address of the asset
+    pub address: Address,
+    /// The total amount of those tokens in the pool
+    pub amount: i128,
+}
+
+/// This struct is used to return a query result with the total amount of LP tokens and assets in a specific pool.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PoolResponse {
+    /// The asset A in the pool together with asset amounts
+    pub asset_a: AddressAndAmount,
+    /// The asset B in the pool together with asset amounts
+    pub asset_b: AddressAndAmount,
+    /// The total amount of LP tokens currently issued
+    pub asset_lp_share: AddressAndAmount,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LiquidityPoolInfo {
+    pub pool_address: Address,
+    pub pool_response: PoolResponse,
+    pub total_fee_bps: i64,
 }

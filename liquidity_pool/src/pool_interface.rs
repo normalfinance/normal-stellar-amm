@@ -1,4 +1,7 @@
+use sep_40_oracle::Asset;
 use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Val, Vec};
+
+use crate::storage::LiquidityPoolInfo;
 
 pub trait LiquidityPoolCrunch {
     // Initialize pool completely to reduce calculations cost
@@ -7,6 +10,8 @@ pub trait LiquidityPoolCrunch {
         admin: Address,
         privileged_addrs: (Address, Address, Address, Address, Vec<Address>),
         router: Address,
+        oracle: Address,
+        target_asset: Asset,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         fee_fraction: u32,
@@ -25,6 +30,8 @@ pub trait LiquidityPoolTrait {
         admin: Address,
         privileged_addrs: (Address, Address, Address, Address, Vec<Address>),
         router: Address,
+        oracle: Address,
+        target_asset: Asset,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         fee_fraction: u32,
@@ -41,12 +48,7 @@ pub trait LiquidityPoolTrait {
     // Deposits token_a and token_b. Also mints pool shares for the "to" Identifier. The amount minted
     // is determined based on the difference between the reserves stored by this contract, and
     // the actual balance of token_a and token_b for this contract.
-    fn deposit(
-        e: Env,
-        user: Address,
-        desired_amounts: Vec<u128>,
-        min_shares: u128,
-    ) -> (Vec<u128>, u128);
+    fn deposit(e: Env, user: Address, desired_amount: u128, min_shares: u128) -> (u128, u128);
 
     // Perform an exchange between two coins.
     // in_idx: Index value for the coin to send
@@ -87,7 +89,7 @@ pub trait LiquidityPoolTrait {
     // burns all pools share tokens in this contracts, and sends
     // the corresponding amount of tokens to user.
     // Returns amount of tokens withdrawn
-    fn withdraw(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>) -> Vec<u128>;
+    fn withdraw(e: Env, user: Address, share_amount: u128, min_amount: u128) -> u128;
 
     // Get pool reserves
     fn get_reserves(e: Env) -> Vec<u128>;
@@ -96,7 +98,7 @@ pub trait LiquidityPoolTrait {
     fn get_fee_fraction(e: Env) -> u32;
 
     // Get dictionary of basic pool information: type, fee, special parameters if any.
-    fn get_info(e: Env) -> Map<Symbol, Val>;
+    fn get_info(e: Env) -> LiquidityPoolInfo;
 }
 
 pub trait AdminInterfaceTrait {

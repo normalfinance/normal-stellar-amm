@@ -6,7 +6,6 @@ version = 4
 name = "access_control"
 version = "1.5.0"
 dependencies = [
- "liquidity-pool-validation-errors",
  "soroban-sdk",
  "utils",
 ]
@@ -746,20 +745,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ec2a862134d2a7d32d7983ddcdd1c4923530833c9f2ea1a44fc5fa473989058"
 
 [[package]]
-name = "liquidity-pool-events"
-version = "1.5.0"
-dependencies = [
- "soroban-sdk",
-]
-
-[[package]]
-name = "liquidity-pool-validation-errors"
-version = "1.5.0"
-dependencies = [
- "soroban-sdk",
-]
-
-[[package]]
 name = "locker-feed"
 version = "1.5.0"
 dependencies = [
@@ -984,6 +969,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "836fa6a3e1e547f9a2c4040802ec865b5d85f4014efe00555d7090a3dcaa1090"
 
 [[package]]
+name = "sep-40-oracle"
+version = "1.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c74effc5087a6b91b28ca5d429efed3eccf2d70cb9fd1cde544a7faf0723a63"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "serde"
 version = "1.0.192"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1192,9 +1186,9 @@ dependencies = [
 
 [[package]]
 name = "soroban-ledger-snapshot"
-version = "22.0.6"
+version = "22.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08e0570df0224a1742567d418d2f2f926dc8d3580cf568454b7c0990bd003845"
+checksum = "80bbe59497cb50e81861187e6bd2a2c805df253573d44ed56e7d373f79530758"
 dependencies = [
  "serde",
  "serde_json",
@@ -1209,10 +1203,9 @@ name = "soroban-liquidity-pool-contract"
 version = "1.5.0"
 dependencies = [
  "access_control",
- "liquidity-pool-events",
- "liquidity-pool-validation-errors",
  "paste",
  "rewards",
+ "sep-40-oracle",
  "soroban-fixed-point-math",
  "soroban-sdk",
  "token_share",
@@ -1264,25 +1257,9 @@ name = "soroban-liquidity-pool-router-contract"
 version = "1.5.0"
 dependencies = [
  "access_control",
- "liquidity-pool-validation-errors",
  "paste",
  "rewards",
- "soroban-sdk",
- "token_share",
- "upgrade",
- "utils",
-]
-
-[[package]]
-name = "soroban-liquidity-pool-stableswap-contract"
-version = "1.5.0"
-dependencies = [
- "access_control",
- "liquidity-pool-events",
- "liquidity-pool-validation-errors",
- "paste",
- "rewards",
- "soroban-fixed-point-math",
+ "sep-40-oracle",
  "soroban-sdk",
  "token_share",
  "upgrade",
@@ -1291,9 +1268,9 @@ dependencies = [
 
 [[package]]
 name = "soroban-sdk"
-version = "22.0.6"
+version = "22.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a0ea22f82d9709e222fedc1cf777cf80b0fef9d62e78ce00134bde9f94865c8"
+checksum = "c85edd55eb09aa5dd7ba5ab595d2be7ac3f453e90e2f26d704ff26c130f2926f"
 dependencies = [
  "arbitrary",
  "bytes-lit",
@@ -1313,9 +1290,9 @@ dependencies = [
 
 [[package]]
 name = "soroban-sdk-macros"
-version = "22.0.6"
+version = "22.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0160d40380e20b8618c449d457f06a40e16dd2fc5d92422b379c3d59519f9da5"
+checksum = "a141230aa65006d4b3eeee9d0589172d734a2abfbe15b84670e38e76e200b370"
 dependencies = [
  "crate-git-revision",
  "darling",
@@ -1333,9 +1310,9 @@ dependencies = [
 
 [[package]]
 name = "soroban-spec"
-version = "22.0.6"
+version = "22.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05a2d6d7898703dd96c48fe865ebbd42bbdb6637007cefe27494e579c954faf9"
+checksum = "b54326e9516b33be99c701b37242b27efb8e66cc1f1eff994b9d9a013a4be136"
 dependencies = [
  "base64 0.13.1",
  "stellar-xdr",
@@ -1345,9 +1322,9 @@ dependencies = [
 
 [[package]]
 name = "soroban-spec-rust"
-version = "22.0.6"
+version = "22.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1439c0446625e545bb08a848e0fee89d3f9afb568375263342e27d00b8548c8f"
+checksum = "f009cab4dfd653bc94a06c5022f1ca9d30e198b0e451f84cf307231563d11de2"
 dependencies = [
  "prettyplease",
  "proc-macro2",

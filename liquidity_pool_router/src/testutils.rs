@@ -40,11 +40,11 @@ pub fn install_liq_pool_hash(e: &Env) -> BytesN<32> {
     e.deployer().upload_contract_wasm(standard_pool::WASM)
 }
 
-pub mod stableswap_pool {
-    soroban_sdk::contractimport!(
-        file = "../target/wasm32v1-none/release/soroban_liquidity_pool_stableswap_contract.wasm"
-    );
-}
+// pub mod stableswap_pool {
+//     soroban_sdk::contractimport!(
+//         file = "../target/wasm32v1-none/release/soroban_liquidity_pool_stableswap_contract.wasm"
+//     );
+// }
 
 pub fn install_stableswap_liq_pool_hash(e: &Env) -> BytesN<32> {
     e.deployer().upload_contract_wasm(stableswap_pool::WASM)
@@ -52,8 +52,7 @@ pub fn install_stableswap_liq_pool_hash(e: &Env) -> BytesN<32> {
 
 mod pool_plane {
     soroban_sdk::contractimport!(
-        file =
-            "../target/wasm32v1-none/release/soroban_liquidity_pool_plane_contract.wasm"
+        file = "../target/wasm32v1-none/release/soroban_liquidity_pool_plane_contract.wasm"
     );
 }
 

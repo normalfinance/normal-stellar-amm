@@ -4,6 +4,7 @@ use soroban_sdk::contracterror;
 #[derive(Copy, Clone)]
 #[repr(u32)]
 pub enum LiquidityPoolRouterError {
+    #[doc = "LiquidityPoolRouterError: PoolNotFound"]
     PoolNotFound = 301,
     BadFee = 302,
     StableswapHashMissing = 303,

@@ -1,5 +1,5 @@
 use crate::storage::{get_token_a, get_token_b};
-use soroban_sdk::token::TokenClient as Client;
+use soroban_sdk::token::{StellarAssetClient as AssetClient, TokenClient as Client};
 use soroban_sdk::{xdr::ToXdr, Address, Bytes, BytesN, Env};
 
 pub fn create_contract(
@@ -27,4 +27,12 @@ pub fn transfer_a(e: &Env, to: &Address, amount: u128) {
 
 pub fn transfer_b(e: &Env, to: &Address, amount: u128) {
     transfer(e, get_token_b(e), to, amount as i128);
+}
+
+pub fn mint_a(e: &Env, to: &Address, amount: u128) {
+    AssetClient::new(e, &get_token_a(e)).mint(to, &(amount as i128));
+}
+
+pub fn burn_a(e: &Env, from: &Address, amount: u128) {
+    Client::new(e, &get_token_a(e)).burn(from, &(amount as i128));
 }
