@@ -18,7 +18,7 @@ fn create_contract<'a>(e: &Env) -> LiquidityPoolLiquidityCalculatorClient<'a> {
 mod pool_plane {
     soroban_sdk::contractimport!(
         file =
-            "../target/wasm32-unknown-unknown/release/soroban_liquidity_pool_plane_contract.wasm"
+            "../target/wasm32v1-none/release/soroban_liquidity_pool_plane_contract.wasm"
     );
 }
 
