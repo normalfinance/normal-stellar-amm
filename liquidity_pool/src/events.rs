@@ -1,6 +1,6 @@
 #![no_std]
 
-use soroban_sdk::{Address, Env, IntoVal, Symbol, Val, Vec};
+use soroban_sdk::{ Address, Env, IntoVal, Symbol, Val, Vec };
 
 #[derive(Clone)]
 pub struct Events(Env);
@@ -22,9 +22,9 @@ impl Events {
 //  when liquidity is withdrawn from the pool, and when a trade occurs in the pool.
 // Events structured to ease integration with third party tools.
 pub trait LiquidityPoolEvents {
-    fn deposit_liquidity(&self, tokens: Vec<Address>, amount: u128, share_amount: u128);
+    fn deposit_liquidity(&self, token: Address, amount: u128, share_amount: u128);
 
-    fn withdraw_liquidity(&self, tokens: Vec<Address>, amount: u128, share_amount: u128);
+    fn withdraw_liquidity(&self, token: Address, amount: u128, share_amount: u128);
 
     fn trade(
         &self,
@@ -33,7 +33,7 @@ pub trait LiquidityPoolEvents {
         token_out: Address,
         in_amount: u128,
         out_amount: u128,
-        fee_amount: u128,
+        fee_amount: u128
     );
 
     fn kill_deposit(&self);
@@ -53,58 +53,42 @@ pub trait LiquidityPoolEvents {
 // It provides methods for emitting events when liquidity is deposited into the pool,
 //  when liquidity is withdrawn from the pool, and when a trade occurs in the pool.
 impl LiquidityPoolEvents for Events {
-    fn deposit_liquidity(&self, tokens: Vec<Address>, amount: u128, share_amount: u128) {
+    fn deposit_liquidity(&self, token: Address, amount: u128, share_amount: u128) {
         // topics
         // [
         //   "deposit_liquidity": Symbol, // event identifier
-        //   assetA: Address,   // contract addresses identifying asset deposited to the pool
-        //   assetB: Address,   // contract addresses identifying asset deposited to the pool (optional)
-        //   assetC: Address    // contract addresses identifying asset deposited to the pool (optional)
+        //   token: Address,   // contract addresses identifying asset deposited to the pool
         // ]
         //
         // body
         // [
-        //   stake_amount: i128, // amount of pool tokens received from the pool
-        //   amountA: i128,      // amount of tokens deposited to the pool for assetA
-        //   amountB: i128       // amount of tokens deposited to the pool for assetB (optional)
-        //   amountC: i128       // amount of tokens deposited to the pool for assetC (optional)
+        //   share_amount: i128, // amount of pool tokens received from the pool
+        //   amount: i128,      // amount of tokens deposited to the pool for assetA
         // ]
         let e = self.env();
-        let fn_name = Symbol::new(e, "deposit_liquidity");
-        let mut topics: Vec<Val> = Vec::from_array(e, [fn_name.to_val()]);
-        let mut body: Vec<Val> = Vec::from_array(e, [(share_amount as i128).into_val(e)]);
-        for i in 0..tokens.len() {
-            body.push_back((amount as i128).into_val(e));
-            topics.push_back(tokens.get(i).unwrap().into_val(e));
-        }
-        e.events().publish(topics, body);
+        e.events().publish(
+            (Symbol::new(e, "deposit_liquidity"), token),
+            (share_amount as i128, amount as i128)
+        );
     }
 
-    fn withdraw_liquidity(&self, tokens: Vec<Address>, amount: u128, share_amount: u128) {
+    fn withdraw_liquidity(&self, token: Address, amount: u128, share_amount: u128) {
         // topics
         // [
         //   "withdraw_liquidity": Symbol, // event identifier
-        //   assetA: Address,   // contract addresses identifying asset withdrawn from the pool
-        //   assetB: Address,   // contract addresses identifying asset withdrawn from the pool (optional)
-        //   assetC: Address    // contract addresses identifying asset withdrawn from the pool (optional)
+        //   asset: Address,   // contract addresses identifying asset withdrawn from the pool
         // ]
         //
         // body
         // [
-        //   stake_amount: i128, // amount of pool tokens sent to the pool
-        //   amountA: i128,      // amount of tokens withdrawn from the pool for assetA
-        //   amountB: i128       // amount of tokens withdrawn from the pool for assetB (optional)
-        //   amountC: i128       // amount of tokens withdrawn from the pool for assetC (optional)
+        //   share_amount: i128, // amount of pool tokens sent to the pool
+        //   amount: i128,      // amount of tokens withdrawn from the pool for assetA
         // ]
         let e = self.env();
-        let fn_name = Symbol::new(e, "withdraw_liquidity");
-        let mut topics: Vec<Val> = Vec::from_array(e, [fn_name.to_val()]);
-        let mut body: Vec<Val> = Vec::from_array(e, [(share_amount as i128).into_val(e)]);
-        for i in 0..tokens.len() {
-            body.push_back((amount as i128).into_val(e));
-            topics.push_back(tokens.get(i).unwrap().into_val(e));
-        }
-        e.events().publish(topics, body);
+        e.events().publish(
+            (Symbol::new(e, "withdraw_liquidity"), token),
+            (share_amount as i128, amount as i128)
+        );
     }
 
     fn trade(
@@ -114,7 +98,7 @@ impl LiquidityPoolEvents for Events {
         token_out: Address,
         in_amount: u128,
         out_amount: u128,
-        fee_amount: u128,
+        fee_amount: u128
     ) {
         // topics
         // [
@@ -133,7 +117,7 @@ impl LiquidityPoolEvents for Events {
         let e = self.env();
         e.events().publish(
             (Symbol::new(e, "trade"), token_in, token_out, user),
-            (in_amount as i128, out_amount as i128, fee_amount as i128),
+            (in_amount as i128, out_amount as i128, fee_amount as i128)
         );
     }
 
