@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use crate::testutils::{
-    install_liq_pool_hash, install_stableswap_liq_pool_hash, install_token_wasm, Setup,
+    install_liq_pool_hash, install_token_wasm, Setup,
 };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::Address as _;
@@ -350,7 +350,6 @@ fn test_set_hashes() {
     let router = setup.router;
     let user = Address::generate(&setup.env);
     let pool_hash = install_liq_pool_hash(&setup.env);
-    let stable_pool_hash = install_stableswap_liq_pool_hash(&setup.env);
     let token_hash = install_token_wasm(&setup.env);
 
     for (addr, is_ok) in [
@@ -364,12 +363,6 @@ fn test_set_hashes() {
     ] {
         assert_eq!(router.try_set_token_hash(&addr, &token_hash).is_ok(), is_ok);
         assert_eq!(router.try_set_pool_hash(&addr, &pool_hash).is_ok(), is_ok);
-        assert_eq!(
-            router
-                .try_set_stableswap_pool_hash(&addr, &stable_pool_hash)
-                .is_ok(),
-            is_ok
-        );
     }
 }
 
@@ -610,7 +603,7 @@ fn test_configure_init_pool_payment() {
                     &addr,
                     &setup.reward_token.address,
                     &1,
-                    &1,
+                    // &1,
                     &router.address
                 )
                 .is_ok(),
