@@ -892,6 +892,14 @@ impl AdminInterfaceTrait for LiquidityPool {
         result
     }
 
+    fn rebalance(e: Env, admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, &Role::Admin);
+
+        pool::rebalance_pool(&e, false);
+    }
+
     // Stops the pool deposits instantly.
     //
     // # Arguments

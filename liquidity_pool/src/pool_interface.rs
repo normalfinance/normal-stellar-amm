@@ -115,6 +115,9 @@ pub trait AdminInterfaceTrait {
     // Get map of privileged roles
     fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>>;
 
+    //
+    fn rebalance(e: Env, admin: Address);
+
     // Stop pool instantly
     fn kill_deposit(e: Env, admin: Address);
     fn kill_withdraw(e: Env, admin: Address);
