@@ -20,6 +20,7 @@ use crate::storage::{
     get_is_killed_claim,
     get_is_killed_deposit,
     get_is_killed_swap,
+    get_is_killed_withdraw,
     get_plane,
     get_reserve_a,
     get_reserve_b,
@@ -998,6 +999,11 @@ impl AdminInterfaceTrait for LiquidityPool {
     // Get deposit killswitch status.
     fn get_is_killed_deposit(e: Env) -> bool {
         get_is_killed_deposit(&e)
+    }
+
+    // Get withdraw killswitch status.
+    fn get_is_killed_withdraw(e: Env) -> bool {
+        get_is_killed_withdraw(&e)
     }
 
     // Get swap killswitch status.
