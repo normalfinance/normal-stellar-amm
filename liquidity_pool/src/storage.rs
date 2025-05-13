@@ -22,6 +22,7 @@ enum DataKey {
     TargetAsset,
     IsKilledSwap,
     IsKilledDeposit,
+    IsKilledWithdraw,
     IsKilledClaim,
 
     TokenFutureWASM,
@@ -36,6 +37,12 @@ generate_instance_storage_getter_and_setter_with_default!(
 generate_instance_storage_getter_and_setter_with_default!(
     is_killed_deposit,
     DataKey::IsKilledDeposit,
+    bool,
+    false
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    is_killed_withdraw,
+    DataKey::IsKilledWithdraw,
     bool,
     false
 );

@@ -40,6 +40,10 @@ pub trait LiquidityPoolEvents {
 
     fn unkill_deposit(&self);
 
+    fn kill_withdraw(&self);
+
+    fn unkill_withdraw(&self);
+
     fn kill_swap(&self);
 
     fn unkill_swap(&self);
@@ -131,6 +135,18 @@ impl LiquidityPoolEvents for Events {
         self.env()
             .events()
             .publish((Symbol::new(self.env(), "unkill_deposit"),), ())
+    }
+
+    fn kill_withdraw(&self) {
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "kill_withdraw"),), ())
+    }
+
+    fn unkill_withdraw(&self) {
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "unkill_withdraw"),), ())
     }
 
     fn kill_swap(&self) {
