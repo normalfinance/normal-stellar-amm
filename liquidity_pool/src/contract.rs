@@ -36,6 +36,7 @@ use crate::storage::{
     set_is_killed_claim,
     set_is_killed_deposit,
     set_is_killed_swap,
+    set_is_killed_withdraw,
     set_oracle,
     set_plane,
     set_router,
@@ -903,6 +904,19 @@ impl AdminInterfaceTrait for LiquidityPool {
         PoolEvents::new(&e).kill_deposit();
     }
 
+    // Stops the pool withdrawals instantly.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn kill_withdraw(e: Env, admin: Address) {
+        admin.require_auth();
+        require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
+
+        set_is_killed_withdraw(&e, &true);
+        PoolEvents::new(&e).kill_deposit();
+    }
+
     // Stops the pool swaps instantly.
     //
     // # Arguments
@@ -939,6 +953,19 @@ impl AdminInterfaceTrait for LiquidityPool {
         require_pause_admin_or_owner(&e, &admin);
 
         set_is_killed_deposit(&e, &false);
+        PoolEvents::new(&e).unkill_deposit();
+    }
+
+    // Resumes the pool withdrawals.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn unkill_withdraw(e: Env, admin: Address) {
+        admin.require_auth();
+        require_pause_admin_or_owner(&e, &admin);
+
+        set_is_killed_withdraw(&e, &false);
         PoolEvents::new(&e).unkill_deposit();
     }
 
