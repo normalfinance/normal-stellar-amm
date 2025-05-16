@@ -3,11 +3,7 @@ extern crate std;
 use crate::plane::{ pool_plane, PoolPlaneClient };
 use crate::LiquidityPoolClient;
 use access_control::constants::ADMIN_ACTIONS_DELAY;
-use sep_40_oracle::testutils::{
-    Asset as MockAsset,
-    MockPriceOracleClient,
-    MockPriceOracleWASM,
-};
+use sep_40_oracle::testutils::{ Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM };
 use sep_40_oracle::Asset;
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient,
@@ -275,23 +271,6 @@ impl Setup<'_> {
                 &reward_tps
             );
         }
-    }
-
-    pub(crate) fn update_base_oracle_price(&self, factor: i128) {
-        let base_oracle_client = MockPriceOracleClient::new(&self.env, &self.oracles.base_oracle);
-        let new_price = self.base_oracle_price * (1 + factor);
-        base_oracle_client.set_price(
-            &Vec::from_array(&self.env, [new_price]),
-            &self.env.ledger().timestamp()
-        );
-    }
-
-    pub(crate) fn update_quote_base_oracle_price(&self, price: i128) {
-        let quote_oracle_client = MockPriceOracleClient::new(&self.env, &self.oracles.quote_oracle);
-        quote_oracle_client.set_price(
-            &Vec::from_array(&self.env, [price]),
-            &self.env.ledger().timestamp()
-        );
     }
 }
 
