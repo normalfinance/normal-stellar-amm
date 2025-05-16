@@ -5,6 +5,7 @@ members = [
     "utils",
     "access_control",
     "token_share",
+    "token_synthetic",
     "token",
     "rewards",
     "liquidity_pool",
@@ -31,6 +32,7 @@ paste = { version = "1.0.15" }
 utils = { path = "utils" }
 access_control = { path = "access_control" }
 token_share = { path = "token_share" }
+token_synthetic = { path = "token_synthetic" }
 rewards = { path = "rewards" }
 upgrade = { path = "upgrade"}
 sep-40-oracle = "1.2.2"

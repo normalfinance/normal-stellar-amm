@@ -7,18 +7,19 @@ use crate::pool_interface::{
 };
 use crate::pool_utils::{
     assert_tokens_sorted, deploy_standard_pool, get_standard_pool_salt, get_tokens_salt,
-    get_total_liquidity, validate_tokens_contracts,
+    get_total_liquidity,
 };
 use crate::rewards::get_rewards_manager;
 use crate::router_interface::AdminInterface;
 use crate::storage::{
     get_liquidity_calculator, get_pool, get_pool_plane, get_pools_plain, get_pools_vec,
-    get_reward_tokens, get_reward_tokens_detailed, get_rewards_config, get_tokens_set,
-    get_tokens_set_count, has_pool, remove_pool, set_constant_product_pool_hash,
-    set_liquidity_calculator, set_pool_plane, set_reward_tokens, set_reward_tokens_detailed,
-    set_rewards_config, set_token_hash, GlobalRewardsConfig, LiquidityPoolInfo,
-    LiquidityPoolRewardInfo,
+    get_reward_tokens, get_reward_tokens_detailed, get_rewards_config, get_token_hash,
+    get_tokens_set, get_tokens_set_count, has_pool, remove_pool, set_constant_product_pool_hash,
+    set_liquidity_calculator, set_oracle_guard_rails, set_pool_plane, set_reward_tokens,
+    set_reward_tokens_detailed, set_rewards_config, set_token_hash, GlobalRewardsConfig,
+    LiquidityPoolRewardInfo, OracleGuardRails,
 };
+use crate::token::{create_contract, create_synthetic_token_contract};
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
 use access_control::errors::AccessControlError;
@@ -33,12 +34,13 @@ use rewards::storage::{BoostFeedStorageTrait, BoostTokenStorageTrait, RewardToke
 use sep_40_oracle::Asset;
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
-    contract, contractimpl, panic_with_error, symbol_short, Address, BytesN, Env, IntoVal, Map,
-    Symbol, Val, Vec, U256,
+    contract, contractimpl, panic_with_error, symbol_short, vec, Address, BytesN, Env, IntoVal,
+    Map, String, Symbol, Val, Vec, U256,
 };
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
+use utils::storage::{LiquidityPoolInfo, OraclePair};
 
 #[contract]
 pub struct LiquidityPoolRouter;
@@ -167,7 +169,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         tokens: Vec<Address>,
         pool_index: BytesN<32>,
         desired_amount: u128,
-        min_shares: u128,
     ) -> (u128, u128) {
         user.require_auth();
         assert_tokens_sorted(&e, &tokens);
@@ -177,14 +178,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         let (amount, share_amount): (u128, u128) = e.invoke_contract(
             &pool_id,
             &symbol_short!("deposit"),
-            Vec::from_array(
-                &e,
-                [
-                    user.clone().into_val(&e),
-                    desired_amount.into_val(&e),
-                    min_shares.into_val(&e),
-                ],
-            ),
+            Vec::from_array(&e, [user.clone().into_val(&e), desired_amount.into_val(&e)]),
         );
         Events::new(&e).deposit(tokens, user, pool_id, amount, share_amount);
         (amount, share_amount)
@@ -312,7 +306,6 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         tokens: Vec<Address>,
         pool_index: BytesN<32>,
         share_amount: u128,
-        min_amount: u128,
     ) -> u128 {
         user.require_auth();
         assert_tokens_sorted(&e, &tokens);
@@ -322,14 +315,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         let amount: u128 = e.invoke_contract(
             &pool_id,
             &symbol_short!("withdraw"),
-            Vec::from_array(
-                &e,
-                [
-                    user.clone().into_val(&e),
-                    share_amount.into_val(&e),
-                    min_amount.into_val(&e),
-                ],
-            ),
+            Vec::from_array(&e, [user.clone().into_val(&e), share_amount.into_val(&e)]),
         );
 
         Events::new(&e).withdraw(tokens, user, pool_id, amount, share_amount);
@@ -595,6 +581,12 @@ impl AdminInterface for LiquidityPoolRouter {
         let rewards_storage = get_rewards_manager(&e).storage();
         rewards_storage.put_reward_boost_token(reward_boost_token);
         rewards_storage.put_reward_boost_feed(reward_boost_feed);
+    }
+
+    fn set_oracle_guardrails(e: Env, admin: Address, oracle_guard_rails: OracleGuardRails) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        set_oracle_guard_rails(&e, &oracle_guard_rails);
     }
 }
 
@@ -1088,15 +1080,14 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
     fn init_standard_pool(
         e: Env,
         user: Address,
-        tokens: Vec<Address>,
-        // quote_token: Address,
-        oracle: Address,
+        oracles: OraclePair,
         target_asset: Asset,
+        tokens: Vec<Address>,
+        lp_token_name: String,
+        lp_token_symbol: String,
         fee_fraction: u32,
     ) -> (BytesN<32>, Address) {
         user.require_auth();
-        validate_tokens_contracts(&e, &tokens);
-        assert_tokens_sorted(&e, &tokens);
 
         if !CONSTANT_PRODUCT_FEE_AVAILABLE.contains(&fee_fraction) {
             panic_with_error!(&e, LiquidityPoolRouterError::BadFee);
@@ -1108,7 +1099,15 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
 
         match pools.get(pool_index.clone()) {
             Some(pool_address) => (pool_index, pool_address),
-            None => deploy_standard_pool(&e, &tokens, &oracle, &target_asset, fee_fraction),
+            None => deploy_standard_pool(
+                &e,
+                &tokens,
+                &oracles,
+                &target_asset,
+                &lp_token_name,
+                &lp_token_symbol,
+                fee_fraction,
+            ),
         }
     }
 

@@ -1,7 +1,6 @@
 use sep_40_oracle::Asset;
-use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Val, Vec, U256};
-
-use crate::storage::LiquidityPoolInfo;
+use soroban_sdk::{Address, BytesN, Env, Map, String, Symbol, Val, Vec, U256};
+use utils::storage::{LiquidityPoolInfo, OraclePair};
 
 pub trait LiquidityPoolInterfaceTrait {
     // Get symbolic explanation of pool type.
@@ -30,8 +29,7 @@ pub trait LiquidityPoolInterfaceTrait {
         user: Address,
         tokens: Vec<Address>,
         pool_index: BytesN<32>,
-        desired_amount: u128,
-        min_shares: u128,
+        token_b_amount: u128,
     ) -> (u128, u128);
 
     // Perform an exchange between two coins.
@@ -63,7 +61,6 @@ pub trait LiquidityPoolInterfaceTrait {
 
     // Withdraw coins from the pool.
     // share_amount: Quantity of LP tokens to burn in the withdrawal
-    // min_amounts: Minimum amounts of underlying coins to receive
     // Returns a list of the amounts for each coin that was withdrawn.
     fn withdraw(
         e: Env,
@@ -71,7 +68,6 @@ pub trait LiquidityPoolInterfaceTrait {
         tokens: Vec<Address>,
         pool_index: BytesN<32>,
         share_amount: u128,
-        min_amount: u128,
     ) -> u128;
 
     fn get_liquidity(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> U256;
@@ -209,9 +205,11 @@ pub trait PoolsManagementTrait {
     fn init_standard_pool(
         e: Env,
         user: Address,
-        tokens: Vec<Address>,
-        oracle: Address,
+        oracles: OraclePair,
         target_asset: Asset,
+        tokens: Vec<Address>,
+        lp_token_name: String,
+        lp_token_symbol: String,
         fee_fraction: u32,
     ) -> (BytesN<32>, Address);
 

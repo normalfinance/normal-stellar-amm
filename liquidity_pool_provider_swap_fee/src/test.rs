@@ -72,7 +72,7 @@ fn test_strict_send_fee_over_max() {
 
     let user = Address::generate(&setup.env);
     setup.token_a_admin_client.mint(&user, &1_0000000);
-    setup.contract.swap_chained(
+    setup.contract.swap(
         &user,
         &Vec::from_array(
             &setup.env,

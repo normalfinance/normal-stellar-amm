@@ -11,10 +11,13 @@ use access_control::management::{MultipleAddressesManagementTrait, SingleAddress
 use access_control::role::Role;
 use rewards::storage::{BoostFeedStorageTrait, BoostTokenStorageTrait, RewardTokenStorageTrait};
 use sep_40_oracle::Asset;
-use soroban_sdk::token::Client as SorobanTokenClient;
+use soroban_sdk::{panic_with_error, String};
 use soroban_sdk::{
-    panic_with_error, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Map, Symbol,
-    Val, Vec, U256,
+    symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Map, Symbol, Val, Vec, U256,
+};
+use utils::storage::{
+    InitializeAllParams, InitializeParams, OraclePair, PrivilegedAddresses, RewardConfig,
+    TokenInitInfo,
 };
 
 pub fn get_standard_pool_salt(e: &Env, fee_fraction: &u32) -> BytesN<32> {
@@ -44,8 +47,10 @@ pub fn merge_salt(e: &Env, left: BytesN<32>, right: BytesN<32>) -> BytesN<32> {
 pub fn deploy_standard_pool(
     e: &Env,
     tokens: &Vec<Address>,
-    oracle: &Address,
+    oracles: &OraclePair,
     target_asset: &Asset,
+    lp_token_name: &String,
+    lp_token_symbol: &String,
     fee_fraction: u32,
 ) -> (BytesN<32>, Address) {
     let tokens_salt = get_tokens_salt(e, tokens);
@@ -63,9 +68,11 @@ pub fn deploy_standard_pool(
     init_standard_pool(
         e,
         tokens,
-        oracle,
+        oracles,
         target_asset,
         &pool_contract_id,
+        lp_token_name,
+        lp_token_symbol,
         fee_fraction,
     );
 
@@ -92,9 +99,11 @@ pub fn deploy_standard_pool(
 fn init_standard_pool(
     e: &Env,
     tokens: &Vec<Address>,
-    oracle: &Address,
+    oracles: &OraclePair,
     target_asset: &Asset,
     pool_contract_id: &Address,
+    lp_token_name: &String,
+    lp_token_symbol: &String,
     fee_fraction: u32,
 ) {
     let token_wasm_hash = get_token_hash(e);
@@ -122,36 +131,39 @@ fn init_standard_pool(
 
     let plane = get_pool_plane(e);
 
+    let params = InitializeAllParams {
+        base: InitializeParams {
+            admin,
+            privileged_addrs: PrivilegedAddresses {
+                emergency_admin,
+                rewards_admin,
+                operations_admin,
+                pause_admin,
+                emergency_pause_admins,
+            },
+            router: e.current_contract_address(),
+            oracles: oracles.clone(),
+            target_asset: target_asset.clone(),
+            tokens: tokens.clone(),
+            lp_token_info: TokenInitInfo {
+                token_wasm_hash: token_wasm_hash.into_val(e),
+                name: lp_token_name.clone(),
+                symbol: lp_token_symbol.clone(),
+            },
+            fee_fraction,
+        },
+        reward_config: RewardConfig {
+            reward_token,
+            reward_boost_token,
+            reward_boost_feed,
+        },
+        plane,
+    };
+
     e.invoke_contract::<()>(
         pool_contract_id,
         &Symbol::new(e, "initialize_all"),
-        Vec::from_array(
-            e,
-            [
-                admin.into_val(e),
-                (
-                    emergency_admin,
-                    rewards_admin,
-                    operations_admin,
-                    pause_admin,
-                    emergency_pause_admins,
-                )
-                    .into_val(e),
-                e.current_contract_address().to_val(),
-                oracle.clone().into_val(e),
-                target_asset.clone().into_val(e),
-                token_wasm_hash.into_val(e),
-                tokens.clone().into_val(e),
-                fee_fraction.into_val(e),
-                (
-                    reward_token.to_val(),
-                    reward_boost_token.to_val(),
-                    reward_boost_feed.to_val(),
-                )
-                    .into_val(e),
-                plane.into_val(e),
-            ],
-        ),
+        Vec::from_array(e, [params.into_val(e)]),
     );
 }
 
@@ -159,7 +171,6 @@ pub fn assert_tokens_sorted(e: &Env, tokens: &Vec<Address>) {
     for i in 0..tokens.len() - 1 {
         let left = tokens.get_unchecked(i);
         let right = tokens.get_unchecked(i + 1);
-        // FIXME: we need the synthetic asset to always be token_a, possibly by deploying it within the pool.initialize function
         // if left > right {
         //     panic_with_error!(e, LiquidityPoolRouterError::TokensNotSorted);
         // }
@@ -175,13 +186,6 @@ pub fn get_tokens_salt(e: &Env, tokens: &Vec<Address>) -> BytesN<32> {
         salt.append(&token.to_xdr(e));
     }
     e.crypto().sha256(&salt).to_bytes()
-}
-
-pub fn validate_tokens_contracts(e: &Env, tokens: &Vec<Address>) {
-    // call token contract to check if token exists & it's alive
-    for token in tokens.iter() {
-        SorobanTokenClient::new(e, &token).balance(&e.current_contract_address());
-    }
 }
 
 pub fn get_total_liquidity(

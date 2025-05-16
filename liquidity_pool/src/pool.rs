@@ -1,126 +1,93 @@
 use crate::constants::PRICE_PRECISION;
-use crate::storage::{
-    get_fee_fraction,
-    get_oracle,
-    get_reserve_a,
-    get_reserve_b,
-    get_target_asset,
-    put_reserve_a,
-};
-use crate::token::{ burn_a, mint_a };
-use crate::{ constants::FEE_MULTIPLIER, errors::LiquidityPoolValidationError };
-use sep_40_oracle::PriceFeedClient;
-// use sep_40_oracle::PriceFeedClient;
+use crate::oracle;
+// use crate::events::Events as PoolEvents;
+// use crate::events::LiquidityPoolEvents;
+use crate::storage::{get_fee_fraction, get_reserve_a, get_reserve_b, put_reserve_a};
+use crate::{constants::FEE_MULTIPLIER, errors::LiquidityPoolValidationError};
 use soroban_fixed_point_math::SorobanFixedPoint;
-use soroban_sdk::{ log, panic_with_error, Env };
+use soroban_sdk::{log, panic_with_error, Env};
 
-pub fn get_adjusted_pool_value(e: &Env, reserve_a: u128, reserve_b: u128) -> u128 {
-    let oracle_price = get_oracle_price(&e, false);
+use token_synthetic::{burn_synthetic, mint_synthetic};
 
-    let adj = oracle_price
-        .fixed_mul_floor(e, &reserve_a, &PRICE_PRECISION)
-        .checked_add(reserve_b)
-        .unwrap();
+// Gets the current pool price
+// * a_in_b - Should the price be denominated in Token A or B.
+// * in_usd - Should that price be in USD.
+//
+pub fn get_pool_price(e: &Env, a_in_b: bool, in_usd: bool) -> u128 {
+    let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
 
-    adj
+    let mut price = 0_u128;
+
+    if reserve_a == 0 || reserve_b == 0 {
+        return price;
+    }
+
+    if a_in_b {
+        // price of 1 A in terms of B
+        price = reserve_b.fixed_div_floor(e, &reserve_a, &PRICE_PRECISION);
+
+        if in_usd {
+            let quote_oracle_price = oracle::get_quote_oracle_price(e, false);
+            price = price.fixed_mul_floor(e, &quote_oracle_price, &PRICE_PRECISION);
+        }
+    } else {
+        // price of 1 B in terms of A
+        price = reserve_a.fixed_div_floor(e, &reserve_b, &PRICE_PRECISION);
+
+        if in_usd {
+            let base_oracle_price = oracle::get_base_oracle_price(e, false);
+            price = price.fixed_mul_floor(e, &base_oracle_price, &PRICE_PRECISION);
+        }
+    }
+
+    price
 }
 
-//
-pub fn rebalance_pool(e: &Env, a_to_b: bool) {
-    // Compute the price difference between the oracle price and the current pool price
-    let oracle_price = get_oracle_price(&e, false);
-    let current_price = get_current_price(e, a_to_b);
-
-    let price_delta = (current_price as i128).checked_sub(oracle_price as i128).unwrap();
-    log!(e, "price_delta: {}", price_delta);
+pub fn rebalance_pool(e: &Env) {
+    // Compute the price difference between the oracle price and the pool price
+    let base_oracle_price = oracle::get_base_oracle_price(e, false);
+    log!(e, "base_oracle_price: {}", base_oracle_price);
 
     // Find the ideal reserve_a amount such that the pool's price is equal to the oracle price
     // A_new = sqrt(k / P_target)
     let reserve_a = get_reserve_a(&e);
     let reserve_b = get_reserve_b(&e);
-    log!(e, "new_reserve_a: {}", reserve_a);
-    log!(e, "new_reserve_b: {}", reserve_b);
+    log!(e, "reserve_a: {}", reserve_a);
+    log!(e, "reserve_b: {}", reserve_b);
 
-    let target_reserve_a = reserve_b.fixed_div_floor(e, &oracle_price, &PRICE_PRECISION);
+    let target_reserve_a = reserve_b.fixed_div_floor(e, &base_oracle_price, &PRICE_PRECISION);
     log!(e, "target_reserve_a: {}", target_reserve_a);
 
-    if price_delta > 0 {
-        let amount_to_mint = target_reserve_a.checked_sub(reserve_a).unwrap();
-        log!(e, "amount_to_mint: {}", amount_to_mint);
+    let delta_a = (target_reserve_a as i128)
+        .checked_sub(reserve_a as i128)
+        .unwrap();
+    log!(e, "delta_a: {}", delta_a);
 
-        mint_a(&e, &e.current_contract_address(), amount_to_mint);
-        put_reserve_a(&e, reserve_a + amount_to_mint);
-
-        get_current_price(e, a_to_b);
-    } else {
-        let amount_to_burn = reserve_a.checked_sub(target_reserve_a).unwrap();
-        log!(e, "amount_to_burn: {}", amount_to_burn);
-
-        burn_a(&e, &e.current_contract_address(), amount_to_burn);
-        put_reserve_a(&e, reserve_a + amount_to_burn);
-
-        get_current_price(e, a_to_b);
+    if delta_a > 0 {
+        mint_synthetic(&e, &e.current_contract_address(), delta_a);
+        put_reserve_a(&e, reserve_a + (delta_a as u128));
     }
-}
-
-pub fn get_oracle_price(e: &Env, squared: bool) -> u128 {
-    let oracle = get_oracle(&e);
-    let price_feed_client = PriceFeedClient::new(&e, &oracle);
-
-    let target_asset = get_target_asset(&e);
-    let oracle_price_data = price_feed_client.lastprice(&target_asset).unwrap();
-
-    // TODO: oracle price checks and validation
-
-    let oracle_price: u128 = oracle_price_data.price as u128;
-    log!(e, "oracle_price: {}", oracle_price);
-
-    if squared {
-        oracle_price.isqrt()
-    } else {
-        oracle_price
-    }
-}
-
-pub fn get_current_price(e: &Env, _a_to_b: bool) -> u128 {
-    let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
-
-    let current_price = reserve_b.fixed_div_floor(e, &reserve_a, &PRICE_PRECISION);
-    log!(e, "current_price: {}", current_price);
-
-    current_price
-}
-
-// Δx = (x / y) ⋅ Δy
-// x = P target / y
-pub fn get_mint_amount(e: &Env, delta_b: u128, reserve_a: u128, reserve_b: u128) -> u128 {
-    if delta_b == 0 {
-        return 0;
+    if delta_a < 0 {
+        burn_synthetic(&e, &e.current_contract_address(), delta_a.abs() as u128);
+        put_reserve_a(&e, reserve_a - (delta_a.abs() as u128));
     }
 
-    // Initial deposit
-    if reserve_a == 0 && reserve_b == 0 {
-        let oracle_price = get_oracle_price(e, false);
+    let price = get_pool_price(e, true, true);
+    log!(e, "price_after: {}", price);
 
-        let amount_to_mint = delta_b.fixed_div_floor(e, &oracle_price, &PRICE_PRECISION);
-        log!(&e, "amount_to_mint: {:}", amount_to_mint);
+    let new_reserve_a = get_reserve_a(&e);
+    let new_reserve_b = get_reserve_b(&e);
+    log!(e, "new_reserve_a: {}", new_reserve_a);
+    log!(e, "new_reserve_b: {}", new_reserve_b);
 
-        return amount_to_mint;
-    }
-
-    let amount_to_mint = reserve_a
-        .fixed_div_floor(e, &reserve_b, &PRICE_PRECISION)
-        .fixed_mul_floor(e, &delta_b, &PRICE_PRECISION);
-    log!(&e, "amount_to_mint: {:}", amount_to_mint);
-
-    amount_to_mint
+    // PoolEvents::new(&e).rebalance(user, base_oracle_price, pool_price, 0, reserve_a, reserve_b);
 }
 
 pub fn get_amount_out(
     e: &Env,
     in_amount: u128,
     reserve_sell: u128,
-    reserve_buy: u128
+    reserve_buy: u128,
 ) -> (u128, u128) {
     if in_amount == 0 {
         return (0, 0);
@@ -137,7 +104,7 @@ pub fn get_amount_out_strict_receive(
     e: &Env,
     out_amount: u128,
     reserve_sell: u128,
-    reserve_buy: u128
+    reserve_buy: u128,
 ) -> (u128, u128) {
     if out_amount == 0 {
         return (0, 0);
@@ -146,16 +113,15 @@ pub fn get_amount_out_strict_receive(
     let dy_w_fee = out_amount.fixed_mul_ceil(
         &e,
         &FEE_MULTIPLIER,
-        &(FEE_MULTIPLIER - (get_fee_fraction(&e) as u128))
+        &(FEE_MULTIPLIER - (get_fee_fraction(&e) as u128)),
     );
     // if total value including fee is more than the reserve, math can't be done properly
     if dy_w_fee >= reserve_buy {
         panic_with_error!(e, LiquidityPoolValidationError::InsufficientBalance);
     }
     // +1 just in case there were some rounding errors & convert to real units in place
-    let result =
-        reserve_buy.fixed_mul_floor(&e, &reserve_sell, &(reserve_buy - dy_w_fee)) -
-        reserve_sell +
-        1;
+    let result = reserve_buy.fixed_mul_floor(&e, &reserve_sell, &(reserve_buy - dy_w_fee))
+        - reserve_sell
+        + 1;
     (result, dy_w_fee - out_amount)
 }

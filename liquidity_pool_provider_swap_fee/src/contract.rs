@@ -88,7 +88,7 @@ impl ProviderSwapFeeCollector {
     pub fn claim_fees(e: Env, operator: Address, token: Address) -> u128 {
         operator.require_auth();
         if operator != get_operator(&e) {
-            panic_with_error!(&e, Error::Unauthorized)
+            panic_with_error!(&e, Error::Unauthorized);
         }
         let token_client = SorobanTokenClient::new(&e, &token);
         let amount = token_client.balance(&e.current_contract_address());
@@ -117,18 +117,14 @@ impl ProviderSwapFeeCollector {
     pub fn claim_fees_and_swap(
         e: Env,
         operator: Address,
-        swaps_chain: Vec<(Vec<Address>, BytesN<32>, Address)>,
+        swap: (Vec<Address>, BytesN<32>, Address),
         token: Address,
         out_min: u128,
     ) -> u128 {
         operator.require_auth();
         if operator != get_operator(&e) {
-            panic_with_error!(&e, Error::Unauthorized)
+            panic_with_error!(&e, Error::Unauthorized);
         }
-        let (_, _, token_out) = match swaps_chain.last() {
-            Some(v) => v,
-            None => panic_with_error!(&e, Error::PathIsEmpty),
-        };
         let router = get_router(&e);
         let token_client = SorobanTokenClient::new(&e, &token);
         let amount = token_client.balance(&e.current_contract_address()) as u128;
@@ -151,26 +147,26 @@ impl ProviderSwapFeeCollector {
                 &e,
                 [
                     e.current_contract_address().to_val(),
-                    swaps_chain.to_val(),
+                    swap.into_val(&e),
                     token.clone().to_val(),
                     amount.into_val(&e),
                     out_min.into_val(&e),
                 ],
             ),
         );
-        SorobanTokenClient::new(&e, &token_out).transfer(
+        SorobanTokenClient::new(&e, &swap.2).transfer(
             &e.current_contract_address(),
             &get_fee_destination(&e),
             &(out_amount as i128),
         );
-        Events::new(&e).claim_fee(token, amount, token_out, out_amount);
+        Events::new(&e).claim_fee(token, amount, swap.2, out_amount);
         out_amount
     }
 }
 
 #[contractimpl]
 impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
-    // swap_chained
+    // swap
     // Executes a multi-hop token swap with fee deduction.
     //
     // Arguments:
@@ -184,10 +180,10 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
     //
     // Returns:
     //   - A u128 value representing the net output tokens transferred to the user.
-    fn swap_chained(
+    fn swap(
         e: Env,
         user: Address,
-        swaps_chain: Vec<(Vec<Address>, BytesN<32>, Address)>,
+        swap: (Vec<Address>, BytesN<32>, Address),
         token_in: Address,
         in_amount: u128,
         out_min: u128,
@@ -199,10 +195,6 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
             panic_with_error!(&e, Error::FeeFractionTooHigh);
         }
 
-        let (_, _, token_out) = match swaps_chain.last() {
-            Some(v) => v,
-            None => panic_with_error!(&e, Error::PathIsEmpty),
-        };
         SorobanTokenClient::new(&e, &token_in).transfer(
             &user,
             &e.current_contract_address(),
@@ -227,39 +219,39 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
         ]);
         let amount_out: u128 = e.invoke_contract(
             &router,
-            &Symbol::new(&e, "swap_chained"),
+            &Symbol::new(&e, "swap"),
             Vec::from_array(
                 &e,
                 [
                     e.current_contract_address().to_val(),
-                    swaps_chain.to_val(),
+                    swap.into_val(&e),
                     token_in.clone().to_val(),
                     in_amount.into_val(&e),
                     out_min.into_val(&e),
                 ],
             ),
         );
-        let fee_amount = amount_out * fee_fraction as u128 / FEE_DENOMINATOR as u128;
+        let fee_amount = (amount_out * (fee_fraction as u128)) / (FEE_DENOMINATOR as u128);
         let amount_out_w_fee = amount_out - fee_amount;
         if amount_out_w_fee < out_min {
             panic_with_error!(&e, Error::OutMinNotSatisfied);
         }
-        SorobanTokenClient::new(&e, &token_out).transfer(
+        SorobanTokenClient::new(&e, &swap.2).transfer(
             &e.current_contract_address(),
             &user,
             &(amount_out_w_fee as i128),
         );
-        Events::new(&e).charge_provider_fee(token_out, fee_amount);
+        Events::new(&e).charge_provider_fee(swap.2, fee_amount);
         amount_out_w_fee
     }
 
-    // swap_chained_strict_receive
+    // swap_strict_receive
     // Executes a multi-hop swap ensuring a specific output amount by adjusting the input and fee.
     //
     // Arguments:
     //   - e: The Soroban environment.
     //   - user: The user initiating the swap (must be authorized).
-    //   - swaps_chain: A vector defining the swap path.
+    //   - swap: A vector defining the swap path.
     //   - token_in: The input token address.
     //   - out_amount: The exact target output amount.
     //   - in_max: The maximum amount of token_in the user is willing to spend.
@@ -267,10 +259,10 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
     //
     // Returns:
     //   - A u128 value representing the total input amount (including fees) required.
-    fn swap_chained_strict_receive(
+    fn swap_strict_receive(
         e: Env,
         user: Address,
-        swaps_chain: Vec<(Vec<Address>, BytesN<32>, Address)>,
+        swap: (Vec<Address>, BytesN<32>, Address),
         token_in: Address,
         out_amount: u128,
         in_max: u128,
@@ -281,11 +273,6 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
         if fee_fraction > get_max_swap_fee_fraction(&e) {
             panic_with_error!(&e, Error::FeeFractionTooHigh);
         }
-
-        let (_, _, token_out) = match swaps_chain.last() {
-            Some(v) => v,
-            None => panic_with_error!(&e, Error::PathIsEmpty),
-        };
 
         SorobanTokenClient::new(&e, &token_in).transfer(
             &user,
@@ -307,24 +294,24 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
         ]);
         let amount_in: u128 = e.invoke_contract(
             &router,
-            &Symbol::new(&e, "swap_chained_strict_receive"),
+            &Symbol::new(&e, "swap_strict_receive"),
             Vec::from_array(
                 &e,
                 [
                     e.current_contract_address().to_val(),
-                    swaps_chain.to_val(),
+                    swap.into_val(&e),
                     token_in.clone().to_val(),
                     out_amount.into_val(&e),
                     in_max.into_val(&e),
                 ],
             ),
         );
-        SorobanTokenClient::new(&e, &token_out).transfer(
+        SorobanTokenClient::new(&e, &swap.2).transfer(
             &e.current_contract_address(),
             &user,
             &(out_amount as i128),
         );
-        let fee_amount = amount_in * fee_fraction as u128 / FEE_DENOMINATOR as u128;
+        let fee_amount = (amount_in * (fee_fraction as u128)) / (FEE_DENOMINATOR as u128);
         let amount_in_with_fee = amount_in + fee_amount;
         if amount_in_with_fee > in_max {
             panic_with_error!(&e, Error::InMaxNotSatisfied);

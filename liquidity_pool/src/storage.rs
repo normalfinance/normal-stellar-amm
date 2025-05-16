@@ -13,12 +13,13 @@ use utils::{
 enum DataKey {
     TokenA,
     TokenB,
-    ReserveA,
-    ReserveB,
+    ReserveA,    // Total reserve of A
+    ReserveB,    // Total reserve of B
     FeeFraction, // 1 = 0.01%
     Plane,
     Router,
-    Oracle,
+    BaseOracle,  // Oracle address for the base (synthetic) asset (i.e. nBTC)
+    QuoteOracle, // Oracle address for the quote asset (TokenB) - usually XLM or USDC
     TargetAsset,
     IsKilledSwap,
     IsKilledDeposit,
@@ -151,14 +152,28 @@ pub(crate) fn get_router(e: &Env) -> Address {
     }
 }
 
-pub(crate) fn set_oracle(e: &Env, oracle: &Address) {
-    let key = DataKey::Oracle;
+pub(crate) fn set_base_oracle(e: &Env, oracle: &Address) {
+    let key = DataKey::BaseOracle;
     bump_instance(e);
     e.storage().instance().set(&key, oracle);
 }
 
-pub(crate) fn get_oracle(e: &Env) -> Address {
-    let key = DataKey::Oracle;
+pub(crate) fn get_base_oracle(e: &Env) -> Address {
+    let key = DataKey::BaseOracle;
+    match e.storage().instance().get(&key) {
+        Some(v) => v,
+        None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
+}
+
+pub(crate) fn set_quote_oracle(e: &Env, oracle: &Address) {
+    let key = DataKey::QuoteOracle;
+    bump_instance(e);
+    e.storage().instance().set(&key, oracle);
+}
+
+pub(crate) fn get_quote_oracle(e: &Env) -> Address {
+    let key = DataKey::QuoteOracle;
     match e.storage().instance().get(&key) {
         Some(v) => v,
         None => panic_with_error!(e, StorageError::ValueNotInitialized),
@@ -190,35 +205,4 @@ pub(crate) fn get_token_future_wasm(e: &Env) -> BytesN<32> {
         Some(v) => v,
         None => panic_with_error!(e, StorageError::ValueNotInitialized),
     }
-}
-
-// Custom types
-
-#[contracttype]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AddressAndAmount {
-    /// Address of the asset
-    pub address: Address,
-    /// The total amount of those tokens in the pool
-    pub amount: u128,
-}
-
-/// This struct is used to return a query result with the total amount of LP tokens and assets in a specific pool.
-#[contracttype]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PoolResponse {
-    /// The asset A in the pool together with asset amounts
-    pub asset_a: AddressAndAmount,
-    /// The asset B in the pool together with asset amounts
-    pub asset_b: AddressAndAmount,
-    /// The total amount of LP tokens currently issued
-    pub asset_lp_share: AddressAndAmount,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct LiquidityPoolInfo {
-    pub pool_address: Address,
-    pub pool_response: PoolResponse,
-    pub total_fee_bps: u32,
 }

@@ -1,4 +1,4 @@
-use crate::constants::MAX_POOLS_FOR_PAIR;
+use crate::constants::{MAX_POOLS_FOR_PAIR, PERCENTAGE_PRECISION_U64};
 use crate::errors::LiquidityPoolRouterError;
 use crate::pool_utils::get_tokens_salt;
 use paste::paste;
@@ -62,6 +62,8 @@ enum DataKey {
     RewardsConfig,                          // Global reward config
     RewardTokensList,                       // Tokens for reward
     RewardTokensPoolsLiquidity(BytesN<32>), // Per pool liquidity
+
+    OracleGuardRails,
 }
 
 #[contracterror]
@@ -124,6 +126,11 @@ generate_instance_storage_getter_and_setter!(
     liquidity_calculator,
     DataKey::LiquidityCalculator,
     Address
+);
+generate_instance_storage_getter_and_setter!(
+    oracle_guard_rails,
+    DataKey::OracleGuardRails,
+    OracleGuardRails
 );
 
 pub fn get_rewards_config(e: &Env) -> GlobalRewardsConfig {
@@ -281,30 +288,28 @@ pub fn put_tokens_set(e: &Env, index: u128, tokens: &Vec<Address>) {
 }
 
 #[contracttype]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AddressAndAmount {
-    /// Address of the asset
-    pub address: Address,
-    /// The total amount of those tokens in the pool
-    pub amount: i128,
+#[derive(Copy, Clone, Debug)]
+pub struct OracleGuardRails {
+    pub oracle_twap_percent_divergence: u64,
+    pub slots_before_stale_for_amm: i64,
+    pub confidence_interval_max_size: u64,
+    pub too_volatile_ratio: i64,
 }
 
-/// This struct is used to return a query result with the total amount of LP tokens and assets in a specific pool.
-#[contracttype]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PoolResponse {
-    /// The asset A in the pool together with asset amounts
-    pub asset_a: AddressAndAmount,
-    /// The asset B in the pool together with asset amounts
-    pub asset_b: AddressAndAmount,
-    /// The total amount of LP tokens currently issued
-    pub asset_lp_share: AddressAndAmount,
+impl Default for OracleGuardRails {
+    fn default() -> Self {
+        OracleGuardRails {
+            oracle_twap_percent_divergence: PERCENTAGE_PRECISION_U64 / 2,
+            slots_before_stale_for_amm: 10,       // ~5 seconds
+            confidence_interval_max_size: 20_000, // 2% of price
+            too_volatile_ratio: 5,                // 5x or 80% down
+        }
+    }
 }
 
-#[contracttype]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct LiquidityPoolInfo {
-    pub pool_address: Address,
-    pub pool_response: PoolResponse,
-    pub total_fee_bps: i64,
+impl OracleGuardRails {
+    pub fn max_oracle_twap_5min_percent_divergence(&self) -> u64 {
+        self.oracle_twap_percent_divergence
+            .max(PERCENTAGE_PRECISION_U64 / 2)
+    }
 }

@@ -1,36 +1,19 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::constants::{ CONSTANT_PRODUCT_FEE_AVAILABLE };
+use crate::constants::CONSTANT_PRODUCT_FEE_AVAILABLE;
 use crate::testutils;
-use crate::testutils::{ create_plane_contract, test_token, Setup };
+use crate::testutils::{create_plane_contract, test_token, Setup};
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::{
-    AuthorizedFunction,
-    AuthorizedInvocation,
-    Events,
-    MockAuth,
-    MockAuthInvoke,
+    AuthorizedFunction, AuthorizedInvocation, Events, MockAuth, MockAuthInvoke,
 };
 use soroban_sdk::{
-    symbol_short,
-    testutils::Address as _,
-    vec,
-    Address,
-    FromVal,
-    IntoVal,
-    Map,
-    Symbol,
-    Val,
-    Vec,
+    symbol_short, testutils::Address as _, vec, Address, FromVal, IntoVal, Map, Symbol, Val, Vec,
     U256,
 };
 use utils::test_utils::{
-    assert_approx_eq_abs,
-    assert_approx_eq_abs_u256,
-    get_mint_amount,
-    install_dummy_wasm,
-    jump,
+    assert_approx_eq_abs, assert_approx_eq_abs_u256, get_mint_amount, install_dummy_wasm, jump,
 };
 
 #[test]
@@ -51,20 +34,20 @@ fn test_total_liquidity() {
     token1.mint(&user1, &1000000);
     token2.mint(&user1, &1000000);
 
-    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
+    let oracles = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
 
     for pool_fee in CONSTANT_PRODUCT_FEE_AVAILABLE {
-        let (pool_hash, _pool_address) = setup.router.init_standard_pool(
-            &user1,
-            &tokens,
-            &pool_fee
-        );
-        setup.router.deposit(&user1, &tokens, &pool_hash, &30000, &0);
+        let (pool_hash, _pool_address) =
+            setup.router.init_standard_pool(&user1, &oracles, &pool_fee);
+        setup.router.deposit(&user1, &tokens, &pool_hash, &30000);
     }
 
     e.cost_estimate().budget().reset_unlimited();
     e.cost_estimate().budget().reset_default();
-    assert_eq!(setup.router.get_total_liquidity(&tokens), U256::from_u32(&e, 3228));
+    assert_eq!(
+        setup.router.get_total_liquidity(&tokens),
+        U256::from_u32(&e, 3228)
+    );
     e.cost_estimate().budget().print();
     e.cost_estimate().budget().reset_unlimited();
 
@@ -88,7 +71,10 @@ fn test_total_liquidity() {
     //     U256::from_u32(&e, 33600)
     // );
     // e.cost_estimate().budget().print();
-    assert!(e.cost_estimate().budget().cpu_instruction_cost() < 100_000_000, "budget exceed");
+    assert!(
+        e.cost_estimate().budget().cpu_instruction_cost() < 100_000_000,
+        "budget exceed"
+    );
 }
 
 #[test]
@@ -104,14 +90,12 @@ fn test_constant_product_pool() {
     let user1 = Address::generate(&e);
     setup.reward_token.mint(&user1, &10_0000000);
 
-    let (pool_hash, pool_address) = router.init_standard_pool(
-        &user1,
-        &tokens,
-        &setup.oracle,
-        &setup.target_asset,
-        &30
+    let (pool_hash, pool_address) =
+        router.init_standard_pool(&user1, &tokens, &setup.target_asset, &30);
+    assert_eq!(
+        router.pool_type(&tokens, &pool_hash),
+        Symbol::new(&e, "constant_product")
     );
-    assert_eq!(router.pool_type(&tokens, &pool_hash), Symbol::new(&e, "constant_product"));
     let pool_info = router.get_info(&tokens, &pool_hash);
     assert_eq!(
         Symbol::from_val(&e, &pool_info.get(Symbol::new(&e, "pool_type")).unwrap()),
@@ -134,7 +118,7 @@ fn test_constant_product_pool() {
     assert_eq!(token_share.balance(&user1), 0);
 
     let desired_amount = 100;
-    router.deposit(&user1, &tokens, &pool_hash, &desired_amount, &0);
+    router.deposit(&user1, &tokens, &pool_hash, &desired_amount);
     assert_eq!(router.get_total_liquidity(&tokens), U256::from_u32(&e, 2));
 
     assert_eq!(token_share.balance(&user1), 100);
@@ -147,7 +131,7 @@ fn test_constant_product_pool() {
         &e,
         desired_amount,
         reserves.get(0).unwrap(),
-        reserves.get(1).unwrap()
+        reserves.get(1).unwrap(),
     );
 
     assert_eq!(token1.balance(&pool_address), expected_mint_amount as i128);
@@ -180,7 +164,10 @@ fn test_constant_product_pool() {
     assert_eq!(token1.balance(&pool_address), 197);
     assert_eq!(token2.balance(&user1), 948);
     assert_eq!(token2.balance(&pool_address), 52);
-    assert_eq!(router.get_reserves(&tokens, &pool_hash), Vec::from_array(&e, [197, 52]));
+    assert_eq!(
+        router.get_reserves(&tokens, &pool_hash),
+        Vec::from_array(&e, [197, 52])
+    );
 
     // assert_eq!(
     //     router.estimate_swap(&tokens, &token1.address, &token2.address, &pool_hash, &97),
@@ -206,11 +193,8 @@ fn test_constant_product_pool() {
     // assert_eq!(router.get_reserves(&tokens, &pool_hash), Vec::from_array(&e, [197, 52]));
 
     router.withdraw(
-        &user1,
-        &tokens,
-        &pool_hash,
-        &100_u128,
-        &Vec::from_array(&e, [197_u128, 52_u128])
+        &user1, &tokens, &pool_hash, &100_u128,
+        // &Vec::from_array(&e, [197_u128, 52_u128])
     );
 
     assert_eq!(token1.balance(&user1), 1000);
@@ -234,7 +218,9 @@ fn test_add_pool_after_removal() {
 
     let (pool_hash, pool_address) = router.init_standard_pool(&user1, &tokens, &30);
     assert!(router.try_remove_pool(&user1, &tokens, &pool_hash).is_err());
-    assert!(router.try_remove_pool(&setup.rewards_admin, &tokens, &pool_hash).is_err());
+    assert!(router
+        .try_remove_pool(&setup.rewards_admin, &tokens, &pool_hash)
+        .is_err());
     router.remove_pool(&setup.operations_admin, &tokens, &pool_hash);
     let (pool_hash_new, pool_address_new) = router.init_standard_pool(&user1, &tokens, &30);
     assert_eq!(pool_hash, pool_hash_new);
@@ -281,10 +267,13 @@ fn test_init_pool_bad_tokens() {
     let [token1, _, _, _] = setup.tokens;
     let reward_token = setup.reward_token;
 
-    let tokens = Vec::from_array(&e, [
-        token1.address.clone(),
-        create_plane_contract(&e).address.clone(),
-    ]);
+    let tokens = Vec::from_array(
+        &e,
+        [
+            token1.address.clone(),
+            create_plane_contract(&e).address.clone(),
+        ],
+    );
 
     let user1 = Address::generate(&e);
     reward_token.mint(&user1, &10_0000000);
@@ -301,10 +290,13 @@ fn test_init_standard_pool_bad_tokens() {
     let [token1, _, _, _] = setup.tokens;
     let reward_token = setup.reward_token;
 
-    let tokens = Vec::from_array(&e, [
-        token1.address.clone(),
-        create_plane_contract(&e).address.clone(),
-    ]);
+    let tokens = Vec::from_array(
+        &e,
+        [
+            token1.address.clone(),
+            create_plane_contract(&e).address.clone(),
+        ],
+    );
 
     let user1 = Address::generate(&e);
     reward_token.mint(&user1, &10_0000000);
@@ -324,23 +316,13 @@ fn test_simple_ongoing_reward() {
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
 
     let user1 = Address::generate(&e);
-    router.configure_init_pool_payment(
-        &admin,
-        &reward_token.address,
-        &0,
-        // &1000_0000000,
-        &router.address
-    );
 
     reward_token.mint(&user1, &1000_0000000);
     reward_token.mint(&router.address, &2_000_000_0000000);
     reward_token.mint(&admin, &2_000_000_0000000);
 
-    let (standard_pool_hash, standard_pool_address) = router.init_standard_pool(
-        &user1,
-        &tokens,
-        &30
-    );
+    let (standard_pool_hash, standard_pool_address) =
+        router.init_standard_pool(&user1, &tokens, &30);
 
     let reward_1_tps = 10_5000000_u128;
     let total_reward_1 = reward_1_tps * 60;
@@ -351,30 +333,53 @@ fn test_simple_ongoing_reward() {
     token2.mint(&user1, &2000);
     assert_eq!(token2.balance(&user1), 2000);
 
-    assert_eq!(router.get_total_accumulated_reward(&tokens, &standard_pool_hash), 0);
-    assert_eq!(router.get_total_claimed_reward(&tokens, &standard_pool_hash), 0);
-    assert_eq!(router.get_total_configured_reward(&tokens, &standard_pool_hash), 0);
-    assert_eq!(router.get_total_outstanding_reward(&tokens, &standard_pool_hash), 0);
+    assert_eq!(
+        router.get_total_accumulated_reward(&tokens, &standard_pool_hash),
+        0
+    );
+    assert_eq!(
+        router.get_total_claimed_reward(&tokens, &standard_pool_hash),
+        0
+    );
+    assert_eq!(
+        router.get_total_configured_reward(&tokens, &standard_pool_hash),
+        0
+    );
+    assert_eq!(
+        router.get_total_outstanding_reward(&tokens, &standard_pool_hash),
+        0
+    );
 
     // 10 seconds passed since config, user depositing
     jump(&e, 10);
-    router.deposit(&user1, &tokens, &standard_pool_hash, &1000, &0);
+    router.deposit(&user1, &tokens, &standard_pool_hash, &1000);
     let standard_liquidity = router.get_total_liquidity(&tokens);
     assert_eq!(standard_liquidity, U256::from_u32(&e, 34));
-    router.deposit(&user1, &tokens, &stable_pool_hash, &1000, &0);
     let stable_liquidity = router.get_total_liquidity(&tokens).sub(&standard_liquidity);
-    assert_eq!(standard_liquidity.add(&stable_liquidity), U256::from_u32(&e, 370));
+    assert_eq!(
+        standard_liquidity.add(&stable_liquidity),
+        U256::from_u32(&e, 370)
+    );
 
-    assert_eq!(router.get_total_accumulated_reward(&tokens, &standard_pool_hash), 0);
-    assert_eq!(router.get_total_claimed_reward(&tokens, &standard_pool_hash), 0);
-    assert_eq!(router.get_total_configured_reward(&tokens, &standard_pool_hash), 0);
+    assert_eq!(
+        router.get_total_accumulated_reward(&tokens, &standard_pool_hash),
+        0
+    );
+    assert_eq!(
+        router.get_total_claimed_reward(&tokens, &standard_pool_hash),
+        0
+    );
+    assert_eq!(
+        router.get_total_configured_reward(&tokens, &standard_pool_hash),
+        0
+    );
 
     let rewards = Vec::from_array(&e, [(tokens.clone(), 1_0000000)]);
     router.config_global_rewards(
         &admin,
         &reward_1_tps,
         &e.ledger().timestamp().saturating_add(60),
-        &rewards
+        &rewards,
     );
     e.cost_estimate().budget().reset_default();
     router.fill_liquidity(&tokens);
@@ -390,14 +395,14 @@ fn test_simple_ongoing_reward() {
             .mul(&standard_liquidity)
             .div(&standard_liquidity.add(&stable_liquidity)),
         U256::from_u128(&e, standard_pool_tps * 60),
-        U256::from_u32(&e, 100)
+        U256::from_u32(&e, 100),
     );
     assert_approx_eq_abs_u256(
         U256::from_u128(&e, total_reward_1)
             .mul(&stable_liquidity)
             .div(&standard_liquidity.add(&stable_liquidity)),
         U256::from_u128(&e, stable_pool_tps * 60),
-        U256::from_u32(&e, 100)
+        U256::from_u32(&e, 100),
     );
 
     assert_eq!(reward_token.balance(&user1), 0);
@@ -408,7 +413,10 @@ fn test_simple_ongoing_reward() {
         router.get_total_accumulated_reward(&tokens, &standard_pool_hash),
         standard_pool_tps * 30
     );
-    assert_eq!(router.get_total_claimed_reward(&tokens, &standard_pool_hash), 0);
+    assert_eq!(
+        router.get_total_claimed_reward(&tokens, &standard_pool_hash),
+        0
+    );
     assert_eq!(
         router.get_total_configured_reward(&tokens, &standard_pool_hash),
         standard_pool_tps * 60
@@ -441,12 +449,15 @@ fn test_simple_ongoing_reward() {
         standard_pool_tps * 60
     );
     // distribute second part from admin's balance
-    assert!(
-        router
-            .try_distribute_outstanding_reward(&admin, &admin, &tokens, &stable_pool_hash)
-            .is_err()
+    assert!(router
+        .try_distribute_outstanding_reward(&admin, &admin, &tokens, &stable_pool_hash)
+        .is_err());
+    reward_token.approve(
+        &admin,
+        &router.address,
+        &((stable_pool_tps as i128) * 60),
+        &9999,
     );
-    reward_token.approve(&admin, &router.address, &((stable_pool_tps as i128) * 60), &9999);
     assert_eq!(
         router.distribute_outstanding_reward(&admin, &admin, &tokens, &stable_pool_hash),
         stable_pool_tps * 60
@@ -459,12 +470,27 @@ fn test_simple_ongoing_reward() {
         router.distribute_outstanding_reward(&admin, &router.address, &tokens, &stable_pool_hash),
         0
     );
-    assert_eq!(router.get_total_outstanding_reward(&tokens, &stable_pool_hash), 0);
-    assert_eq!(reward_token.balance(&standard_pool_address) as u128, standard_pool_tps * 60);
-    assert_eq!(reward_token.balance(&stable_pool_address) as u128, stable_pool_tps * 60);
+    assert_eq!(
+        router.get_total_outstanding_reward(&tokens, &stable_pool_hash),
+        0
+    );
+    assert_eq!(
+        reward_token.balance(&standard_pool_address) as u128,
+        standard_pool_tps * 60
+    );
+    assert_eq!(
+        reward_token.balance(&stable_pool_address) as u128,
+        stable_pool_tps * 60
+    );
 
-    assert_eq!(router.claim(&user1, &tokens, &standard_pool_hash), standard_pool_tps * 30);
-    assert_eq!(router.claim(&user1, &tokens, &stable_pool_hash), stable_pool_tps * 30);
+    assert_eq!(
+        router.claim(&user1, &tokens, &standard_pool_hash),
+        standard_pool_tps * 30
+    );
+    assert_eq!(
+        router.claim(&user1, &tokens, &stable_pool_hash),
+        stable_pool_tps * 30
+    );
 
     assert_eq!(
         router.get_total_accumulated_reward(&tokens, &standard_pool_hash),
@@ -482,13 +508,20 @@ fn test_simple_ongoing_reward() {
         router.get_total_accumulated_reward(&tokens, &stable_pool_hash),
         stable_pool_tps * 30
     );
-    assert_eq!(router.get_total_claimed_reward(&tokens, &stable_pool_hash), stable_pool_tps * 30);
+    assert_eq!(
+        router.get_total_claimed_reward(&tokens, &stable_pool_hash),
+        stable_pool_tps * 30
+    );
     assert_eq!(
         router.get_total_configured_reward(&tokens, &stable_pool_hash),
         stable_pool_tps * 60
     );
 
-    assert_approx_eq_abs(reward_token.balance(&user1) as u128, total_reward_1 / 2, 100);
+    assert_approx_eq_abs(
+        reward_token.balance(&user1) as u128,
+        total_reward_1 / 2,
+        100,
+    );
     jump(&e, 60);
     router.claim(&user1, &tokens, &standard_pool_hash);
     router.claim(&user1, &tokens, &stable_pool_hash);
@@ -510,7 +543,10 @@ fn test_simple_ongoing_reward() {
         router.get_total_accumulated_reward(&tokens, &stable_pool_hash),
         stable_pool_tps * 60
     );
-    assert_eq!(router.get_total_claimed_reward(&tokens, &stable_pool_hash), stable_pool_tps * 60);
+    assert_eq!(
+        router.get_total_claimed_reward(&tokens, &stable_pool_hash),
+        stable_pool_tps * 60
+    );
     assert_eq!(
         router.get_total_configured_reward(&tokens, &stable_pool_hash),
         stable_pool_tps * 60
@@ -527,13 +563,6 @@ fn test_rewards_distribution() {
     let reward_token = setup.reward_token;
 
     let user1 = Address::generate(&e);
-    router.configure_init_pool_payment(
-        &admin,
-        &reward_token.address,
-        &0,
-        &1000_0000000,
-        &router.address
-    );
 
     let tokens1 = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
     let tokens2 = Vec::from_array(&e, [token1.address.clone(), reward_token.address.clone()]);
@@ -541,26 +570,10 @@ fn test_rewards_distribution() {
     reward_token.mint(&user1, &2000_0000000);
     reward_token.mint(&router.address, &2_000_000_0000000);
 
-    let (standard_pool_hash1, standard_pool_address1) = router.init_standard_pool(
-        &user1,
-        &tokens1,
-        &30
-    );
-    let (standard_pool_hash2, standard_pool_address2) = router.init_standard_pool(
-        &user1,
-        &tokens2,
-        &30
-    );
-    let (stable_pool_hash1, stable_pool_address1) = router.init_stableswap_pool(
-        &user1,
-        &tokens1,
-        &10
-    );
-    let (stable_pool_hash2, stable_pool_address2) = router.init_stableswap_pool(
-        &user1,
-        &tokens2,
-        &10
-    );
+    let (standard_pool_hash1, standard_pool_address1) =
+        router.init_standard_pool(&user1, &tokens1, &30);
+    let (standard_pool_hash2, standard_pool_address2) =
+        router.init_standard_pool(&user1, &tokens2, &30);
 
     let reward_tps = 10_5000000_u128;
 
@@ -568,42 +581,38 @@ fn test_rewards_distribution() {
     token2.mint(&user1, &2000);
     reward_token.mint(&user1, &2000);
 
-    assert_eq!(router.get_total_outstanding_reward(&tokens1, &standard_pool_hash1), 0);
-    assert_eq!(router.get_total_outstanding_reward(&tokens1, &stable_pool_hash1), 0);
-    assert_eq!(router.get_total_outstanding_reward(&tokens2, &standard_pool_hash2), 0);
-    assert_eq!(router.get_total_outstanding_reward(&tokens2, &stable_pool_hash2), 0);
+    assert_eq!(
+        router.get_total_outstanding_reward(&tokens1, &standard_pool_hash1),
+        0
+    );
+    assert_eq!(
+        router.get_total_outstanding_reward(&tokens2, &standard_pool_hash2),
+        0
+    );
 
     // 10 seconds passed since config, user depositing
     jump(&e, 10);
-    router.deposit(&user1, &tokens1, &standard_pool_hash1, &1000, &0);
-    router.deposit(&user1, &tokens2, &standard_pool_hash2, &1000, &0);
+    router.deposit(&user1, &tokens1, &standard_pool_hash1, &1000);
+    router.deposit(&user1, &tokens2, &standard_pool_hash2, &1000);
     let standard_liquidity1 = router.get_total_liquidity(&tokens1);
     let standard_liquidity2 = router.get_total_liquidity(&tokens2);
     assert_eq!(standard_liquidity1, U256::from_u32(&e, 34));
     assert_eq!(standard_liquidity2, U256::from_u32(&e, 34));
-    router.deposit(&user1, &tokens1, &stable_pool_hash1, &1000, &0);
-    router.deposit(&user1, &tokens2, &stable_pool_hash2, &1000, &0);
-    let stable_liquidity1 = router.get_total_liquidity(&tokens1).sub(&standard_liquidity1);
-    let stable_liquidity2 = router.get_total_liquidity(&tokens2).sub(&standard_liquidity2);
-    assert_eq!(standard_liquidity1.add(&stable_liquidity1), U256::from_u32(&e, 370));
-    assert_eq!(standard_liquidity2.add(&stable_liquidity2), U256::from_u32(&e, 370));
 
-    let rewards = Vec::from_array(&e, [
-        (tokens1.clone(), 0_5000000),
-        (tokens2.clone(), 0_5000000),
-    ]);
+    let rewards = Vec::from_array(
+        &e,
+        [(tokens1.clone(), 0_5000000), (tokens2.clone(), 0_5000000)],
+    );
     router.config_global_rewards(
         &admin,
         &reward_tps,
         &e.ledger().timestamp().saturating_add(60),
-        &rewards
+        &rewards,
     );
     router.fill_liquidity(&tokens1);
     router.fill_liquidity(&tokens2);
     let standard_pool_tps1 = router.config_pool_rewards(&tokens1, &standard_pool_hash1);
-    let stable_pool_tps1 = router.config_pool_rewards(&tokens1, &stable_pool_hash1);
     let standard_pool_tps2 = router.config_pool_rewards(&tokens2, &standard_pool_hash2);
-    let stable_pool_tps2 = router.config_pool_rewards(&tokens2, &stable_pool_hash2);
     assert_eq!(standard_pool_tps1, standard_pool_tps2);
     assert_eq!(stable_pool_tps1, stable_pool_tps2);
     let standard_pool_tps = standard_pool_tps1;
@@ -718,8 +727,14 @@ fn test_rewards_distribution() {
         router.distribute_outstanding_reward(&admin, &router.address, &tokens2, &stable_pool_hash2),
         0
     );
-    assert_eq!(router.get_total_outstanding_reward(&tokens1, &stable_pool_hash1), 0);
-    assert_eq!(router.get_total_outstanding_reward(&tokens2, &stable_pool_hash2), 0);
+    assert_eq!(
+        router.get_total_outstanding_reward(&tokens1, &stable_pool_hash1),
+        0
+    );
+    assert_eq!(
+        router.get_total_outstanding_reward(&tokens2, &stable_pool_hash2),
+        0
+    );
 
     // deposit again to check how reserves being calculated
     token1.mint(&user1, &4000);
@@ -731,13 +746,22 @@ fn test_rewards_distribution() {
     router.deposit(&user1, &tokens2, &stable_pool_hash2, &1000, &0);
 
     // reward balance of pools2 equals to total reward + reserves
-    assert_eq!(reward_token.balance(&standard_pool_address1) as u128, standard_pool_tps * 60);
-    assert_eq!(reward_token.balance(&stable_pool_address1) as u128, stable_pool_tps * 60);
+    assert_eq!(
+        reward_token.balance(&standard_pool_address1) as u128,
+        standard_pool_tps * 60
+    );
+    assert_eq!(
+        reward_token.balance(&stable_pool_address1) as u128,
+        stable_pool_tps * 60
+    );
     assert_eq!(
         reward_token.balance(&standard_pool_address2) as u128,
         standard_pool_tps * 60 + 2000
     );
-    assert_eq!(reward_token.balance(&stable_pool_address2) as u128, stable_pool_tps * 60 + 2000);
+    assert_eq!(
+        reward_token.balance(&stable_pool_address2) as u128,
+        stable_pool_tps * 60 + 2000
+    );
 
     // reserves don't include rewards
     assert_eq!(
@@ -770,23 +794,13 @@ fn test_rewards_distribution_as_operator() {
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
 
     let user1 = Address::generate(&e);
-    router.configure_init_pool_payment(
-        &admin,
-        &reward_token.address,
-        &0,
-        // &1000_0000000,
-        &router.address
-    );
 
     reward_token.mint(&user1, &1000_0000000);
     reward_token.mint(&router.address, &2_000_000_0000000);
     reward_token.mint(&admin, &2_000_000_0000000);
 
-    let (standard_pool_hash, _standard_pool_address) = router.init_standard_pool(
-        &user1,
-        &tokens,
-        &30
-    );
+    let (standard_pool_hash, _standard_pool_address) =
+        router.init_standard_pool(&user1, &tokens, &30);
 
     let reward_1_tps = 10_5000000_u128;
 
@@ -809,7 +823,7 @@ fn test_rewards_distribution_as_operator() {
         &admin,
         &reward_1_tps,
         &e.ledger().timestamp().saturating_add(60),
-        &rewards
+        &rewards,
     );
     router.fill_liquidity(&tokens);
     let standard_pool_tps = router.config_pool_rewards(&tokens, &standard_pool_hash);
@@ -820,43 +834,22 @@ fn test_rewards_distribution_as_operator() {
 
     // operator not set yet. admin should be able to distribute rewards but no one else should
     let operator = Address::generate(&e);
-    assert!(
-        router
-            .try_distribute_outstanding_reward(
-                &user1,
-                &router.address,
-                &tokens,
-                &standard_pool_hash
-            )
-            .is_err()
-    );
-    assert!(
-        router
-            .try_distribute_outstanding_reward(
-                &operator,
-                &router.address,
-                &tokens,
-                &standard_pool_hash
-            )
-            .is_err()
-    );
+    assert!(router
+        .try_distribute_outstanding_reward(&user1, &router.address, &tokens, &standard_pool_hash)
+        .is_err());
+    assert!(router
+        .try_distribute_outstanding_reward(&operator, &router.address, &tokens, &standard_pool_hash)
+        .is_err());
     router.set_privileged_addrs(
         &admin,
         &operator,
         &admin,
         &admin,
-        &Vec::from_array(&e, [admin.clone()])
+        &Vec::from_array(&e, [admin.clone()]),
     );
-    assert!(
-        router
-            .try_distribute_outstanding_reward(
-                &user1,
-                &router.address,
-                &tokens,
-                &standard_pool_hash
-            )
-            .is_err()
-    );
+    assert!(router
+        .try_distribute_outstanding_reward(&user1, &router.address, &tokens, &standard_pool_hash)
+        .is_err());
     assert_eq!(
         router.distribute_outstanding_reward(
             &operator,
@@ -890,28 +883,14 @@ fn test_rewards_distribution_override() {
 
     let user1 = Address::generate(&e);
 
-    router.configure_init_pool_payment(
-        &admin,
-        &reward_token.address,
-        &0,
-        &1000_0000000,
-        &router.address
-    );
-
     reward_token.mint(&user1, &1000_0000000);
     reward_token.mint(&router.address, &2_000_000_0000000);
     reward_token.mint(&admin, &2_000_000_0000000);
 
-    let (standard_pool_hash, _standard_pool_address) = router.init_standard_pool(
-        &user1,
-        &tokens,
-        &30
-    );
-    let (stable_pool_hash, _stable_pool_address) = router.init_stableswap_pool(
-        &user1,
-        &tokens,
-        &10
-    );
+    let (standard_pool_hash, _standard_pool_address) =
+        router.init_standard_pool(&user1, &tokens, &30);
+    let (stable_pool_hash, _stable_pool_address) =
+        router.init_stableswap_pool(&user1, &tokens, &10);
 
     let reward_1_tps = 10_5000000_u128;
 
@@ -928,7 +907,7 @@ fn test_rewards_distribution_override() {
         &admin,
         &reward_1_tps,
         &e.ledger().timestamp().saturating_add(60),
-        &rewards
+        &rewards,
     );
     router.fill_liquidity(&tokens);
     let standard_pool_tps = router.config_pool_rewards(&tokens, &standard_pool_hash);
@@ -965,7 +944,12 @@ fn test_rewards_distribution_override() {
         stable_pool_tps * 30
     );
 
-    router.config_global_rewards(&admin, &0, &e.ledger().timestamp().saturating_add(10), &rewards);
+    router.config_global_rewards(
+        &admin,
+        &0,
+        &e.ledger().timestamp().saturating_add(10),
+        &rewards,
+    );
     router.fill_liquidity(&tokens);
     router.config_pool_rewards(&tokens, &standard_pool_hash);
     router.config_pool_rewards(&tokens, &stable_pool_hash);
@@ -1005,7 +989,7 @@ fn test_rewards_distribution_override() {
         &rewards_admin,
         &admin,
         &admin,
-        &Vec::from_array(&e, [admin.clone()])
+        &Vec::from_array(&e, [admin.clone()]),
     );
     assert_eq!(
         router.distribute_outstanding_reward(
@@ -1040,26 +1024,21 @@ fn test_liqidity_not_filled() {
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
 
     let user1 = Address::generate(&e);
-    router.configure_init_pool_payment(
-        &admin,
-        &reward_token.address,
-        &0,
-        &1000_0000000,
-        &router.address
-    );
 
-    let (standard_pool_hash, _standard_pool_address) = router.init_standard_pool(
-        &user1,
-        &tokens,
-        &30
-    );
+    let (standard_pool_hash, _standard_pool_address) =
+        router.init_standard_pool(&user1, &tokens, &30);
 
     token1.mint(&user1, &2000);
     token2.mint(&user1, &2000);
 
-    router.deposit(&user1, &tokens, &standard_pool_hash, &1000, &0);
+    router.deposit(&user1, &tokens, &standard_pool_hash, &1000);
     let rewards = Vec::from_array(&e, [(tokens.clone(), 1_0000000)]);
-    router.config_global_rewards(&admin, &1, &e.ledger().timestamp().saturating_add(60), &rewards);
+    router.config_global_rewards(
+        &admin,
+        &1,
+        &e.ledger().timestamp().saturating_add(60),
+        &rewards,
+    );
     router.config_pool_rewards(&tokens, &standard_pool_hash);
 }
 
@@ -1077,25 +1056,19 @@ fn test_fill_liqidity_reentrancy() {
 
     let user1 = Address::generate(&e);
 
-    router.configure_init_pool_payment(
-        &admin,
-        &reward_token.address,
-        &0,
-        &1000_0000000,
-        &router.address
-    );
-
-    let (standard_pool_hash, _standard_pool_address) = router.init_standard_pool(
-        &user1,
-        &tokens,
-        &30
-    );
+    let (standard_pool_hash, _standard_pool_address) =
+        router.init_standard_pool(&user1, &tokens, &30);
     token1.mint(&user1, &2000);
     token2.mint(&user1, &2000);
 
-    router.deposit(&user1, &tokens, &standard_pool_hash, &1000, &0);
+    router.deposit(&user1, &tokens, &standard_pool_hash, &1000);
     let rewards = Vec::from_array(&e, [(tokens.clone(), 1_0000000)]);
-    router.config_global_rewards(&admin, &1, &e.ledger().timestamp().saturating_add(60), &rewards);
+    router.config_global_rewards(
+        &admin,
+        &1,
+        &e.ledger().timestamp().saturating_add(60),
+        &rewards,
+    );
     router.fill_liquidity(&tokens);
     router.fill_liquidity(&tokens);
 }
@@ -1114,25 +1087,19 @@ fn test_config_pool_rewards_reentrancy() {
 
     let user1 = Address::generate(&e);
 
-    router.configure_init_pool_payment(
-        &admin,
-        &reward_token.address,
-        &0,
-        // &1000_0000000,
-        &router.address
-    );
-
-    let (standard_pool_hash, _standard_pool_address) = router.init_standard_pool(
-        &user1,
-        &tokens,
-        &30
-    );
+    let (standard_pool_hash, _standard_pool_address) =
+        router.init_standard_pool(&user1, &tokens, &30);
     token1.mint(&user1, &2000);
     token2.mint(&user1, &2000);
 
     router.deposit(&user1, &tokens, &standard_pool_hash, &1000, &0);
     let rewards = Vec::from_array(&e, [(tokens.clone(), 1_0000000)]);
-    router.config_global_rewards(&admin, &1, &e.ledger().timestamp().saturating_add(60), &rewards);
+    router.config_global_rewards(
+        &admin,
+        &1,
+        &e.ledger().timestamp().saturating_add(60),
+        &rewards,
+    );
     router.fill_liquidity(&tokens);
     router.config_pool_rewards(&tokens, &standard_pool_hash);
     router.config_pool_rewards(&tokens, &standard_pool_hash);
@@ -1151,30 +1118,29 @@ fn test_config_pool_rewards_after_new_global_config() {
 
     let user1 = Address::generate(&e);
 
-    router.configure_init_pool_payment(
-        &admin,
-        &reward_token.address,
-        &0,
-        // &1000_0000000,
-        &router.address
-    );
-
-    let (standard_pool_hash, _standard_pool_address) = router.init_standard_pool(
-        &user1,
-        &tokens,
-        &30
-    );
+    let (standard_pool_hash, _standard_pool_address) =
+        router.init_standard_pool(&user1, &tokens, &30);
     token1.mint(&user1, &2000);
     token2.mint(&user1, &2000);
 
     router.deposit(&user1, &tokens, &standard_pool_hash, &1000, &0);
     let rewards = Vec::from_array(&e, [(tokens.clone(), 1_0000000)]);
-    router.config_global_rewards(&admin, &1, &e.ledger().timestamp().saturating_add(60), &rewards);
+    router.config_global_rewards(
+        &admin,
+        &1,
+        &e.ledger().timestamp().saturating_add(60),
+        &rewards,
+    );
     router.fill_liquidity(&tokens);
     assert_eq!(router.config_pool_rewards(&tokens, &standard_pool_hash), 1);
 
     jump(&e, 300);
-    router.config_global_rewards(&admin, &1, &e.ledger().timestamp().saturating_add(60), &rewards);
+    router.config_global_rewards(
+        &admin,
+        &1,
+        &e.ledger().timestamp().saturating_add(60),
+        &rewards,
+    );
     router.fill_liquidity(&tokens);
     assert_eq!(router.config_pool_rewards(&tokens, &standard_pool_hash), 1);
 }
@@ -1194,22 +1160,11 @@ fn test_config_pool_after_liquidity_fill() {
 
     let user1 = Address::generate(&e);
 
-    router.configure_init_pool_payment(
-        &admin,
-        &reward_token.address,
-        &0,
-        &1000_0000000,
-        &router.address
-    );
-
     token1.mint(&user1, &2000);
     token2.mint(&user1, &2000);
 
-    let (standard_pool_1_hash, _standard_pool_1_address) = router.init_standard_pool(
-        &user1,
-        &tokens,
-        &30
-    );
+    let (standard_pool_1_hash, _standard_pool_1_address) =
+        router.init_standard_pool(&user1, &tokens, &30);
     router.deposit(&user1, &tokens, &standard_pool_1_hash, &1000, &0);
 
     let rewards = Vec::from_array(&e, [(tokens.clone(), 1_0000000)]);
@@ -1217,18 +1172,21 @@ fn test_config_pool_after_liquidity_fill() {
         &admin,
         &1_0000000,
         &e.ledger().timestamp().saturating_add(60),
-        &rewards
+        &rewards,
     );
     router.fill_liquidity(&tokens);
-    assert_eq!(router.config_pool_rewards(&tokens, &standard_pool_1_hash), 1_0000000);
-
-    let (standard_pool_2_hash, _standard_pool_2_address) = router.init_standard_pool(
-        &user1,
-        &tokens,
-        &10
+    assert_eq!(
+        router.config_pool_rewards(&tokens, &standard_pool_1_hash),
+        1_0000000
     );
+
+    let (standard_pool_2_hash, _standard_pool_2_address) =
+        router.init_standard_pool(&user1, &tokens, &10);
     router.deposit(&user1, &tokens, &standard_pool_2_hash, &1000, &0);
-    assert_eq!(router.config_pool_rewards(&tokens, &standard_pool_2_hash), 0);
+    assert_eq!(
+        router.config_pool_rewards(&tokens, &standard_pool_2_hash),
+        0
+    );
 }
 
 #[test]
@@ -1245,19 +1203,8 @@ fn test_fill_liquidity_no_config() {
 
     let user1 = Address::generate(&e);
 
-    router.configure_init_pool_payment(
-        &admin,
-        &reward_token.address,
-        &0,
-        // &1000_0000000,
-        &router.address
-    );
-
-    let (standard_pool_hash, _standard_pool_address) = router.init_standard_pool(
-        &user1,
-        &tokens,
-        &30
-    );
+    let (standard_pool_hash, _standard_pool_address) =
+        router.init_standard_pool(&user1, &tokens, &30);
     token1.mint(&user1, &2000);
     token2.mint(&user1, &2000);
 
@@ -1279,19 +1226,16 @@ fn test_config_rewards_not_admin() {
 
     let user1 = Address::generate(&e);
 
-    router.configure_init_pool_payment(
-        &admin,
-        &reward_token.address,
-        &0,
-        // &1000_0000000,
-        &router.address
-    );
-
     reward_token.mint(&user1, &1000_0000000);
     router.init_standard_pool(&user1, &tokens, &30);
 
     let rewards = Vec::from_array(&e, [(tokens.clone(), 1_0000000)]);
-    router.config_global_rewards(&user1, &1, &e.ledger().timestamp().saturating_add(60), &rewards);
+    router.config_global_rewards(
+        &user1,
+        &1,
+        &e.ledger().timestamp().saturating_add(60),
+        &rewards,
+    );
 }
 
 #[test]
@@ -1308,21 +1252,22 @@ fn test_config_rewards_duplicated_tokens() {
 
     let user1 = Address::generate(&e);
 
-    router.configure_init_pool_payment(
-        &admin,
-        &reward_token.address,
-        &0,
-        // &1000_0000000,
-        &router.address
-    );
-
     reward_token.mint(&user1, &1000_0000000);
     router.init_standard_pool(&user1, &tokens, &30);
 
-    let rewards = Vec::from_array(&e, [
-        (Vec::from_array(&e, [token1.address.clone(), token1.address.clone()]), 1_0000000),
-    ]);
-    router.config_global_rewards(&admin, &1, &e.ledger().timestamp().saturating_add(60), &rewards);
+    let rewards = Vec::from_array(
+        &e,
+        [(
+            Vec::from_array(&e, [token1.address.clone(), token1.address.clone()]),
+            1_0000000,
+        )],
+    );
+    router.config_global_rewards(
+        &admin,
+        &1,
+        &e.ledger().timestamp().saturating_add(60),
+        &rewards,
+    );
 }
 
 #[test]
@@ -1339,21 +1284,22 @@ fn test_config_rewards_tokens_not_sorted() {
 
     let user1 = Address::generate(&e);
 
-    router.configure_init_pool_payment(
-        &admin,
-        &reward_token.address,
-        &0,
-        // &1000_0000000,
-        &router.address
-    );
-
     reward_token.mint(&user1, &1000_0000000);
     router.init_standard_pool(&user1, &tokens, &30);
 
-    let rewards = Vec::from_array(&e, [
-        (Vec::from_array(&e, [token2.address, token1.address]), 1_0000000),
-    ]);
-    router.config_global_rewards(&admin, &1, &e.ledger().timestamp().saturating_add(60), &rewards);
+    let rewards = Vec::from_array(
+        &e,
+        [(
+            Vec::from_array(&e, [token2.address, token1.address]),
+            1_0000000,
+        )],
+    );
+    router.config_global_rewards(
+        &admin,
+        &1,
+        &e.ledger().timestamp().saturating_add(60),
+        &rewards,
+    );
 }
 
 #[test]
@@ -1367,24 +1313,27 @@ fn test_config_rewards_no_pools_for_tokens() {
 
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
 
-    router.configure_init_pool_payment(
-        &admin,
-        &reward_token.address,
-        &0,
-        // &1000_0000000,
-        &router.address
-    );
-
     let rewards = Vec::from_array(&e, [(tokens.clone(), 1_0000000)]);
-    router.config_global_rewards(&admin, &1, &e.ledger().timestamp().saturating_add(60), &rewards);
+    router.config_global_rewards(
+        &admin,
+        &1,
+        &e.ledger().timestamp().saturating_add(60),
+        &rewards,
+    );
     assert_eq!(
         router.get_tokens_for_reward(),
-        Map::from_array(&e, [(tokens.clone(), (1_0000000, false, U256::from_u32(&e, 0)))])
+        Map::from_array(
+            &e,
+            [(tokens.clone(), (1_0000000, false, U256::from_u32(&e, 0)))]
+        )
     );
     router.fill_liquidity(&tokens);
     assert_eq!(
         router.get_tokens_for_reward(),
-        Map::from_array(&e, [(tokens.clone(), (1_0000000, true, U256::from_u32(&e, 0)))])
+        Map::from_array(
+            &e,
+            [(tokens.clone(), (1_0000000, true, U256::from_u32(&e, 0)))]
+        )
     );
 }
 
@@ -1420,13 +1369,7 @@ fn test_event_correct() {
     let user1 = Address::generate(&e);
 
     let payment_for_creation_address = router.get_init_pool_payment_address();
-    router.configure_init_pool_payment(
-        &admin,
-        &reward_token.address,
-        &0,
-        // &1000_0000000,
-        &payment_for_creation_address
-    );
+
     assert_eq!(reward_token.balance(&payment_for_creation_address), 0);
 
     reward_token.mint(&user1, &10000000_0000000);
@@ -1438,16 +1381,20 @@ fn test_event_correct() {
 
     assert_eq!(
         vec![&e, init_pool_event],
-        vec![&e, (
-            router.address.clone(),
-            (Symbol::new(&e, "add_pool"), tokens.clone()).into_val(&e),
+        vec![
+            &e,
             (
-                pool_address.clone(),
-                symbol_short!("constant"),
-                pool_hash.clone(),
-                Vec::<Val>::from_array(&e, [fee.into_val(&e)]),
-            ).into_val(&e),
-        )]
+                router.address.clone(),
+                (Symbol::new(&e, "add_pool"), tokens.clone()).into_val(&e),
+                (
+                    pool_address.clone(),
+                    symbol_short!("constant"),
+                    pool_hash.clone(),
+                    Vec::<Val>::from_array(&e, [fee.into_val(&e)]),
+                )
+                    .into_val(&e),
+            )
+        ]
     );
 
     reward_token.mint(&router.address, &1_000_000_0000000);
@@ -1457,7 +1404,7 @@ fn test_event_correct() {
         &admin,
         &reward_1_tps,
         &e.ledger().timestamp().saturating_add(60),
-        &rewards
+        &rewards,
     );
     router.fill_liquidity(&tokens);
     router.config_pool_rewards(&tokens, &pool_hash);
@@ -1481,11 +1428,14 @@ fn test_event_correct() {
 
     assert_eq!(
         vec![&e, deposit_event],
-        vec![&e, (
-            router.address.clone(),
-            (Symbol::new(&e, "deposit"), tokens.clone(), user1.clone()).into_val(&e),
-            (pool_id.clone(), amounts, share_amount).into_val(&e),
-        )]
+        vec![
+            &e,
+            (
+                router.address.clone(),
+                (Symbol::new(&e, "deposit"), tokens.clone(), user1.clone()).into_val(&e),
+                (pool_id.clone(), amounts, share_amount).into_val(&e),
+            )
+        ]
     );
 
     let out_amt = router.swap(
@@ -1495,17 +1445,27 @@ fn test_event_correct() {
         &token2.address,
         &pool_hash,
         &97_u128,
-        &48_u128
+        &48_u128,
     );
     let swap_event = e.events().all().last().unwrap();
 
     assert_eq!(
         vec![&e, swap_event],
-        vec![&e, (
-            router.address.clone(),
-            (Symbol::new(&e, "swap"), tokens.clone(), user1.clone()).into_val(&e),
-            (pool_id.clone(), &token1.address, &token2.address, 97_u128, out_amt).into_val(&e),
-        )]
+        vec![
+            &e,
+            (
+                router.address.clone(),
+                (Symbol::new(&e, "swap"), tokens.clone(), user1.clone()).into_val(&e),
+                (
+                    pool_id.clone(),
+                    &token1.address,
+                    &token2.address,
+                    97_u128,
+                    out_amt
+                )
+                    .into_val(&e),
+            )
+        ]
     );
 
     let amounts = router.withdraw(
@@ -1513,17 +1473,20 @@ fn test_event_correct() {
         &tokens,
         &pool_hash,
         &100_u128,
-        &Vec::from_array(&e, [197_u128, 51_u128])
+        &Vec::from_array(&e, [197_u128, 51_u128]),
     );
     let withdraw_event = e.events().all().last().unwrap();
 
     assert_eq!(
         vec![&e, withdraw_event],
-        vec![&e, (
-            router.address.clone(),
-            (Symbol::new(&e, "withdraw"), tokens.clone(), user1.clone()).into_val(&e),
-            (pool_id.clone(), 100_u128, amounts).into_val(&e),
-        )]
+        vec![
+            &e,
+            (
+                router.address.clone(),
+                (Symbol::new(&e, "withdraw"), tokens.clone(), user1.clone()).into_val(&e),
+                (pool_id.clone(), 100_u128, amounts).into_val(&e),
+            )
+        ]
     );
 }
 
@@ -1535,7 +1498,11 @@ fn test_tokens_storage() {
     let [token1, token2, token3, _] = setup.tokens;
     let reward_token = setup.reward_token;
 
-    let tokens = [token1.address.clone(), token2.address.clone(), token3.address.clone()];
+    let tokens = [
+        token1.address.clone(),
+        token2.address.clone(),
+        token3.address.clone(),
+    ];
 
     let user1 = Address::generate(&e);
     reward_token.mint(&user1, &100_0000000);
@@ -1544,7 +1511,10 @@ fn test_tokens_storage() {
         Vec::from_array(&e, [tokens[0].clone(), tokens[1].clone()]),
         Vec::from_array(&e, [tokens[1].clone(), tokens[2].clone()]),
         Vec::from_array(&e, [tokens[0].clone(), tokens[2].clone()]),
-        Vec::from_array(&e, [tokens[0].clone(), tokens[1].clone(), tokens[2].clone()]),
+        Vec::from_array(
+            &e,
+            [tokens[0].clone(), tokens[1].clone(), tokens[2].clone()],
+        ),
     ];
     for pair in pairs.clone() {
         router.init_stableswap_pool(&user1, &pair, &0);
@@ -1558,14 +1528,20 @@ fn test_tokens_storage() {
     let mut pools_full_list = Vec::new(&e);
     for i in 0..counter {
         assert_eq!(router.get_tokens(&i), pairs[i as usize]);
-        let pools = (pairs[i as usize].clone(), router.get_pools(&pairs[i as usize]));
+        let pools = (
+            pairs[i as usize].clone(),
+            router.get_pools(&pairs[i as usize]),
+        );
         assert_eq!(
             router.get_pools_for_tokens_range(&i, &(i + 1)),
             Vec::from_array(&e, [pools.clone()])
         );
         pools_full_list.push_back(pools);
     }
-    assert_eq!(router.get_pools_for_tokens_range(&0, &counter), pools_full_list);
+    assert_eq!(
+        router.get_pools_for_tokens_range(&0, &counter),
+        pools_full_list
+    );
 }
 
 #[test]
@@ -1583,13 +1559,6 @@ fn test_create_pool_payment() {
     reward_token.mint(&user1, &10_0000000);
 
     let payments_destination = router.get_init_pool_payment_address();
-    router.configure_init_pool_payment(
-        &admin,
-        &reward_token.address,
-        &100,
-        // &1000,
-        &payments_destination
-    );
 
     assert_eq!(reward_token.balance(&payments_destination), 0);
     router.init_standard_pool(&user1, &tokens, &30);
@@ -1614,11 +1583,8 @@ fn test_rewards_distribution_without_outstanding_rewards() {
     reward_token.mint(&user, &200000_0000000);
     reward_token.mint(&router.address, &20_000_000_0000000);
 
-    let (standard_pool_hash1, standard_pool_address1) = router.init_standard_pool(
-        &user,
-        &tokens,
-        &30
-    );
+    let (standard_pool_hash1, standard_pool_address1) =
+        router.init_standard_pool(&user, &tokens, &30);
 
     let reward_tps = 1_5000000_u128;
 
@@ -1632,7 +1598,7 @@ fn test_rewards_distribution_without_outstanding_rewards() {
         &tokens,
         &standard_pool_hash1,
         &Vec::from_array(&e, [30399483, 2420176738]),
-        &0
+        &0,
     );
 
     reward_token.mint(&standard_pool_address1, &(3888205486 - 2420176738));
@@ -1641,14 +1607,17 @@ fn test_rewards_distribution_without_outstanding_rewards() {
         &admin,
         &reward_tps,
         &e.ledger().timestamp().saturating_add(60),
-        &rewards
+        &rewards,
     );
 
     router.fill_liquidity(&tokens);
     router.config_pool_rewards(&tokens, &standard_pool_hash1);
 
     // check that we don't need to add rewards to pool
-    assert_eq!(router.get_total_outstanding_reward(&tokens, &standard_pool_hash1), 0);
+    assert_eq!(
+        router.get_total_outstanding_reward(&tokens, &standard_pool_hash1),
+        0
+    );
 
     // check that it works without panicking
     assert_eq!(
@@ -1678,17 +1647,32 @@ fn test_privileged_users() {
 
     let (_, standard_address) = router.init_standard_pool(&user1, &tokens, &30);
     // let (_, stable_address) = router.init_stableswap_pool(&user1, &tokens, &30);
-    let privileged_addrs: Map<Symbol, Vec<Address>> = Map::from_array(&e, [
-        (Symbol::new(&e, "Admin"), Vec::from_array(&e, [setup.admin])),
-        (Symbol::new(&e, "EmergencyAdmin"), Vec::from_array(&e, [setup.emergency_admin])),
-        (Symbol::new(&e, "RewardsAdmin"), Vec::from_array(&e, [setup.rewards_admin])),
-        (Symbol::new(&e, "OperationsAdmin"), Vec::from_array(&e, [setup.operations_admin])),
-        (Symbol::new(&e, "PauseAdmin"), Vec::from_array(&e, [setup.pause_admin])),
-        (
-            Symbol::new(&e, "EmergencyPauseAdmin"),
-            Vec::from_array(&e, [setup.emergency_pause_admin]),
-        ),
-    ]);
+    let privileged_addrs: Map<Symbol, Vec<Address>> = Map::from_array(
+        &e,
+        [
+            (Symbol::new(&e, "Admin"), Vec::from_array(&e, [setup.admin])),
+            (
+                Symbol::new(&e, "EmergencyAdmin"),
+                Vec::from_array(&e, [setup.emergency_admin]),
+            ),
+            (
+                Symbol::new(&e, "RewardsAdmin"),
+                Vec::from_array(&e, [setup.rewards_admin]),
+            ),
+            (
+                Symbol::new(&e, "OperationsAdmin"),
+                Vec::from_array(&e, [setup.operations_admin]),
+            ),
+            (
+                Symbol::new(&e, "PauseAdmin"),
+                Vec::from_array(&e, [setup.pause_admin]),
+            ),
+            (
+                Symbol::new(&e, "EmergencyPauseAdmin"),
+                Vec::from_array(&e, [setup.emergency_pause_admin]),
+            ),
+        ],
+    );
     assert_eq!(privileged_addrs, router.get_privileged_addrs());
     // test addresses inheritance
     assert_eq!(
@@ -1711,21 +1695,25 @@ fn test_set_privileged_addresses_event() {
         &setup.rewards_admin.clone(),
         &setup.operations_admin.clone(),
         &setup.pause_admin.clone(),
-        &Vec::from_array(&setup.env, [setup.emergency_pause_admin.clone()])
+        &Vec::from_array(&setup.env, [setup.emergency_pause_admin.clone()]),
     );
 
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            router.address.clone(),
-            (Symbol::new(&setup.env, "set_privileged_addrs"),).into_val(&setup.env),
+        vec![
+            &setup.env,
             (
-                setup.rewards_admin,
-                setup.operations_admin,
-                setup.pause_admin,
-                Vec::from_array(&setup.env, [setup.emergency_pause_admin]),
-            ).into_val(&setup.env),
-        )]
+                router.address.clone(),
+                (Symbol::new(&setup.env, "set_privileged_addrs"),).into_val(&setup.env),
+                (
+                    setup.rewards_admin,
+                    setup.operations_admin,
+                    setup.pause_admin,
+                    Vec::from_array(&setup.env, [setup.emergency_pause_admin]),
+                )
+                    .into_val(&setup.env),
+            )
+        ]
     );
 }
 
@@ -1738,25 +1726,35 @@ fn test_transfer_ownership_events() {
     router.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &new_admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            router.address.clone(),
-            (Symbol::new(&setup.env, "commit_transfer_ownership"), symbol_short!("Admin")).into_val(
-                &setup.env
-            ),
-            (new_admin.clone(),).into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                router.address.clone(),
+                (
+                    Symbol::new(&setup.env, "commit_transfer_ownership"),
+                    symbol_short!("Admin")
+                )
+                    .into_val(&setup.env),
+                (new_admin.clone(),).into_val(&setup.env),
+            )
+        ]
     );
 
     router.revert_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            router.address.clone(),
-            (Symbol::new(&setup.env, "revert_transfer_ownership"), symbol_short!("Admin")).into_val(
-                &setup.env
-            ),
-            ().into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                router.address.clone(),
+                (
+                    Symbol::new(&setup.env, "revert_transfer_ownership"),
+                    symbol_short!("Admin")
+                )
+                    .into_val(&setup.env),
+                ().into_val(&setup.env),
+            )
+        ]
     );
 
     router.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &new_admin);
@@ -1764,13 +1762,18 @@ fn test_transfer_ownership_events() {
     router.apply_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            router.address.clone(),
-            (Symbol::new(&setup.env, "apply_transfer_ownership"), symbol_short!("Admin")).into_val(
-                &setup.env
-            ),
-            (new_admin.clone(),).into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                router.address.clone(),
+                (
+                    Symbol::new(&setup.env, "apply_transfer_ownership"),
+                    symbol_short!("Admin")
+                )
+                    .into_val(&setup.env),
+                (new_admin.clone(),).into_val(&setup.env),
+            )
+        ]
     );
 }
 
@@ -1783,21 +1786,27 @@ fn test_upgrade_events() {
     contract.commit_upgrade(&setup.admin, &new_wasm_hash);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            contract.address.clone(),
-            (Symbol::new(&setup.env, "commit_upgrade"),).into_val(&setup.env),
-            (new_wasm_hash.clone(),).into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "commit_upgrade"),).into_val(&setup.env),
+                (new_wasm_hash.clone(),).into_val(&setup.env),
+            )
+        ]
     );
 
     contract.revert_upgrade(&setup.admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            contract.address.clone(),
-            (Symbol::new(&setup.env, "revert_upgrade"),).into_val(&setup.env),
-            ().into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "revert_upgrade"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            )
+        ]
     );
 
     contract.commit_upgrade(&setup.admin, &new_wasm_hash);
@@ -1805,11 +1814,14 @@ fn test_upgrade_events() {
     contract.apply_upgrade(&setup.admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            contract.address.clone(),
-            (Symbol::new(&setup.env, "apply_upgrade"),).into_val(&setup.env),
-            (new_wasm_hash.clone(),).into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "apply_upgrade"),).into_val(&setup.env),
+                (new_wasm_hash.clone(),).into_val(&setup.env),
+            )
+        ]
     );
 }
 
@@ -1821,20 +1833,26 @@ fn test_emergency_mode_events() {
     contract.set_emergency_mode(&setup.emergency_admin, &true);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            contract.address.clone(),
-            (Symbol::new(&setup.env, "enable_emergency_mode"),).into_val(&setup.env),
-            ().into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "enable_emergency_mode"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            )
+        ]
     );
     contract.set_emergency_mode(&setup.emergency_admin, &false);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            contract.address.clone(),
-            (Symbol::new(&setup.env, "disable_emergency_mode"),).into_val(&setup.env),
-            ().into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "disable_emergency_mode"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            )
+        ]
     );
 }
 

@@ -1,23 +1,9 @@
-use sep_40_oracle::Asset;
-use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Val, Vec};
-
-use crate::storage::LiquidityPoolInfo;
+use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Vec};
+use utils::storage::{InitializeAllParams, InitializeParams, LiquidityPoolInfo};
 
 pub trait LiquidityPoolCrunch {
     // Initialize pool completely to reduce calculations cost
-    fn initialize_all(
-        e: Env,
-        admin: Address,
-        privileged_addrs: (Address, Address, Address, Address, Vec<Address>),
-        router: Address,
-        oracle: Address,
-        target_asset: Asset,
-        lp_token_wasm_hash: BytesN<32>,
-        tokens: Vec<Address>,
-        fee_fraction: u32,
-        reward_config: (Address, Address, Address),
-        plane: Address,
-    );
+    fn initialize_all(e: Env, params: InitializeAllParams);
 }
 
 pub trait LiquidityPoolTrait {
@@ -25,17 +11,7 @@ pub trait LiquidityPoolTrait {
     fn pool_type(e: Env) -> Symbol;
 
     // Sets the token contract addresses for this pool
-    fn initialize(
-        e: Env,
-        admin: Address,
-        privileged_addrs: (Address, Address, Address, Address, Vec<Address>),
-        router: Address,
-        oracle: Address,
-        target_asset: Asset,
-        lp_token_wasm_hash: BytesN<32>,
-        tokens: Vec<Address>,
-        fee_fraction: u32,
-    );
+    fn initialize(e: Env, params: InitializeParams);
 
     // Returns the token contract address for the pool share token
     fn share_id(e: Env) -> Address;
@@ -45,10 +21,10 @@ pub trait LiquidityPoolTrait {
 
     fn get_tokens(e: Env) -> Vec<Address>;
 
-    // Deposits token_a and token_b. Also mints pool shares for the "to" Identifier. The amount minted
+    // Deposits token_b. Also mints pool shares for the "to" Identifier. The amount minted
     // is determined based on the difference between the reserves stored by this contract, and
     // the actual balance of token_a and token_b for this contract.
-    fn deposit(e: Env, user: Address, desired_amount: u128, min_shares: u128) -> (u128, u128);
+    fn deposit(e: Env, user: Address, token_b_amount: u128) -> (u128, u128);
 
     // Perform an exchange between two coins.
     // in_idx: Index value for the coin to send
@@ -89,7 +65,7 @@ pub trait LiquidityPoolTrait {
     // burns all pools share tokens in this contracts, and sends
     // the corresponding amount of tokens to user.
     // Returns amount of tokens withdrawn
-    fn withdraw(e: Env, user: Address, share_amount: u128, min_amount: u128) -> u128;
+    fn withdraw(e: Env, user: Address, share_amount: u128) -> u128;
 
     // Get pool reserves
     fn get_reserves(e: Env) -> Vec<u128>;
@@ -114,6 +90,12 @@ pub trait AdminInterfaceTrait {
 
     // Get map of privileged roles
     fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>>;
+
+    // Failsafe to update the base oracle address
+    fn set_base_oracle(e: Env, admin: Address, new_oracle: Address);
+
+    // Failsafe to update the quote oracle address
+    fn set_quote_oracle(e: Env, admin: Address, new_oracle: Address);
 
     //
     fn rebalance(e: Env, admin: Address);

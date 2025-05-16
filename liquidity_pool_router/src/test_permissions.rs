@@ -1,8 +1,6 @@
 #![cfg(test)]
 
-use crate::testutils::{
-    install_liq_pool_hash, install_token_wasm, Setup,
-};
+use crate::testutils::{install_liq_pool_hash, install_token_wasm, Setup};
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{symbol_short, Address, Symbol, Vec};
@@ -336,7 +334,7 @@ fn test_set_privileged_addresses() {
                     &setup.rewards_admin.clone(),
                     &setup.operations_admin.clone(),
                     &setup.pause_admin.clone(),
-                    &Vec::from_array(&setup.env, [setup.emergency_pause_admin.clone()]),
+                    &Vec::from_array(&setup.env, [setup.emergency_pause_admin.clone()])
                 )
                 .is_ok(),
             is_ok
@@ -536,7 +534,7 @@ fn test_config_rewards() {
                     &addr,
                     &1,
                     &setup.env.ledger().timestamp().saturating_add(60),
-                    &Vec::from_array(&setup.env, [(tokens.clone(), 1_0000000)]),
+                    &Vec::from_array(&setup.env, [(tokens.clone(), 1_0000000)])
                 )
                 .is_ok(),
             is_ok
@@ -576,36 +574,6 @@ fn test_distribute_rewards() {
         assert_eq!(
             router
                 .try_distribute_outstanding_reward(&addr, &router.address, &tokens, &pool_hash)
-                .is_ok(),
-            is_ok
-        );
-    }
-}
-
-#[test]
-fn test_configure_init_pool_payment() {
-    let setup = Setup::default();
-    let router = setup.router;
-    let user = Address::generate(&setup.env);
-
-    for (addr, is_ok) in [
-        (user, false),
-        (setup.admin, true),
-        (setup.emergency_admin, false),
-        (setup.rewards_admin, false),
-        (setup.operations_admin, false),
-        (setup.pause_admin, false),
-        (setup.emergency_pause_admin, false),
-    ] {
-        assert_eq!(
-            router
-                .try_configure_init_pool_payment(
-                    &addr,
-                    &setup.reward_token.address,
-                    &1,
-                    // &1,
-                    &router.address
-                )
                 .is_ok(),
             is_ok
         );

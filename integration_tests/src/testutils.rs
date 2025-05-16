@@ -55,21 +55,9 @@ impl Setup<'_> {
         let router = deploy_liqpool_router_contract(e.clone());
         router.init_admin(&admin);
         router.set_pool_hash(&admin, &pool_hash);
-        router.set_stableswap_pool_hash(
-            &admin,
-            &e.deployer()
-                .upload_contract_wasm(contracts::stableswap_pool::WASM),
-        );
         router.set_token_hash(&admin, &token_hash);
         router.set_reward_token(&admin, &reward_token.address);
         router.set_pools_plane(&admin, &plane.address);
-        router.configure_init_pool_payment(
-            &admin,
-            &reward_token.address,
-            &10_0000000,
-            &1_0000000,
-            &router.address,
-        );
         router.set_reward_boost_config(&admin, &locked_token.address, &boost_feed.address);
 
         let fee_collector_factory =
@@ -102,24 +90,6 @@ impl Setup<'_> {
         );
         (
             contracts::constant_product_pool::Client::new(&self.env, &pool_address),
-            pool_hash,
-        )
-    }
-
-    pub(crate) fn deploy_stableswap_pool(
-        &self,
-        token_a: &Address,
-        token_b: &Address,
-        fee_fraction: u32,
-    ) -> (contracts::stableswap_pool::Client, BytesN<32>) {
-        get_token_admin_client(&self.env, &self.reward_token).mint(&self.admin, &1_0000000);
-        let (pool_hash, pool_address) = self.router.init_stableswap_pool(
-            &self.admin,
-            &Vec::from_array(&self.env, [token_a.clone(), token_b.clone()]),
-            &fee_fraction,
-        );
-        (
-            contracts::stableswap_pool::Client::new(&self.env, &pool_address),
             pool_hash,
         )
     }

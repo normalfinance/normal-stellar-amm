@@ -13,6 +13,8 @@ pub enum LiquidityPoolError {
     PoolSwapKilled = 206,
     PoolClaimKilled = 207,
     FutureShareIdNotSet = 208,
+    PoolWithdrawKilled = 209,
+    InvalidOracle = 210,
     // pool specific validation errors
 }
 

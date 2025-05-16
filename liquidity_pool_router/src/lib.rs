@@ -13,5 +13,6 @@ mod storage;
 mod test;
 mod test_permissions;
 mod testutils;
+pub mod token;
 
 pub use contract::{LiquidityPoolRouter, LiquidityPoolRouterClient};

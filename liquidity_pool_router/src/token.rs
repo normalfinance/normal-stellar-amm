@@ -1,7 +1,4 @@
-use crate::storage::{get_token_a, get_token_b};
 use sep_40_oracle::Asset;
-use soroban_sdk::token::TokenClient as Client;
-use soroban_sdk::String;
 use soroban_sdk::{xdr::ToXdr, Address, Bytes, BytesN, Env};
 
 pub fn create_contract(
@@ -30,16 +27,4 @@ pub fn create_synthetic_token_contract(
     e.deployer()
         .with_current_contract(salt)
         .deploy_v2(token_wasm_hash, ())
-}
-
-fn transfer(e: &Env, token: Address, to: &Address, amount: i128) {
-    Client::new(e, &token).transfer(&e.current_contract_address(), to, &amount);
-}
-
-pub fn transfer_a(e: &Env, to: &Address, amount: u128) {
-    transfer(e, get_token_a(e), to, amount as i128);
-}
-
-pub fn transfer_b(e: &Env, to: &Address, amount: u128) {
-    transfer(e, get_token_b(e), to, amount as i128);
 }

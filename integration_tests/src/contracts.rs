@@ -25,11 +25,7 @@ pub(crate) mod swap_fee_factory {
 pub(crate) mod router {
     soroban_sdk::contractimport!(file = "../contracts/soroban_liquidity_pool_router_contract.wasm");
 }
-// pub(crate) mod stableswap_pool {
-//     soroban_sdk::contractimport!(
-//         file = "../contracts/soroban_liquidity_pool_stableswap_contract.wasm"
-//     );
-// }
+
 pub(crate) mod boost_feed {
     soroban_sdk::contractimport!(file = "../contracts/soroban_locker_feed_contract.wasm");
 }

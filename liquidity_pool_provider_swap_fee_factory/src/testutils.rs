@@ -62,34 +62,20 @@ impl Setup<'_> {
         let router = deploy_liqpool_router_contract(e.clone());
         router.init_admin(&admin);
         router.set_pool_hash(&admin, &pool_hash);
-        router.set_stableswap_pool_hash(&admin, &install_stableswap_liq_pool_hash(&e));
         router.set_token_hash(&admin, &token_hash);
         router.set_reward_token(&admin, &token_a.address);
         router.set_pools_plane(&admin, &plane);
-        router.configure_init_pool_payment(
-            &admin,
-            &token_a.address,
-            &10_0000000,
-            &1_0000000,
-            &router.address,
-        );
         router.set_reward_boost_config(&admin, &token_a.address, &boost_feed.address);
 
         // create swap pool & deposit initial liquidity
-        token_a_admin_client.mint(&admin, &10_0000000);
         let (_, pool_address) = router.init_standard_pool(
             &admin,
             &Vec::from_array(&e, [token_a.address.clone(), token_b.address.clone()]),
             &30,
         );
         let swap_pool = liquidity_pool::Client::new(&e, &pool_address);
-        token_a_admin_client.mint(&admin, &1_000_000_000_0000000);
         token_b_admin_client.mint(&admin, &1_000_000_000_0000000);
-        swap_pool.deposit(
-            &admin,
-            &Vec::from_array(&e, [1_000_000_000_0000000, 1_000_000_000_0000000]),
-            &1,
-        );
+        swap_pool.deposit(&admin, &1_000_000_000_0000000);
 
         let contract = create_contract(
             &e,
@@ -174,13 +160,6 @@ fn install_liq_pool_hash(e: &Env) -> BytesN<32> {
     );
     e.deployer().upload_contract_wasm(WASM)
 }
-
-// fn install_stableswap_liq_pool_hash(e: &Env) -> BytesN<32> {
-//     soroban_sdk::contractimport!(
-//         file = "../target/wasm32v1-none/release/soroban_liquidity_pool_stableswap_contract.wasm"
-//     );
-//     e.deployer().upload_contract_wasm(WASM)
-// }
 
 fn deploy_plane_contract<'a>(e: &Env) -> Address {
     soroban_sdk::contractimport!(

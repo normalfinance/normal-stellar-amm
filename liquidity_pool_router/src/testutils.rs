@@ -40,16 +40,6 @@ pub fn install_liq_pool_hash(e: &Env) -> BytesN<32> {
     e.deployer().upload_contract_wasm(standard_pool::WASM)
 }
 
-// pub mod stableswap_pool {
-//     soroban_sdk::contractimport!(
-//         file = "../target/wasm32v1-none/release/soroban_liquidity_pool_stableswap_contract.wasm"
-//     );
-// }
-
-pub fn install_stableswap_liq_pool_hash(e: &Env) -> BytesN<32> {
-    e.deployer().upload_contract_wasm(stableswap_pool::WASM)
-}
-
 mod pool_plane {
     soroban_sdk::contractimport!(
         file = "../target/wasm32v1-none/release/soroban_liquidity_pool_plane_contract.wasm"
@@ -163,16 +153,8 @@ impl Default for Setup<'_> {
             &Vec::from_array(&env, [emergency_pause_admin.clone()]),
         );
         router.set_pool_hash(&admin, &pool_hash);
-        router.set_stableswap_pool_hash(&admin, &install_stableswap_liq_pool_hash(&env));
         router.set_token_hash(&admin, &token_hash);
         router.set_reward_token(&admin, &reward_token.address);
-        router.configure_init_pool_payment(
-            &admin,
-            &reward_token.address,
-            &1_0000000,
-            &1_0000000,
-            &payment_for_creation_address,
-        );
         router.set_reward_boost_config(
             &admin,
             &reward_boost_token.address,

@@ -1,11 +1,12 @@
 #![cfg(test)]
 extern crate std;
 use crate::ProviderSwapFeeCollectorClient;
+use sep_40_oracle::Asset;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
-use soroban_sdk::{Address, BytesN, Env, Vec};
+use soroban_sdk::{Address, BytesN, Env, Symbol, Vec};
 
 pub(crate) struct TestConfig {
     pub(crate) max_provider_fee: u32,
@@ -69,34 +70,22 @@ impl Setup<'_> {
         let router = deploy_liqpool_router_contract(e.clone());
         router.init_admin(&admin);
         router.set_pool_hash(&admin, &pool_hash);
-        router.set_stableswap_pool_hash(&admin, &install_stableswap_liq_pool_hash(&e));
         router.set_token_hash(&admin, &token_hash);
         router.set_reward_token(&admin, &token_a.address);
         router.set_pools_plane(&admin, &plane);
-        router.configure_init_pool_payment(
-            &admin,
-            &token_a.address,
-            &10_0000000,
-            &1_0000000,
-            &router.address,
-        );
         router.set_reward_boost_config(&admin, &token_a.address, &boost_feed.address);
 
         // create swap pool & deposit initial liquidity
-        token_a_admin_client.mint(&admin, &10_0000000);
         let (_, pool_address) = router.init_standard_pool(
             &admin,
             &Vec::from_array(&e, [token_a.address.clone(), token_b.address.clone()]),
+            &(base_oracle, quote_oracle),
+            &Asset::Other(Symbol::new(&e, "SOL")),
             &30,
         );
         let swap_pool = liquidity_pool::Client::new(&e, &pool_address);
-        token_a_admin_client.mint(&admin, &1_000_000_000_0000000);
         token_b_admin_client.mint(&admin, &1_000_000_000_0000000);
-        swap_pool.deposit(
-            &admin,
-            &Vec::from_array(&e, [1_000_000_000_0000000, 1_000_000_000_0000000]),
-            &1,
-        );
+        swap_pool.deposit(&admin, &1_000_000_000_0000000);
 
         let contract = create_contract(
             &e,
