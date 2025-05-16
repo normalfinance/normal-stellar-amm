@@ -12,7 +12,7 @@ mod pool_interface;
 mod rewards;
 mod storage;
 mod test;
-// mod test_permissions;
+mod test_permissions;
 mod testutils;
 pub mod token;
 

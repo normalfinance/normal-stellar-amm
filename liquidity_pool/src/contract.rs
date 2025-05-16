@@ -864,7 +864,7 @@ impl AdminInterfaceTrait for LiquidityPool {
         require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
 
         set_is_killed_withdraw(&e, &true);
-        PoolEvents::new(&e).kill_deposit();
+        PoolEvents::new(&e).kill_withdraw();
     }
 
     // Stops the pool swaps instantly.
@@ -916,7 +916,7 @@ impl AdminInterfaceTrait for LiquidityPool {
         require_pause_admin_or_owner(&e, &admin);
 
         set_is_killed_withdraw(&e, &false);
-        PoolEvents::new(&e).unkill_deposit();
+        PoolEvents::new(&e).unkill_withdraw();
     }
 
     // Resumes the pool swaps.

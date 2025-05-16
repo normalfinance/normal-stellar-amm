@@ -26,12 +26,9 @@ fn test() {
 
     let user = Address::generate(&setup.env);
     setup.token_a_admin_client.mint(&user, &1_0000000);
-    let result = swap_fee_collector_client.swap_chained(
+    let result = swap_fee_collector_client.swap(
         &user,
-        &Vec::from_array(
-            &setup.env,
-            [(tokens, pool_index, setup.token_b.address.clone())],
-        ),
+        &(tokens, pool_index, setup.token_b.address.clone()),
         &setup.token_a.address,
         &1_0000000,
         &0,

@@ -2,8 +2,10 @@
 extern crate std;
 
 use crate::LiquidityPoolRouterClient;
+use sep_40_oracle::Asset;
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{Address, BytesN, Env, Symbol, Vec};
+use soroban_sdk::{ Address, BytesN, Env, Symbol, Vec };
+use utils::storage::OraclePair;
 
 pub(crate) mod test_token {
     use soroban_sdk::contractimport;
@@ -11,11 +13,7 @@ pub(crate) mod test_token {
 }
 
 pub fn create_token_contract<'a>(e: &Env, admin: &Address) -> test_token::Client<'a> {
-    test_token::Client::new(
-        e,
-        &e.register_stellar_asset_contract_v2(admin.clone())
-            .address(),
-    )
+    test_token::Client::new(e, &e.register_stellar_asset_contract_v2(admin.clone()).address())
 }
 
 pub fn create_liqpool_router_contract<'a>(e: &Env) -> LiquidityPoolRouterClient<'a> {
@@ -52,8 +50,7 @@ pub fn create_plane_contract<'a>(e: &Env) -> pool_plane::Client<'a> {
 
 mod liquidity_calculator {
     soroban_sdk::contractimport!(
-        file =
-            "../target/wasm32v1-none/release/soroban_liquidity_pool_liquidity_calculator_contract.wasm"
+        file = "../target/wasm32v1-none/release/soroban_liquidity_pool_liquidity_calculator_contract.wasm"
     );
 }
 
@@ -71,14 +68,14 @@ pub(crate) fn create_reward_boost_feed_contract<'a>(
     e: &Env,
     admin: &Address,
     operations_admin: &Address,
-    emergency_admin: &Address,
+    emergency_admin: &Address
 ) -> reward_boost_feed::Client<'a> {
     reward_boost_feed::Client::new(
         e,
         &e.register(
             reward_boost_feed::WASM,
-            reward_boost_feed::Args::__constructor(admin, operations_admin, emergency_admin),
-        ),
+            reward_boost_feed::Args::__constructor(admin, operations_admin, emergency_admin)
+        )
     )
 }
 
@@ -86,6 +83,9 @@ pub(crate) struct Setup<'a> {
     pub(crate) env: Env,
 
     pub(crate) admin: Address,
+
+    pub(crate) oracles: OraclePair,
+    pub(crate) target_asset: Asset,
 
     pub(crate) tokens: [test_token::Client<'a>; 4],
     pub(crate) reward_token: test_token::Client<'a>,
@@ -114,7 +114,7 @@ impl Default for Setup<'_> {
             create_token_contract(&env, &admin).address,
             create_token_contract(&env, &admin).address,
             create_token_contract(&env, &admin).address,
-            create_token_contract(&env, &admin).address,
+            create_token_contract(&env, &admin).address
         ];
         tokens.sort();
         let tokens = [
@@ -123,6 +123,10 @@ impl Default for Setup<'_> {
             test_token::Client::new(&env, &tokens[2]),
             test_token::Client::new(&env, &tokens[3]),
         ];
+
+        let oracles = OraclePair { base_oracle: (), quote_oracle: () };
+
+        let target_asset = Asset::Other(Symbol::new(&env, "SOL"));
 
         let reward_admin = Address::generate(&env);
         let admin = Address::generate(&env);
@@ -143,14 +147,14 @@ impl Default for Setup<'_> {
             &env,
             &admin,
             &operations_admin,
-            &emergency_pause_admin,
+            &emergency_pause_admin
         );
         router.set_privileged_addrs(
             &admin,
             &rewards_admin,
             &operations_admin,
             &pause_admin,
-            &Vec::from_array(&env, [emergency_pause_admin.clone()]),
+            &Vec::from_array(&env, [emergency_pause_admin.clone()])
         );
         router.set_pool_hash(&admin, &pool_hash);
         router.set_token_hash(&admin, &token_hash);
@@ -158,14 +162,14 @@ impl Default for Setup<'_> {
         router.set_reward_boost_config(
             &admin,
             &reward_boost_token.address,
-            &reward_boost_feed.address,
+            &reward_boost_feed.address
         );
 
         let emergency_admin = Address::generate(&env);
         router.commit_transfer_ownership(
             &admin,
             &Symbol::new(&env, "EmergencyAdmin"),
-            &emergency_admin,
+            &emergency_admin
         );
         router.apply_transfer_ownership(&admin, &Symbol::new(&env, "EmergencyAdmin"));
 
@@ -180,6 +184,8 @@ impl Default for Setup<'_> {
         Setup {
             env,
             admin,
+            oracles,
+            target_asset,
             tokens,
             reward_token,
             router,

@@ -1,10 +1,10 @@
 #![cfg(test)]
 
-use crate::testutils::{install_liq_pool_hash, install_token_wasm, Setup};
+use crate::testutils::{ install_liq_pool_hash, install_token_wasm, Setup };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{symbol_short, Address, Symbol, Vec};
-use utils::test_utils::{install_dummy_wasm, jump};
+use soroban_sdk::{ symbol_short, Address, String, Symbol, Vec };
+use utils::test_utils::{ install_dummy_wasm, jump };
 
 // test admin transfer ownership
 #[test]
@@ -17,9 +17,7 @@ fn test_admin_transfer_ownership_too_early() {
 
     router.commit_transfer_ownership(&admin_original, &symbol_short!("Admin"), &admin_new);
     // check admin not changed yet by calling protected method
-    assert!(router
-        .try_revert_transfer_ownership(&admin_new, &symbol_short!("Admin"))
-        .is_err());
+    assert!(router.try_revert_transfer_ownership(&admin_new, &symbol_short!("Admin")).is_err());
     jump(&setup.env, ADMIN_ACTIONS_DELAY - 1);
     router.apply_transfer_ownership(&admin_original, &symbol_short!("Admin"));
 }
@@ -57,9 +55,7 @@ fn test_admin_transfer_ownership_reverted() {
 
     router.commit_transfer_ownership(&admin_original, &symbol_short!("Admin"), &admin_new);
     // check admin not changed yet by calling protected method
-    assert!(router
-        .try_revert_transfer_ownership(&admin_new, &symbol_short!("Admin"))
-        .is_err());
+    assert!(router.try_revert_transfer_ownership(&admin_new, &symbol_short!("Admin")).is_err());
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     router.revert_transfer_ownership(&admin_original, &symbol_short!("Admin"));
     router.apply_transfer_ownership(&admin_original, &symbol_short!("Admin"));
@@ -74,9 +70,7 @@ fn test_admin_transfer_ownership() {
 
     router.commit_transfer_ownership(&admin_original, &symbol_short!("Admin"), &admin_new);
     // check admin not changed yet by calling protected method
-    assert!(router
-        .try_revert_transfer_ownership(&admin_new, &symbol_short!("Admin"))
-        .is_err());
+    assert!(router.try_revert_transfer_ownership(&admin_new, &symbol_short!("Admin")).is_err());
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     router.apply_transfer_ownership(&admin_original, &symbol_short!("Admin"));
 
@@ -94,16 +88,12 @@ fn test_emergency_admin_transfer_ownership_too_early() {
     router.commit_transfer_ownership(
         &setup.admin,
         &Symbol::new(&setup.env, "EmergencyAdmin"),
-        &emergency_admin_new,
+        &emergency_admin_new
     );
 
     // check emergency admin not changed yet by calling protected method
-    assert!(router
-        .try_set_emergency_mode(&emergency_admin_new, &false)
-        .is_err());
-    assert!(router
-        .try_set_emergency_mode(&setup.emergency_admin, &false)
-        .is_ok());
+    assert!(router.try_set_emergency_mode(&emergency_admin_new, &false).is_err());
+    assert!(router.try_set_emergency_mode(&setup.emergency_admin, &false).is_ok());
 
     jump(&setup.env, ADMIN_ACTIONS_DELAY - 1);
     router.apply_transfer_ownership(&setup.admin, &Symbol::new(&setup.env, "EmergencyAdmin"));
@@ -119,12 +109,12 @@ fn test_emergency_admin_transfer_ownership_twice() {
     router.commit_transfer_ownership(
         &setup.admin,
         &Symbol::new(&setup.env, "EmergencyAdmin"),
-        &emergency_admin_new,
+        &emergency_admin_new
     );
     router.commit_transfer_ownership(
         &setup.admin,
         &Symbol::new(&setup.env, "EmergencyAdmin"),
-        &emergency_admin_new,
+        &emergency_admin_new
     );
 }
 
@@ -148,16 +138,12 @@ fn test_emergency_admin_transfer_ownership_reverted() {
     router.commit_transfer_ownership(
         &setup.admin,
         &Symbol::new(&setup.env, "EmergencyAdmin"),
-        &emergency_admin_new,
+        &emergency_admin_new
     );
 
     // check emergency admin not changed yet by calling protected method
-    assert!(router
-        .try_set_emergency_mode(&emergency_admin_new, &false)
-        .is_err());
-    assert!(router
-        .try_set_emergency_mode(&setup.emergency_admin, &false)
-        .is_ok());
+    assert!(router.try_set_emergency_mode(&emergency_admin_new, &false).is_err());
+    assert!(router.try_set_emergency_mode(&setup.emergency_admin, &false).is_ok());
 
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     router.revert_transfer_ownership(&setup.admin, &Symbol::new(&setup.env, "EmergencyAdmin"));
@@ -173,27 +159,19 @@ fn test_emergency_admin_transfer_ownership() {
     router.commit_transfer_ownership(
         &setup.admin,
         &Symbol::new(&setup.env, "EmergencyAdmin"),
-        &emergency_admin_new,
+        &emergency_admin_new
     );
 
     // check emergency admin not changed yet by calling protected method
-    assert!(router
-        .try_set_emergency_mode(&emergency_admin_new, &false)
-        .is_err());
-    assert!(router
-        .try_set_emergency_mode(&setup.emergency_admin, &false)
-        .is_ok());
+    assert!(router.try_set_emergency_mode(&emergency_admin_new, &false).is_err());
+    assert!(router.try_set_emergency_mode(&setup.emergency_admin, &false).is_ok());
 
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     router.apply_transfer_ownership(&setup.admin, &Symbol::new(&setup.env, "EmergencyAdmin"));
 
     // check emergency admin has changed
-    assert!(router
-        .try_set_emergency_mode(&emergency_admin_new, &false)
-        .is_ok());
-    assert!(router
-        .try_set_emergency_mode(&setup.emergency_admin, &false)
-        .is_err());
+    assert!(router.try_set_emergency_mode(&emergency_admin_new, &false).is_ok());
+    assert!(router.try_set_emergency_mode(&setup.emergency_admin, &false).is_err());
 }
 
 #[test]
@@ -207,22 +185,15 @@ fn test_transfer_ownership_separate_deadlines() {
         router.get_future_address(&Symbol::new(&setup.env, "EmergencyAdmin")),
         setup.emergency_admin
     );
-    assert_eq!(
-        router.get_future_address(&symbol_short!("Admin")),
-        setup.admin
-    );
+    assert_eq!(router.get_future_address(&symbol_short!("Admin")), setup.admin);
 
-    assert!(router
-        .try_set_emergency_mode(&emergency_admin_new, &false)
-        .is_err());
-    assert!(router
-        .try_set_emergency_mode(&setup.emergency_admin, &false)
-        .is_ok());
+    assert!(router.try_set_emergency_mode(&emergency_admin_new, &false).is_err());
+    assert!(router.try_set_emergency_mode(&setup.emergency_admin, &false).is_ok());
 
     router.commit_transfer_ownership(
         &setup.admin,
         &Symbol::new(&setup.env, "EmergencyAdmin"),
-        &emergency_admin_new,
+        &emergency_admin_new
     );
     jump(&setup.env, 10);
     router.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &admin_new);
@@ -231,16 +202,11 @@ fn test_transfer_ownership_separate_deadlines() {
         router.get_future_address(&Symbol::new(&setup.env, "EmergencyAdmin")),
         emergency_admin_new
     );
-    assert_eq!(
-        router.get_future_address(&symbol_short!("Admin")),
-        admin_new
-    );
+    assert_eq!(router.get_future_address(&symbol_short!("Admin")), admin_new);
 
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1 - 10);
     router.apply_transfer_ownership(&setup.admin, &Symbol::new(&setup.env, "EmergencyAdmin"));
-    assert!(router
-        .try_apply_transfer_ownership(&setup.admin, &symbol_short!("Admin"))
-        .is_err());
+    assert!(router.try_apply_transfer_ownership(&setup.admin, &symbol_short!("Admin")).is_err());
 
     assert_eq!(
         router.get_future_address(&Symbol::new(&setup.env, "EmergencyAdmin")),
@@ -250,20 +216,13 @@ fn test_transfer_ownership_separate_deadlines() {
     jump(&setup.env, 10);
     router.apply_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
 
-    assert_eq!(
-        router.get_future_address(&symbol_short!("Admin")),
-        admin_new
-    );
+    assert_eq!(router.get_future_address(&symbol_short!("Admin")), admin_new);
 
     // check ownership transfer is complete. new admin is capable to call protected methods
     //      and new emergency admin can change toggle emergency mode
     router.commit_transfer_ownership(&admin_new, &Symbol::new(&setup.env, "Admin"), &setup.admin);
-    assert!(router
-        .try_set_emergency_mode(&emergency_admin_new, &false)
-        .is_ok());
-    assert!(router
-        .try_set_emergency_mode(&setup.emergency_admin, &false)
-        .is_err());
+    assert!(router.try_set_emergency_mode(&emergency_admin_new, &false).is_ok());
+    assert!(router.try_set_emergency_mode(&setup.emergency_admin, &false).is_err());
 }
 
 // test all the authorized methods
@@ -303,12 +262,7 @@ fn test_set_liquidity_calculator() {
         (setup.pause_admin, false),
         (setup.emergency_pause_admin, false),
     ] {
-        assert_eq!(
-            router
-                .try_set_liquidity_calculator(&addr, &liq_calculator)
-                .is_ok(),
-            is_ok
-        );
+        assert_eq!(router.try_set_liquidity_calculator(&addr, &liq_calculator).is_ok(), is_ok);
     }
 }
 
@@ -379,12 +333,7 @@ fn test_set_reward_token() {
         (setup.pause_admin, false),
         (setup.emergency_pause_admin, false),
     ] {
-        assert_eq!(
-            router
-                .try_set_reward_token(&addr, &setup.reward_token.address)
-                .is_ok(),
-            is_ok
-        );
+        assert_eq!(router.try_set_reward_token(&addr, &setup.reward_token.address).is_ok(), is_ok);
     }
 }
 
@@ -486,9 +435,7 @@ fn test_apply_upgrade_emergency_pause_admin() {
     // after upgrade router cannot be reused
     router.commit_upgrade(&setup.admin, &install_dummy_wasm(&setup.env));
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
-    assert!(router
-        .try_apply_upgrade(&setup.emergency_pause_admin)
-        .is_err());
+    assert!(router.try_apply_upgrade(&setup.emergency_pause_admin).is_err());
 }
 
 #[test]
@@ -545,13 +492,22 @@ fn test_config_rewards() {
 #[test]
 fn test_distribute_rewards() {
     let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
-    let user = Address::generate(&setup.env);
+    let user = Address::generate(&e);
     let [token1, token2, _, _] = setup.tokens;
-    let tokens = Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]);
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
     setup.reward_token.mint(&user, &1_0000000);
     setup.reward_token.mint(&router.address, &1_0000000);
-    let (pool_hash, _pool_address) = router.init_standard_pool(&user, &tokens, &10);
+    let (pool_hash, _pool_address) = router.init_standard_pool(
+        &user,
+        &setup.oracles,
+        &setup.target_asset,
+        &tokens,
+        &String::from_str(&e, "Pool Share Token"),
+        &String::from_str(&e, "Pool Share Token"),
+        &10
+    );
 
     for (addr, is_ok) in [
         (user, false),
@@ -565,8 +521,8 @@ fn test_distribute_rewards() {
         router.config_global_rewards(
             &setup.admin,
             &1_0000000,
-            &setup.env.ledger().timestamp().saturating_add(60),
-            &Vec::from_array(&setup.env, [(tokens.clone(), 1_0000000)]),
+            &e.ledger().timestamp().saturating_add(60),
+            &Vec::from_array(&e, [(tokens.clone(), 1_0000000)])
         );
         router.fill_liquidity(&tokens);
         router.config_pool_rewards(&tokens, &pool_hash);
@@ -583,10 +539,11 @@ fn test_distribute_rewards() {
 #[test]
 fn test_remove_pool() {
     let setup = Setup::default();
+    let e = setup.env;
     let router = setup.router;
-    let user = Address::generate(&setup.env);
+    let user = Address::generate(&e);
     let [token1, token2, _, _] = setup.tokens;
-    let tokens = Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]);
+    let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
     setup.reward_token.mint(&user, &10_0000000);
 
     for (addr, is_ok) in [
@@ -598,10 +555,15 @@ fn test_remove_pool() {
         (setup.pause_admin, false),
         (setup.emergency_pause_admin, false),
     ] {
-        let (pool_hash, _pool_address) = router.init_standard_pool(&user.clone(), &tokens, &10);
-        assert_eq!(
-            router.try_remove_pool(&addr, &tokens, &pool_hash).is_ok(),
-            is_ok
+        let (pool_hash, _pool_address) = router.init_standard_pool(
+            &user.clone(),
+            &setup.oracles,
+            &setup.target_asset,
+            &tokens,
+            &String::from_str(&e, "Pool Share Token"),
+            &String::from_str(&e, "Pool Share Token"),
+            &10
         );
+        assert_eq!(router.try_remove_pool(&addr, &tokens, &pool_hash).is_ok(), is_ok);
     }
 }
