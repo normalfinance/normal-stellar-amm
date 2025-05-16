@@ -1,24 +1,6 @@
 [workspace]
 resolver = "2"
-
-members = [
-    "utils",
-    "access_control",
-    "token_share",
-    "token_synthetic",
-    "token",
-    "rewards",
-    "liquidity_pool",
-    "liquidity_pool_router",
-    "liquidity_pool_liquidity_calculator",
-    "liquidity_pool_plane",
-    "fees_collector",
-    "upgrade",
-    "locker_feed",
-    "liquidity_pool_provider_swap_fee_factory",
-    "liquidity_pool_provider_swap_fee",
-    "integration_tests",
-]
+members = ["contracts/*"]
 
 [workspace.package]
 version = "0.1.0"
@@ -27,14 +9,14 @@ rust-version = "1.84"
 [workspace.dependencies]
 soroban-sdk = { version = "22.0.6" }
 soroban-token-sdk = { version = "22.0.6" }
-soroban-fixed-point-math = { version = "1.3.0"}
+soroban-fixed-point-math = { version = "1.3.0" }
 paste = { version = "1.0.15" }
-utils = { path = "utils" }
-access_control = { path = "access_control" }
-token_share = { path = "token_share" }
-token_synthetic = { path = "token_synthetic" }
-rewards = { path = "rewards" }
-upgrade = { path = "upgrade"}
+utils = { path = "contracts/utils" }
+access_control = { path = "contracts/access_control" }
+token_share = { path = "contracts/token_share" }
+token_synthetic = { path = "contracts/token_synthetic" }
+rewards = { path = "contracts/rewards" }
+upgrade = { path = "contracts/upgrade" }
 sep-40-oracle = "1.2.2"
 
 [profile.release]

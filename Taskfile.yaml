@@ -18,11 +18,11 @@ tasks:
 
   build:
     cmds:
-      - task -d liquidity_pool_router build || exit 1
-      - task -d liquidity_pool_provider_swap_fee build || exit 1
-      - task -d liquidity_pool_provider_swap_fee_factory build || exit 1
-      - task -d fees_collector build || exit 1
-      - cp ./target/wasm32v1-none/release/*.wasm ./contracts
+      - task -d contracts/liquidity_pool_router build || exit 1
+      - task -d contracts/liquidity_pool_provider_swap_fee build || exit 1
+      - task -d contracts/liquidity_pool_provider_swap_fee_factory build || exit 1
+      - task -d contracts/fees_collector build || exit 1
+      - cp ./target/wasm32v1-none/release/*.wasm ./wasm
 
   test:
     cmds:
