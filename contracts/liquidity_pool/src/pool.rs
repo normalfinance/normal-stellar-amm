@@ -62,8 +62,6 @@ pub fn rebalance(e: &Env) {
     // Find the ideal reserve_a amount such that the pool's price is equal to the oracle price
     let reserve_a = get_reserve_a(&e);
     let reserve_b = get_reserve_b(&e);
-    log!(e, "reserve_a: {}", reserve_a);
-    log!(e, "reserve_b: {}", reserve_b);
 
     let delta_a = get_delta_a(e, reserve_a, reserve_b);
 
@@ -77,24 +75,17 @@ pub fn rebalance(e: &Env) {
     }
 
     let price = get_current_price(e, true, false);
-    log!(e, "price_after: {}", price);
 
     let new_reserve_a = get_reserve_a(&e);
     let new_reserve_b = get_reserve_b(&e);
-    log!(e, "new_reserve_a: {}", new_reserve_a);
-    log!(e, "new_reserve_b: {}", new_reserve_b);
 
     PoolEvents::new(&e).rebalance(delta_a, reserve_a, reserve_b);
 }
 
 pub fn get_delta_a(e: &Env, reserve_a: u128, reserve_b: u128) -> i128 {
     let target_price = oracle::get_target_oracle_price(e, false);
-
     let target_reserve_a = reserve_b.fixed_div_floor(e, &target_price, &PRICE_PRECISION);
-    log!(e, "target_reserve_a: {}", target_reserve_a);
-
     let delta_a = (target_reserve_a as i128).checked_sub(reserve_a as i128).unwrap();
-    log!(e, "delta_a: {}", delta_a);
 
     delta_a
 }

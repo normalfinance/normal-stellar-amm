@@ -1059,14 +1059,11 @@ fn test_swaps_many_users(iterations_to_simulate: u32) {
     assert_approx_eq_abs(pool_price, expected_price as u128, 10_000); // allow small rounding tolerance
 
     for i in 1..iterations_to_simulate as usize {
-        log!(&env, "iteration: {}", i as u64);
-
         // Simulate oracle price with volatility
         let token_a_vol = rng.gen_range(
             -(max_token_a_volatility as i128)..max_token_a_volatility as i128
         );
         let new_token_a_price = setup.base_oracle_price + token_a_vol;
-        log!(&env, "new_token_a_price: {}", new_token_a_price);
         setup.base_oracle_client.set_price(
             &Vec::from_array(&env, [new_token_a_price]),
             &env.ledger().timestamp()
@@ -1077,7 +1074,6 @@ fn test_swaps_many_users(iterations_to_simulate: u32) {
             -(max_token_b_volatility as i128)..max_token_b_volatility as i128
         );
         let new_token_b_price = setup.quote_oracle_price + token_b_vol;
-        log!(&env, "new_token_b_price: {}", new_token_b_price);
         setup.quote_oracle_client.set_price(
             &Vec::from_array(&env, [new_token_b_price]),
             &env.ledger().timestamp()
@@ -1087,7 +1083,6 @@ fn test_swaps_many_users(iterations_to_simulate: u32) {
         let user = &users[user_index];
         let user_index_u32 = user_index as u32;
         let action_roll: i32 = rng.gen_range(0..100);
-        log!(&env, "action_roll: {}", action_roll);
 
         let mut check_price = true;
 
