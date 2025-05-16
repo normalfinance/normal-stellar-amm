@@ -34,6 +34,8 @@ Normal is a synthetic asset protocol enabling investors to trade any crypto asse
 - **liquidity_pool_plane** - contract designed to store minimum information about any liquidity pool: type, parameters, reserves. being updated on every action with the pool (deposit, swap, withdraw, parameters update, etc)
 - **liquidity_pool_liquidity_calculator** - smart contract containing pools liquidity calculation logic which is capable to compare many pools at once
 
+![Normal AMM Swap Flow](./docs/images/swap.png "Swap Flow")
+
 ## Built With
 
 - [Rust](https://www.rust-lang.org/)
