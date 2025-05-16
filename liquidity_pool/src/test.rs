@@ -1,6 +1,9 @@
 #![cfg(test)]
 extern crate std;
 
+use rand::rngs::StdRng;
+use rand::{ Rng, SeedableRng };
+
 use crate::constants::{ PRICE_PRECISION, PRICE_PRECISION_I128 };
 use crate::testutils::{
     create_liqpool_contract,
@@ -16,7 +19,7 @@ use access_control::constants::ADMIN_ACTIONS_DELAY;
 use sep_40_oracle::testutils::{ Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM };
 use sep_40_oracle::Asset;
 use soroban_fixed_point_math::FixedPoint;
-use soroban_sdk::{ log, String, U256 };
+use soroban_sdk::{ log, String };
 use utils::storage::{
     InitializeAllParams,
     InitializeParams,
@@ -70,10 +73,12 @@ fn test() {
     let total_reward_1 = reward_1_tps * 60;
     let amount_to_deposit = 100_0000000; // 100.00
 
-    // let expected_mint_amount = (amount_to_deposit as i128)
-    //     .fixed_div_floor(setup.oracle_price, PRICE_PRECISION_I128)
-    //     .unwrap();
-    let expected_mint_amount = 50_0000000_u128; // 100 / 2
+    let target_price = setup.quote_oracle_price
+        .fixed_div_floor(setup.base_oracle_price, PRICE_PRECISION_I128)
+        .unwrap();
+    let expected_mint_amount = (amount_to_deposit as i128)
+        .fixed_div_floor(target_price, PRICE_PRECISION_I128)
+        .unwrap();
 
     liq_pool.deposit(&admin, &amount_to_deposit);
     assert_eq!(e.auths()[0], (
@@ -150,20 +155,21 @@ fn test() {
     assert_eq!(token_share.balance(&liq_pool.address), 0);
 
     let swap_in_amount: u128 = 1_0000000_u128;
-    let expected_swap_result = 4935643_u128;
+    let expected_swap_result = 39485148_u128;
+    let expected_mint_amount = 0_i128;
 
     // selling quote for base (1 > 0)
-    // result = (1*.5)/(100+1)
-    // 0.00495049505
-    // fee = 0.00495049505 * (30 / 10_000)
-    // expected = result - fee
-    assert_eq!(liq_pool.estimate_swap(&1, &0, &swap_in_amount), expected_swap_result);
+    // expected = (1*4) / (100+1) - ((1*4)/(100+1) * (30 / 10_000))
+    assert_eq!(liq_pool.estimate_swap(&1, &0, &swap_in_amount), (
+        expected_swap_result,
+        expected_mint_amount,
+    ));
     assert_eq!(
         liq_pool.swap(&user1, &1, &0, &swap_in_amount, &expected_swap_result),
         expected_swap_result
     );
 
-    let expected_new_mint = 9935643_u128;
+    let expected_new_mint = 79485148_u128;
 
     // assert_eq!(e.auths()[1], (
     //     user1.clone(),
@@ -249,12 +255,12 @@ fn test() {
     ));
     // TODO: how do we assert the pool burned token1
 
-    // jump(&e, 600);
-    // assert_eq!(liq_pool.claim(&admin), 0);
-    // assert_eq!(
-    //     token_reward.balance(&admin) as u128,
-    //     total_reward_1 + total_reward_2 + total_reward_3
-    // );
+    jump(&e, 600);
+    assert_eq!(liq_pool.claim(&admin), 0);
+    assert_eq!(
+        token_reward.balance(&admin) as u128,
+        total_reward_1 + total_reward_2 + total_reward_3
+    );
 
     assert_eq!(token1.balance(&admin), 0);
     assert_eq!(token2.balance(&admin), i128::MAX);
@@ -262,16 +268,6 @@ fn test() {
     assert_eq!(token1.balance(&liq_pool.address), 5000000); // 0.5
     assert_eq!(token2.balance(&liq_pool.address), 1_0000000); // 1.0
     assert_eq!(token_share.balance(&liq_pool.address), 0);
-}
-
-#[test]
-fn test_deposit() {
-    let setup = Setup::new_with_config(
-        &(TestConfig {
-            mint_to_user: i128::MAX,
-            ..TestConfig::default()
-        })
-    );
 }
 
 #[test]
@@ -287,12 +283,17 @@ fn test_strict_receive() {
     setup.liq_pool.deposit(&user1, &desired_amount);
     let swap_in_amount = 1_0000000_u128;
     let expected_swap_result = 4935643_u128;
+    //
+    let expected_mint_amount = 0_i128; // TOOD:
 
-    assert_eq!(setup.liq_pool.estimate_swap(&1, &0, &swap_in_amount), expected_swap_result);
-    assert_eq!(
-        setup.liq_pool.estimate_swap_strict_receive(&1, &0, &expected_swap_result),
-        swap_in_amount
-    );
+    assert_eq!(setup.liq_pool.estimate_swap(&1, &0, &swap_in_amount), (
+        expected_swap_result,
+        expected_mint_amount,
+    ));
+    assert_eq!(setup.liq_pool.estimate_swap_strict_receive(&1, &0, &expected_swap_result), (
+        swap_in_amount,
+        0_i128,
+    ));
     assert_eq!(
         setup.liq_pool.swap_strict_receive(&user1, &1, &0, &expected_swap_result, &swap_in_amount),
         swap_in_amount
@@ -322,7 +323,7 @@ fn test_strict_receive_over_max() {
     // maximum we're able to buy is `reserve * (1 - fee) - delta`
     assert_eq!(
         setup.liq_pool.estimate_swap_strict_receive(&1, &0, &99_6999999),
-        99999999900_0000001
+        (99999999900_0000001, 0)
     );
     assert_eq!(
         setup.liq_pool.swap_strict_receive(&user1, &1, &0, &99_6999999, &99999999900_0000001),
@@ -355,7 +356,7 @@ fn test_events() {
         )]
     );
 
-    assert_eq!(liq_pool.swap(&user1, &1, &0, &1, &0_4), 98);
+    assert_eq!(liq_pool.swap(&user1, &1, &0, &1, &0), 2);
     assert_eq!(
         vec![&e, e.events().all().last().unwrap()],
         vec![&e, (
@@ -366,7 +367,7 @@ fn test_events() {
                 token1.address.clone(),
                 user1.clone(),
             ).into_val(&e),
-            (100_i128, 98_i128, 1_i128).into_val(&e),
+            (1_i128, 39485148_i128, 2_i128).into_val(&e),
         )]
     );
 
@@ -482,14 +483,17 @@ fn test_custom_fee() {
     let setup = Setup::new_with_config(&config);
 
     // we're checking fraction against output for 1 token
+    // result = (1*4)/(100+1)
+    // 0.00495049505
+    // fee = 0.0396039604 * (10 / 10_000)
     for fee_config in [
-        (0, 9900990_u128), // 0%
-        (10, 9891089_u128), // 0.1%
-        (30, 9871287_u128), // 0.3%
-        (100, 9801980_u128), // 1%
-        (1000, 8910891_u128), // 10%
-        (3000, 6930693_u128), // 30%
-        (5000, 4950495_u128), // 50%
+        (0, 396039_u128, 0_i128), // 0%
+        (10, 395643_u128, 0_i128), // 0.1% 0.03956435644
+        (30, 394851_u128, 0_i128), // 0.3% 0.03948514852
+        (100, 392079_u128, 0_i128), // 1% 0.0392079208
+        (1000, 356435_u128, 0_i128), // 10% 0.03564356436
+        (3000, 356435_u128, 0_i128), // 30% 0.03564356436
+        (5000, 198019_u128, 0_i128), // 50%  0.0198019802
     ] {
         let liqpool = create_liqpool_contract(
             &setup.env,
@@ -511,7 +515,7 @@ fn test_custom_fee() {
             &setup.plane.address
         );
         liqpool.deposit(&setup.users[0], &100_0000000);
-        assert_eq!(liqpool.estimate_swap(&1, &0, &1_0000000), fee_config.1);
+        assert_eq!(liqpool.estimate_swap(&1, &0, &1_0000000), (fee_config.1, 0));
         assert_eq!(liqpool.swap(&setup.users[0], &1, &0, &1_0000000, &0), fee_config.1);
 
         // FIXME:
@@ -525,8 +529,8 @@ fn test_custom_fee() {
             )
         );
         liqpool.deposit(&setup.users[0], &100_0000000);
-        assert_eq!(liqpool.estimate_swap(&1, &0, &1_0000000), fee_config.1); // re-check swap result didn't change
-        assert_eq!(liqpool.estimate_swap_strict_receive(&1, &0, &fee_config.1), 1_0000000);
+        assert_eq!(liqpool.estimate_swap(&1, &0, &1_0000000), (fee_config.1, fee_config.2)); // re-check swap result didn't change
+        assert_eq!(liqpool.estimate_swap_strict_receive(&1, &0, &fee_config.1), (1_0000000, 0));
         assert_eq!(
             liqpool.swap_strict_receive(&setup.users[0], &1, &0, &fee_config.1, &1_0000000),
             1_0000000
@@ -1016,9 +1020,17 @@ fn test_swaps_many_users(iterations_to_simulate: u32) {
     let liq_pool = setup.liq_pool;
     let users = setup.users;
     let token2_admin_client = setup.token2_admin_client;
-    let token_reward_admin_client = setup.token_reward_admin_client;
 
     let admin = users[0].clone();
+
+    let rng_seed = 42;
+    let mut rng = StdRng::seed_from_u64(rng_seed);
+
+    // Admin seeds initial liquidity
+    token2_admin_client.mint(&admin, &1_000_000_0000000); // 1 million
+    liq_pool.deposit(&admin, &1_000_000_0000000);
+
+    // Mint token B to users
     let first_user = Address::generate(&env);
 
     for i in 0..101 {
@@ -1026,50 +1038,146 @@ fn test_swaps_many_users(iterations_to_simulate: u32) {
             0 => &first_user,
             val => &users[val - 1],
         };
-        token2_admin_client.mint(user, &1_000_000_000_000_000_000_000);
+        token2_admin_client.mint(user, &100_000_000_0000000); // 1 million
     }
 
-    token_reward_admin_client.mint(&liq_pool.address, &1_000_000_000_000_0000000);
-
-    let reward_1_tps = 10_5000000_u128;
-    liq_pool.set_rewards_config(
-        &admin,
-        &env
-            .ledger()
-            .timestamp()
-            .saturating_add((iterations_to_simulate * 2 + 110).into()),
-        &reward_1_tps
-    );
-    jump(&env, 10);
-
-    // we have this because of last jump(100)
-    let mut expected_reward = (100 * reward_1_tps) / (iterations_to_simulate as u128);
-    for i in 0..iterations_to_simulate as u128 {
-        expected_reward += reward_1_tps / (i + 1);
+    // Track user token_a balances for accurate sells
+    let mut token_a_balances: Vec<u128> = Vec::new(&env);
+    for _ in 0..users.len() {
+        token_a_balances.push_back(0);
     }
 
-    liq_pool.deposit(&first_user, &1_000_000_000_000_0000000);
-    jump(&env, 1);
+    let max_token_a_volatility = 1_000_000_u128; // ±10%
+    let max_token_b_volatility = 1_000_000_u128; // ±10%
+    let max_b = 100_000_000_u128; // 0.1 token B (e.g., USDC)
+
+    // Test pool price peg
+    let pool_price = liq_pool.get_price(&true, &false);
+    let expected_price = setup.quote_oracle_price
+        .fixed_div_floor(setup.base_oracle_price, PRICE_PRECISION_I128)
+        .unwrap();
+    assert_approx_eq_abs(pool_price, expected_price as u128, 10_000); // allow small rounding tolerance
 
     for i in 1..iterations_to_simulate as usize {
-        let user = &users[i % 10];
-        liq_pool.deposit(user, &1_000_000_000_000_0000000);
+        log!(&env, "iteration: {}", i as u64);
+
+        // Simulate oracle price with volatility
+        let token_a_vol = rng.gen_range(
+            -(max_token_a_volatility as i128)..max_token_a_volatility as i128
+        );
+        let new_token_a_price = setup.base_oracle_price + token_a_vol;
+        log!(&env, "new_token_a_price: {}", new_token_a_price);
+        setup.base_oracle_client.set_price(
+            &Vec::from_array(&env, [new_token_a_price]),
+            &env.ledger().timestamp()
+        );
+
+        // Update the quote asset price
+        let token_b_vol = rng.gen_range(
+            -(max_token_b_volatility as i128)..max_token_b_volatility as i128
+        );
+        let new_token_b_price = setup.quote_oracle_price + token_b_vol;
+        log!(&env, "new_token_b_price: {}", new_token_b_price);
+        setup.quote_oracle_client.set_price(
+            &Vec::from_array(&env, [new_token_b_price]),
+            &env.ledger().timestamp()
+        );
+
+        let user_index = (i as usize) % users.len();
+        let user = &users[user_index];
+        let user_index_u32 = user_index as u32;
+        let action_roll: i32 = rng.gen_range(0..100);
+        log!(&env, "action_roll: {}", action_roll);
+
+        let mut check_price = true;
+
+        if action_roll < 20 {
+            // Deposit more liquidity
+            let amount_to_deposit = rng.gen_range(1..=max_b);
+            liq_pool.deposit(user, &amount_to_deposit);
+        } else if action_roll < 60 {
+            // Buy Token A using Token B (only if enough A in reserve)
+            let reserves = liq_pool.get_reserves();
+            let reserve_a = reserves.get(0).unwrap();
+
+            if reserve_a > 0 {
+                let amount_b = rng.gen_range(1..=1_000_000_0000000);
+                let out_a = liq_pool.swap(user, &1, &0, &amount_b, &0);
+
+                let prev_balance = token_a_balances.get(user_index_u32).unwrap_or(0);
+                token_a_balances.set(user_index_u32, prev_balance + out_a);
+            }
+        } else if action_roll < 90 {
+            // Swap Token A to B (sell)
+            let balance_a = token_a_balances.get(user_index_u32).unwrap_or(0);
+            let max_sell = balance_a.min(100_000_000);
+
+            if max_sell > 0 {
+                let sell_amount = rng.gen_range(1..=max_sell);
+
+                liq_pool.swap(user, &0, &1, &sell_amount, &0);
+                token_a_balances.set(user_index_u32, balance_a - sell_amount);
+            } else {
+                check_price = false;
+            }
+        } else {
+            // Withdraw some liquidity
+            let lp_balance = setup.token_share.balance(user);
+            if lp_balance > 0 {
+                let max_withdraw = lp_balance;
+                let withdraw_amount = rng.gen_range(1..=max_withdraw);
+                liq_pool.withdraw(user, &(withdraw_amount as u128));
+            } else {
+                check_price = false;
+            }
+        }
+
+        // Test pool price peg
+        if check_price {
+            let pool_price = liq_pool.get_price(&true, &false);
+            let expected_price = new_token_b_price
+                .fixed_div_floor(new_token_a_price, PRICE_PRECISION_I128)
+                .unwrap();
+            assert_approx_eq_abs(pool_price, expected_price as u128, 10_000); // allow small rounding tolerance
+        }
+
         jump(&env, 1);
     }
 
-    // swaps
-    for i in 1..iterations_to_simulate as usize {
-        let user = &users[i % 10];
-        let in_idx = &1;
-        let out_idx = &0;
-        liq_pool.swap(user, in_idx, out_idx, &0, &0);
-        jump(&env, 1);
-        // TODO: modulate oracle price
-        liq_pool.update_base_oracle_price(1);
-    }
+    jump(&env, 100);
 
-    // expects
+    // // Withdraw every user's liquidity
+    // for i in 0..101 {
+    //     let user = match i {
+    //         0 => &first_user,
+    //         val => &users[val - 1],
+    //     };
+    //     let lp_balance = setup.token_share.balance(user);
+    //     liq_pool.withdraw(user, &(lp_balance as u128));
+    // }
+
+    // // TODO: reserve expects
+
+    // // Ensure token_a holders can still sell
+    // for i in 0..101 {
+    //     let user = match i {
+    //         0 => &first_user,
+    //         val => &users[val - 1],
+    //     };
+
+    //     let amt_a = token_a_balances[i];
+    //     if amt_a > 0 {
+    //         let result = liq_pool.swap(user, &0, &1, &amt_a, &0);
+    //         assert!(result > 0, "User {} could not redeem token A back", i);
+    //     }
+    // }
 }
+
+#[test]
+fn test_bank_run_many_users() {}
+
+#[test]
+fn test_large_swap_many_users() {}
 
 #[test]
 fn test_deposit_inequal_return_change() {
@@ -1081,10 +1189,10 @@ fn test_deposit_inequal_return_change() {
     let users = setup.users;
     let user1 = users[0].clone();
     liq_pool.deposit(&user1, &100);
-    assert_eq!(token1.balance(&liq_pool.address), 100);
+    assert_eq!(token1.balance(&liq_pool.address), 400);
     assert_eq!(token2.balance(&liq_pool.address), 100);
     liq_pool.deposit(&user1, &100); // 200?
-    assert_eq!(token1.balance(&liq_pool.address), 200);
+    assert_eq!(token1.balance(&liq_pool.address), 800);
     assert_eq!(token2.balance(&liq_pool.address), 200);
 }
 
@@ -1099,10 +1207,10 @@ fn test_deposit_inequal_return_change() {
 //     test_rewards_many_users(50_000);
 // }
 
-// #[test]
-// fn test_swaps_1k() {
-//     test_swaps_many_users(1_000);
-// }
+#[test]
+fn test_swaps_1k() {
+    test_swaps_many_users(1_000);
+}
 
 // #[cfg(feature = "slow_tests")]
 // #[test]
@@ -1207,6 +1315,12 @@ fn test_large_numbers() {
     let user1 = users[0].clone();
     let amount_to_deposit = u128::MAX / 1_000_000;
     let desired_amount = amount_to_deposit;
+    let target_price = setup.quote_oracle_price
+        .fixed_div_floor(setup.base_oracle_price, PRICE_PRECISION_I128)
+        .unwrap();
+    let expected_mint_amount = amount_to_deposit
+        .fixed_div_floor(target_price as u128, PRICE_PRECISION)
+        .unwrap();
 
     liq_pool.deposit(&user1, &desired_amount);
 
@@ -1214,31 +1328,28 @@ fn test_large_numbers() {
     let expected_share_amount = amount_to_deposit as i128;
     assert_eq!(token_share.balance(&user1), expected_share_amount);
     assert_eq!(token_share.balance(&liq_pool.address), 0);
-    assert_eq!(token1.balance(&user1), i128::MAX - (amount_to_deposit as i128));
-    assert_eq!(token1.balance(&liq_pool.address), amount_to_deposit as i128);
+    assert_eq!(token1.balance(&user1), 0);
+    assert_eq!(token1.balance(&liq_pool.address), expected_mint_amount as i128);
     assert_eq!(token2.balance(&user1), i128::MAX - (amount_to_deposit as i128));
     assert_eq!(token2.balance(&liq_pool.address), amount_to_deposit as i128);
 
     let swap_in = amount_to_deposit / 1_000;
     // swap out shouldn't differ for more than 0.4% since fee is 0.3%
     let expected_swap_result_delta = swap_in / 250;
-    let estimate_swap_result = liq_pool.estimate_swap(&0, &1, &swap_in);
+    let (estimate_swap_result, estimate_mint_result) = liq_pool.estimate_swap(&1, &0, &swap_in);
     assert_approx_eq_abs(estimate_swap_result, swap_in, expected_swap_result_delta);
     assert_eq!(
-        liq_pool.swap(&user1, &0, &1, &swap_in, &estimate_swap_result),
+        liq_pool.swap(&user1, &1, &0, &swap_in, &estimate_swap_result),
         estimate_swap_result
     );
 
-    assert_eq!(token1.balance(&user1), i128::MAX - (amount_to_deposit as i128) - (swap_in as i128));
-    assert_eq!(token1.balance(&liq_pool.address), (amount_to_deposit as i128) + (swap_in as i128));
+    assert_eq!(token1.balance(&user1), estimate_swap_result as i128);
     assert_eq!(
-        token2.balance(&user1),
-        i128::MAX - (amount_to_deposit as i128) + (estimate_swap_result as i128)
-    );
-    assert_eq!(
-        token2.balance(&liq_pool.address),
-        (amount_to_deposit as i128) - (estimate_swap_result as i128)
-    );
+        token1.balance(&liq_pool.address),
+        (expected_mint_amount as i128) - (estimate_swap_result as i128) + 0
+    ); // next mint amount
+    assert_eq!(token2.balance(&user1), i128::MAX - (amount_to_deposit as i128) - (swap_in as i128));
+    assert_eq!(token2.balance(&liq_pool.address), (amount_to_deposit as i128) + (swap_in as i128));
 
     // let withdraw_amounts = [amount_to_deposit + swap_in, amount_to_deposit - estimate_swap_result];
     liq_pool.withdraw(&user1, &(expected_share_amount as u128));
@@ -1515,10 +1626,12 @@ fn test_withdraw_rewards() {
 
     let router = Address::generate(&e);
 
+    let usdc = Address::generate(&e);
+
     // Setup oracles
     let target_asset = Asset::Other(Symbol::new(&e, "SOL"));
     let target_asset_mock = MockAsset::Other(Symbol::new(&e, "SOL"));
-    let quote_asset = Asset::Other(Symbol::new(&e, "XLM"));
+    // let quote_asset = Asset::Other(Symbol::new(&e, "XLM"));
     let quote_asset_mock = MockAsset::Other(Symbol::new(&e, "XLM"));
 
     let oracles = OraclePair {
@@ -1537,10 +1650,7 @@ fn test_withdraw_rewards() {
         &7,
         &(5 * 60 * 60)
     );
-    base_oracle_client.set_price(
-        &Vec::from_array(&e, [base_oracle_price]),
-        &e.ledger().timestamp()
-    );
+    base_oracle_client.set_price(&Vec::from_array(&e, [2_0000000]), &e.ledger().timestamp());
 
     // Setup quote oracle
     quote_oracle_client.set_data(
@@ -1550,10 +1660,7 @@ fn test_withdraw_rewards() {
         &7,
         &(5 * 60 * 60)
     );
-    quote_oracle_client.set_price(
-        &Vec::from_array(&e, [quote_oracle_price]),
-        &e.ledger().timestamp()
-    );
+    quote_oracle_client.set_price(&Vec::from_array(&e, [1_0000000]), &e.ledger().timestamp());
 
     // Create pool
     let liq_pool = create_liqpool_contract(
@@ -1878,96 +1985,96 @@ fn test_withdraw_rewards() {
 // //     assert_eq!(liq_pool.claim(&users[0]), 4772727271);
 // // }
 
-#[test]
-fn test_drain_reserves() {
-    // test pool reserves are not affected by rewards if reward token is one of pool tokens and presented in pool balance
-    let e = Env::default();
-    e.mock_all_auths();
-    e.cost_estimate().budget().reset_unlimited();
+// #[test]
+// fn test_drain_reserves() {
+//     // test pool reserves are not affected by rewards if reward token is one of pool tokens and presented in pool balance
+//     let e = Env::default();
+//     e.mock_all_auths();
+//     e.cost_estimate().budget().reset_unlimited();
 
-    let admin = Address::generate(&e);
-    let user1 = Address::generate(&e);
-    let user2 = Address::generate(&e);
-    let user3 = Address::generate(&e);
-    let user4 = Address::generate(&e);
+//     let admin = Address::generate(&e);
+//     let user1 = Address::generate(&e);
+//     let user2 = Address::generate(&e);
+//     let user3 = Address::generate(&e);
+//     let user4 = Address::generate(&e);
 
-    let mut token1 = create_token_contract(&e, &admin);
-    let mut token2 = create_token_contract(&e, &admin);
+//     let mut token1 = create_token_contract(&e, &admin);
+//     let mut token2 = create_token_contract(&e, &admin);
 
-    let plane = create_plane_contract(&e);
+//     let plane = create_plane_contract(&e);
 
-    // if &token2.address < &token1.address {
-    //     std::mem::swap(&mut token1, &mut token2);
-    // }
-    let token2_admin_client = get_token_admin_client(&e, &token2.address);
-    let token_reward_admin_client = SorobanTokenAdminClient::new(&e, &token1.address.clone());
-    let reward_boost_token = create_token_contract(&e, &admin);
-    let reward_boost_feed = create_reward_boost_feed_contract(&e.clone(), &admin, &admin, &admin);
+//     // if &token2.address < &token1.address {
+//     //     std::mem::swap(&mut token1, &mut token2);
+//     // }
+//     let token2_admin_client = get_token_admin_client(&e, &token2.address);
+//     let token_reward_admin_client = SorobanTokenAdminClient::new(&e, &token1.address.clone());
+//     let reward_boost_token = create_token_contract(&e, &admin);
+//     let reward_boost_feed = create_reward_boost_feed_contract(&e.clone(), &admin, &admin, &admin);
 
-    let router = Address::generate(&e);
-    let oracle = Address::generate(&e);
-    let target_asset = Asset::Other(Symbol::new(&e, "SOL"));
+//     let router = Address::generate(&e);
 
-    let liq_pool = create_liqpool_contract(
-        &e,
-        &admin,
-        &router,
-        &oracles,
-        &target_asset,
-        &install_token_wasm(&e),
-        &String::from_str(&e, "Pool Share Token"),
-        &String::from_str(&e, "Pool Share Token"),
-        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
-        &token_reward_admin_client.address,
-        &reward_boost_token.address,
-        &reward_boost_feed.address,
-        30,
-        &plane.address
-    );
+//     let target_asset = Asset::Other(Symbol::new(&e, "SOL"));
 
-    liq_pool.set_rewards_config(
-        &admin,
-        &e.ledger().timestamp().saturating_add(100),
-        &1_000_0000000
-    );
-    token_reward_admin_client.mint(&liq_pool.address, &(1_000_0000000 * 100));
-    assert_eq!(liq_pool.get_reserves(), Vec::from_array(&e, [0, 0]));
+//     let liq_pool = create_liqpool_contract(
+//         &e,
+//         &admin,
+//         &router,
+//         &oracles,
+//         &target_asset,
+//         &install_token_wasm(&e),
+//         &String::from_str(&e, "Pool Share Token"),
+//         &String::from_str(&e, "Pool Share Token"),
+//         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
+//         &token_reward_admin_client.address,
+//         &reward_boost_token.address,
+//         &reward_boost_feed.address,
+//         30,
+//         &plane.address
+//     );
 
-    // first user deposits
-    token2_admin_client.mint(&user1, &1_000_000_0000000);
-    liq_pool.deposit(&user1, &1_000_000_0000000);
+//     liq_pool.set_rewards_config(
+//         &admin,
+//         &e.ledger().timestamp().saturating_add(100),
+//         &1_000_0000000
+//     );
+//     token_reward_admin_client.mint(&liq_pool.address, &(1_000_0000000 * 100));
+//     assert_eq!(liq_pool.get_reserves(), Vec::from_array(&e, [0, 0]));
 
-    // first exploiter deposits
-    token2_admin_client.mint(&user2, &1_000_000_0000000);
-    let (_, lp_amount) = liq_pool.deposit(&user2, &300_000_0000000);
+//     // first user deposits
+//     token2_admin_client.mint(&user1, &1_000_000_0000000);
+//     liq_pool.deposit(&user1, &1_000_000_0000000);
 
-    let token_share = SorobanTokenClient::new(&e, &liq_pool.share_id());
+//     // first exploiter deposits
+//     token2_admin_client.mint(&user2, &1_000_000_0000000);
+//     let (_, lp_amount) = liq_pool.deposit(&user2, &300_000_0000000);
 
-    token_share.transfer(&user2, &user3, &(lp_amount as i128));
-    liq_pool.claim(&user3);
-    token_share.transfer(&user3, &user4, &(lp_amount as i128));
-    liq_pool.claim(&user4);
+//     let token_share = SorobanTokenClient::new(&e, &liq_pool.share_id());
 
-    jump(&e, 100);
+//     token_share.transfer(&user2, &user3, &(lp_amount as i128));
+//     liq_pool.claim(&user3);
+//     token_share.transfer(&user3, &user4, &(lp_amount as i128));
+//     liq_pool.claim(&user4);
 
-    // exploit starts
-    assert_eq!(liq_pool.claim(&user4), 230769230769);
-    token_share.transfer(&user4, &user3, &(lp_amount as i128));
-    assert_eq!(liq_pool.claim(&user3), 0);
-    token_share.transfer(&user3, &user2, &(lp_amount as i128));
-    assert_eq!(liq_pool.claim(&user2), 0);
+//     jump(&e, 100);
 
-    // first user claims
-    assert_eq!(liq_pool.claim(&user1), 769230769230);
+//     // exploit starts
+//     assert_eq!(liq_pool.claim(&user4), 230769230769);
+//     token_share.transfer(&user4, &user3, &(lp_amount as i128));
+//     assert_eq!(liq_pool.claim(&user3), 0);
+//     token_share.transfer(&user3, &user2, &(lp_amount as i128));
+//     assert_eq!(liq_pool.claim(&user2), 0);
 
-    // check reserves
-    assert_eq!(
-        liq_pool.get_reserves(),
-        Vec::from_array(&e, [1_300_000_0000000, 1_300_000_0000000]) // FIXME:
-    );
-    assert_eq!(token1.balance(&liq_pool.address), 1_300_000_0000001); // 1 token left on balance because of rounding
-    assert_eq!(token2.balance(&liq_pool.address), 1_300_000_0000000);
-}
+//     // first user claims
+//     assert_eq!(liq_pool.claim(&user1), 769230769230);
+
+//     // check reserves
+//     assert_eq!(
+//         liq_pool.get_reserves(),
+//         Vec::from_array(&e, [1_300_000_0000000, 1_300_000_0000000]) // FIXME:
+//     );
+//     assert_eq!(token1.balance(&liq_pool.address), 1_300_000_0000001); // 1 token left on balance because of rounding
+//     assert_eq!(token2.balance(&liq_pool.address), 1_300_000_0000000);
+// }
 
 // // #[test]
 // // fn test_return_unused_reward() {

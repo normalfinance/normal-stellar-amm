@@ -1,59 +1,116 @@
 use crate::constants::FEE_MULTIPLIER;
-use crate::errors::{LiquidityPoolError, LiquidityPoolValidationError};
+use crate::errors::{ LiquidityPoolError, LiquidityPoolValidationError };
 use crate::events::Events as PoolEvents;
 use crate::events::LiquidityPoolEvents;
 use crate::oracle;
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
-use crate::pool::{self};
-use crate::pool::{get_amount_out, get_amount_out_strict_receive};
+use crate::pool::{
+    get_amount_out,
+    get_amount_out_strict_receive,
+    get_delta_a,
+    get_current_price,
+    rebalance,
+};
 use crate::pool_interface::{
-    AdminInterfaceTrait, LiquidityPoolCrunch, LiquidityPoolTrait, RewardsTrait,
-    UpgradeableContract, UpgradeableLPTokenTrait,
+    AdminInterfaceTrait,
+    LiquidityPoolCrunch,
+    LiquidityPoolTrait,
+    RewardsTrait,
+    UpgradeableContract,
+    UpgradeableLPTokenTrait,
 };
 use crate::rewards::get_rewards_manager;
 use crate::storage::{
-    get_fee_fraction, get_is_killed_claim, get_is_killed_deposit, get_is_killed_swap,
-    get_is_killed_withdraw, get_plane, get_reserve_a, get_reserve_b, get_router, get_target_asset,
-    get_token_a, get_token_b, get_token_future_wasm, has_plane, put_fee_fraction, put_reserve_a,
-    put_reserve_b, put_token_a, put_token_b, set_base_oracle, set_is_killed_claim,
-    set_is_killed_deposit, set_is_killed_swap, set_is_killed_withdraw, set_plane, set_quote_oracle,
-    set_router, set_target_asset, set_token_future_wasm,
+    get_fee_fraction,
+    get_is_killed_claim,
+    get_is_killed_deposit,
+    get_is_killed_swap,
+    get_is_killed_withdraw,
+    get_plane,
+    get_reserve_a,
+    get_reserve_b,
+    get_router,
+    get_target_asset,
+    get_token_a,
+    get_token_b,
+    get_token_future_wasm,
+    has_plane,
+    put_fee_fraction,
+    put_reserve_a,
+    put_reserve_b,
+    put_token_a,
+    put_token_b,
+    set_base_oracle,
+    set_is_killed_claim,
+    set_is_killed_deposit,
+    set_is_killed_swap,
+    set_is_killed_withdraw,
+    set_plane,
+    set_quote_oracle,
+    set_router,
+    set_target_asset,
+    set_token_future_wasm,
 };
-use crate::token::{create_contract, create_synthetic_token_contract, transfer_a, transfer_b};
-use access_control::access::{AccessControl, AccessControlTrait};
-use access_control::emergency::{get_emergency_mode, set_emergency_mode};
+use crate::token::{ create_contract, transfer_a, transfer_b };
+use access_control::access::{ AccessControl, AccessControlTrait };
+use access_control::emergency::{ get_emergency_mode, set_emergency_mode };
 use access_control::errors::AccessControlError;
 use access_control::events::Events as AccessControlEvents;
 use access_control::interface::TransferableContract;
-use access_control::management::{MultipleAddressesManagementTrait, SingleAddressManagementTrait};
+use access_control::management::{ MultipleAddressesManagementTrait, SingleAddressManagementTrait };
 use access_control::role::Role;
 use access_control::role::SymbolRepresentation;
 use access_control::transfer::TransferOwnershipTrait;
 use access_control::utils::{
-    require_operations_admin_or_owner, require_pause_admin_or_owner,
-    require_pause_or_emergency_pause_admin_or_owner, require_rewards_admin_or_owner,
+    require_operations_admin_or_owner,
+    require_pause_admin_or_owner,
+    require_pause_or_emergency_pause_admin_or_owner,
+    require_rewards_admin_or_owner,
 };
 use rewards::events::Events as RewardEvents;
 use rewards::storage::{
-    BoostFeedStorageTrait, BoostTokenStorageTrait, PoolRewardsStorageTrait, RewardTokenStorageTrait,
+    BoostFeedStorageTrait,
+    BoostTokenStorageTrait,
+    PoolRewardsStorageTrait,
+    RewardTokenStorageTrait,
 };
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{
-    contract, contractimpl, contractmeta, log, panic_with_error, symbol_short, Address, BytesN,
-    Env, IntoVal, Map, Symbol, Vec, U256,
+    contract,
+    contractimpl,
+    contractmeta,
+    panic_with_error,
+    symbol_short,
+    Address,
+    BytesN,
+    Env,
+    IntoVal,
+    Map,
+    Symbol,
+    Vec,
+    U256,
 };
 use token_share::{
-    burn_shares, get_token_share, get_total_shares, get_user_balance_shares, mint_shares,
-    put_token_share, Client as LPTokenClient,
+    burn_shares,
+    get_token_share,
+    get_total_shares,
+    get_user_balance_shares,
+    mint_shares,
+    put_token_share,
+    Client as LPTokenClient,
 };
-use token_synthetic::{put_token_synthetic, Client as SyntheticTokenClient};
+use token_synthetic::put_token_synthetic;
 use upgrade::events::Events as UpgradeEvents;
-use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
+use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
 
 use sep_40_oracle::Asset;
 use utils::storage::{
-    AddressAndAmount, InitializeAllParams, InitializeParams, LiquidityPoolInfo, PoolResponse,
+    AddressAndAmount,
+    InitializeAllParams,
+    InitializeParams,
+    LiquidityPoolInfo,
+    PoolResponse,
 };
 
 // Metadata that is added on to the WASM custom section
@@ -71,24 +128,7 @@ impl LiquidityPoolCrunch for LiquidityPool {
     //
     // # Arguments
     //
-    // * `admin` - The address of the admin user.
-    // * `privileged_addrs` - (
-    //      emergency admin,
-    //      rewards admin,
-    //      operations admin,
-    //      pause admin,
-    //      emergency pause admins
-    //  ).
-    // * `router` - The address of the router.
-    // * `lp_token_wasm_hash` - The hash of the liquidity pool token contract.
-    // * `tokens` - A vector of token addresses.
-    // * `fee_fraction` - The fee fraction for the pool.
-    // * `reward_config` - (
-    // *    `reward_token` - The address of the reward token.
-    // *    `reward_boost_token` - The address of the reward boost token.
-    // *    `reward_boost_feed` - The address of the reward boost feed.
-    // * )
-    // * `plane` - The address of the plane.
+    // * `params` - The params to initialize all the pool with.
     fn initialize_all(e: Env, params: InitializeAllParams) {
         // merge whole initialize process into one because lack of caching of VM components
         // https://github.com/stellar/rs-soroban-env/issues/827
@@ -97,7 +137,7 @@ impl LiquidityPoolCrunch for LiquidityPool {
         Self::initialize_boost_config(
             e.clone(),
             params.reward_config.reward_boost_token,
-            params.reward_config.reward_boost_feed,
+            params.reward_config.reward_boost_feed
         );
         Self::initialize_rewards_config(e.clone(), params.reward_config.reward_token);
     }
@@ -118,20 +158,7 @@ impl LiquidityPoolTrait for LiquidityPool {
     //
     // # Arguments
     //
-    // * `admin` - The address of the admin user.
-    // * `privileged_addrs` - (
-    //      emergency admin,
-    //      rewards admin,
-    //      operations admin,
-    //      pause admin,
-    //      emergency pause admins
-    //  ).
-    // * `router` - The address of the router.
-    // * `oracle` -
-    // * `target_asset` -
-    // * `lp_token_wasm_hash` - The hash of the liquidity pool token contract.
-    // * `tokens` - A vector of token addresses.
-    // * `fee_fraction` - The fee fraction for the pool.
+    // * `params` - The params to initialize the pool with.
     fn initialize(e: Env, params: InitializeParams) {
         let access_control = AccessControl::new(&e);
         if access_control.get_role_safe(&Role::Admin).is_some() {
@@ -140,18 +167,20 @@ impl LiquidityPoolTrait for LiquidityPool {
         access_control.set_role_address(&Role::Admin, &params.admin);
         access_control.set_role_address(
             &Role::EmergencyAdmin,
-            &params.privileged_addrs.emergency_admin,
+            &params.privileged_addrs.emergency_admin
         );
-        access_control
-            .set_role_address(&Role::RewardsAdmin, &params.privileged_addrs.rewards_admin);
+        access_control.set_role_address(
+            &Role::RewardsAdmin,
+            &params.privileged_addrs.rewards_admin
+        );
         access_control.set_role_address(
             &Role::OperationsAdmin,
-            &params.privileged_addrs.operations_admin,
+            &params.privileged_addrs.operations_admin
         );
         access_control.set_role_address(&Role::PauseAdmin, &params.privileged_addrs.pause_admin);
         access_control.set_role_addresses(
             &Role::EmergencyPauseAdmin,
-            &params.privileged_addrs.emergency_pause_admins,
+            &params.privileged_addrs.emergency_pause_admins
         );
 
         set_router(&e, &params.router);
@@ -168,13 +197,17 @@ impl LiquidityPoolTrait for LiquidityPool {
         set_target_asset(&e, &params.target_asset);
 
         // deploy and initialize LP token contract
-        let share_contract =
-            create_contract(&e, params.lp_token_info.token_wasm_hash, &token_a, &token_b);
+        let share_contract = create_contract(
+            &e,
+            params.lp_token_info.token_wasm_hash,
+            &token_a,
+            &token_b
+        );
         LPTokenClient::new(&e, &share_contract).initialize(
             &e.current_contract_address(),
             &7u32,
             &params.lp_token_info.name.into_val(&e),
-            &params.lp_token_info.symbol.into_val(&e),
+            &params.lp_token_info.symbol.into_val(&e)
         );
 
         // 0.01% = 1; 1% = 100; 0.3% = 30
@@ -245,9 +278,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
         let user_shares = get_user_balance_shares(&e, &user);
-        rewards
-            .manager()
-            .checkpoint_user(&user, total_shares, user_shares);
+        rewards.manager().checkpoint_user(&user, total_shares, user_shares);
 
         if reserve_a == 0 && reserve_b == 0 && token_b_amount == 0 {
             panic_with_error!(&e, LiquidityPoolValidationError::AllCoinsRequired);
@@ -255,17 +286,13 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // Deposit Token B
         let token_b_client = SorobanTokenClient::new(&e, &get_token_b(&e));
-        token_b_client.transfer(
-            &user,
-            &e.current_contract_address(),
-            &(token_b_amount as i128),
-        );
+        token_b_client.transfer(&user, &e.current_contract_address(), &(token_b_amount as i128));
 
         // Increase reserves
         put_reserve_b(&e, reserve_b + token_b_amount);
 
         // Rebalance the pool
-        pool::rebalance_pool(&e);
+        rebalance(&e);
 
         // Now calculate how many new pool shares to mint
         let total_shares = get_total_shares(&e);
@@ -274,11 +301,13 @@ impl LiquidityPoolTrait for LiquidityPool {
         mint_shares(&e, &user, shares_to_mint as i128);
 
         // Checkpoint resulting working balance
-        rewards.manager().update_working_balance(
-            &user,
-            total_shares + shares_to_mint,
-            user_shares + shares_to_mint,
-        );
+        rewards
+            .manager()
+            .update_working_balance(
+                &user,
+                total_shares + shares_to_mint,
+                user_shares + shares_to_mint
+            );
 
         // update plane data for every pool update
         update_plane(&e);
@@ -307,7 +336,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         in_idx: u32,
         out_idx: u32,
         in_amount: u128,
-        out_min: u128,
+        out_min: u128
     ) -> u128 {
         user.require_auth();
 
@@ -331,8 +360,8 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(e, LiquidityPoolValidationError::ZeroAmount);
         }
 
-        // Rebalance the pool
-        pool::rebalance_pool(&e);
+        // Rebalance the pool before swapping
+        rebalance(&e);
 
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
@@ -374,8 +403,9 @@ impl LiquidityPoolTrait for LiquidityPool {
                 residue_denominator
                     .mul(&U256::from_u128(&e, old_reserve))
                     .add(
-                        &U256::from_u128(&e, residue_numerator)
-                            .mul(&U256::from_u128(&e, reserve - old_reserve - out)),
+                        &U256::from_u128(&e, residue_numerator).mul(
+                            &U256::from_u128(&e, reserve - old_reserve - out)
+                        )
                     )
             } else {
                 residue_denominator
@@ -413,11 +443,11 @@ impl LiquidityPoolTrait for LiquidityPool {
             tokens.get(out_idx).unwrap(),
             in_amount,
             out,
-            fee,
+            fee
         );
 
-        // Rebalance the pool
-        pool::rebalance_pool(&e);
+        // Rebalance the pool after swapping
+        rebalance(&e);
 
         out
     }
@@ -432,8 +462,8 @@ impl LiquidityPoolTrait for LiquidityPool {
     //
     // # Returns
     //
-    // The estimated amount of the output token that would be received.
-    fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: u128) -> u128 {
+    // A tuple containing the estimated amount of the output token that would be received and the amount of token_a to mint/burn.
+    fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: u128) -> (u128, i128) {
         if in_idx == out_idx {
             panic_with_error!(&e, LiquidityPoolValidationError::CannotSwapSameToken);
         }
@@ -452,7 +482,10 @@ impl LiquidityPoolTrait for LiquidityPool {
         let reserve_sell = reserves.get(in_idx).unwrap();
         let reserve_buy = reserves.get(out_idx).unwrap();
 
-        get_amount_out(&e, in_amount, reserve_sell, reserve_buy).0
+        let out = get_amount_out(&e, in_amount, reserve_sell, reserve_buy).0;
+        let delta_a = get_delta_a(&e, reserve_a, reserve_b);
+
+        (out, delta_a)
     }
 
     // Swaps tokens in the pool.
@@ -475,7 +508,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         in_idx: u32,
         out_idx: u32,
         out_amount: u128,
-        in_max: u128,
+        in_max: u128
     ) -> u128 {
         user.require_auth();
 
@@ -500,7 +533,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         // Rebalance the pool
-        pool::rebalance_pool(&e);
+        rebalance(&e);
 
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
@@ -513,8 +546,12 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolValidationError::EmptyPool);
         }
 
-        let (in_amount, fee) =
-            get_amount_out_strict_receive(&e, out_amount, reserve_sell, reserve_buy);
+        let (in_amount, fee) = get_amount_out_strict_receive(
+            &e,
+            out_amount,
+            reserve_sell,
+            reserve_buy
+        );
 
         if in_amount > in_max {
             panic_with_error!(&e, LiquidityPoolValidationError::InMaxNotSatisfied);
@@ -529,7 +566,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         sell_token_client.transfer(
             &e.current_contract_address(),
             &user,
-            &((in_max - in_amount) as i128),
+            &((in_max - in_amount) as i128)
         );
 
         if in_idx == 0 {
@@ -550,8 +587,9 @@ impl LiquidityPoolTrait for LiquidityPool {
                 residue_denominator
                     .mul(&U256::from_u128(&e, old_reserve))
                     .add(
-                        &U256::from_u128(&e, residue_numerator)
-                            .mul(&U256::from_u128(&e, reserve - old_reserve - out)),
+                        &U256::from_u128(&e, residue_numerator).mul(
+                            &U256::from_u128(&e, reserve - old_reserve - out)
+                        )
                     )
             } else {
                 residue_denominator
@@ -561,11 +599,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             }
         };
 
-        let (out_a, out_b) = if out_idx == 0 {
-            (out_amount, 0)
-        } else {
-            (0, out_amount)
-        };
+        let (out_a, out_b) = if out_idx == 0 { (out_amount, 0) } else { (0, out_amount) };
 
         let new_inv_a = new_invariant_factor(new_reserve_a, reserve_a, out_a);
         let new_inv_b = new_invariant_factor(new_reserve_b, reserve_b, out_b);
@@ -593,11 +627,11 @@ impl LiquidityPoolTrait for LiquidityPool {
             tokens.get(out_idx).unwrap(),
             in_amount,
             out_amount,
-            fee,
+            fee
         );
 
         // Rebalance the pool
-        pool::rebalance_pool(&e);
+        rebalance(&e);
 
         in_amount
     }
@@ -612,8 +646,13 @@ impl LiquidityPoolTrait for LiquidityPool {
     //
     // # Returns
     //
-    // The estimated amount of the output token that would be received.
-    fn estimate_swap_strict_receive(e: Env, in_idx: u32, out_idx: u32, out_amount: u128) -> u128 {
+    // A tuple containing the estimated amount of the output token that would be received and the amount of token_a to mint/burn.
+    fn estimate_swap_strict_receive(
+        e: Env,
+        in_idx: u32,
+        out_idx: u32,
+        out_amount: u128
+    ) -> (u128, i128) {
         if in_idx == out_idx {
             panic_with_error!(&e, LiquidityPoolValidationError::CannotSwapSameToken);
         }
@@ -632,7 +671,10 @@ impl LiquidityPoolTrait for LiquidityPool {
         let reserve_sell = reserves.get(in_idx).unwrap();
         let reserve_buy = reserves.get(out_idx).unwrap();
 
-        get_amount_out_strict_receive(&e, out_amount, reserve_sell, reserve_buy).0
+        let out = get_amount_out_strict_receive(&e, out_amount, reserve_sell, reserve_buy).0;
+        let delta_a = get_delta_a(&e, reserve_a, reserve_b);
+
+        (out, delta_a)
     }
 
     // Withdraws tokens from the pool.
@@ -656,9 +698,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
         let user_shares = get_user_balance_shares(&e, &user);
-        rewards
-            .manager()
-            .checkpoint_user(&user, total_shares, user_shares);
+        rewards.manager().checkpoint_user(&user, total_shares, user_shares);
 
         burn_shares(&e, &user, share_amount);
 
@@ -669,14 +709,12 @@ impl LiquidityPoolTrait for LiquidityPool {
         put_reserve_b(&e, reserve_b - share_amount);
 
         // Rebalance the pool
-        pool::rebalance_pool(&e);
+        rebalance(&e);
 
         // Checkpoint resulting working balance
-        rewards.manager().update_working_balance(
-            &user,
-            total_shares - share_amount,
-            user_shares - share_amount,
-        );
+        rewards
+            .manager()
+            .update_working_balance(&user, total_shares - share_amount, user_shares - share_amount);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -693,6 +731,15 @@ impl LiquidityPoolTrait for LiquidityPool {
     // A vector of the pool's reserves.
     fn get_reserves(e: Env) -> Vec<u128> {
         Vec::from_array(&e, [get_reserve_a(&e), get_reserve_b(&e)])
+    }
+
+    // Returns the pool's price.
+    //
+    // # Returns
+    //
+    // The pool's price as a u128.
+    fn get_price(e: Env, a_in_b: bool, in_usd: bool) -> u128 {
+        get_current_price(&e, a_in_b, in_usd)
     }
 
     // Returns the pool's fee fraction.
@@ -751,7 +798,7 @@ impl AdminInterfaceTrait for LiquidityPool {
         rewards_admin: Address,
         operations_admin: Address,
         pause_admin: Address,
-        emergency_pause_admins: Vec<Address>,
+        emergency_pause_admins: Vec<Address>
     ) {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
@@ -765,7 +812,7 @@ impl AdminInterfaceTrait for LiquidityPool {
             rewards_admin,
             operations_admin,
             pause_admin,
-            emergency_pause_admins,
+            emergency_pause_admins
         );
     }
 
@@ -784,18 +831,15 @@ impl AdminInterfaceTrait for LiquidityPool {
             Role::OperationsAdmin,
             Role::PauseAdmin,
         ] {
-            result.set(
-                role.as_symbol(&e),
-                match access_control.get_role_safe(&role) {
-                    Some(v) => Vec::from_array(&e, [v]),
-                    None => Vec::new(&e),
-                },
-            );
+            result.set(role.as_symbol(&e), match access_control.get_role_safe(&role) {
+                Some(v) => Vec::from_array(&e, [v]),
+                None => Vec::new(&e),
+            });
         }
 
         result.set(
             Role::EmergencyPauseAdmin.as_symbol(&e),
-            access_control.get_role_addresses(&Role::EmergencyPauseAdmin),
+            access_control.get_role_addresses(&Role::EmergencyPauseAdmin)
         );
 
         result
@@ -823,7 +867,7 @@ impl AdminInterfaceTrait for LiquidityPool {
             &e,
             &new_oracle,
             &Asset::Other(Symbol::new(&e, "XLM")),
-            false,
+            false
         );
         if price == 0 {
             panic_with_error!(&e, LiquidityPoolError::InvalidOracle);
@@ -838,7 +882,7 @@ impl AdminInterfaceTrait for LiquidityPool {
         access_control.assert_address_has_role(&admin, &Role::Admin);
 
         // Rebalance the pool
-        pool::rebalance_pool(&e);
+        rebalance(&e);
     }
 
     // Stops the pool deposits instantly.
@@ -991,7 +1035,7 @@ impl UpgradeableContract for LiquidityPool {
         e: Env,
         admin: Address,
         new_wasm_hash: BytesN<32>,
-        token_new_wasm_hash: BytesN<32>,
+        token_new_wasm_hash: BytesN<32>
     ) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
@@ -999,10 +1043,9 @@ impl UpgradeableContract for LiquidityPool {
         // handle token upgrade manually together with pool upgrade
         set_token_future_wasm(&e, &token_new_wasm_hash);
 
-        UpgradeEvents::new(&e).commit_upgrade(Vec::from_array(
-            &e,
-            [new_wasm_hash.clone(), token_new_wasm_hash.clone()],
-        ));
+        UpgradeEvents::new(&e).commit_upgrade(
+            Vec::from_array(&e, [new_wasm_hash.clone(), token_new_wasm_hash.clone()])
+        );
     }
 
     // Applies the committed upgrade.
@@ -1015,13 +1058,13 @@ impl UpgradeableContract for LiquidityPool {
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
         let new_wasm_hash = apply_upgrade(&e);
         let token_new_wasm_hash = get_token_future_wasm(&e);
-        token_share::Client::new(&e, &get_token_share(&e))
+        token_share::Client
+            ::new(&e, &get_token_share(&e))
             .upgrade(&e.current_contract_address(), &token_new_wasm_hash);
 
-        UpgradeEvents::new(&e).apply_upgrade(Vec::from_array(
-            &e,
-            [new_wasm_hash.clone(), token_new_wasm_hash.clone()],
-        ));
+        UpgradeEvents::new(&e).apply_upgrade(
+            Vec::from_array(&e, [new_wasm_hash.clone(), token_new_wasm_hash.clone()])
+        );
 
         (new_wasm_hash, token_new_wasm_hash)
     }
@@ -1074,7 +1117,7 @@ impl UpgradeableLPTokenTrait for LiquidityPool {
         e.invoke_contract::<()>(
             &get_token_share(&e),
             &symbol_short!("upgrade"),
-            Vec::from_array(&e, [new_token_wasm.to_val()]),
+            Vec::from_array(&e, [new_token_wasm.to_val()])
         );
     }
 }
@@ -1110,7 +1153,7 @@ impl RewardsTrait for LiquidityPool {
         e: Env,
         admin: Address,
         reward_boost_token: Address,
-        reward_boost_feed: Address,
+        reward_boost_feed: Address
     ) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
@@ -1132,7 +1175,7 @@ impl RewardsTrait for LiquidityPool {
         e: Env,
         admin: Address,
         expired_at: u64, // timestamp
-        tps: u128,       // value with 7 decimal places. example: 600_0000000
+        tps: u128 // value with 7 decimal places. example: 600_0000000
     ) {
         admin.require_auth();
 
@@ -1143,9 +1186,7 @@ impl RewardsTrait for LiquidityPool {
 
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
-        rewards
-            .manager()
-            .set_reward_config(total_shares, expired_at, tps);
+        rewards.manager().set_reward_config(total_shares, expired_at, tps);
         RewardEvents::new(&e).set_rewards_config(expired_at, tps);
     }
 
@@ -1154,12 +1195,14 @@ impl RewardsTrait for LiquidityPool {
         let rewards = get_rewards_manager(&e);
         let mut rewards_manager = rewards.manager();
         let total_shares = get_total_shares(&e);
-        let mut reward_balance_to_keep = rewards_manager.get_total_configured_reward(total_shares)
-            - rewards_manager.get_total_claimed_reward(total_shares);
+        let mut reward_balance_to_keep =
+            rewards_manager.get_total_configured_reward(total_shares) -
+            rewards_manager.get_total_claimed_reward(total_shares);
 
         let reward_token = rewards.storage().get_reward_token();
-        let reward_balance = SorobanTokenClient::new(&e, &reward_token)
-            .balance(&e.current_contract_address()) as u128;
+        let reward_balance = SorobanTokenClient::new(&e, &reward_token).balance(
+            &e.current_contract_address()
+        ) as u128;
 
         match Self::get_tokens(e.clone()).first_index_of(reward_token) {
             Some(idx) => {
@@ -1192,7 +1235,7 @@ impl RewardsTrait for LiquidityPool {
         SorobanTokenClient::new(&e, &reward_token).transfer(
             &e.current_contract_address(),
             &get_router(&e),
-            &(unused_reward as i128),
+            &(unused_reward as i128)
         );
         unused_reward
     }
@@ -1218,30 +1261,18 @@ impl RewardsTrait for LiquidityPool {
 
         // pre-fill result dict with stored values
         // or values won't be affected by checkpoint in any way
-        let mut result = Map::from_array(
-            &e,
-            [
-                (symbol_short!("tps"), config.tps as i128),
-                (symbol_short!("exp_at"), config.expired_at as i128),
-                (symbol_short!("supply"), total_shares as i128),
-                (
-                    Symbol::new(&e, "working_balance"),
-                    manager.get_working_balance(&user, user_shares) as i128,
-                ),
-                (
-                    Symbol::new(&e, "working_supply"),
-                    manager.get_working_supply(total_shares) as i128,
-                ),
-                (
-                    Symbol::new(&e, "boost_balance"),
-                    manager.get_user_boost_balance(&user) as i128,
-                ),
-                (
-                    Symbol::new(&e, "boost_supply"),
-                    manager.get_total_locked() as i128,
-                ),
-            ],
-        );
+        let mut result = Map::from_array(&e, [
+            (symbol_short!("tps"), config.tps as i128),
+            (symbol_short!("exp_at"), config.expired_at as i128),
+            (symbol_short!("supply"), total_shares as i128),
+            (
+                Symbol::new(&e, "working_balance"),
+                manager.get_working_balance(&user, user_shares) as i128,
+            ),
+            (Symbol::new(&e, "working_supply"), manager.get_working_supply(total_shares) as i128),
+            (Symbol::new(&e, "boost_balance"), manager.get_user_boost_balance(&user) as i128),
+            (Symbol::new(&e, "boost_supply"), manager.get_total_locked() as i128),
+        ]);
 
         // display actual values
         let user_data = manager.checkpoint_user(&user, total_shares, user_shares);
@@ -1249,10 +1280,7 @@ impl RewardsTrait for LiquidityPool {
 
         result.set(symbol_short!("acc"), pool_data.accumulated as i128);
         result.set(symbol_short!("last_time"), pool_data.last_time as i128);
-        result.set(
-            symbol_short!("pool_acc"),
-            user_data.pool_accumulated as i128,
-        );
+        result.set(symbol_short!("pool_acc"), user_data.pool_accumulated as i128);
         result.set(symbol_short!("block"), pool_data.block as i128);
         result.set(symbol_short!("usr_block"), user_data.last_block as i128);
         result.set(symbol_short!("to_claim"), user_data.to_claim as i128);
@@ -1262,11 +1290,11 @@ impl RewardsTrait for LiquidityPool {
         // and needs to checkpoint itself for more rewards
         result.set(
             Symbol::new(&e, "new_working_balance"),
-            manager.get_working_balance(&user, user_shares) as i128,
+            manager.get_working_balance(&user, user_shares) as i128
         );
         result.set(
             Symbol::new(&e, "new_working_supply"),
-            manager.get_working_supply(total_shares) as i128,
+            manager.get_working_supply(total_shares) as i128
         );
         result
     }
@@ -1285,9 +1313,7 @@ impl RewardsTrait for LiquidityPool {
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
         let user_shares = get_user_balance_shares(&e, &user);
-        rewards
-            .manager()
-            .get_amount_to_claim(&user, total_shares, user_shares)
+        rewards.manager().get_amount_to_claim(&user, total_shares, user_shares)
     }
 
     fn checkpoint_reward(e: Env, token_contract: Address, user: Address, user_shares: u128) {
@@ -1298,16 +1324,14 @@ impl RewardsTrait for LiquidityPool {
         }
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
-        rewards
-            .manager()
-            .checkpoint_user(&user, total_shares, user_shares);
+        rewards.manager().checkpoint_user(&user, total_shares, user_shares);
     }
 
     fn checkpoint_working_balance(
         e: Env,
         token_contract: Address,
         user: Address,
-        user_shares: u128,
+        user_shares: u128
     ) {
         // checkpoint working balance with provided values to avoid re-entrancy issue
         token_contract.require_auth();
@@ -1316,9 +1340,7 @@ impl RewardsTrait for LiquidityPool {
         }
         let rewards = get_rewards_manager(&e);
         let total_shares = get_total_shares(&e);
-        rewards
-            .manager()
-            .update_working_balance(&user, total_shares, user_shares);
+        rewards.manager().update_working_balance(&user, total_shares, user_shares);
     }
 
     // Returns the total amount of accumulated reward for the pool.
@@ -1399,8 +1421,9 @@ impl RewardsTrait for LiquidityPool {
                 continue;
             }
 
-            let balance = SorobanTokenClient::new(&e, &tokens.get(i).unwrap())
-                .balance(&e.current_contract_address()) as u128;
+            let balance = SorobanTokenClient::new(&e, &tokens.get(i).unwrap()).balance(
+                &e.current_contract_address()
+            ) as u128;
             if reserves.get(i).unwrap() > balance {
                 panic_with_error!(&e, LiquidityPoolValidationError::InsufficientBalance);
             }
@@ -1530,10 +1553,11 @@ impl TransferableContract for LiquidityPool {
         let access_control = AccessControl::new(&e);
         let role = Role::from_symbol(&e, role_name);
         match access_control.get_transfer_ownership_deadline(&role) {
-            0 => match access_control.get_role_safe(&role) {
-                Some(address) => address,
-                None => panic_with_error!(&e, AccessControlError::RoleNotFound),
-            },
+            0 =>
+                match access_control.get_role_safe(&role) {
+                    Some(address) => address,
+                    None => panic_with_error!(&e, AccessControlError::RoleNotFound),
+                }
             _ => access_control.get_future_address(&role),
         }
     }

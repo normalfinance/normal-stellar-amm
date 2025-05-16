@@ -1,13 +1,14 @@
 #![cfg(test)]
 extern crate std;
 use crate::ProviderSwapFeeCollectorClient;
+use sep_40_oracle::testutils::MockPriceOracleWASM;
 use sep_40_oracle::Asset;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient,
     TokenClient as SorobanTokenClient,
 };
-use soroban_sdk::{ Address, BytesN, Env, Symbol, Vec };
+use soroban_sdk::{ Address, BytesN, Env, String, Symbol, Vec };
 use utils::storage::OraclePair;
 
 pub(crate) struct TestConfig {
@@ -78,16 +79,18 @@ impl Setup<'_> {
         router.set_reward_boost_config(&admin, &token_a.address, &boost_feed.address);
 
         let oracles = OraclePair {
-            base_oracle: "",
-            quote_oracle: "",
+            base_oracle: e.register(MockPriceOracleWASM, ()),
+            quote_oracle: e.register(MockPriceOracleWASM, ()),
         };
 
         // create swap pool & deposit initial liquidity
         let (_, pool_address) = router.init_standard_pool(
             &admin,
-            &Vec::from_array(&e, [token_a.address.clone(), token_b.address.clone()]),
             &oracles,
             &Asset::Other(Symbol::new(&e, "SOL")),
+            &Vec::from_array(&e, [token_a.address.clone(), token_b.address.clone()]),
+            &String::from_str(&e, "Pool Share Token"),
+            &String::from_str(&e, "Pool Share Token"),
             &30
         );
         let swap_pool = liquidity_pool::Client::new(&e, &pool_address);

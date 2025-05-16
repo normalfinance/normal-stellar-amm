@@ -1,5 +1,5 @@
 use sep_40_oracle::Asset;
-use soroban_sdk::{contracttype, Address, BytesN, String, Vec};
+use soroban_sdk::{ contracttype, Address, BytesN, String, Vec };
 
 #[macro_export]
 macro_rules! generate_instance_storage_setter {
@@ -64,6 +64,7 @@ macro_rules! generate_instance_storage_getter_and_setter_with_default {
 #[contracttype]
 #[derive(Clone)]
 pub struct TokenInitInfo {
+    /// The hash of the liquidity pool token contract.
     pub token_wasm_hash: BytesN<32>,
     pub name: String,
     pub symbol: String,
@@ -100,13 +101,17 @@ pub struct RewardConfig {
 #[contracttype]
 #[derive(Clone)]
 pub struct InitializeParams {
+    /// The address of the admin user.
     pub admin: Address,
     pub privileged_addrs: PrivilegedAddresses,
+    /// The address of the router.
     pub router: Address,
     pub oracles: OraclePair,
     pub target_asset: Asset,
     pub lp_token_info: TokenInitInfo,
+    /// A vector of token addresses.
     pub tokens: Vec<Address>,
+    /// The fee fraction for the pool.
     pub fee_fraction: u32,
 }
 
@@ -115,6 +120,7 @@ pub struct InitializeParams {
 pub struct InitializeAllParams {
     pub base: InitializeParams,
     pub reward_config: RewardConfig,
+    /// The address of the plane.
     pub plane: Address,
 }
 

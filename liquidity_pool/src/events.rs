@@ -1,6 +1,6 @@
 #![no_std]
 
-use soroban_sdk::{Address, Env, IntoVal, Symbol, Val, Vec};
+use soroban_sdk::{ Address, Env, Symbol };
 
 #[derive(Clone)]
 pub struct Events(Env);
@@ -33,18 +33,10 @@ pub trait LiquidityPoolEvents {
         token_out: Address,
         in_amount: u128,
         out_amount: u128,
-        fee_amount: u128,
+        fee_amount: u128
     );
 
-    fn rebalance(
-        &self,
-        user: Address,
-        oracle_price: u128,
-        pool_price: u128,
-        delta_a: u128,
-        new_reserve_a: u128,
-        new_reserve_b: u128,
-    );
+    fn rebalance(&self, delta_a: i128, new_reserve_a: u128, new_reserve_b: u128);
 
     fn kill_deposit(&self);
 
@@ -82,7 +74,7 @@ impl LiquidityPoolEvents for Events {
         let e = self.env();
         e.events().publish(
             (Symbol::new(e, "deposit_liquidity"), token),
-            (share_amount as i128, amount as i128),
+            (share_amount as i128, amount as i128)
         );
     }
 
@@ -101,7 +93,7 @@ impl LiquidityPoolEvents for Events {
         let e = self.env();
         e.events().publish(
             (Symbol::new(e, "withdraw_liquidity"), token),
-            (share_amount as i128, amount as i128),
+            (share_amount as i128, amount as i128)
         );
     }
 
@@ -112,7 +104,7 @@ impl LiquidityPoolEvents for Events {
         token_out: Address,
         in_amount: u128,
         out_amount: u128,
-        fee_amount: u128,
+        fee_amount: u128
     ) {
         // topics
         // [
@@ -131,23 +123,14 @@ impl LiquidityPoolEvents for Events {
         let e = self.env();
         e.events().publish(
             (Symbol::new(e, "trade"), token_in, token_out, user),
-            (in_amount as i128, out_amount as i128, fee_amount as i128),
+            (in_amount as i128, out_amount as i128, fee_amount as i128)
         );
     }
 
-    fn rebalance(
-        &self,
-        user: Address,
-        oracle_price: u128,
-        pool_price: u128,
-        delta_a: u128,
-        new_reserve_a: u128,
-        new_reserve_b: u128,
-    ) {
+    fn rebalance(&self, delta_a: i128, new_reserve_a: u128, new_reserve_b: u128) {
         // topics
         // [
         //   "rebalance": Symbol, // event identifier
-        //   user: Address,   // contract addresses identifying asset withdrawn from the pool
         // ]
         //
         // body
@@ -157,14 +140,8 @@ impl LiquidityPoolEvents for Events {
         // ]
         let e = self.env();
         e.events().publish(
-            (Symbol::new(e, "rebalance"), user),
-            (
-                oracle_price as i128,
-                pool_price as i128,
-                delta_a as i128,
-                new_reserve_a as i128,
-                new_reserve_b as i128,
-            ),
+            (Symbol::new(e, "rebalance"),),
+            (delta_a, new_reserve_a as i128, new_reserve_b as i128)
         );
     }
 

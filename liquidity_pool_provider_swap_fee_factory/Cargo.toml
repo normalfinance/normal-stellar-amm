@@ -14,7 +14,9 @@ access_control = { workspace = true }
 upgrade = { workspace = true }
 paste = { workspace = true }
 utils = { workspace = true }
+sep-40-oracle = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
 utils = { workspace = true, features = ["testutils"] }
+sep-40-oracle = { workspace = true, features = ["testutils"] }

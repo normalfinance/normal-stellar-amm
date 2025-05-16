@@ -2,6 +2,7 @@
 extern crate std;
 
 use crate::LiquidityPoolRouterClient;
+use sep_40_oracle::testutils::MockPriceOracleWASM;
 use sep_40_oracle::Asset;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{ Address, BytesN, Env, Symbol, Vec };
@@ -124,7 +125,10 @@ impl Default for Setup<'_> {
             test_token::Client::new(&env, &tokens[3]),
         ];
 
-        let oracles = OraclePair { base_oracle: (), quote_oracle: () };
+        let oracles = OraclePair {
+            base_oracle: env.register(MockPriceOracleWASM, ()),
+            quote_oracle: env.register(MockPriceOracleWASM, ()),
+        };
 
         let target_asset = Asset::Other(Symbol::new(&env, "SOL"));
 

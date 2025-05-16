@@ -1,5 +1,5 @@
-use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Vec};
-use utils::storage::{InitializeAllParams, InitializeParams, LiquidityPoolInfo};
+use soroban_sdk::{ Address, BytesN, Env, Map, Symbol, Vec };
+use utils::storage::{ InitializeAllParams, InitializeParams, LiquidityPoolInfo };
 
 pub trait LiquidityPoolCrunch {
     // Initialize pool completely to reduce calculations cost
@@ -38,11 +38,11 @@ pub trait LiquidityPoolTrait {
         in_idx: u32,
         out_idx: u32,
         in_amount: u128,
-        out_min: u128,
+        out_min: u128
     ) -> u128;
 
     // Estimate amount of coins to retrieve using swap function
-    fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: u128) -> u128;
+    fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: u128) -> (u128, i128);
 
     // Perform an exchange between two coins with strict amount to receive.
     // in_idx: Index value for the coin to send
@@ -55,11 +55,11 @@ pub trait LiquidityPoolTrait {
         in_idx: u32,
         out_idx: u32,
         out_amount: u128,
-        in_max: u128,
+        in_max: u128
     ) -> u128;
 
     // Estimate amount of coins to retrieve using swap_strict_receive function
-    fn estimate_swap_strict_receive(e: Env, in_idx: u32, out_idx: u32, out_amount: u128) -> u128;
+    fn estimate_swap_strict_receive(e: Env, in_idx: u32, out_idx: u32, out_amount: u128) -> (u128, i128);
 
     // Transfers share_amount of pool share tokens to this contract,
     // burns all pools share tokens in this contracts, and sends
@@ -69,6 +69,9 @@ pub trait LiquidityPoolTrait {
 
     // Get pool reserves
     fn get_reserves(e: Env) -> Vec<u128>;
+
+    // Get the price of the tokens in the pool in various formats
+    fn get_price(e: Env, a_in_b: bool, in_usd: bool) -> u128;
 
     // Fee fraction getter. 1 = 0.01%
     fn get_fee_fraction(e: Env) -> u32;
@@ -85,7 +88,7 @@ pub trait AdminInterfaceTrait {
         rewards_admin: Address,
         operations_admin: Address,
         pause_admin: Address,
-        emergency_pause_admins: Vec<Address>,
+        emergency_pause_admins: Vec<Address>
     );
 
     // Get map of privileged roles
@@ -128,7 +131,7 @@ pub trait UpgradeableContract {
         e: Env,
         admin: Address,
         new_wasm_hash: BytesN<32>,
-        new_token_wasm_hash: BytesN<32>,
+        new_token_wasm_hash: BytesN<32>
     );
     fn apply_upgrade(e: Env, admin: Address) -> (BytesN<32>, BytesN<32>);
     fn revert_upgrade(e: Env, admin: Address);
@@ -153,7 +156,7 @@ pub trait RewardsTrait {
         e: Env,
         admin: Address,
         reward_boost_token: Address,
-        reward_boost_feed: Address,
+        reward_boost_feed: Address
     );
 
     // Configure rewards for pool. Every second tps of coins
@@ -186,7 +189,7 @@ pub trait RewardsTrait {
         e: Env,
         token_contract: Address,
         user: Address,
-        user_shares: u128,
+        user_shares: u128
     );
 
     // Get total amount of accumulated reward for the pool

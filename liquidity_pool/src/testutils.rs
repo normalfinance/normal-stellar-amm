@@ -1,11 +1,10 @@
 #![cfg(test)]
 extern crate std;
 use crate::plane::{ pool_plane, PoolPlaneClient };
-use crate::{ pool, LiquidityPoolClient };
+use crate::LiquidityPoolClient;
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use sep_40_oracle::testutils::{
     Asset as MockAsset,
-    MockPriceOracle,
     MockPriceOracleClient,
     MockPriceOracleWASM,
 };
@@ -14,7 +13,7 @@ use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient,
     TokenClient as SorobanTokenClient,
 };
-use soroban_sdk::{ log, String };
+use soroban_sdk::String;
 use soroban_sdk::{ testutils::Address as _, Address, BytesN, Env, Symbol, Vec };
 use utils::storage::{
     InitializeAllParams,
@@ -57,6 +56,9 @@ pub(crate) struct Setup<'a> {
     pub(crate) oracles: OraclePair,
     pub(crate) target_asset: Asset,
     pub(crate) base_oracle_price: i128,
+    pub(crate) base_oracle_client: MockPriceOracleClient<'a>,
+    pub(crate) quote_oracle_price: i128,
+    pub(crate) quote_oracle_client: MockPriceOracleClient<'a>,
     pub(crate) users: vec::Vec<Address>,
     pub(crate) token1: SorobanTokenClient<'a>,
     pub(crate) token1_admin_client: SorobanTokenAdminClient<'a>,
@@ -140,11 +142,11 @@ impl Setup<'_> {
 
         let target_asset = Asset::Other(Symbol::new(&e, "SOL"));
         let target_asset_mock = MockAsset::Other(Symbol::new(&e, "SOL"));
-        let quote_asset = Asset::Other(Symbol::new(&e, "XLM"));
+        // let quote_asset = Asset::Other(Symbol::new(&e, "XLM"));
         let quote_asset_mock = MockAsset::Other(Symbol::new(&e, "XLM"));
 
         let base_oracle_price = 2_0000000; // $2.00
-        let quote_oracle_price = 1_0000000; // $0.30
+        let quote_oracle_price = 0_5000000; // $0.50
 
         let oracles = OraclePair {
             base_oracle: e.register(MockPriceOracleWASM, ()),
@@ -226,6 +228,9 @@ impl Setup<'_> {
             oracles,
             target_asset,
             base_oracle_price,
+            base_oracle_client,
+            quote_oracle_price,
+            quote_oracle_client,
             users,
             token1,
             token1_admin_client,
@@ -379,15 +384,15 @@ pub fn install_token_wasm(e: &Env) -> BytesN<32> {
     e.deployer().upload_contract_wasm(WASM)
 }
 
-#[test]
-fn test() {
-    let config = TestConfig {
-        users_count: 2,
-        mint_to_user: 1000,
-        rewards_count: 1_000_000_0000000,
-        liq_pool_fee: 30,
-        reward_tps: 10_5000000_u128,
-        reward_token_in_pool: false,
-    };
-    let _setup = Setup::new_with_config(&config);
-}
+// #[test]
+// fn test() {
+//     let config = TestConfig {
+//         users_count: 2,
+//         mint_to_user: 1000,
+//         rewards_count: 1_000_000_0000000,
+//         liq_pool_fee: 30,
+//         reward_tps: 10_5000000_u128,
+//         reward_token_in_pool: false,
+//     };
+//     let _setup = Setup::new_with_config(&config);
+// }

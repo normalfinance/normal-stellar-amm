@@ -107,7 +107,7 @@ impl ProviderSwapFeeCollector {
     // Arguments:
     //   - e: The Soroban environment.
     //   - operator: The address calling for the fee claim and swap (must match the stored operator).
-    //   - swaps_chain: A vector describing the swap path; each element is a tuple of (intermediate token addresses, function hash, output token address).
+    //   - swap: A vector describing the swap path; each element is a tuple of (intermediate token addresses, function hash, output token address).
     //   - token: The token for which fees are claimed.
     //   - out_min: The minimum acceptable output amount from the swap.
     //   - to: The destination address for the swapped tokens.
@@ -142,7 +142,7 @@ impl ProviderSwapFeeCollector {
         ]);
         let out_amount: u128 = e.invoke_contract(
             &get_router(&e),
-            &Symbol::new(&e, "swap_chained"),
+            &Symbol::new(&e, "swap"),
             Vec::from_array(
                 &e,
                 [
@@ -167,12 +167,12 @@ impl ProviderSwapFeeCollector {
 #[contractimpl]
 impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
     // swap
-    // Executes a multi-hop token swap with fee deduction.
+    // Executes a token swap with fee deduction.
     //
     // Arguments:
     //   - e: The Soroban environment.
     //   - user: The user initiating the swap (must be authorized).
-    //   - swaps_chain: A vector describing the swap path.
+    //   - swap: The swap args.
     //   - token_in: The input token address.
     //   - in_amount: The amount of token_in provided by the user.
     //   - out_min: The minimum acceptable output token amount (after fee deduction).
@@ -246,7 +246,7 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
     }
 
     // swap_strict_receive
-    // Executes a multi-hop swap ensuring a specific output amount by adjusting the input and fee.
+    // Executes a swap ensuring a specific output amount by adjusting the input and fee.
     //
     // Arguments:
     //   - e: The Soroban environment.

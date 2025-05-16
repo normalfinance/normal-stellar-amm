@@ -1,4 +1,3 @@
-use sep_40_oracle::Asset;
 use soroban_sdk::{Address, BytesN, Env, Symbol, Val, Vec};
 
 #[derive(Clone)]

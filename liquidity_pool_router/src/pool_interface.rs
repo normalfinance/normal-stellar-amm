@@ -57,7 +57,7 @@ pub trait LiquidityPoolInterfaceTrait {
         token_out: Address,
         pool_index: BytesN<32>,
         in_amount: u128,
-    ) -> u128;
+    ) -> (u128, i128);
 
     // Withdraw coins from the pool.
     // share_amount: Quantity of LP tokens to burn in the withdrawal

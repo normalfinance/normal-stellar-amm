@@ -171,9 +171,9 @@ pub fn assert_tokens_sorted(e: &Env, tokens: &Vec<Address>) {
     for i in 0..tokens.len() - 1 {
         let left = tokens.get_unchecked(i);
         let right = tokens.get_unchecked(i + 1);
-        // if left > right {
-        //     panic_with_error!(e, LiquidityPoolRouterError::TokensNotSorted);
-        // }
+        if left > right {
+            panic_with_error!(e, LiquidityPoolRouterError::TokensNotSorted);
+        }
         if left == right {
             panic_with_error!(e, LiquidityPoolRouterError::DuplicatesNotAllowed);
         }

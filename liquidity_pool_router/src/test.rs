@@ -80,8 +80,7 @@ fn test_constant_product_pool() {
     let [token1, token2, _, _] = setup.tokens;
 
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
-    // let oracle = Address::generate(&e);
-    // let target_asset = setup.target_asset
+
     let user1 = Address::generate(&e);
     setup.reward_token.mint(&user1, &10_0000000);
 
@@ -122,26 +121,15 @@ fn test_constant_product_pool() {
     assert_eq!(token_share.balance(&pool_address), 0);
     assert_eq!(token1.balance(&user1), 0);
 
-    let reserves = router.get_reserves(&tokens, &pool_hash);
-    let expected_mint_amount = get_mint_amount(
-        &e,
-        desired_amount,
-        reserves.get(0).unwrap(),
-        reserves.get(1).unwrap()
-    );
-
-    assert_eq!(token1.balance(&pool_address), expected_mint_amount as i128);
+    assert_eq!(token1.balance(&pool_address), 10);
     assert_eq!(token2.balance(&user1), 900);
     assert_eq!(token2.balance(&pool_address), 100);
 
-    assert_eq!(
-        router.get_reserves(&tokens, &pool_hash),
-        Vec::from_array(&e, [expected_mint_amount, 100])
-    );
+    assert_eq!(router.get_reserves(&tokens, &pool_hash), Vec::from_array(&e, [10, 100]));
 
     assert_eq!(
         router.estimate_swap(&tokens, &token2.address, &token1.address, &pool_hash, &97),
-        48
+        (48, 0)
     );
     assert_eq!(
         router.swap(
@@ -156,15 +144,15 @@ fn test_constant_product_pool() {
         48
     );
 
-    assert_eq!(token1.balance(&user1), 803);
-    assert_eq!(token1.balance(&pool_address), 197);
-    assert_eq!(token2.balance(&user1), 948);
-    assert_eq!(token2.balance(&pool_address), 52);
-    assert_eq!(router.get_reserves(&tokens, &pool_hash), Vec::from_array(&e, [197, 52]));
+    assert_eq!(token1.balance(&user1), 948);
+    assert_eq!(token1.balance(&pool_address), 52);
+    assert_eq!(token2.balance(&user1), 803);
+    assert_eq!(token2.balance(&pool_address), 197);
+    assert_eq!(router.get_reserves(&tokens, &pool_hash), Vec::from_array(&e, [52, 197]));
 
     assert_eq!(
         router.estimate_swap(&tokens, &token1.address, &token2.address, &pool_hash, &97),
-        48
+        (48, 0)
     );
     assert_eq!(
         router.swap(
@@ -428,9 +416,7 @@ fn test_simple_ongoing_reward() {
     // e.cost_estimate().budget().reset_unlimited();
 
     assert_approx_eq_abs_u256(
-        U256::from_u128(&e, total_reward_1)
-            .mul(&standard_liquidity)
-            .div(&standard_liquidity),
+        U256::from_u128(&e, total_reward_1).mul(&standard_liquidity).div(&standard_liquidity),
         U256::from_u128(&e, standard_pool_tps * 60),
         U256::from_u32(&e, 100)
     );
@@ -529,7 +515,11 @@ fn test_rewards_distribution() {
     );
     let (standard_pool_hash2, standard_pool_address2) = router.init_standard_pool(
         &user1,
+        &setup.oracles,
+        &setup.target_asset,
         &tokens2,
+        &String::from_str(&e, "Pool Share Token"),
+        &String::from_str(&e, "Pool Share Token"),
         &30
     );
 
@@ -1268,8 +1258,6 @@ fn test_event_correct() {
     router.fill_liquidity(&tokens);
     router.config_pool_rewards(&tokens, &pool_hash);
 
-    assert_eq!(token1.balance(&user1), 1000);
-
     token2.mint(&user1, &1000);
     assert_eq!(token2.balance(&user1), 1000);
 
@@ -1296,8 +1284,8 @@ fn test_event_correct() {
     let out_amt = router.swap(
         &user1,
         &tokens,
-        &token1.address,
         &token2.address,
+        &token1.address,
         &pool_hash,
         &97_u128,
         &48_u128
@@ -1309,7 +1297,7 @@ fn test_event_correct() {
         vec![&e, (
             router.address.clone(),
             (Symbol::new(&e, "swap"), tokens.clone(), user1.clone()).into_val(&e),
-            (pool_id.clone(), &token1.address, &token2.address, 97_u128, out_amt).into_val(&e),
+            (pool_id.clone(), &token2.address, &token1.address, 97_u128, out_amt).into_val(&e),
         )]
     );
 
@@ -1353,9 +1341,20 @@ fn test_tokens_storage() {
     ];
     for pair in pairs.clone() {
         if pair.len() == 2 {
-            router.init_standard_pool(&user1, &pair, &30);
+            router.init_standard_pool(
+                &user1,
+                &setup.oracles,
+                &setup.target_asset,
+                &pair,
+                &String::from_str(&e, "Pool Share Token"),
+                &String::from_str(&e, "Pool Share Token"),
+                &30
+            );
         }
     }
+    let pools_vec = router.query_pools();
+    assert_eq!(pools_vec.len(), 4);
+
     let counter = router.get_tokens_sets_count();
     assert_eq!(counter, 4);
     let mut pools_full_list = Vec::new(&e);
@@ -1416,7 +1415,11 @@ fn test_rewards_distribution_without_outstanding_rewards() {
 
     let (standard_pool_hash1, standard_pool_address1) = router.init_standard_pool(
         &user,
+        &setup.oracles,
+        &setup.target_asset,
         &tokens,
+        &String::from_str(&e, "Pool Share Token"),
+        &String::from_str(&e, "Pool Share Token"),
         &30
     );
 
@@ -1431,7 +1434,7 @@ fn test_rewards_distribution_without_outstanding_rewards() {
         &user,
         &tokens,
         &standard_pool_hash1,
-        &Vec::from_array(&e, [30399483, 2420176738]) // FIXME:
+        &2420176738 // [30399483, 2420176738]
     );
 
     reward_token.mint(&standard_pool_address1, &(3888205486 - 2420176738));

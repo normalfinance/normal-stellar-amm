@@ -1,10 +1,15 @@
 #![cfg(test)]
 extern crate std;
 use crate::ProviderSwapFeeFactoryClient;
+use sep_40_oracle::testutils::MockPriceOracleWASM;
+use sep_40_oracle::Asset;
 use soroban_sdk::token::{
-    StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
+    StellarAssetClient as SorobanTokenAdminClient,
+    TokenClient as SorobanTokenClient,
 };
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Vec};
+use soroban_sdk::{ String, Symbol };
+use soroban_sdk::{ testutils::Address as _, Address, BytesN, Env, Vec };
+use utils::storage::OraclePair;
 
 pub(crate) struct TestConfig {}
 
@@ -67,11 +72,20 @@ impl Setup<'_> {
         router.set_pools_plane(&admin, &plane);
         router.set_reward_boost_config(&admin, &token_a.address, &boost_feed.address);
 
+        let oracles = OraclePair {
+            base_oracle: e.register(MockPriceOracleWASM, ()),
+            quote_oracle: e.register(MockPriceOracleWASM, ()),
+        };
+
         // create swap pool & deposit initial liquidity
         let (_, pool_address) = router.init_standard_pool(
             &admin,
+            &oracles,
+            &Asset::Other(Symbol::new(&e, "SOL")),
             &Vec::from_array(&e, [token_a.address.clone(), token_b.address.clone()]),
-            &30,
+            &String::from_str(&e, "Pool Share Token"),
+            &String::from_str(&e, "Pool Share Token"),
+            &30
         );
         let swap_pool = liquidity_pool::Client::new(&e, &pool_address);
         token_b_admin_client.mint(&admin, &1_000_000_000_0000000);
@@ -82,7 +96,7 @@ impl Setup<'_> {
             &router.address,
             &admin,
             &emergency_admin,
-            &install_swap_fee_collector_wasm(&e),
+            &install_swap_fee_collector_wasm(&e)
         );
 
         Self {
@@ -100,11 +114,7 @@ impl Setup<'_> {
 }
 
 pub(crate) fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanTokenClient<'a> {
-    SorobanTokenClient::new(
-        e,
-        &e.register_stellar_asset_contract_v2(admin.clone())
-            .address(),
-    )
+    SorobanTokenClient::new(e, &e.register_stellar_asset_contract_v2(admin.clone()).address())
 }
 
 pub mod liquidity_pool {
@@ -115,7 +125,7 @@ pub mod liquidity_pool {
 
 pub(crate) fn get_token_admin_client<'a>(
     e: &Env,
-    address: &Address,
+    address: &Address
 ) -> SorobanTokenAdminClient<'a> {
     SorobanTokenAdminClient::new(e, address)
 }
@@ -125,14 +135,16 @@ pub fn create_contract<'a>(
     router: &Address,
     admin: &Address,
     emergency_admin: &Address,
-    fee_collector_wasm: &BytesN<32>,
+    fee_collector_wasm: &BytesN<32>
 ) -> ProviderSwapFeeFactoryClient<'a> {
     let contract = ProviderSwapFeeFactoryClient::new(
         e,
-        &e.register(
-            crate::ProviderSwapFeeFactory,
-            (admin, emergency_admin, router, fee_collector_wasm),
-        ),
+        &e.register(crate::ProviderSwapFeeFactory, (
+            admin,
+            emergency_admin,
+            router,
+            fee_collector_wasm,
+        ))
     );
     contract
 }
@@ -186,13 +198,13 @@ pub(crate) fn install_swap_fee_collector_wasm(e: &Env) -> BytesN<32> {
 
 pub(crate) fn create_reward_boost_feed_contract<'a>(
     e: &Env,
-    admin: &Address,
+    admin: &Address
 ) -> reward_boost_feed::Client<'a> {
     reward_boost_feed::Client::new(
         e,
         &e.register(
             reward_boost_feed::WASM,
-            reward_boost_feed::Args::__constructor(admin, admin, admin),
-        ),
+            reward_boost_feed::Args::__constructor(admin, admin, admin)
+        )
     )
 }
