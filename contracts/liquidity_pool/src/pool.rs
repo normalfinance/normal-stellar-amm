@@ -33,7 +33,7 @@ pub fn get_current_price(e: &Env, a_in_b: bool, in_usd: bool) -> u128 {
         price = reserve_b.fixed_div_floor(e, &reserve_a, &PRICE_PRECISION);
 
         if in_usd {
-            let quote_oracle_price = oracle::get_quote_oracle_price(e, false);
+            let quote_oracle_price = oracle::get_quote_oracle_price(e);
             price = price.fixed_mul_floor(e, &quote_oracle_price, &PRICE_PRECISION);
         }
     } else {
@@ -41,7 +41,7 @@ pub fn get_current_price(e: &Env, a_in_b: bool, in_usd: bool) -> u128 {
         price = reserve_a.fixed_div_floor(e, &reserve_b, &PRICE_PRECISION);
 
         if in_usd {
-            let base_oracle_price = oracle::get_base_oracle_price(e, false);
+            let base_oracle_price = oracle::get_base_oracle_price(e);
             price = price.fixed_mul_floor(e, &base_oracle_price, &PRICE_PRECISION);
         }
     }
@@ -83,7 +83,7 @@ pub fn rebalance(e: &Env) {
 }
 
 pub fn get_delta_a(e: &Env, reserve_a: u128, reserve_b: u128) -> i128 {
-    let target_price = oracle::get_target_oracle_price(e, false);
+    let target_price = oracle::get_target_oracle_price(e);
     let target_reserve_a = reserve_b.fixed_div_floor(e, &target_price, &PRICE_PRECISION);
     let delta_a = (target_reserve_a as i128).checked_sub(reserve_a as i128).unwrap();
 
