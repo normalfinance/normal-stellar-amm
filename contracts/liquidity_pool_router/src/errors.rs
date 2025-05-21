@@ -23,4 +23,5 @@ pub enum LiquidityPoolRouterError {
 
     TokensNotSorted = 2002,
     InMaxNotSatisfied = 2020,
+    UnsupportedQuoteToken = 2021,
 }

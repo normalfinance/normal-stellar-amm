@@ -15,6 +15,7 @@ pub enum LiquidityPoolError {
     FutureShareIdNotSet = 208,
     PoolWithdrawKilled = 209,
     InvalidOracle = 210,
+    InvalidExpiryTimestamp = 211,
     // pool specific validation errors
 }
 

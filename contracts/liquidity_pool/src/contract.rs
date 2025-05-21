@@ -1,17 +1,10 @@
-use crate::constants::FEE_MULTIPLIER;
 use crate::errors::{ LiquidityPoolError, LiquidityPoolValidationError };
 use crate::events::Events as PoolEvents;
 use crate::events::LiquidityPoolEvents;
 use crate::oracle;
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
-use crate::pool::{
-    get_amount_out,
-    get_amount_out_strict_receive,
-    get_delta_a,
-    get_current_price,
-    rebalance,
-};
+use crate::pool::{ Pool };
 use crate::pool_interface::{
     AdminInterfaceTrait,
     LiquidityPoolCrunch,
@@ -22,34 +15,26 @@ use crate::pool_interface::{
 };
 use crate::rewards::get_rewards_manager;
 use crate::storage::{
-    get_fee_fraction,
     get_is_killed_claim,
     get_is_killed_deposit,
     get_is_killed_swap,
     get_is_killed_withdraw,
     get_plane,
+    get_pool,
     get_reserve_a,
     get_reserve_b,
     get_router,
-    get_target_asset,
-    get_token_a,
-    get_token_b,
     get_token_future_wasm,
     has_plane,
-    put_fee_fraction,
     put_reserve_a,
     put_reserve_b,
-    put_token_a,
-    put_token_b,
-    set_base_oracle,
     set_is_killed_claim,
     set_is_killed_deposit,
     set_is_killed_swap,
     set_is_killed_withdraw,
     set_plane,
-    set_quote_oracle,
+    set_pool,
     set_router,
-    set_target_asset,
     set_token_future_wasm,
 };
 use crate::token::{ create_contract, transfer_a, transfer_b };
@@ -105,12 +90,17 @@ use upgrade::events::Events as UpgradeEvents;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
 
 use sep_40_oracle::Asset;
+use utils::constant::FEE_MULTIPLIER;
+use utils::oracle::OracleSource;
 use utils::storage::{
     AddressAndAmount,
     InitializeAllParams,
     InitializeParams,
     LiquidityPoolInfo,
+    OracleAndSource,
     PoolResponse,
+    PoolStatus,
+    PoolTier,
 };
 
 // Metadata that is added on to the WASM custom section
@@ -159,7 +149,7 @@ impl LiquidityPoolTrait for LiquidityPool {
     // # Arguments
     //
     // * `params` - The params to initialize the pool with.
-    fn initialize(e: Env, params: InitializeParams) {
+    fn initialize(e: Env, params: InitializeParams, active_status: bool) {
         let access_control = AccessControl::new(&e);
         if access_control.get_role_safe(&Role::Admin).is_some() {
             panic_with_error!(&e, LiquidityPoolError::AlreadyInitialized);
@@ -192,9 +182,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let token_a = params.tokens.get(0).unwrap();
         let token_b = params.tokens.get(1).unwrap();
 
-        set_base_oracle(&e, &params.oracles.base_oracle);
-        set_quote_oracle(&e, &params.oracles.quote_oracle);
-        set_target_asset(&e, &params.target_asset);
+        // TODO: validate oracle
 
         // deploy and initialize LP token contract
         let share_contract = create_contract(
@@ -214,14 +202,29 @@ impl LiquidityPoolTrait for LiquidityPool {
         if (params.fee_fraction as u128) > FEE_MULTIPLIER - 1 {
             panic_with_error!(&e, LiquidityPoolValidationError::FeeOutOfBounds);
         }
-        put_fee_fraction(&e, params.fee_fraction);
 
-        put_token_a(&e, token_a.clone());
-        put_token_b(&e, token_b);
         put_token_share(&e, share_contract);
         put_token_synthetic(&e, token_a);
         put_reserve_a(&e, 0);
         put_reserve_b(&e, 0);
+
+        let pool = Pool {
+            token_a,
+            token_b,
+            tier: params.tier,
+            status: if active_status {
+                MarketStatus::Active
+            } else {
+                MarketStatus::Initialized
+            },
+            fee_fraction: params.fee_fraction,
+            base_oracle: params.oracles.base_oracle,
+            quote_oracle: params.oracles.quote_oracle,
+            target_asset: params.target_asset,
+            expiry_ts: 0,
+            expiry_price: 0,
+        };
+        set_pool(&e, &pool);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -251,7 +254,8 @@ impl LiquidityPoolTrait for LiquidityPool {
     //
     // A vector of token addresses.
     fn get_tokens(e: Env) -> Vec<Address> {
-        Vec::from_array(&e, [get_token_a(&e), get_token_b(&e)])
+        let pool = get_pool(&e);
+        Vec::from_array(&e, [pool.token_a, pool.token_b])
     }
 
     // Deposits tokens into the pool.
@@ -284,15 +288,17 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolValidationError::AllCoinsRequired);
         }
 
+        let mut pool = get_pool(&e);
+
         // Deposit Token B
-        let token_b_client = SorobanTokenClient::new(&e, &get_token_b(&e));
+        let token_b_client = SorobanTokenClient::new(&e, &pool.token_b);
         token_b_client.transfer(&user, &e.current_contract_address(), &(token_b_amount as i128));
 
         // Increase reserves
         put_reserve_b(&e, reserve_b + token_b_amount);
 
         // Rebalance the pool
-        rebalance(&e);
+        pool.rebalance(&e);
 
         // Now calculate how many new pool shares to mint
         let total_shares = get_total_shares(&e);
@@ -312,7 +318,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         // update plane data for every pool update
         update_plane(&e);
 
-        PoolEvents::new(&e).deposit_liquidity(get_token_b(&e), token_b_amount, shares_to_mint);
+        PoolEvents::new(&e).deposit_liquidity(pool.token_b, token_b_amount, shares_to_mint);
 
         (token_b_amount, shares_to_mint)
     }
@@ -361,7 +367,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         // Rebalance the pool before swapping
-        rebalance(&e);
+        let mut pool = get_pool(&e);
+        pool.rebalance(&e);
 
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
@@ -374,7 +381,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolValidationError::EmptyPool);
         }
 
-        let (out, fee) = get_amount_out(&e, in_amount, reserve_sell, reserve_buy);
+        let (out, fee) = pool.get_amount_out(&e, in_amount, reserve_sell, reserve_buy);
 
         if out < out_min {
             panic_with_error!(&e, LiquidityPoolValidationError::OutMinNotSatisfied);
@@ -395,7 +402,7 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // residue_numerator and residue_denominator are the amount that the invariant considers after
         // deducting the fee, scaled up by FEE_MULTIPLIER to avoid fractions
-        let residue_numerator = FEE_MULTIPLIER - (get_fee_fraction(&e) as u128);
+        let residue_numerator = FEE_MULTIPLIER - (pool.fee_fraction as u128);
         let residue_denominator = U256::from_u128(&e, FEE_MULTIPLIER);
 
         let new_invariant_factor = |reserve: u128, old_reserve: u128, out: u128| {
@@ -434,6 +441,9 @@ impl LiquidityPoolTrait for LiquidityPool {
             put_reserve_b(&e, reserve_b - out);
         }
 
+        // rebalance the pool after swapping
+        pool.rebalance(&e);
+
         // update plane data for every pool update
         update_plane(&e);
 
@@ -445,9 +455,6 @@ impl LiquidityPoolTrait for LiquidityPool {
             out,
             fee
         );
-
-        // Rebalance the pool after swapping
-        rebalance(&e);
 
         out
     }
@@ -478,12 +485,14 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
-        let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
+
+        let reserves = Vec::from_array(&e, [pool.reserve_a, pool.reserve_b]);
         let reserve_sell = reserves.get(in_idx).unwrap();
         let reserve_buy = reserves.get(out_idx).unwrap();
 
-        let out = get_amount_out(&e, in_amount, reserve_sell, reserve_buy).0;
-        let delta_a = get_delta_a(&e, reserve_a, reserve_b);
+        let pool = get_pool(&e);
+        let out = pool.get_amount_out(&e, in_amount, reserve_sell, reserve_buy).0;
+        let delta_a = pool.get_delta_a(&e);
 
         (out, delta_a)
     }
@@ -533,7 +542,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         // Rebalance the pool
-        rebalance(&e);
+        let mut pool = get_pool(&e);
+        pool.rebalance(&e);
 
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
@@ -631,7 +641,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         );
 
         // Rebalance the pool
-        rebalance(&e);
+        pool.rebalance(&e);
 
         in_amount
     }
@@ -671,8 +681,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         let reserve_sell = reserves.get(in_idx).unwrap();
         let reserve_buy = reserves.get(out_idx).unwrap();
 
-        let out = get_amount_out_strict_receive(&e, out_amount, reserve_sell, reserve_buy).0;
-        let delta_a = get_delta_a(&e, reserve_a, reserve_b);
+        let pool = get_pool(&e);
+        let out = pool.get_amount_out_strict_receive(&e, out_amount, reserve_sell, reserve_buy).0;
+        let delta_a = pool.get_delta_a(&e);
 
         (out, delta_a)
     }
@@ -709,7 +720,8 @@ impl LiquidityPoolTrait for LiquidityPool {
         put_reserve_b(&e, reserve_b - share_amount);
 
         // Rebalance the pool
-        rebalance(&e);
+        let mut pool = get_pool(&e);
+        pool.rebalance(&e);
 
         // Checkpoint resulting working balance
         rewards
@@ -739,7 +751,8 @@ impl LiquidityPoolTrait for LiquidityPool {
     //
     // The pool's price as a u128.
     fn get_price(e: Env, a_in_b: bool, in_usd: bool) -> u128 {
-        get_current_price(&e, a_in_b, in_usd)
+        let pool = get_pool(&e);
+        pool.get_current_price(&e, a_in_b, in_usd)
     }
 
     // Returns the pool's fee fraction.
@@ -749,7 +762,8 @@ impl LiquidityPoolTrait for LiquidityPool {
     // The pool's fee fraction as a u32.
     fn get_fee_fraction(e: Env) -> u32 {
         // returns fee fraction. 0.01% = 1; 1% = 100; 0.3% = 30
-        get_fee_fraction(&e)
+        let pool = get_pool(&e);
+        pool.fee_fraction
     }
 
     // Returns information about the pool.
@@ -758,13 +772,14 @@ impl LiquidityPoolTrait for LiquidityPool {
     //
     // A map of Symbols to Vals representing the pool's information.
     fn get_info(e: Env) -> LiquidityPoolInfo {
+        let pool = get_pool(&e);
         let pool_response = PoolResponse {
             asset_a: AddressAndAmount {
-                address: get_token_a(&e),
+                address: pool.token_a,
                 amount: get_reserve_a(&e),
             },
             asset_b: AddressAndAmount {
-                address: get_token_b(&e),
+                address: pool.token_b,
                 amount: get_reserve_b(&e),
             },
             asset_lp_share: AddressAndAmount {
@@ -776,7 +791,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         LiquidityPoolInfo {
             pool_address: e.current_contract_address(),
             pool_response,
-            total_fee_bps: get_fee_fraction(&e),
+            total_fee_bps: pool.fee_fraction,
         }
     }
 }
@@ -845,35 +860,83 @@ impl AdminInterfaceTrait for LiquidityPool {
         result
     }
 
-    fn set_base_oracle(e: Env, admin: Address, new_oracle: Address) {
+    fn set_tier(e: Env, admin: Address, tier: PoolTier) {
         admin.require_auth();
         require_operations_admin_or_owner(&e, &admin);
 
-        // FIXME: validation isn't satisfied by just "is zero?"
-        let price = oracle::get_oracle_price(&e, &new_oracle, &get_target_asset(&e), false);
-        if price == 0 {
-            panic_with_error!(&e, LiquidityPoolError::InvalidOracle);
-        }
+        let mut pool = get_pool(&e);
+        pool.tier = tier;
 
-        set_base_oracle(&e, &new_oracle);
+        set_pool(&e, &pool);
     }
 
-    fn set_quote_oracle(e: Env, admin: Address, new_oracle: Address) {
+    fn set_status(e: Env, admin: Address, status: PoolStatus) {
         admin.require_auth();
         require_operations_admin_or_owner(&e, &admin);
 
-        // FIXME: validation isn't satisfied by just "is zero?"
-        let price = oracle::get_oracle_price(
-            &e,
-            &new_oracle,
-            &Asset::Other(Symbol::new(&e, "XLM")),
-            false
-        );
-        if price == 0 {
-            panic_with_error!(&e, LiquidityPoolError::InvalidOracle);
+        let mut pool = get_pool(&e);
+        pool.status = status;
+
+        set_pool(&e, &pool);
+    }
+
+    fn set_expiry_ts(e: Env, admin: Address, expiry_ts: u64) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+
+        if e.ledger().timestamp() < expiry_ts {
+            panic_with_error!(e, LiquidityPoolError::InvalidExpiryTimestamp);
         }
 
-        set_quote_oracle(&e, &new_oracle);
+        let mut pool = get_pool(&e);
+        pool.status = PoolStatus::ReduceOnly;
+        pool.expiry_ts = expiry_ts;
+
+        set_pool(&e, &pool);
+    }
+
+    fn set_base_oracle(e: Env, admin: Address, oracle: Address, oracle_source: OracleSource) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+
+        let now = e.ledger().timestamp();
+
+        let mut pool = get_pool(&e);
+
+        // Verify oracle is readable
+        let OraclePriceData {
+            price: _oracle_price,
+            delay: _oracle_delay,
+            ..
+        } = oracle::get_oracle_price(&e, &oracle_source, &oracle, &pool.target_asset, now);
+
+        pool.base_oracle = OracleAndSource {
+            address: oracle,
+            source: oracle_source,
+        };
+        set_pool(&e, &pool);
+    }
+
+    fn set_quote_oracle(e: Env, admin: Address, oracle: Address, oracle_source: OracleSource) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+
+        let now = e.ledger().timestamp();
+
+        let mut pool = get_pool(&e);
+
+        // Verify oracle is readable
+        let OraclePriceData {
+            price: _oracle_price,
+            delay: _oracle_delay,
+            ..
+        } = oracle::get_oracle_price(&e, &oracle_source & oracle, &get_tokn, now);
+
+        pool.quote_oracle = OracleAndSource {
+            address: oracle,
+            source: oracle_source,
+        };
+        set_pool(&e, &pool);
     }
 
     fn rebalance(e: Env, admin: Address) {
@@ -882,7 +945,8 @@ impl AdminInterfaceTrait for LiquidityPool {
         access_control.assert_address_has_role(&admin, &Role::Admin);
 
         // Rebalance the pool
-        rebalance(&e);
+        let mut pool = get_pool(&e);
+        pool.rebalance(&e);
     }
 
     // Stops the pool deposits instantly.

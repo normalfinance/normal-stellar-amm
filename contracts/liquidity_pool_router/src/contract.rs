@@ -14,6 +14,7 @@ use crate::pool_utils::{
     get_standard_pool_salt,
     get_tokens_salt,
     get_total_liquidity,
+    validate_tokens_contracts,
 };
 use crate::rewards::get_rewards_manager;
 use crate::router_interface::AdminInterface;
@@ -26,6 +27,7 @@ use crate::storage::{
     get_reward_tokens,
     get_reward_tokens_detailed,
     get_rewards_config,
+    get_supported_quote_tokens,
     get_tokens_set,
     get_tokens_set_count,
     has_pool,
@@ -37,6 +39,7 @@ use crate::storage::{
     set_reward_tokens,
     set_reward_tokens_detailed,
     set_rewards_config,
+    set_supported_quote_tokens,
     set_token_hash,
     GlobalRewardsConfig,
     LiquidityPoolRewardInfo,
@@ -74,6 +77,7 @@ use soroban_sdk::{
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
+use utils::oracle::OracleGuardRails;
 use utils::storage::{ LiquidityPoolInfo, OraclePair };
 
 #[contract]
@@ -598,6 +602,14 @@ impl AdminInterface for LiquidityPoolRouter {
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
         set_oracle_guard_rails(&e, &oracle_guard_rails);
     }
+
+    fn set_supported_quote_tokens(e: Env, tokens: Vec<Address>) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+
+        validate_tokens_contracts(&e, &tokens);
+        set_supported_quote_tokens(&e, tokens);
+    }
 }
 
 // The `RewardsInterfaceTrait` trait provides the interface for interacting with rewards.
@@ -1086,6 +1098,11 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
 
         if !CONSTANT_PRODUCT_FEE_AVAILABLE.contains(&fee_fraction) {
             panic_with_error!(&e, LiquidityPoolRouterError::BadFee);
+        }
+
+        let supported_quote_tokens = get_supported_quote_tokens(&e);
+        if !supported_quote_tokens.contains(&tokens.get(1).unwrap()) {
+            panic_with_error!(&e, LiquidityPoolRouterError::UnsupportedQuoteToken);
         }
 
         let salt = get_tokens_salt(&e, &tokens);

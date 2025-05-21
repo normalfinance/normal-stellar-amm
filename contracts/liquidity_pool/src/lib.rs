@@ -1,6 +1,5 @@
 #![no_std]
 
-mod constants;
 mod contract;
 pub mod errors;
 mod events;

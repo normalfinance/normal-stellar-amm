@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Vec};
+use soroban_sdk::{ Address, BytesN, Env, Map, Symbol, Vec };
 
 use crate::storage::OracleGuardRails;
 
@@ -13,7 +13,7 @@ pub trait AdminInterface {
         rewards_admin: Address,
         operations_admin: Address,
         pause_admin: Address,
-        emergency_pause_admins: Vec<Address>,
+        emergency_pause_admins: Vec<Address>
     );
 
     // Get map of privileged roles
@@ -33,9 +33,12 @@ pub trait AdminInterface {
         e: Env,
         admin: Address,
         reward_boost_token: Address,
-        reward_boost_feed: Address,
+        reward_boost_feed: Address
     );
 
     // Set oracle guardrails
     fn set_oracle_guardrails(e: Env, admin: Address, oracle_guard_rails: OracleGuardRails);
+
+    //
+    fn set_supported_quote_tokens(e: Env, tokens: Vec<Address>);
 }

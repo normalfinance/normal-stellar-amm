@@ -1,26 +1,29 @@
 use paste::paste;
 use sep_40_oracle::Asset;
-use soroban_sdk::{contracttype, panic_with_error, Address, BytesN, Env};
+use soroban_sdk::{ contracttype, panic_with_error, Address, BytesN, Env };
 pub use utils::bump::bump_instance;
+use utils::storage::{ PoolStatus, PoolTier };
 use utils::storage_errors::StorageError;
 use utils::{
     generate_instance_storage_getter_and_setter_with_default,
-    generate_instance_storage_getter_with_default, generate_instance_storage_setter,
+    generate_instance_storage_getter_with_default,
+    generate_instance_storage_setter,
 };
+
+use crate::oracle::HistoricalOracleData;
+use crate::pool::Pool;
 
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
-    TokenA,
-    TokenB,
-    ReserveA,    // Total reserve of A
-    ReserveB,    // Total reserve of B
-    FeeFraction, // 1 = 0.01%
+    ReserveA,
+    ReserveB,
+    /// stores historically witnessed oracle data
+    HistoricalOracleData,
+    /// struct containing infrequently updated pool data
+    Pool,
     Plane,
     Router,
-    BaseOracle,  // Oracle address for the base (synthetic) asset (i.e. nBTC)
-    QuoteOracle, // Oracle address for the quote asset (TokenB) - usually XLM or USDC
-    TargetAsset,
     IsKilledSwap,
     IsKilledDeposit,
     IsKilledWithdraw,
@@ -54,17 +57,15 @@ generate_instance_storage_getter_and_setter_with_default!(
     false
 );
 
-pub fn get_token_a(e: &Env) -> Address {
+pub(crate) fn set_pool(e: &Env, pool: &Pool) {
+    let key = DataKey::Pool;
     bump_instance(e);
-    match e.storage().instance().get(&DataKey::TokenA) {
-        Some(v) => v,
-        None => panic_with_error!(e, StorageError::ValueNotInitialized),
-    }
+    e.storage().instance().set(&key, pool);
 }
 
-pub fn get_token_b(e: &Env) -> Address {
-    bump_instance(e);
-    match e.storage().instance().get(&DataKey::TokenB) {
+pub(crate) fn get_pool(e: &Env) -> Pool {
+    let key = DataKey::Pool;
+    match e.storage().instance().get(&key) {
         Some(v) => v,
         None => panic_with_error!(e, StorageError::ValueNotInitialized),
     }
@@ -86,37 +87,27 @@ pub fn get_reserve_b(e: &Env) -> u128 {
     }
 }
 
-pub fn put_token_a(e: &Env, contract: Address) {
-    bump_instance(e);
-    e.storage().instance().set(&DataKey::TokenA, &contract)
-}
-
-pub fn put_token_b(e: &Env, contract: Address) {
-    bump_instance(e);
-    e.storage().instance().set(&DataKey::TokenB, &contract)
-}
-
 pub fn put_reserve_a(e: &Env, amount: u128) {
     bump_instance(e);
     e.storage().instance().set(&DataKey::ReserveA, &amount)
 }
 
-pub fn put_reserve_b(e: &Env, amount: u128) {
+pub fn get_historical_oracle_data(e: &Env) -> HistoricalOracleData {
     bump_instance(e);
-    e.storage().instance().set(&DataKey::ReserveB, &amount)
-}
-
-pub fn get_fee_fraction(e: &Env) -> u32 {
-    bump_instance(e);
-    match e.storage().instance().get(&DataKey::FeeFraction) {
+    match e.storage().instance().get(&DataKey::HistoricalOracleData) {
         Some(v) => v,
         None => panic_with_error!(e, StorageError::ValueNotInitialized),
     }
 }
 
-pub fn put_fee_fraction(e: &Env, value: u32) {
+pub fn put_historical_oracle_data(e: &Env, data: HistoricalOracleData) {
     bump_instance(e);
-    e.storage().instance().set(&DataKey::FeeFraction, &value)
+    e.storage().instance().set(&DataKey::HistoricalOracleData, &data)
+}
+
+pub fn put_reserve_b(e: &Env, amount: u128) {
+    bump_instance(e);
+    e.storage().instance().set(&DataKey::ReserveB, &amount)
 }
 
 pub(crate) fn set_plane(e: &Env, plane: &Address) {
@@ -146,48 +137,6 @@ pub(crate) fn set_router(e: &Env, plane: &Address) {
 
 pub(crate) fn get_router(e: &Env) -> Address {
     let key = DataKey::Router;
-    match e.storage().instance().get(&key) {
-        Some(v) => v,
-        None => panic_with_error!(e, StorageError::ValueNotInitialized),
-    }
-}
-
-pub(crate) fn set_base_oracle(e: &Env, oracle: &Address) {
-    let key = DataKey::BaseOracle;
-    bump_instance(e);
-    e.storage().instance().set(&key, oracle);
-}
-
-pub(crate) fn get_base_oracle(e: &Env) -> Address {
-    let key = DataKey::BaseOracle;
-    match e.storage().instance().get(&key) {
-        Some(v) => v,
-        None => panic_with_error!(e, StorageError::ValueNotInitialized),
-    }
-}
-
-pub(crate) fn set_quote_oracle(e: &Env, oracle: &Address) {
-    let key = DataKey::QuoteOracle;
-    bump_instance(e);
-    e.storage().instance().set(&key, oracle);
-}
-
-pub(crate) fn get_quote_oracle(e: &Env) -> Address {
-    let key = DataKey::QuoteOracle;
-    match e.storage().instance().get(&key) {
-        Some(v) => v,
-        None => panic_with_error!(e, StorageError::ValueNotInitialized),
-    }
-}
-
-pub(crate) fn set_target_asset(e: &Env, asset: &Asset) {
-    let key = DataKey::TargetAsset;
-    bump_instance(e);
-    e.storage().instance().set(&key, asset);
-}
-
-pub(crate) fn get_target_asset(e: &Env) -> Asset {
-    let key = DataKey::TargetAsset;
     match e.storage().instance().get(&key) {
         Some(v) => v,
         None => panic_with_error!(e, StorageError::ValueNotInitialized),

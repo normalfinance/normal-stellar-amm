@@ -13,6 +13,7 @@ doctest = false
 [dependencies]
 soroban-sdk = { workspace = true }
 sep-40-oracle = { workspace = true }
+num-traits = "0.2"
 
 [features]
 default = []

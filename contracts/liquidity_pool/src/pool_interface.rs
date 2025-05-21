@@ -1,5 +1,11 @@
 use soroban_sdk::{ Address, BytesN, Env, Map, Symbol, Vec };
-use utils::storage::{ InitializeAllParams, InitializeParams, LiquidityPoolInfo };
+use utils::storage::{
+    InitializeAllParams,
+    InitializeParams,
+    LiquidityPoolInfo,
+    PoolStatus,
+    PoolTier,
+};
 
 pub trait LiquidityPoolCrunch {
     // Initialize pool completely to reduce calculations cost
@@ -59,7 +65,12 @@ pub trait LiquidityPoolTrait {
     ) -> u128;
 
     // Estimate amount of coins to retrieve using swap_strict_receive function
-    fn estimate_swap_strict_receive(e: Env, in_idx: u32, out_idx: u32, out_amount: u128) -> (u128, i128);
+    fn estimate_swap_strict_receive(
+        e: Env,
+        in_idx: u32,
+        out_idx: u32,
+        out_amount: u128
+    ) -> (u128, i128);
 
     // Transfers share_amount of pool share tokens to this contract,
     // burns all pools share tokens in this contracts, and sends
@@ -94,13 +105,22 @@ pub trait AdminInterfaceTrait {
     // Get map of privileged roles
     fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>>;
 
+    // Set target asset tier
+    fn set_tier(e: Env, admin: Address, tier: PoolTier);
+
+    // Set pool status
+    fn set_status(e: Env, admin: Address, status: PoolStatus);
+
+    // Set when the pool will expire
+    fn set_expiry_ts(e: Env, admin: Address, expiry_ts: u64);
+
     // Failsafe to update the base oracle address
-    fn set_base_oracle(e: Env, admin: Address, new_oracle: Address);
+    fn set_base_oracle(e: Env, admin: Address, oracle: Address, oracle_source: OracleSource);
 
     // Failsafe to update the quote oracle address
-    fn set_quote_oracle(e: Env, admin: Address, new_oracle: Address);
+    fn set_quote_oracle(e: Env, admin: Address, oracle: Address, oracle_source: OracleSource);
 
-    //
+    // Rebalance pool reserves
     fn rebalance(e: Env, admin: Address);
 
     // Stop pool instantly

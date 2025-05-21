@@ -1,22 +1,43 @@
 use crate::errors::LiquidityPoolRouterError;
-use crate::events::{Events, LiquidityPoolRouterEvents};
+use crate::events::{ Events, LiquidityPoolRouterEvents };
 use crate::liquidity_calculator::LiquidityCalculatorClient;
 use crate::rewards::get_rewards_manager;
 use crate::storage::{
-    add_pool, add_tokens_set, get_constant_product_pool_hash, get_pool_next_counter,
-    get_pool_plane, get_pools_plain, get_token_hash, LiquidityPoolType,
+    add_pool,
+    add_tokens_set,
+    get_constant_product_pool_hash,
+    get_pool_next_counter,
+    get_pool_plane,
+    get_pools_plain,
+    get_token_hash,
+    LiquidityPoolType,
 };
 use access_control::access::AccessControl;
-use access_control::management::{MultipleAddressesManagementTrait, SingleAddressManagementTrait};
+use access_control::management::{ MultipleAddressesManagementTrait, SingleAddressManagementTrait };
 use access_control::role::Role;
-use rewards::storage::{BoostFeedStorageTrait, BoostTokenStorageTrait, RewardTokenStorageTrait};
+use rewards::storage::{ BoostFeedStorageTrait, BoostTokenStorageTrait, RewardTokenStorageTrait };
 use sep_40_oracle::Asset;
-use soroban_sdk::{panic_with_error, String};
+use soroban_sdk::{ panic_with_error, String };
 use soroban_sdk::{
-    symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Map, Symbol, Val, Vec, U256,
+    symbol_short,
+    xdr::ToXdr,
+    Address,
+    Bytes,
+    BytesN,
+    Env,
+    IntoVal,
+    Map,
+    Symbol,
+    Val,
+    Vec,
+    U256,
 };
 use utils::storage::{
-    InitializeAllParams, InitializeParams, OraclePair, PrivilegedAddresses, RewardConfig,
+    InitializeAllParams,
+    InitializeParams,
+    OraclePair,
+    PrivilegedAddresses,
+    RewardConfig,
     TokenInitInfo,
 };
 
@@ -51,7 +72,7 @@ pub fn deploy_standard_pool(
     target_asset: &Asset,
     lp_token_name: &String,
     lp_token_symbol: &String,
-    fee_fraction: u32,
+    fee_fraction: u32
 ) -> (BytesN<32>, Address) {
     let tokens_salt = get_tokens_salt(e, tokens);
     let liquidity_pool_wasm_hash = get_constant_product_pool_hash(e);
@@ -59,11 +80,13 @@ pub fn deploy_standard_pool(
 
     let pool_contract_id = e
         .deployer()
-        .with_current_contract(merge_salt(
-            e,
-            merge_salt(e, tokens_salt.clone(), subpool_salt.clone()),
-            get_pool_counter_salt(e),
-        ))
+        .with_current_contract(
+            merge_salt(
+                e,
+                merge_salt(e, tokens_salt.clone(), subpool_salt.clone()),
+                get_pool_counter_salt(e)
+            )
+        )
         .deploy_v2(liquidity_pool_wasm_hash, ());
     init_standard_pool(
         e,
@@ -73,7 +96,7 @@ pub fn deploy_standard_pool(
         &pool_contract_id,
         lp_token_name,
         lp_token_symbol,
-        fee_fraction,
+        fee_fraction
     );
 
     add_tokens_set(e, tokens);
@@ -82,7 +105,7 @@ pub fn deploy_standard_pool(
         tokens_salt,
         subpool_salt.clone(),
         LiquidityPoolType::ConstantProduct,
-        pool_contract_id.clone(),
+        pool_contract_id.clone()
     );
 
     Events::new(e).add_pool(
@@ -90,7 +113,7 @@ pub fn deploy_standard_pool(
         pool_contract_id.clone(),
         symbol_short!("constant"),
         subpool_salt.clone(),
-        Vec::<Val>::from_array(e, [fee_fraction.into_val(e)]),
+        Vec::<Val>::from_array(e, [fee_fraction.into_val(e)])
     );
 
     (subpool_salt, pool_contract_id)
@@ -104,7 +127,7 @@ fn init_standard_pool(
     pool_contract_id: &Address,
     lp_token_name: &String,
     lp_token_symbol: &String,
-    fee_fraction: u32,
+    fee_fraction: u32
 ) {
     let token_wasm_hash = get_token_hash(e);
     let rewards = get_rewards_manager(e);
@@ -118,15 +141,11 @@ fn init_standard_pool(
     let emergency_admin = access_control
         .get_role_safe(&Role::EmergencyAdmin)
         .unwrap_or(admin.clone());
-    let rewards_admin = access_control
-        .get_role_safe(&Role::RewardsAdmin)
-        .unwrap_or(admin.clone());
+    let rewards_admin = access_control.get_role_safe(&Role::RewardsAdmin).unwrap_or(admin.clone());
     let operations_admin = access_control
         .get_role_safe(&Role::OperationsAdmin)
         .unwrap_or(admin.clone());
-    let pause_admin = access_control
-        .get_role_safe(&Role::PauseAdmin)
-        .unwrap_or(admin.clone());
+    let pause_admin = access_control.get_role_safe(&Role::PauseAdmin).unwrap_or(admin.clone());
     let emergency_pause_admins = access_control.get_role_addresses(&Role::EmergencyPauseAdmin);
 
     let plane = get_pool_plane(e);
@@ -163,7 +182,7 @@ fn init_standard_pool(
     e.invoke_contract::<()>(
         pool_contract_id,
         &Symbol::new(e, "initialize_all"),
-        Vec::from_array(e, [params.into_val(e)]),
+        Vec::from_array(e, [params.into_val(e)])
     );
 }
 
@@ -188,10 +207,17 @@ pub fn get_tokens_salt(e: &Env, tokens: &Vec<Address>) -> BytesN<32> {
     e.crypto().sha256(&salt).to_bytes()
 }
 
+pub fn validate_tokens_contracts(e: &Env, tokens: &Vec<Address>) {
+    // call token contract to check if token exists & it's alive
+    for token in tokens.iter() {
+        SorobanTokenClient::new(e, &token).balance(&e.current_contract_address());
+    }
+}
+
 pub fn get_total_liquidity(
     e: &Env,
     tokens: &Vec<Address>,
-    calculator: Address,
+    calculator: Address
 ) -> (Map<BytesN<32>, U256>, U256) {
     let tokens_salt = get_tokens_salt(e, tokens);
     let pools = get_pools_plain(&e, tokens_salt);

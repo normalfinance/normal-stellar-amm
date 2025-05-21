@@ -36,6 +36,7 @@ fn get_default_pool(e: &Env) -> PoolPlane {
 }
 
 pub(crate) fn update(e: &Env, contract: Address, pool: &PoolPlane) {
+    // TODO: add auth check here to avoid anyone calling update
     let key = DataKey::PoolData(contract);
     e.storage().persistent().set(&key, pool);
     bump_persistent(e, &key);

@@ -1,6 +1,8 @@
 use sep_40_oracle::Asset;
 use soroban_sdk::{ contracttype, Address, BytesN, String, Vec };
 
+use crate::oracle::OracleSource;
+
 #[macro_export]
 macro_rules! generate_instance_storage_setter {
     ($attr_name:ident, $key:expr, $data_type:ty) => {
@@ -62,6 +64,49 @@ macro_rules! generate_instance_storage_getter_and_setter_with_default {
 }
 
 #[contracttype]
+#[derive(Default, Clone)]
+pub enum PoolStatus {
+    /// warm up period for initialization, fills are paused
+    #[default]
+    Initialized,
+    /// all operations allowed
+    Active,
+    ///
+    Frozen,
+    /// fills only able to reduce liability
+    ReduceOnly,
+    /// market has determined settlement price and positions are expired must be settled
+    Settlement,
+    /// market has no remaining participants
+    Delisted,
+}
+
+#[contracttype]
+#[derive(Clone, Copy, PartialEq, Debug, Eq, PartialOrd, Ord, Default)]
+pub enum PoolTier {
+    /// max insurance capped at A level
+    A,
+    /// max insurance capped at B level
+    B,
+    /// max insurance capped at C level
+    C,
+    /// no insurance
+    Speculative,
+    /// no insurance, another tranches below
+    #[default]
+    HighlySpeculative,
+    /// no insurance, only single position allowed
+    Isolated,
+}
+
+impl PoolTier {
+    pub fn is_as_safe_as(&self, other: &PoolTier) -> bool {
+        // Pool Tier A safest
+        self <= other
+    }
+}
+
+#[contracttype]
 #[derive(Clone)]
 pub struct TokenInitInfo {
     /// The hash of the liquidity pool token contract.
@@ -82,9 +127,16 @@ pub struct PrivilegedAddresses {
 
 #[contracttype]
 #[derive(Clone)]
+pub struct OracleAndSource {
+    pub address: Address,
+    pub source: OracleSource,
+}
+
+#[contracttype]
+#[derive(Clone)]
 pub struct OraclePair {
-    pub base_oracle: Address,
-    pub quote_oracle: Address,
+    pub base_oracle: OracleAndSource,
+    pub quote_oracle: OracleAndSource,
 }
 
 #[contracttype]
@@ -113,6 +165,8 @@ pub struct InitializeParams {
     pub tokens: Vec<Address>,
     /// The fee fraction for the pool.
     pub fee_fraction: u32,
+    pub tier: PoolTier,
+    pub status: PoolStatus,
 }
 
 #[contracttype]

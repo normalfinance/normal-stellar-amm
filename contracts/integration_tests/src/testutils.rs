@@ -1,11 +1,14 @@
 #![cfg(test)]
 extern crate std;
 use crate::contracts;
+use sep_40_oracle::testutils::{ Asset, MockPriceOracleWASM };
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::{
-    StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
+    StellarAssetClient as SorobanTokenAdminClient,
+    TokenClient as SorobanTokenClient,
 };
-use soroban_sdk::{Address, BytesN, Env, Vec};
+use soroban_sdk::{ Address, BytesN, Env, String, Symbol, Vec };
+use utils::storage::OraclePair;
 
 pub(crate) struct Setup<'a> {
     pub(crate) env: Env,
@@ -46,9 +49,7 @@ impl Setup<'_> {
         boost_feed.set_total_supply(&operator, &53_000_000_000_0000000);
 
         // init swap router
-        let pool_hash = e
-            .deployer()
-            .upload_contract_wasm(contracts::constant_product_pool::WASM);
+        let pool_hash = e.deployer().upload_contract_wasm(contracts::constant_product_pool::WASM);
         let token_hash = e.deployer().upload_contract_wasm(contracts::lp_token::WASM);
         let plane = deploy_plane_contract(&e);
 
@@ -60,8 +61,12 @@ impl Setup<'_> {
         router.set_pools_plane(&admin, &plane.address);
         router.set_reward_boost_config(&admin, &locked_token.address, &boost_feed.address);
 
-        let fee_collector_factory =
-            deploy_provider_swap_fee_factory(&e, &admin, &emergency_admin, &router.address);
+        let fee_collector_factory = deploy_provider_swap_fee_factory(
+            &e,
+            &admin,
+            &emergency_admin,
+            &router.address
+        );
 
         Self {
             env: e,
@@ -80,48 +85,49 @@ impl Setup<'_> {
         &self,
         token_a: &Address,
         token_b: &Address,
-        fee_fraction: u32,
+        fee_fraction: u32
     ) -> (contracts::constant_product_pool::Client, BytesN<32>) {
         get_token_admin_client(&self.env, &self.reward_token).mint(&self.admin, &10_0000000);
+        let oracles = OraclePair {
+            base_oracle: self.env.register(MockPriceOracleWASM, ()),
+            quote_oracle: self.env.register(MockPriceOracleWASM, ()),
+        };
         let (pool_hash, pool_address) = self.router.init_standard_pool(
             &self.admin,
+            &oracles,
+            &Asset::Other(Symbol::new(&self.env, "SOL")),
             &Vec::from_array(&self.env, [token_a.clone(), token_b.clone()]),
-            &fee_fraction,
+            &String::from_str(&self.env, "Pool Share Token"),
+            &String::from_str(&self.env, "Pool Share Token"),
+            &fee_fraction
         );
-        (
-            contracts::constant_product_pool::Client::new(&self.env, &pool_address),
-            pool_hash,
-        )
+        (contracts::constant_product_pool::Client::new(&self.env, &pool_address), pool_hash)
     }
 
     pub(crate) fn deploy_swap_fee_contract(
         &self,
         operator: &Address,
         fee_destination: &Address,
-        max_fee_fraction: u32,
+        max_fee_fraction: u32
     ) -> contracts::swap_fee::Client {
         contracts::swap_fee::Client::new(
             &self.env,
             &self.fee_collector_factory.deploy_swap_fee_contract(
                 &operator,
                 &fee_destination,
-                &max_fee_fraction,
-            ),
+                &max_fee_fraction
+            )
         )
     }
 }
 
 pub(crate) fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanTokenClient<'a> {
-    SorobanTokenClient::new(
-        e,
-        &e.register_stellar_asset_contract_v2(admin.clone())
-            .address(),
-    )
+    SorobanTokenClient::new(e, &e.register_stellar_asset_contract_v2(admin.clone()).address())
 }
 
 pub(crate) fn get_token_admin_client<'a>(
     e: &Env,
-    address: &Address,
+    address: &Address
 ) -> SorobanTokenAdminClient<'a> {
     SorobanTokenAdminClient::new(e, address)
 }
@@ -130,15 +136,17 @@ pub fn deploy_provider_swap_fee_factory<'a>(
     e: &Env,
     admin: &Address,
     emergency_admin: &Address,
-    router: &Address,
+    router: &Address
 ) -> contracts::swap_fee_factory::Client<'a> {
     let swap_fee_wasm = e.deployer().upload_contract_wasm(contracts::swap_fee::WASM);
     contracts::swap_fee_factory::Client::new(
         e,
-        &e.register(
-            contracts::swap_fee_factory::WASM,
-            (admin, emergency_admin, router, swap_fee_wasm),
-        ),
+        &e.register(contracts::swap_fee_factory::WASM, (
+            admin,
+            emergency_admin,
+            router,
+            swap_fee_wasm,
+        ))
     )
 }
 
@@ -154,13 +162,13 @@ pub(crate) fn create_reward_boost_feed_contract<'a>(
     e: &Env,
     admin: &Address,
     operations_admin: &Address,
-    emergency_admin: &Address,
+    emergency_admin: &Address
 ) -> contracts::boost_feed::Client<'a> {
     contracts::boost_feed::Client::new(
         e,
         &e.register(
             contracts::boost_feed::WASM,
-            contracts::boost_feed::Args::__constructor(admin, operations_admin, emergency_admin),
-        ),
+            contracts::boost_feed::Args::__constructor(admin, operations_admin, emergency_admin)
+        )
     )
 }
