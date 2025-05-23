@@ -1,14 +1,12 @@
 use soroban_sdk::{ log, panic_with_error, Env };
 
 use crate::errors::math_errors::MathError;
-use crate::math::{ ceil_div, floor_div };
 
 pub trait SafeMath: Sized {
     fn safe_add(self, e: &Env, rhs: Self) -> Self; // instead of Result<Self, ()> since it either returns Self or panics (no return)
     fn safe_sub(self, e: &Env, rhs: Self) -> Self;
     fn safe_mul(self, e: &Env, rhs: Self) -> Self;
     fn safe_div(self, e: &Env, rhs: Self) -> Self;
-    fn safe_div_ceil(self, e: &Env, rhs: Self) -> Self;
 }
 
 macro_rules! checked_impl {
@@ -61,18 +59,6 @@ macro_rules! checked_impl {
                     }
                 }
             }
-
-            #[track_caller]
-            #[inline(always)]
-            fn safe_div_ceil(self, e: &Env, v: $t) -> $t {
-                match self.checked_ceil_div(v) {
-                    Some(result) => result,
-                    None => {
-                        log!(e, "Math error thrown at {}:{}", file!(), line!());
-                        panic_with_error!(e, MathError::MathError);
-                    }
-                }
-            }
         }
     };
 }
@@ -83,37 +69,9 @@ checked_impl!(u32);
 checked_impl!(i128);
 checked_impl!(i64);
 checked_impl!(i32);
-
-pub trait SafeDivFloor: Sized {
-    /// Perform floor division
-    fn safe_div_floor(self, e: &Env, rhs: Self) -> Self;
-}
-
-macro_rules! div_floor_impl {
-    ($t:ty) => {
-        impl SafeDivFloor for $t {
-            #[track_caller]
-            #[inline(always)]
-            fn safe_div_floor(self, e: &Env, v: $t) -> $t {
-                match self.checked_floor_div(v) {
-                    Some(result) => result,
-                    None => {
-                        log!(e, "Math error thrown at {}:{}", file!(), line!());
-                        panic_with_error!(e, MathError::MathError);
-                    }
-                }
-            }
-        }
-    };
-}
-
-div_floor_impl!(i128);
-div_floor_impl!(i64);
-div_floor_impl!(i32);
-
 #[cfg(test)]
 mod test {
-    use crate::math::safe_math::{ MathError, SafeDivFloor, SafeMath };
+    use crate::math::safe_math::{ MathError, SafeMath };
     use soroban_sdk::Env;
 
     #[test]
@@ -151,13 +109,5 @@ mod test {
         assert_eq!((1_u128).safe_div(&e, 1), 1);
         assert_eq!((1_u128).safe_div(&e, 100), 0);
         // assert_eq!((1_u128).safe_div(0), Err(MathError::MathError));
-    }
-
-    #[test]
-    fn safe_div_floor() {
-        let e = Env::default();
-        assert_eq!((-155_i128).safe_div_floor(&e, 8), -20);
-        assert_eq!((-159_i128).safe_div_floor(&e, 8), -20);
-        assert_eq!((-160_i128).safe_div_floor(&e, 8), -20);
     }
 }
