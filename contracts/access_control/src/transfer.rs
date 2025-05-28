@@ -4,8 +4,7 @@ use crate::errors::AccessControlError;
 use crate::role::Role;
 use crate::storage::StorageTrait;
 use soroban_sdk::{panic_with_error, Address};
-use utils::bump::bump_instance;
-use utils::storage_errors::StorageError;
+use utils::{bump::bump_instance, errors::storage_errors::StorageError};
 
 pub trait TransferOwnershipTrait {
     fn get_transfer_ownership_deadline(&self, role: &Role) -> u64;

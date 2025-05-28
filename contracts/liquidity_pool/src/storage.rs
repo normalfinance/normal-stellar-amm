@@ -1,9 +1,7 @@
 use paste::paste;
-use sep_40_oracle::Asset;
 use soroban_sdk::{ contracttype, panic_with_error, Address, BytesN, Env };
 pub use utils::bump::bump_instance;
-use utils::storage::{ PoolStatus, PoolTier };
-use utils::storage_errors::StorageError;
+use utils::errors::storage_errors::StorageError;
 use utils::{
     generate_instance_storage_getter_and_setter_with_default,
     generate_instance_storage_getter_with_default,
@@ -100,9 +98,9 @@ pub fn get_historical_oracle_data(e: &Env) -> HistoricalOracleData {
     }
 }
 
-pub fn put_historical_oracle_data(e: &Env, data: HistoricalOracleData) {
+pub fn put_historical_oracle_data(e: &Env, data: &HistoricalOracleData) {
     bump_instance(e);
-    e.storage().instance().set(&DataKey::HistoricalOracleData, &data)
+    e.storage().instance().set(&DataKey::HistoricalOracleData, data)
 }
 
 pub fn put_reserve_b(e: &Env, amount: u128) {

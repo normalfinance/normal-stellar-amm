@@ -1,15 +1,28 @@
-use sep_40_oracle::{ Asset, PriceFeedClient };
-use soroban_sdk::{ panic_with_error, Address, Env, Symbol };
+use sep_40_oracle::{ Asset };
+use soroban_sdk::{ contracttype, panic_with_error, Address, Env, Symbol };
 use soroban_fixed_point_math::FixedPoint;
 use utils::{
-    constant::{PRICE_PRECISION, PRICE_PRECISION_I64},
-    interfaces::reflector::ReflectorOracle,
-    oracle::{ OraclePriceData, OracleSource },
-    storage::OraclePriceData,
+    constant::{ PRICE_PRECISION, PRICE_PRECISION_I128, PRICE_PRECISION_I64, PRICE_PRECISION_U64 },
+    interfaces::reflector::ReflectorOracleClient,
+    math::safe_math::SafeMath,
+    oracle::{
+        is_oracle_price_too_divergent,
+        is_oracle_valid_for_action,
+        oracle_validity,
+        NormalAction,
+        OraclePriceData,
+        OracleSource,
+        OracleStatus,
+    },
 };
 
-use crate::{ errors::LiquidityPoolError, pool::Pool, storage::{ put_historical_oracle_data } };
+use crate::{
+    errors::LiquidityPoolError,
+    pool::Pool,
+    storage::{ get_historical_oracle_data, put_historical_oracle_data },
+};
 
+#[contracttype]
 #[derive(Default, Clone, Copy, Eq, PartialEq, Debug)]
 pub struct HistoricalOracleData {
     /// precision: PRICE_PRECISION
@@ -84,7 +97,7 @@ pub fn get_reflector_price(
     now: u64,
     multiple: u128
 ) -> OraclePriceData {
-    let price_feed_client = ReflectorOracle::new(&e, oracle);
+    let price_feed_client = ReflectorOracleClient::new(&e, oracle);
 
     let oracle_price: i128;
     let oracle_conf: u64;
@@ -97,7 +110,8 @@ pub fn get_reflector_price(
     oracle_price = oracle_price_data.price;
     // FIXME: unsupported by reflector
     oracle_conf = 0;
-    oracle_precision = (10_u128).pow(oracle_price_data.exponent.unsigned_abs());
+    // oracle_precision = (10_u128).pow(oracle_price_data.exponent.unsigned_abs());
+    oracle_precision = (10_u128).pow(1);
     published_ts = oracle_price_data.timestamp;
 
     if oracle_precision <= multiple {
@@ -116,17 +130,17 @@ pub fn get_reflector_price(
     }
 
     let oracle_price_scaled = (oracle_price as i128)
-        .fixed_mul_floor(oracle_scale_mult, oracle_scale_div)
+        .fixed_mul_floor(oracle_scale_mult as i128, oracle_scale_div as i128)
         .unwrap();
 
-    let oracle_price_scaled = (oracle_conf as u128)
-        .fixed_mul_floor(oracle_scale_mult, oracle_scale_div)
+    let oracle_conf_scaled = oracle_conf
+        .fixed_mul_floor(oracle_scale_mult as u64, oracle_scale_div as u64)
         .unwrap();
 
-    let oracle_delay: i64 = now.checked_sub(published_ts).unwrap();
+    let oracle_delay: i64 = (now as i64).safe_sub(e, published_ts as i64);
 
     OraclePriceData {
-        price: oracle_price_scaled,
+        price: oracle_price_scaled as i64,
         confidence: oracle_conf_scaled,
         delay: oracle_delay,
         has_sufficient_data_points,
@@ -143,9 +157,9 @@ pub fn get_reflector_price(
 // # Returns
 //
 // The price of the pool as a u128.
-pub fn get_target_oracle_price(e: &Env) -> u128 {
-    let base_oracle_price_data = get_base_oracle_price(e);
-    let quote_oracle_price_data = get_quote_oracle_price(e);
+pub fn get_target_oracle_price(e: &Env, pool: &Pool) -> u128 {
+    let base_oracle_price_data = get_base_oracle_price(e, pool);
+    let quote_oracle_price_data = get_quote_oracle_price(e, pool);
 
     if base_oracle_price_data.price == 0 || quote_oracle_price_data.price == 0 {
         return 0;
@@ -155,16 +169,16 @@ pub fn get_target_oracle_price(e: &Env) -> u128 {
 
     // update historical oracle data
     let new_historical_data = HistoricalOracleData {
-        last_oracle_price: (),
-        last_oracle_conf: (),
-        last_oracle_delay: (),
-        last_oracle_price_twap: (),
-        last_oracle_price_twap_ts: (),
+        last_oracle_price: 0,
+        last_oracle_conf: 0,
+        last_oracle_delay: 0,
+        last_oracle_price_twap: 0,
+        last_oracle_price_twap_ts: 0,
     };
-    put_historical_oracle_data(e, new_historical_data);
+    put_historical_oracle_data(e, &new_historical_data);
 
-    quote_oracle_price_data.price
-        .fixed_div_floor(base_oracle_price_data.price, PRICE_PRECISION)
+    (quote_oracle_price_data.price as u128)
+        .fixed_div_floor(base_oracle_price_data.price as u128, PRICE_PRECISION)
         .unwrap()
 }
 
@@ -175,10 +189,14 @@ pub fn get_target_oracle_price(e: &Env) -> u128 {
 // # Returns
 //
 // The price of the token as a u128.
-pub fn get_base_oracle_price(e: &Env) -> OraclePriceData {
-    let base_oracle = get_base_oracle(e);
-    let target_asset = get_target_asset(&e);
-    get_oracle_price(e, &base_oracle, &target_asset, e.ledger().timestamp(), 1)
+pub fn get_base_oracle_price(e: &Env, pool: &Pool) -> OraclePriceData {
+    get_oracle_price(
+        e,
+        &pool.base_oracle.source,
+        &pool.base_oracle.address,
+        &pool.target_asset,
+        e.ledger().timestamp()
+    )
 }
 
 // Gets the quote (token_b) oracle price.
@@ -188,14 +206,13 @@ pub fn get_base_oracle_price(e: &Env) -> OraclePriceData {
 // # Returns
 //
 // The price of the token as a u128.
-pub fn get_quote_oracle_price(e: &Env) -> OraclePriceData {
-    let quote_oracle = get_quote_oracle(e);
+pub fn get_quote_oracle_price(e: &Env, pool: &Pool) -> OraclePriceData {
     get_oracle_price(
         e,
-        &quote_oracle,
+        &pool.quote_oracle.source,
+        &pool.quote_oracle.address,
         &Asset::Other(Symbol::new(e, "XLM")),
-        e.ledger().timestamp(),
-        1
+        e.ledger().timestamp()
     )
 }
 
@@ -203,8 +220,7 @@ pub fn block_operation(
     e: &Env,
     pool: &Pool,
     oracle_price_data: &OraclePriceData,
-    reserve_price: u64,
-    slot: u64
+    reserve_price: u64
 ) -> bool {
     let OracleStatus {
         oracle_validity,
@@ -228,23 +244,20 @@ pub fn get_oracle_status(
     oracle_price_data: &OraclePriceData,
     reserve_price: u64
 ) -> OracleStatus {
+    let historical_oracle_data = get_historical_oracle_data(e);
     let oracle_validity = oracle_validity(
         e,
-        pool.market_index,
-        pool.historical_oracle_data.last_oracle_price_twap,
+        e.current_contract_address(),
+        historical_oracle_data.last_oracle_price_twap,
         oracle_price_data,
-        &pool.guard_rails.validity,
+        &pool.oracle_guard_rails.validity,
         pool.get_max_confidence_interval_multiplier(),
         false
     );
-    let oracle_reserve_price_spread_pct = calculate_oracle_twap_price_spread_pct(
-        e,
-        &pool,
-        reserve_price
-    );
+    let oracle_reserve_price_spread_pct = calculate_oracle_twap_price_spread_pct(e, reserve_price);
     let is_oracle_price_too_divergent = is_oracle_price_too_divergent(
         oracle_reserve_price_spread_pct,
-        &guard_rails.price_divergence
+        &pool.oracle_guard_rails.price_divergence
     );
 
     OracleStatus {
@@ -255,15 +268,13 @@ pub fn get_oracle_status(
     }
 }
 
-pub fn calculate_oracle_twap_price_spread_pct(e: &Env, pool: &Pool, other_price: u64) -> i64 {
-    // let price_spread = other_price.safe_sub(
-    //     pool.historical_oracle_data.last_oracle_price_twap_5min
-    // );
+pub fn calculate_oracle_twap_price_spread_pct(e: &Env, other_price: u64) -> i64 {
+    let historical_oracle_data = get_historical_oracle_data(e);
     let price_spread = other_price.safe_sub(
         e,
-        pool.historical_oracle_data.last_oracle_price_twap_5min
+        historical_oracle_data.last_oracle_price_twap as u64
     );
 
     // price_spread_pct
-    price_spread.safe_mul(e, BID_ASK_SPREAD_PRECISION_I128)?.safe_div(e, other_price)
+    price_spread.safe_mul(e, PRICE_PRECISION_U64).safe_div(e, other_price) as i64
 }

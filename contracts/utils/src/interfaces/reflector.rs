@@ -1,6 +1,7 @@
 use sep_40_oracle::{ Asset, PriceData };
-use soroban_sdk::{ Address, BytesN, Env, Map, Symbol, Vec };
+use soroban_sdk::{ contractclient, Address, Env, Vec };
 
+#[contractclient(name = "ReflectorOracleClient")]
 pub trait ReflectorOracle {
     /// Return the base asset the price is reported in
     fn base(env: Env) -> Asset;

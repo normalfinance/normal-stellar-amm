@@ -1,7 +1,7 @@
 use sep_40_oracle::Asset;
 use soroban_sdk::{ contracttype, Address, BytesN, String, Vec };
 
-use crate::oracle::OracleSource;
+use crate::oracle::{OracleGuardRails, OracleSource};
 
 #[macro_export]
 macro_rules! generate_instance_storage_setter {
@@ -159,6 +159,7 @@ pub struct InitializeParams {
     /// The address of the router.
     pub router: Address,
     pub oracles: OraclePair,
+    pub oracle_guard_rails: OracleGuardRails,
     pub target_asset: Asset,
     pub lp_token_info: TokenInitInfo,
     /// A vector of token addresses.
@@ -166,7 +167,6 @@ pub struct InitializeParams {
     /// The fee fraction for the pool.
     pub fee_fraction: u32,
     pub tier: PoolTier,
-    pub status: PoolStatus,
 }
 
 #[contracttype]

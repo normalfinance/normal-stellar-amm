@@ -1,7 +1,5 @@
 use soroban_sdk::{ Address, BytesN, Env, Map, Symbol, Vec };
 
-use crate::storage::OracleGuardRails;
-
 pub trait AdminInterface {
     // Initialize admin user. Will panic if called twice
     fn init_admin(e: Env, account: Address);
@@ -36,9 +34,6 @@ pub trait AdminInterface {
         reward_boost_feed: Address
     );
 
-    // Set oracle guardrails
-    fn set_oracle_guardrails(e: Env, admin: Address, oracle_guard_rails: OracleGuardRails);
-
-    //
-    fn set_supported_quote_tokens(e: Env, tokens: Vec<Address>);
+    // Set list of supported token b addresses
+    fn set_supported_quote_tokens(e: Env, admin: Address, tokens: Vec<Address>);
 }

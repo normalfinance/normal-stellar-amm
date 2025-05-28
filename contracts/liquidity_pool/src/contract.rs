@@ -88,10 +88,8 @@ use token_share::{
 use token_synthetic::put_token_synthetic;
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
-
-use sep_40_oracle::Asset;
 use utils::constant::FEE_MULTIPLIER;
-use utils::oracle::OracleSource;
+use utils::oracle::{ OracleGuardRails, OraclePriceData, OracleSource };
 use utils::storage::{
     AddressAndAmount,
     InitializeAllParams,
@@ -149,7 +147,7 @@ impl LiquidityPoolTrait for LiquidityPool {
     // # Arguments
     //
     // * `params` - The params to initialize the pool with.
-    fn initialize(e: Env, params: InitializeParams, active_status: bool) {
+    fn initialize(e: Env, params: InitializeParams) {
         let access_control = AccessControl::new(&e);
         if access_control.get_role_safe(&Role::Admin).is_some() {
             panic_with_error!(&e, LiquidityPoolError::AlreadyInitialized);
@@ -204,7 +202,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         put_token_share(&e, share_contract);
-        put_token_synthetic(&e, token_a);
+        put_token_synthetic(&e, token_a.clone());
         put_reserve_a(&e, 0);
         put_reserve_b(&e, 0);
 
@@ -212,14 +210,11 @@ impl LiquidityPoolTrait for LiquidityPool {
             token_a,
             token_b,
             tier: params.tier,
-            status: if active_status {
-                MarketStatus::Active
-            } else {
-                MarketStatus::Initialized
-            },
+            status: PoolStatus::Initialized,
             fee_fraction: params.fee_fraction,
             base_oracle: params.oracles.base_oracle,
             quote_oracle: params.oracles.quote_oracle,
+            oracle_guard_rails: params.oracle_guard_rails,
             target_asset: params.target_asset,
             expiry_ts: 0,
             expiry_price: 0,
@@ -288,7 +283,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolValidationError::AllCoinsRequired);
         }
 
-        let mut pool = get_pool(&e);
+        let pool = get_pool(&e);
 
         // Deposit Token B
         let token_b_client = SorobanTokenClient::new(&e, &pool.token_b);
@@ -367,7 +362,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         // Rebalance the pool before swapping
-        let mut pool = get_pool(&e);
+        let pool = get_pool(&e);
         pool.rebalance(&e);
 
         let reserve_a = get_reserve_a(&e);
@@ -486,7 +481,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
 
-        let reserves = Vec::from_array(&e, [pool.reserve_a, pool.reserve_b]);
+        let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
         let reserve_sell = reserves.get(in_idx).unwrap();
         let reserve_buy = reserves.get(out_idx).unwrap();
 
@@ -542,7 +537,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         }
 
         // Rebalance the pool
-        let mut pool = get_pool(&e);
+        let pool = get_pool(&e);
         pool.rebalance(&e);
 
         let reserve_a = get_reserve_a(&e);
@@ -556,7 +551,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolValidationError::EmptyPool);
         }
 
-        let (in_amount, fee) = get_amount_out_strict_receive(
+        let (in_amount, fee) = pool.get_amount_out_strict_receive(
             &e,
             out_amount,
             reserve_sell,
@@ -589,7 +584,7 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // residue_numerator and residue_denominator are the amount that the invariant considers after
         // deducting the fee, scaled up by FEE_MULTIPLIER to avoid fractions
-        let residue_numerator = FEE_MULTIPLIER - (get_fee_fraction(&e) as u128);
+        let residue_numerator = FEE_MULTIPLIER - (pool.fee_fraction as u128);
         let residue_denominator = U256::from_u128(&e, FEE_MULTIPLIER);
 
         let new_invariant_factor = |reserve: u128, old_reserve: u128, out: u128| {
@@ -720,7 +715,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         put_reserve_b(&e, reserve_b - share_amount);
 
         // Rebalance the pool
-        let mut pool = get_pool(&e);
+        let pool = get_pool(&e);
         pool.rebalance(&e);
 
         // Checkpoint resulting working balance
@@ -731,7 +726,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         // update plane data for every pool update
         update_plane(&e);
 
-        PoolEvents::new(&e).withdraw_liquidity(get_token_b(&e), share_amount, share_amount);
+        PoolEvents::new(&e).withdraw_liquidity(pool.token_b, share_amount, share_amount);
 
         share_amount
     }
@@ -860,6 +855,16 @@ impl AdminInterfaceTrait for LiquidityPool {
         result
     }
 
+    fn set_oracle_guardrails(e: Env, admin: Address, oracle_guard_rails: OracleGuardRails) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+
+        let mut pool = get_pool(&e);
+        pool.oracle_guard_rails = oracle_guard_rails;
+
+        set_pool(&e, &pool);
+    }
+
     fn set_tier(e: Env, admin: Address, tier: PoolTier) {
         admin.require_auth();
         require_operations_admin_or_owner(&e, &admin);
@@ -921,16 +926,16 @@ impl AdminInterfaceTrait for LiquidityPool {
         admin.require_auth();
         require_operations_admin_or_owner(&e, &admin);
 
-        let now = e.ledger().timestamp();
+        // let now = e.ledger().timestamp();
 
         let mut pool = get_pool(&e);
 
-        // Verify oracle is readable
-        let OraclePriceData {
-            price: _oracle_price,
-            delay: _oracle_delay,
-            ..
-        } = oracle::get_oracle_price(&e, &oracle_source & oracle, &get_tokn, now);
+        // TODO: Verify oracle is readable
+        // let OraclePriceData {
+        //     price: _oracle_price,
+        //     delay: _oracle_delay,
+        //     ..
+        // } = oracle::get_oracle_price(&e, &oracle_source, &oracle, &get_tokn, now);
 
         pool.quote_oracle = OracleAndSource {
             address: oracle,
@@ -945,7 +950,7 @@ impl AdminInterfaceTrait for LiquidityPool {
         access_control.assert_address_has_role(&admin, &Role::Admin);
 
         // Rebalance the pool
-        let mut pool = get_pool(&e);
+        let pool = get_pool(&e);
         pool.rebalance(&e);
     }
 

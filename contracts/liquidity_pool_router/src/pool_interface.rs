@@ -1,6 +1,6 @@
 use sep_40_oracle::Asset;
-use soroban_sdk::{Address, BytesN, Env, Map, String, Symbol, Val, Vec, U256};
-use utils::storage::{LiquidityPoolInfo, OraclePair};
+use soroban_sdk::{ Address, BytesN, Env, Map, String, Symbol, Val, Vec, U256 };
+use utils::{ oracle::OracleGuardRails, storage::{ LiquidityPoolInfo, OraclePair, PoolTier } };
 
 pub trait LiquidityPoolInterfaceTrait {
     // Get symbolic explanation of pool type.
@@ -29,7 +29,7 @@ pub trait LiquidityPoolInterfaceTrait {
         user: Address,
         tokens: Vec<Address>,
         pool_index: BytesN<32>,
-        token_b_amount: u128,
+        token_b_amount: u128
     ) -> (u128, u128);
 
     // Perform an exchange between two coins.
@@ -46,7 +46,7 @@ pub trait LiquidityPoolInterfaceTrait {
         token_out: Address,
         pool_index: BytesN<32>,
         in_amount: u128,
-        out_min: u128,
+        out_min: u128
     ) -> u128;
 
     // Estimate amount of coins to retrieve using swap function
@@ -56,7 +56,7 @@ pub trait LiquidityPoolInterfaceTrait {
         token_in: Address,
         token_out: Address,
         pool_index: BytesN<32>,
-        in_amount: u128,
+        in_amount: u128
     ) -> (u128, i128);
 
     // Withdraw coins from the pool.
@@ -67,7 +67,7 @@ pub trait LiquidityPoolInterfaceTrait {
         user: Address,
         tokens: Vec<Address>,
         pool_index: BytesN<32>,
-        share_amount: u128,
+        share_amount: u128
     ) -> u128;
 
     fn get_liquidity(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> U256;
@@ -125,7 +125,7 @@ pub trait RewardsInterfaceTrait {
         user: Address,
         reward_tps: u128,
         expired_at: u64,
-        tokens_votes: Vec<(Vec<Address>, u32)>,
+        tokens_votes: Vec<(Vec<Address>, u32)>
     );
 
     // Fills the aggregated liquidity information for a given set of tokens.
@@ -164,12 +164,11 @@ pub trait RewardsInterfaceTrait {
         e: Env,
         user: Address,
         tokens: Vec<Address>,
-        pool_index: BytesN<32>,
+        pool_index: BytesN<32>
     ) -> Map<Symbol, i128>;
 
     // Get amount of reward tokens available for the user to claim.
-    fn get_user_reward(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>)
-        -> u128;
+    fn get_user_reward(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
 
     // Get total amount of accumulated reward for the pool
     fn get_total_accumulated_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
@@ -190,7 +189,7 @@ pub trait RewardsInterfaceTrait {
         user: Address,
         from: Address,
         tokens: Vec<Address>,
-        pool_index: BytesN<32>,
+        pool_index: BytesN<32>
     ) -> u128;
 
     // Claim reward as a user.
@@ -206,11 +205,13 @@ pub trait PoolsManagementTrait {
         e: Env,
         user: Address,
         oracles: OraclePair,
+        oracle_guard_rails: OracleGuardRails,
         target_asset: Asset,
         tokens: Vec<Address>,
         lp_token_name: String,
         lp_token_symbol: String,
         fee_fraction: u32,
+        tier: PoolTier,
     ) -> (BytesN<32>, Address);
 
     // Get all pools addresses
@@ -243,7 +244,7 @@ pub trait PoolsManagementTrait {
     fn get_pools_for_tokens_range(
         e: Env,
         start: u128,
-        end: u128,
+        end: u128
     ) -> Vec<(Vec<Address>, Map<BytesN<32>, Address>)>;
 }
 

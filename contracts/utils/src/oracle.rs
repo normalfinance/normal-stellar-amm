@@ -1,9 +1,11 @@
+use core::cmp::max;
+
 use soroban_sdk::{ contracttype, log, Address, Env };
 
 use crate::{
-    constant::PERCENTAGE_PRECISION_U64,
-    math::safe_math::SafeMath,
+    constant::{ PERCENTAGE_PRECISION_U64, PRICE_PRECISION_I64 },
     errors::oracle_error::OracleError,
+    math::safe_math::SafeMath,
 };
 
 //  ___________  ___  ___  _______    _______   ________
@@ -176,16 +178,17 @@ pub fn oracle_validity(
 
     let is_oracle_price_too_volatile = oracle_price
         .max(last_oracle_twap)
-        .safe_div(last_oracle_twap.min(oracle_price).max(1))
+        .safe_div(e, last_oracle_twap.min(oracle_price).max(1))
         .gt(&valid_oracle_guard_rails.too_volatile_ratio);
 
     let conf_pct_of_price = max(1, oracle_conf)
-        .safe_mul(BID_ASK_SPREAD_PRECISION)?
-        .safe_div(oracle_price);
+        .safe_mul(e, PERCENTAGE_PRECISION_U64)
+        .safe_div(e, oracle_price as u64);
 
     // TooUncertain
     let is_conf_too_large = conf_pct_of_price.gt(
         &valid_oracle_guard_rails.confidence_interval_max_size.safe_mul(
+            e,
             max_confidence_interval_multiplier
         )
     );

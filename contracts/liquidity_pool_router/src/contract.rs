@@ -1,4 +1,3 @@
-use crate::constants::CONSTANT_PRODUCT_FEE_AVAILABLE;
 use crate::errors::LiquidityPoolRouterError;
 use crate::events::{ Events, LiquidityPoolRouterEvents };
 use crate::liquidity_calculator::LiquidityCalculatorClient;
@@ -34,7 +33,6 @@ use crate::storage::{
     remove_pool,
     set_constant_product_pool_hash,
     set_liquidity_calculator,
-    set_oracle_guard_rails,
     set_pool_plane,
     set_reward_tokens,
     set_reward_tokens_detailed,
@@ -43,7 +41,6 @@ use crate::storage::{
     set_token_hash,
     GlobalRewardsConfig,
     LiquidityPoolRewardInfo,
-    OracleGuardRails,
 };
 use access_control::access::{ AccessControl, AccessControlTrait };
 use access_control::emergency::{ get_emergency_mode, set_emergency_mode };
@@ -77,8 +74,9 @@ use soroban_sdk::{
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
+use utils::constant::CONSTANT_PRODUCT_FEE_AVAILABLE;
 use utils::oracle::OracleGuardRails;
-use utils::storage::{ LiquidityPoolInfo, OraclePair };
+use utils::storage::{ LiquidityPoolInfo, OraclePair, PoolTier };
 
 #[contract]
 pub struct LiquidityPoolRouter;
@@ -597,18 +595,12 @@ impl AdminInterface for LiquidityPoolRouter {
         rewards_storage.put_reward_boost_feed(reward_boost_feed);
     }
 
-    fn set_oracle_guardrails(e: Env, admin: Address, oracle_guard_rails: OracleGuardRails) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-        set_oracle_guard_rails(&e, &oracle_guard_rails);
-    }
-
-    fn set_supported_quote_tokens(e: Env, tokens: Vec<Address>) {
+    fn set_supported_quote_tokens(e: Env, admin: Address, tokens: Vec<Address>) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
 
         validate_tokens_contracts(&e, &tokens);
-        set_supported_quote_tokens(&e, tokens);
+        set_supported_quote_tokens(&e, &tokens);
     }
 }
 
@@ -1088,11 +1080,13 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         e: Env,
         user: Address,
         oracles: OraclePair,
+        oracle_guard_rails: OracleGuardRails,
         target_asset: Asset,
         tokens: Vec<Address>,
         lp_token_name: String,
         lp_token_symbol: String,
-        fee_fraction: u32
+        fee_fraction: u32,
+        tier: PoolTier
     ) -> (BytesN<32>, Address) {
         user.require_auth();
 
@@ -1116,10 +1110,12 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
                     &e,
                     &tokens,
                     &oracles,
+                    &oracle_guard_rails,
                     &target_asset,
                     &lp_token_name,
                     &lp_token_symbol,
-                    fee_fraction
+                    fee_fraction,
+                    &tier
                 ),
         }
     }

@@ -1,10 +1,7 @@
 use soroban_sdk::{ Address, BytesN, Env, Map, Symbol, Vec };
-use utils::storage::{
-    InitializeAllParams,
-    InitializeParams,
-    LiquidityPoolInfo,
-    PoolStatus,
-    PoolTier,
+use utils::{
+    oracle::{OracleGuardRails, OracleSource},
+    storage::{ InitializeAllParams, InitializeParams, LiquidityPoolInfo, PoolStatus, PoolTier },
 };
 
 pub trait LiquidityPoolCrunch {
@@ -104,6 +101,9 @@ pub trait AdminInterfaceTrait {
 
     // Get map of privileged roles
     fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>>;
+
+    //
+    fn set_oracle_guardrails(e: Env, admin: Address, oracle_guard_rails: OracleGuardRails);
 
     // Set target asset tier
     fn set_tier(e: Env, admin: Address, tier: PoolTier);

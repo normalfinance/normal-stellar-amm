@@ -13,8 +13,8 @@ use soroban_sdk::{
     U256,
 };
 use utils::bump::{ bump_instance, bump_persistent, bump_temporary };
-use utils::constant::{ MAX_POOLS_FOR_PAIR, PERCENTAGE_PRECISION_U64 };
-use utils::storage_errors::StorageError;
+use utils::constant::MAX_POOLS_FOR_PAIR;
+use utils::errors::storage_errors::StorageError;
 use utils::{
     generate_instance_storage_getter,
     generate_instance_storage_getter_and_setter,
@@ -22,7 +22,6 @@ use utils::{
     generate_instance_storage_getter_with_default,
     generate_instance_storage_setter,
 };
-use sep_40_oracle::Asset;
 
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -140,14 +139,9 @@ generate_instance_storage_getter_and_setter!(
     Address
 );
 generate_instance_storage_getter_and_setter!(
-    oracle_guard_rails,
-    DataKey::OracleGuardRails,
-    OracleGuardRails
-);
-generate_instance_storage_getter_and_setter!(
     supported_quote_tokens,
     DataKey::SupportedQuoteTokens,
-    Vec<Asset>
+    Vec<Address>
 );
 
 pub fn get_rewards_config(e: &Env) -> GlobalRewardsConfig {

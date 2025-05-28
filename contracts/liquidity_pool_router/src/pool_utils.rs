@@ -17,6 +17,7 @@ use access_control::management::{ MultipleAddressesManagementTrait, SingleAddres
 use access_control::role::Role;
 use rewards::storage::{ BoostFeedStorageTrait, BoostTokenStorageTrait, RewardTokenStorageTrait };
 use sep_40_oracle::Asset;
+use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{ panic_with_error, String };
 use soroban_sdk::{
     symbol_short,
@@ -32,10 +33,12 @@ use soroban_sdk::{
     Vec,
     U256,
 };
+use utils::oracle::OracleGuardRails;
 use utils::storage::{
     InitializeAllParams,
     InitializeParams,
     OraclePair,
+    PoolTier,
     PrivilegedAddresses,
     RewardConfig,
     TokenInitInfo,
@@ -69,10 +72,12 @@ pub fn deploy_standard_pool(
     e: &Env,
     tokens: &Vec<Address>,
     oracles: &OraclePair,
+    oracle_guard_rails: &OracleGuardRails,
     target_asset: &Asset,
     lp_token_name: &String,
     lp_token_symbol: &String,
-    fee_fraction: u32
+    fee_fraction: u32,
+    tier: &PoolTier
 ) -> (BytesN<32>, Address) {
     let tokens_salt = get_tokens_salt(e, tokens);
     let liquidity_pool_wasm_hash = get_constant_product_pool_hash(e);
@@ -92,11 +97,13 @@ pub fn deploy_standard_pool(
         e,
         tokens,
         oracles,
+        oracle_guard_rails,
         target_asset,
         &pool_contract_id,
         lp_token_name,
         lp_token_symbol,
-        fee_fraction
+        fee_fraction,
+        tier
     );
 
     add_tokens_set(e, tokens);
@@ -123,11 +130,13 @@ fn init_standard_pool(
     e: &Env,
     tokens: &Vec<Address>,
     oracles: &OraclePair,
+    oracle_guard_rails: &OracleGuardRails,
     target_asset: &Asset,
     pool_contract_id: &Address,
     lp_token_name: &String,
     lp_token_symbol: &String,
-    fee_fraction: u32
+    fee_fraction: u32,
+    tier: &PoolTier
 ) {
     let token_wasm_hash = get_token_hash(e);
     let rewards = get_rewards_manager(e);
@@ -162,6 +171,7 @@ fn init_standard_pool(
             },
             router: e.current_contract_address(),
             oracles: oracles.clone(),
+            oracle_guard_rails: oracle_guard_rails.clone(),
             target_asset: target_asset.clone(),
             tokens: tokens.clone(),
             lp_token_info: TokenInitInfo {
@@ -170,6 +180,7 @@ fn init_standard_pool(
                 symbol: lp_token_symbol.clone(),
             },
             fee_fraction,
+            tier: tier.clone(),
         },
         reward_config: RewardConfig {
             reward_token,

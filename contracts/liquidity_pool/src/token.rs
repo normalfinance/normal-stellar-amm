@@ -1,4 +1,4 @@
-use crate::storage::{ get_token_a, get_token_b };
+use crate::storage::{ get_pool };
 use soroban_sdk::token::TokenClient as Client;
 use soroban_sdk::{ xdr::ToXdr, Address, Bytes, BytesN, Env };
 
@@ -22,11 +22,13 @@ fn transfer(e: &Env, token: Address, to: &Address, amount: i128) {
 pub fn transfer_a(e: &Env, to: &Address, amount: u128) {
     // TODO: add authorization - i.e. e.require_auth(&e.current_contract_address());
     // TODO: Validate that `amount <= i128::MAX` before casting or use a checked conversion (e.g. `TryFrom`) to prevent overflow and reject out-of-range values.
-    transfer(e, get_token_a(e), to, amount as i128);
+    let pool = get_pool(e);
+    transfer(e, pool.token_a, to, amount as i128);
 }
 
 pub fn transfer_b(e: &Env, to: &Address, amount: u128) {
     // TODO: add authorization - i.e. e.require_auth(&e.current_contract_address());
     // TODO: Validate that `amount <= i128::MAX` before casting or use a checked conversion (e.g. `TryFrom`) to prevent overflow and reject out-of-range values.
-    transfer(e, get_token_b(e), to, amount as i128);
+    let pool = get_pool(e);
+    transfer(e, pool.token_b, to, amount as i128);
 }

@@ -36,7 +36,7 @@ pub trait LiquidityPoolEvents {
         fee_amount: u128
     );
 
-    fn rebalance(&self, delta_a: i128, new_reserve_a: u128, new_reserve_b: u128);
+    fn rebalance(&self, delta_a: i128, new_reserve_a: u128);
 
     fn kill_deposit(&self);
 
@@ -127,7 +127,7 @@ impl LiquidityPoolEvents for Events {
         );
     }
 
-    fn rebalance(&self, delta_a: i128, new_reserve_a: u128, new_reserve_b: u128) {
+    fn rebalance(&self, delta_a: i128, new_reserve_a: u128) {
         // topics
         // [
         //   "rebalance": Symbol, // event identifier
@@ -139,10 +139,7 @@ impl LiquidityPoolEvents for Events {
         //   pool_price: i128,      // amount of tokens withdrawn from the pool for assetA
         // ]
         let e = self.env();
-        e.events().publish(
-            (Symbol::new(e, "rebalance"),),
-            (delta_a, new_reserve_a as i128, new_reserve_b as i128)
-        );
+        e.events().publish((Symbol::new(e, "rebalance"),), (delta_a, new_reserve_a as i128));
     }
 
     fn kill_deposit(&self) {

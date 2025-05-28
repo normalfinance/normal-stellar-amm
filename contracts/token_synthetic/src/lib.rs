@@ -18,7 +18,7 @@ pub mod token {
     );
 }
 pub use token::{self as token_contract, Client};
-use utils::storage_errors::StorageError;
+use utils::errors::storage_errors::StorageError;
 
 pub fn get_token_synthetic(e: &Env) -> Address {
     bump_instance(e);

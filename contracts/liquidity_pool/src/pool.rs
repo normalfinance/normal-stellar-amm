@@ -1,26 +1,27 @@
+use crate::errors::LiquidityPoolError;
 use crate::oracle;
 use crate::events::Events as PoolEvents;
 use crate::events::LiquidityPoolEvents;
 use crate::storage::get_historical_oracle_data;
-use crate::storage::set_pool;
-use crate::storage::{ get_fee_fraction, get_reserve_a, get_reserve_b, put_reserve_a };
-use crate::{ constants::FEE_MULTIPLIER, errors::LiquidityPoolValidationError };
+use crate::storage::{ get_reserve_a, get_reserve_b, put_reserve_a };
+use crate::{ errors::LiquidityPoolValidationError };
 use sep_40_oracle::Asset;
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::contracttype;
 use soroban_sdk::Address;
-use soroban_sdk::{ log, panic_with_error, Env };
+use soroban_sdk::{ panic_with_error, Env };
 
 use token_synthetic::{ burn_synthetic, mint_synthetic };
 use utils::constant::{ FEE_MULTIPLIER, PRICE_PRECISION };
-use utils::oracle::OracleSource;
-use utils::storage::Oracle;
+use utils::oracle::oracle_validity;
+use utils::oracle::OracleGuardRails;
+use utils::oracle::OracleValidity;
 use utils::storage::OracleAndSource;
 use utils::storage::PoolStatus;
 use utils::storage::PoolTier;
 
 #[contracttype]
-#[derive(Default)]
+#[derive(Clone)]
 pub struct Pool {
     pub target_asset: Asset,
 
@@ -36,6 +37,8 @@ pub struct Pool {
     pub base_oracle: OracleAndSource,
     // Oracle address for the quote asset (TokenB) - usually XLM or USDC
     pub quote_oracle: OracleAndSource,
+
+    pub oracle_guard_rails: OracleGuardRails,
 
     pub expiry_ts: u64,
     pub expiry_price: u128,
@@ -66,30 +69,40 @@ impl Pool {
             price = reserve_b.fixed_div_floor(e, &reserve_a, &PRICE_PRECISION);
 
             if in_usd {
-                let quote_oracle_price = oracle::get_quote_oracle_price(e);
-                price = price.fixed_mul_floor(e, &quote_oracle_price, &PRICE_PRECISION);
+                let quote_oracle_price_data = oracle::get_quote_oracle_price(e, &self);
+                price = price.fixed_mul_floor(
+                    e,
+                    &(quote_oracle_price_data.price as u128),
+                    &PRICE_PRECISION
+                );
             }
         } else {
             // price of 1 B in terms of A
             price = reserve_a.fixed_div_floor(e, &reserve_b, &PRICE_PRECISION);
 
             if in_usd {
-                let base_oracle_price = oracle::get_base_oracle_price(e);
-                price = price.fixed_mul_floor(e, &base_oracle_price, &PRICE_PRECISION);
+                let base_oracle_price_data = oracle::get_base_oracle_price(e, &self);
+                price = price.fixed_mul_floor(
+                    e,
+                    &(base_oracle_price_data.price as u128),
+                    &PRICE_PRECISION
+                );
             }
         }
         price
     }
 
-    pub fn get_delta_a(self, e: &Env) -> i128 {
-        let target_price = oracle::get_target_oracle_price(e);
+    pub fn get_delta_a(&self, e: &Env) -> i128 {
+        let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
+
+        let target_price = oracle::get_target_oracle_price(e, &self);
         let target_reserve_a = reserve_b.fixed_div_floor(e, &target_price, &PRICE_PRECISION);
         let delta_a = (target_reserve_a as i128).checked_sub(reserve_a as i128).unwrap();
 
         delta_a
     }
 
-    pub fn get_max_confidence_interval_multiplier(self) -> u64 {
+    pub fn get_max_confidence_interval_multiplier(&self) -> u64 {
         // assuming validity_guard_rails max confidence pct is 2%
         match self.tier {
             PoolTier::A => 1, // 2%
@@ -101,7 +114,7 @@ impl Pool {
         }
     }
 
-    pub fn get_sanitize_clamp_denominator(self) -> Option<i64> {
+    pub fn get_sanitize_clamp_denominator(&self) -> Option<i64> {
         match self.tier {
             PoolTier::A => Some(10_i64), // 10%
             PoolTier::B => Some(5_i64), // 20%
@@ -121,11 +134,8 @@ impl Pool {
     // # Returns
     //
     // The type of the pool as a Symbol.
-    pub fn rebalance(self, e: &Env) {
-        let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
-
-        // Pause rebalance if oracle is invalid or if oracle spread is too divergentf
-        let block_rebalance = oracle::block_operation(e, &self, reserve_price, slot);
+    pub fn rebalance(&self, e: &Env) {
+        let reserve_a = get_reserve_a(&e);
 
         // Find the ideal reserve_a amount such that the pool's price is equal to the oracle price
         let delta_a = self.get_delta_a(e);
@@ -140,23 +150,31 @@ impl Pool {
         }
 
         let historical_oracle_data = get_historical_oracle_data(&e);
+        let oracle_price_data = oracle::get_base_oracle_price(e, &self);
 
         let oracle_is_valid =
-            oracle::oracle_validity(
+            oracle_validity(
+                e,
+                e.current_contract_address(),
                 historical_oracle_data.last_oracle_price_twap,
                 &oracle_price_data,
-                &oracle_guard_rails.validity,
+                &self.oracle_guard_rails.validity,
                 self.get_max_confidence_interval_multiplier(),
                 true
             ) == OracleValidity::Valid;
 
-        let (new_reserve_a, new_reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
+        // cannot repeg if oracle is invalid
+        if !oracle_is_valid {
+            panic_with_error!(e, LiquidityPoolError::InvalidOracle);
+        }
 
-        PoolEvents::new(&e).rebalance(delta_a, new_reserve_a, new_reserve_b);
+        let new_reserve_a = get_reserve_a(&e);
+
+        PoolEvents::new(&e).rebalance(delta_a, new_reserve_a);
     }
 
     pub fn get_amount_out(
-        self,
+        &self,
         e: &Env,
         in_amount: u128,
         reserve_sell: u128,
@@ -173,7 +191,7 @@ impl Pool {
     }
 
     pub fn get_amount_out_strict_receive(
-        self,
+        &self,
         e: &Env,
         out_amount: u128,
         reserve_sell: u128,
