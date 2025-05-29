@@ -26,9 +26,6 @@ pub(crate) mod router {
     soroban_sdk::contractimport!(file = "../../wasm/soroban_liquidity_pool_router_contract.wasm");
 }
 
-pub(crate) mod boost_feed {
-    soroban_sdk::contractimport!(file = "../../wasm/soroban_locker_feed_contract.wasm");
-}
 pub(crate) mod lp_token {
     soroban_sdk::contractimport!(file = "../../wasm/soroban_token_contract.wasm");
 }

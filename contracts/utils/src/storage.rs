@@ -144,10 +144,6 @@ pub struct OraclePair {
 pub struct RewardConfig {
     /// The address of the reward token.
     pub reward_token: Address,
-    /// The address of the reward boost token.
-    pub reward_boost_token: Address,
-    /// The address of the reward boost feed.
-    pub reward_boost_feed: Address,
 }
 
 #[contracttype]

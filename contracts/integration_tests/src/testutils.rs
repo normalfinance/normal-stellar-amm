@@ -43,11 +43,6 @@ impl Setup<'_> {
         let locked_token = create_token_contract(&e, &admin);
         let locked_token_admin = get_token_admin_client(&e, &locked_token.address);
 
-        // init boost feed
-        let boost_feed = create_reward_boost_feed_contract(&e, &admin, &operator, &emergency_admin);
-        locked_token_admin.mint(&admin, &53_000_000_000_0000000);
-        boost_feed.set_total_supply(&operator, &53_000_000_000_0000000);
-
         // init swap router
         let pool_hash = e.deployer().upload_contract_wasm(contracts::constant_product_pool::WASM);
         let token_hash = e.deployer().upload_contract_wasm(contracts::lp_token::WASM);
@@ -59,7 +54,6 @@ impl Setup<'_> {
         router.set_token_hash(&admin, &token_hash);
         router.set_reward_token(&admin, &reward_token.address);
         router.set_pools_plane(&admin, &plane.address);
-        router.set_reward_boost_config(&admin, &locked_token.address, &boost_feed.address);
 
         let fee_collector_factory = deploy_provider_swap_fee_factory(
             &e,
@@ -156,19 +150,4 @@ fn deploy_liqpool_router_contract<'a>(e: Env) -> contracts::router::Client<'a> {
 
 fn deploy_plane_contract<'a>(e: &Env) -> contracts::pool_plane::Client {
     contracts::pool_plane::Client::new(e, &e.register(contracts::pool_plane::WASM, ()))
-}
-
-pub(crate) fn create_reward_boost_feed_contract<'a>(
-    e: &Env,
-    admin: &Address,
-    operations_admin: &Address,
-    emergency_admin: &Address
-) -> contracts::boost_feed::Client<'a> {
-    contracts::boost_feed::Client::new(
-        e,
-        &e.register(
-            contracts::boost_feed::WASM,
-            contracts::boost_feed::Args::__constructor(admin, operations_admin, emergency_admin)
-        )
-    )
 }

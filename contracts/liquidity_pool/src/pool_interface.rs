@@ -170,15 +170,6 @@ pub trait RewardsTrait {
     // Initialize rewards token address
     fn initialize_rewards_config(e: Env, reward_token: Address);
 
-    fn initialize_boost_config(e: Env, reward_boost_token: Address, reward_boost_feed: Address);
-
-    fn set_reward_boost_config(
-        e: Env,
-        admin: Address,
-        reward_boost_token: Address,
-        reward_boost_feed: Address
-    );
-
     // Configure rewards for pool. Every second tps of coins
     // being distributed across all liquidity providers
     // after expired_at timestamp distribution ends

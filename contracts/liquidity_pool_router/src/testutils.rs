@@ -59,27 +59,6 @@ pub fn create_liquidity_calculator_contract<'a>(e: &Env) -> liquidity_calculator
     liquidity_calculator::Client::new(e, &e.register(liquidity_calculator::WASM, ()))
 }
 
-mod reward_boost_feed {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/soroban_locker_feed_contract.wasm"
-    );
-}
-
-pub(crate) fn create_reward_boost_feed_contract<'a>(
-    e: &Env,
-    admin: &Address,
-    operations_admin: &Address,
-    emergency_admin: &Address
-) -> reward_boost_feed::Client<'a> {
-    reward_boost_feed::Client::new(
-        e,
-        &e.register(
-            reward_boost_feed::WASM,
-            reward_boost_feed::Args::__constructor(admin, operations_admin, emergency_admin)
-        )
-    )
-}
-
 pub(crate) struct Setup<'a> {
     pub(crate) env: Env,
 
@@ -90,8 +69,6 @@ pub(crate) struct Setup<'a> {
 
     pub(crate) tokens: [test_token::Client<'a>; 4],
     pub(crate) reward_token: test_token::Client<'a>,
-    pub(crate) reward_boost_token: test_token::Client<'a>,
-    pub(crate) reward_boost_feed: reward_boost_feed::Client<'a>,
 
     pub(crate) router: LiquidityPoolRouterClient<'a>,
 
@@ -137,8 +114,7 @@ impl Default for Setup<'_> {
         let payment_for_creation_address = Address::generate(&env);
 
         let reward_token = create_token_contract(&env, &reward_admin);
-        let reward_boost_token = create_token_contract(&env, &reward_admin);
-
+       
         let pool_hash = install_liq_pool_hash(&env);
         let token_hash = install_token_wasm(&env);
         let router = create_liqpool_router_contract(&env);
@@ -147,12 +123,6 @@ impl Default for Setup<'_> {
         let operations_admin = soroban_sdk::Address::generate(&env);
         let pause_admin = soroban_sdk::Address::generate(&env);
         let emergency_pause_admin = soroban_sdk::Address::generate(&env);
-        let reward_boost_feed = create_reward_boost_feed_contract(
-            &env,
-            &admin,
-            &operations_admin,
-            &emergency_pause_admin
-        );
         router.set_privileged_addrs(
             &admin,
             &rewards_admin,
@@ -163,11 +133,6 @@ impl Default for Setup<'_> {
         router.set_pool_hash(&admin, &pool_hash);
         router.set_token_hash(&admin, &token_hash);
         router.set_reward_token(&admin, &reward_token.address);
-        router.set_reward_boost_config(
-            &admin,
-            &reward_boost_token.address,
-            &reward_boost_feed.address
-        );
 
         let emergency_admin = Address::generate(&env);
         router.commit_transfer_ownership(
@@ -198,8 +163,6 @@ impl Default for Setup<'_> {
             operations_admin,
             pause_admin,
             emergency_pause_admin,
-            reward_boost_token,
-            reward_boost_feed,
         }
     }
 }

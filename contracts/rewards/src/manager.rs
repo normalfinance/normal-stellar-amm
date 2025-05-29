@@ -1,4 +1,3 @@
-use crate::boost_feed::RewardBoostFeedClient;
 use crate::constants::REWARD_PRECISION;
 use crate::errors::RewardsError;
 use crate::storage::{
@@ -26,33 +25,6 @@ impl Manager {
             env: e.clone(),
             storage,
             config: config.clone(),
-        }
-    }
-
-    // ------------------------------------
-    // Basic getters for boost balances
-    // ------------------------------------
-
-    pub fn get_user_boost_balance(&self, user: &Address) -> u128 {
-        if self.storage.has_reward_boost_token() {
-            match SorobanTokenClient::new(&self.env, &self.storage.get_reward_boost_token())
-                .try_balance(user)
-            {
-                Ok(balance) => balance.unwrap() as u128,
-                // if trustline is not established, return 0
-                Err(_) => 0,
-            }
-        } else {
-            0
-        }
-    }
-
-    pub fn get_total_locked(&self) -> u128 {
-        if self.storage.has_reward_boost_feed() {
-            RewardBoostFeedClient::new(&self.env, &self.storage.get_reward_boost_feed())
-                .total_supply()
-        } else {
-            0
         }
     }
 

@@ -141,8 +141,6 @@ fn init_standard_pool(
     let token_wasm_hash = get_token_hash(e);
     let rewards = get_rewards_manager(e);
     let reward_token = rewards.storage().get_reward_token();
-    let reward_boost_token = rewards.storage().get_reward_boost_token();
-    let reward_boost_feed = rewards.storage().get_reward_boost_feed();
     let access_control = AccessControl::new(e);
 
     // privileged users
@@ -184,8 +182,6 @@ fn init_standard_pool(
         },
         reward_config: RewardConfig {
             reward_token,
-            reward_boost_token,
-            reward_boost_feed,
         },
         plane,
     };

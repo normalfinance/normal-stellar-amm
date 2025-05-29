@@ -26,14 +26,6 @@ pub trait AdminInterface {
     // Set reward token address
     fn set_reward_token(e: Env, admin: Address, reward_token: Address);
 
-    // Set rewards boost config: token and feed
-    fn set_reward_boost_config(
-        e: Env,
-        admin: Address,
-        reward_boost_token: Address,
-        reward_boost_feed: Address
-    );
-
     // Set list of supported token b addresses
     fn set_supported_quote_tokens(e: Env, admin: Address, tokens: Vec<Address>);
 }

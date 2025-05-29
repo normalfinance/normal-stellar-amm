@@ -11,9 +11,17 @@ use soroban_sdk::token::{
 };
 use soroban_sdk::String;
 use soroban_sdk::{ testutils::Address as _, Address, BytesN, Env, Symbol, Vec };
+use utils::constant::PERCENTAGE_PRECISION_U64;
+use utils::oracle::{
+    OracleGuardRails,
+    OracleSource,
+    PriceDivergenceGuardRails,
+    ValidityGuardRails,
+};
 use utils::storage::{
     InitializeAllParams,
     InitializeParams,
+    OracleAndSource,
     OraclePair,
     PrivilegedAddresses,
     RewardConfig,
@@ -55,6 +63,7 @@ pub(crate) struct Setup<'a> {
     pub(crate) base_oracle_client: MockPriceOracleClient<'a>,
     pub(crate) quote_oracle_price: i128,
     pub(crate) quote_oracle_client: MockPriceOracleClient<'a>,
+    pub(crate) oracle_guard_rails: OracleGuardRails,
     pub(crate) users: vec::Vec<Address>,
     pub(crate) token1: SorobanTokenClient<'a>,
     pub(crate) token1_admin_client: SorobanTokenAdminClient<'a>,
@@ -62,8 +71,6 @@ pub(crate) struct Setup<'a> {
     pub(crate) token2_admin_client: SorobanTokenAdminClient<'a>,
     pub(crate) token_reward: SorobanTokenClient<'a>,
     pub(crate) token_reward_admin_client: SorobanTokenAdminClient<'a>,
-    pub(crate) reward_boost_token: SorobanTokenClient<'a>,
-    pub(crate) reward_boost_feed: reward_boost_feed::Client<'a>,
     pub(crate) token_share: ShareTokenClient<'a>,
     pub(crate) liq_pool: LiquidityPoolClient<'a>,
     pub(crate) plane: PoolPlaneClient<'a>,
@@ -115,13 +122,6 @@ impl Setup<'_> {
         } else {
             create_token_contract(&e, &admin)
         };
-        let reward_boost_token = create_token_contract(&e, &admin);
-        let reward_boost_feed = create_reward_boost_feed_contract(
-            &e,
-            &admin,
-            &operations_admin,
-            &emergency_pause_admin
-        );
 
         let plane = create_plane_contract(&e);
 
@@ -145,12 +145,18 @@ impl Setup<'_> {
         let quote_oracle_price = 0_5000000; // $0.50
 
         let oracles = OraclePair {
-            base_oracle: e.register(MockPriceOracleWASM, ()),
-            quote_oracle: e.register(MockPriceOracleWASM, ()),
+            base_oracle: OracleAndSource {
+                address: e.register(MockPriceOracleWASM, ()),
+                source: OracleSource::Reflector,
+            },
+            quote_oracle: OracleAndSource {
+                address: e.register(MockPriceOracleWASM, ()),
+                source: OracleSource::Reflector,
+            },
         };
 
-        let base_oracle_client = MockPriceOracleClient::new(&e, &oracles.base_oracle);
-        let quote_oracle_client = MockPriceOracleClient::new(&e, &oracles.quote_oracle);
+        let base_oracle_client = MockPriceOracleClient::new(&e, &oracles.base_oracle.address);
+        let quote_oracle_client = MockPriceOracleClient::new(&e, &oracles.quote_oracle.address);
 
         // Setup base oracle
         base_oracle_client.set_data(
@@ -178,19 +184,29 @@ impl Setup<'_> {
             &e.ledger().timestamp()
         );
 
+        let oracle_guard_rails = OracleGuardRails {
+            price_divergence: PriceDivergenceGuardRails {
+                oracle_twap_percent_divergence: PERCENTAGE_PRECISION_U64 / 2,
+            },
+            validity: ValidityGuardRails {
+                slots_before_stale_for_amm: 10, // ~5 seconds
+                confidence_interval_max_size: 20_000, // 2% of price
+                too_volatile_ratio: 5, // 5x or 80% down
+            },
+        };
+
         let liq_pool = create_liqpool_contract(
             &e,
             &admin,
             &router,
             &oracles,
+            &oracle_guard_rails,
             &target_asset,
             &install_token_wasm(&e),
             &String::from_str(&e, "nSOL / XLM Pool Token"),
             &String::from_str(&e, "nSOL-LP"),
             &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
             &reward_token.address,
-            &reward_boost_token.address,
-            &reward_boost_feed.address,
             config.liq_pool_fee,
             &plane.address
         );
@@ -227,6 +243,7 @@ impl Setup<'_> {
             base_oracle_client,
             quote_oracle_price,
             quote_oracle_client,
+            oracle_guard_rails,
             users,
             token1,
             token1_admin_client,
@@ -243,8 +260,6 @@ impl Setup<'_> {
             operations_admin,
             pause_admin,
             emergency_pause_admin,
-            reward_boost_token,
-            reward_boost_feed,
         }
     }
 
@@ -289,40 +304,18 @@ pub(crate) fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
     PoolPlaneClient::new(e, &e.register(pool_plane::WASM, ()))
 }
 
-mod reward_boost_feed {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/soroban_locker_feed_contract.wasm"
-    );
-}
-
-pub(crate) fn create_reward_boost_feed_contract<'a>(
-    e: &Env,
-    admin: &Address,
-    operations_admin: &Address,
-    emergency_admin: &Address
-) -> reward_boost_feed::Client<'a> {
-    reward_boost_feed::Client::new(
-        e,
-        &e.register(
-            reward_boost_feed::WASM,
-            reward_boost_feed::Args::__constructor(admin, operations_admin, emergency_admin)
-        )
-    )
-}
-
 pub fn create_liqpool_contract<'a>(
     e: &Env,
     admin: &Address,
     router: &Address,
     oracles: &OraclePair,
+    oracle_guard_rails: &OracleGuardRails,
     target_asset: &Asset,
     token_wasm_hash: &BytesN<32>,
     lp_token_name: &String,
     lp_token_symbol: &String,
     tokens: &Vec<Address>,
     reward_token: &Address,
-    reward_boost_token: &Address,
-    reward_boost_feed: &Address,
     fee_fraction: u32,
     plane: &Address
 ) -> LiquidityPoolClient<'a> {
@@ -339,6 +332,7 @@ pub fn create_liqpool_contract<'a>(
             },
             router: router.clone(),
             oracles: oracles.clone(),
+            oracle_guard_rails: oracle_guard_rails.clone(),
             target_asset: target_asset.clone(),
             tokens: tokens.clone(),
             lp_token_info: TokenInitInfo {
@@ -350,8 +344,6 @@ pub fn create_liqpool_contract<'a>(
         },
         reward_config: RewardConfig {
             reward_token: reward_token.clone(),
-            reward_boost_token: reward_boost_token.clone(),
-            reward_boost_feed: reward_boost_feed.clone(),
         },
         plane: plane.clone(),
     };

@@ -63,14 +63,12 @@ impl Setup<'_> {
         let pool_hash = install_liq_pool_hash(&e);
         let token_hash = install_token_wasm(&e);
         let plane = deploy_plane_contract(&e);
-        let boost_feed = create_reward_boost_feed_contract(&e, &admin);
         let router = deploy_liqpool_router_contract(e.clone());
         router.init_admin(&admin);
         router.set_pool_hash(&admin, &pool_hash);
         router.set_token_hash(&admin, &token_hash);
         router.set_reward_token(&admin, &token_a.address);
         router.set_pools_plane(&admin, &plane);
-        router.set_reward_boost_config(&admin, &token_a.address, &boost_feed.address);
 
         let oracles = OraclePair {
             base_oracle: e.register(MockPriceOracleWASM, ()),
@@ -180,12 +178,6 @@ fn deploy_plane_contract<'a>(e: &Env) -> Address {
     Client::new(e, &e.register(WASM, ())).address
 }
 
-mod reward_boost_feed {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/soroban_locker_feed_contract.wasm"
-    );
-}
-
 pub(crate) mod swap_fee_collector {
     soroban_sdk::contractimport!(
         file = "../../target/wasm32v1-none/release/soroban_liquidity_pool_provider_swap_fee_contract.wasm"
@@ -196,15 +188,3 @@ pub(crate) fn install_swap_fee_collector_wasm(e: &Env) -> BytesN<32> {
     e.deployer().upload_contract_wasm(swap_fee_collector::WASM)
 }
 
-pub(crate) fn create_reward_boost_feed_contract<'a>(
-    e: &Env,
-    admin: &Address
-) -> reward_boost_feed::Client<'a> {
-    reward_boost_feed::Client::new(
-        e,
-        &e.register(
-            reward_boost_feed::WASM,
-            reward_boost_feed::Args::__constructor(admin, admin, admin)
-        )
-    )
-}

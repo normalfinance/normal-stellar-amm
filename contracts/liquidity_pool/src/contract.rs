@@ -122,11 +122,6 @@ impl LiquidityPoolCrunch for LiquidityPool {
         // https://github.com/stellar/rs-soroban-env/issues/827
         Self::init_pools_plane(e.clone(), params.plane);
         Self::initialize(e.clone(), params.base);
-        Self::initialize_boost_config(
-            e.clone(),
-            params.reward_config.reward_boost_token,
-            params.reward_config.reward_boost_feed
-        );
         Self::initialize_rewards_config(e.clone(), params.reward_config.reward_token);
     }
 }
@@ -1208,30 +1203,6 @@ impl RewardsTrait for LiquidityPool {
         rewards.storage().put_reward_token(reward_token);
     }
 
-    fn initialize_boost_config(e: Env, reward_boost_token: Address, reward_boost_feed: Address) {
-        let rewards_storage = get_rewards_manager(&e).storage();
-        if rewards_storage.has_reward_boost_token() {
-            panic_with_error!(&e, LiquidityPoolError::RewardsAlreadyInitialized);
-        }
-
-        rewards_storage.put_reward_boost_token(reward_boost_token);
-        rewards_storage.put_reward_boost_feed(reward_boost_feed);
-    }
-
-    fn set_reward_boost_config(
-        e: Env,
-        admin: Address,
-        reward_boost_token: Address,
-        reward_boost_feed: Address
-    ) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-
-        let rewards_storage = get_rewards_manager(&e).storage();
-        rewards_storage.put_reward_boost_token(reward_boost_token);
-        rewards_storage.put_reward_boost_feed(reward_boost_feed);
-    }
-
     // Sets the rewards configuration.
     //
     // # Arguments
@@ -1339,8 +1310,6 @@ impl RewardsTrait for LiquidityPool {
                 manager.get_working_balance(&user, user_shares) as i128,
             ),
             (Symbol::new(&e, "working_supply"), manager.get_working_supply(total_shares) as i128),
-            (Symbol::new(&e, "boost_balance"), manager.get_user_boost_balance(&user) as i128),
-            (Symbol::new(&e, "boost_supply"), manager.get_total_locked() as i128),
         ]);
 
         // display actual values
