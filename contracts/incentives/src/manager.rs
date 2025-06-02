@@ -1,7 +1,6 @@
-use crate::constants::REWARD_PRECISION;
 use crate::errors::RewardsError;
 use crate::storage::{
-    BoostFeedStorageTrait, BoostTokenStorageTrait, PoolRewardConfig, PoolRewardData,
+    PoolRewardConfig, PoolRewardData,
     PoolRewardsStorageTrait, RewardInvDataStorageTrait, RewardTokenStorageTrait, Storage,
     UserRewardData, UserRewardsStorageTrait, WorkingBalancesStorageTrait,
 };
@@ -40,7 +39,7 @@ impl Manager {
         total_share: u128,
     ) -> u128 {
         // b_u = 2.5 * min(0.4 * b_u + 0.6 * S * w_i / W, b_u)
-        let lock_balance = self.get_user_boost_balance(&user);
+        // let lock_balance = self.get_user_boost_balance(&user);
         let total_locked = self.get_total_locked();
 
         let mut adjusted_balance = share_balance;
