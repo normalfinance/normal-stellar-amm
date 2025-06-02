@@ -1,1 +1,0 @@
-pub(crate) const REWARD_PRECISION: u128 = 1_000_000_000_000_000_0000000;

@@ -10,6 +10,7 @@ use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{panic_with_error, token::TokenClient as Client, Address, Env, Vec};
 use utils::bump::bump_instance;
+use utils::constant::REWARD_PRECISION;
 
 // `Manager` orchestrates the reward logic, pulling data and methods from `Storage`.
 // It relies on Storage sub-traits to handle actual storage I/O.

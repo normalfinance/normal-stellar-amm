@@ -31,3 +31,10 @@ pub const FEE_MULTIPLIER: u128 = 10_000;
 // Pool Router
 pub const MAX_POOLS_FOR_PAIR: u32 = 1;
 pub const CONSTANT_PRODUCT_FEE_AVAILABLE: [u32; 3] = [10, 30, 100];
+
+// Swap Fee
+pub const FEE_DENOMINATOR: u32 = 10000;
+
+// Incentives
+pub const REWARD_PRECISION: u128 = 1_000_000_000_000_000_0000000;
+
