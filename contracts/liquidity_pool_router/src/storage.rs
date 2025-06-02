@@ -132,12 +132,7 @@ generate_instance_storage_getter_and_setter_with_default!(
     u128,
     0
 );
-generate_instance_storage_getter_and_setter!(pool_plane, DataKey::PoolPlane, Address);
-generate_instance_storage_getter_and_setter!(
-    liquidity_calculator,
-    DataKey::LiquidityCalculator,
-    Address
-);
+generate_instance_storage_getter_and_setter!(pool_plane, DataKey::PoolPlane, Address);;
 generate_instance_storage_getter_and_setter!(
     supported_quote_tokens,
     DataKey::SupportedQuoteTokens,

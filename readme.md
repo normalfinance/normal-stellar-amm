@@ -32,7 +32,6 @@ Normal is a synthetic asset protocol enabling investors to trade any crypto asse
 - **token** - [SEP-0041](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0041.md) compatible token smart contract designed for liquidity pool share management
 - **liquidity_pool_router** - entry point and catalogue of liquidity pools which is capable to deploy new pools if necessary
 - **liquidity_pool_plane** - contract designed to store minimum information about any liquidity pool: type, parameters, reserves. being updated on every action with the pool (deposit, swap, withdraw, parameters update, etc)
-- **liquidity_pool_liquidity_calculator** - smart contract containing pools liquidity calculation logic which is capable to compare many pools at once
 
 ![Normal AMM Swap Flow](./docs/images/swap.png "Swap Flow")
 

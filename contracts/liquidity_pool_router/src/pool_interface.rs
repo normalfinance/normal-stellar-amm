@@ -69,14 +69,6 @@ pub trait LiquidityPoolInterfaceTrait {
         pool_index: BytesN<32>,
         share_amount: u128
     ) -> u128;
-
-    fn get_liquidity(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> U256;
-
-    // Set liquidity calculator address. it's separate contract optimized to estimate liquidity for multiple pools
-    fn set_liquidity_calculator(e: Env, admin: Address, calculator: Address);
-
-    // Get liquidity calculator address
-    fn get_liquidity_calculator(e: Env) -> Address;
 }
 
 pub trait RewardsInterfaceTrait {

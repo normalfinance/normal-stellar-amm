@@ -247,26 +247,6 @@ fn test_set_pools_router() {
 }
 
 #[test]
-fn test_set_liquidity_calculator() {
-    let setup = Setup::default();
-    let router = setup.router;
-    let liq_calculator = Address::generate(&setup.env);
-    let user = Address::generate(&setup.env);
-
-    for (addr, is_ok) in [
-        (user, false),
-        (setup.admin, true),
-        (setup.emergency_admin, false),
-        (setup.rewards_admin, false),
-        (setup.operations_admin, false),
-        (setup.pause_admin, false),
-        (setup.emergency_pause_admin, false),
-    ] {
-        assert_eq!(router.try_set_liquidity_calculator(&addr, &liq_calculator).is_ok(), is_ok);
-    }
-}
-
-#[test]
 fn test_set_privileged_addresses() {
     let setup = Setup::default();
     let router = setup.router;
