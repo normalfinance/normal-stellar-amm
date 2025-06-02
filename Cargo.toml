@@ -15,7 +15,7 @@ utils = { path = "contracts/utils" }
 access_control = { path = "contracts/access_control" }
 token_share = { path = "contracts/token_share" }
 token_synthetic = { path = "contracts/token_synthetic" }
-rewards = { path = "contracts/rewards" }
+incentives = { path = "contracts/incentives" }
 upgrade = { path = "contracts/upgrade" }
 sep-40-oracle = "1.2.2"
 
