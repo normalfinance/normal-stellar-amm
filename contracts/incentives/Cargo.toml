@@ -1,5 +1,5 @@
 [package]
-name = "rewards"
+name = "incentives"
 version.workspace = true
 edition = "2021"
 publish = false
