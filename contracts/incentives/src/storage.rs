@@ -1,5 +1,5 @@
-use soroban_sdk::{contracttype, panic_with_error, Address, Env, Map, Vec};
-use utils::{bump::{bump_instance, bump_persistent}, errors::storage_errors::StorageError};
+use soroban_sdk::{ contracttype, panic_with_error, Address, Env, Map, Vec };
+use utils::{ bump::{ bump_instance, bump_persistent }, errors::storage_errors::StorageError };
 
 // ------------------------------------
 // Data Structures
@@ -42,9 +42,8 @@ enum DataKey {
     // User-level data
     UserRewardData(Address),
 
-    // Reward invariants (legacy + new)
-    RewardInvData(u32, u64),   // legacy
-    RewardInvDataV2(u32, u64), // new
+    // Reward invariants
+    RewardInvDataV2(u32, u64),
 
     // Reward tokens & lock tokens
     RewardStorage,
@@ -91,18 +90,11 @@ pub trait WorkingBalancesStorageTrait {
 
 impl WorkingBalancesStorageTrait for Storage {
     fn get_working_balance(&self, user: &Address) -> u128 {
-        self.env
-            .storage()
-            .persistent()
-            .get(&DataKey::WorkingBalance(user.clone()))
-            .unwrap()
+        self.env.storage().persistent().get(&DataKey::WorkingBalance(user.clone())).unwrap()
     }
 
     fn has_working_balance(&self, user: &Address) -> bool {
-        self.env
-            .storage()
-            .persistent()
-            .has(&DataKey::WorkingBalance(user.clone()))
+        self.env.storage().persistent().has(&DataKey::WorkingBalance(user.clone()))
     }
 
     fn set_working_balance(&self, user: &Address, value: u128) {
@@ -112,19 +104,12 @@ impl WorkingBalancesStorageTrait for Storage {
     }
 
     fn get_working_supply(&self) -> u128 {
-        self.env
-            .storage()
-            .instance()
-            .get(&DataKey::WorkingSupply)
-            .unwrap()
+        self.env.storage().instance().get(&DataKey::WorkingSupply).unwrap()
     }
 
     fn set_working_supply(&self, value: u128) {
         bump_instance(&self.env);
-        self.env
-            .storage()
-            .instance()
-            .set(&DataKey::WorkingSupply, &value);
+        self.env.storage().instance().set(&DataKey::WorkingSupply, &value);
     }
 
     fn has_working_supply(&self) -> bool {
@@ -146,44 +131,35 @@ pub trait PoolRewardsStorageTrait {
 
 impl PoolRewardsStorageTrait for Storage {
     fn get_pool_reward_config(&self) -> PoolRewardConfig {
-        match self
-            .env
-            .storage()
-            .instance()
-            .get(&DataKey::PoolRewardConfig)
-        {
+        match self.env.storage().instance().get(&DataKey::PoolRewardConfig) {
             Some(v) => v,
-            None => PoolRewardConfig {
-                tps: 0,
-                expired_at: 0,
-            },
+            None =>
+                PoolRewardConfig {
+                    tps: 0,
+                    expired_at: 0,
+                },
         }
     }
 
     fn set_pool_reward_config(&self, config: &PoolRewardConfig) {
-        self.env
-            .storage()
-            .instance()
-            .set(&DataKey::PoolRewardConfig, config);
+        self.env.storage().instance().set(&DataKey::PoolRewardConfig, config);
     }
 
     fn get_pool_reward_data(&self) -> PoolRewardData {
         match self.env.storage().instance().get(&DataKey::PoolRewardData) {
             Some(v) => v,
-            None => PoolRewardData {
-                block: 0,
-                accumulated: 0,
-                claimed: 0,
-                last_time: 0,
-            },
+            None =>
+                PoolRewardData {
+                    block: 0,
+                    accumulated: 0,
+                    claimed: 0,
+                    last_time: 0,
+                },
         }
     }
 
     fn set_pool_reward_data(&self, data: &PoolRewardData) {
-        self.env
-            .storage()
-            .instance()
-            .set(&DataKey::PoolRewardData, data);
+        self.env.storage().instance().set(&DataKey::PoolRewardData, data);
     }
 }
 
@@ -199,22 +175,14 @@ pub trait UserRewardsStorageTrait {
 
 impl UserRewardsStorageTrait for Storage {
     fn get_user_reward_data(&self, user: &Address) -> Option<UserRewardData> {
-        match self
-            .env
-            .storage()
-            .persistent()
-            .get(&DataKey::UserRewardData(user.clone()))
-        {
+        match self.env.storage().persistent().get(&DataKey::UserRewardData(user.clone())) {
             Some(data) => data,
             None => None,
         }
     }
 
     fn set_user_reward_data(&self, user: &Address, config: &UserRewardData) {
-        self.env
-            .storage()
-            .persistent()
-            .set(&DataKey::UserRewardData(user.clone()), config);
+        self.env.storage().persistent().set(&DataKey::UserRewardData(user.clone()), config);
     }
 
     fn bump_user_reward_data(&self, user: &Address) {
@@ -241,21 +209,7 @@ impl RewardInvDataStorageTrait for Storage {
         let value = match self.env.storage().persistent().get::<_, Vec<u128>>(&key) {
             Some(v) => v,
             None => {
-                // fallback to legacy key
-                let key_old = DataKey::RewardInvData(pow, page_number);
-                let old_result: Option<Map<u64, u128>> =
-                    self.env.storage().persistent().get(&key_old);
-                match old_result {
-                    Some(legacy_map) => {
-                        let mut new_vec = Vec::new(&self.env);
-                        for (_, local_value) in legacy_map {
-                            new_vec.push_back(local_value);
-                        }
-                        self.set_reward_inv_data(pow, page_number, new_vec.clone());
-                        new_vec
-                    }
-                    None => return Vec::new(&self.env),
-                }
+                return Vec::new(&self.env);
             }
         };
 
@@ -290,10 +244,7 @@ impl RewardTokenStorageTrait for Storage {
     }
 
     fn put_reward_token(&self, contract: Address) {
-        self.env
-            .storage()
-            .instance()
-            .set(&DataKey::RewardToken, &contract);
+        self.env.storage().instance().set(&DataKey::RewardToken, &contract);
     }
 
     fn has_reward_token(&self) -> bool {
