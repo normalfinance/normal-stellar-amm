@@ -15,7 +15,7 @@ pub(crate) struct Setup<'a> {
     pub(crate) admin: Address,
     pub(crate) operator: Address,
     pub(crate) emergency_admin: Address,
-    pub(crate) fee_collector_factory: contracts::swap_fee_factory::Client<'a>,
+    pub(crate) fee_collector: contracts::swap_fee::Client<'a>,
     pub(crate) router: contracts::router::Client<'a>,
     pub(crate) fee_destination: Address,
     pub(crate) reward_token: Address,
@@ -55,7 +55,7 @@ impl Setup<'_> {
         router.set_reward_token(&admin, &reward_token.address);
         router.set_pools_plane(&admin, &plane.address);
 
-        let fee_collector_factory = deploy_provider_swap_fee_factory(
+        let fee_collector = deploy_provider_swap_fee_contract(
             &e,
             &admin,
             &emergency_admin,
@@ -68,7 +68,7 @@ impl Setup<'_> {
             operator,
             emergency_admin,
             fee_destination,
-            fee_collector_factory,
+            fee_collector,
             router,
             reward_token: reward_token.address,
             locked_token: locked_token.address,
@@ -97,22 +97,6 @@ impl Setup<'_> {
         );
         (contracts::constant_product_pool::Client::new(&self.env, &pool_address), pool_hash)
     }
-
-    pub(crate) fn deploy_swap_fee_contract(
-        &self,
-        operator: &Address,
-        fee_destination: &Address,
-        max_fee_fraction: u32
-    ) -> contracts::swap_fee::Client {
-        contracts::swap_fee::Client::new(
-            &self.env,
-            &self.fee_collector_factory.deploy_swap_fee_contract(
-                &operator,
-                &fee_destination,
-                &max_fee_fraction
-            )
-        )
-    }
 }
 
 pub(crate) fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanTokenClient<'a> {
@@ -126,21 +110,15 @@ pub(crate) fn get_token_admin_client<'a>(
     SorobanTokenAdminClient::new(e, address)
 }
 
-pub fn deploy_provider_swap_fee_factory<'a>(
+pub fn deploy_provider_swap_fee_contract<'a>(
     e: &Env,
     admin: &Address,
     emergency_admin: &Address,
     router: &Address
-) -> contracts::swap_fee_factory::Client<'a> {
-    let swap_fee_wasm = e.deployer().upload_contract_wasm(contracts::swap_fee::WASM);
-    contracts::swap_fee_factory::Client::new(
+) -> contracts::swap_fee::Client<'a> {
+    contracts::swap_fee::Client::new(
         e,
-        &e.register(contracts::swap_fee_factory::WASM, (
-            admin,
-            emergency_admin,
-            router,
-            swap_fee_wasm,
-        ))
+        &e.register(contracts::swap_fee::WASM, (admin, emergency_admin, router))
     )
 }
 

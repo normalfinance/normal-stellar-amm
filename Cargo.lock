@@ -653,6 +653,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
+name = "incentives"
+version = "0.1.0"
+dependencies = [
+ "soroban-fixed-point-math",
+ "soroban-sdk",
+ "utils",
+]
+
+[[package]]
 name = "indexmap"
 version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -907,15 +916,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rewards"
-version = "0.1.0"
-dependencies = [
- "soroban-fixed-point-math",
- "soroban-sdk",
- "utils",
-]
-
-[[package]]
 name = "rfc6979"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1158,21 +1158,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "soroban-fees-collector-contract"
-version = "0.1.0"
-dependencies = [
- "access_control",
- "soroban-sdk",
- "upgrade",
-]
-
-[[package]]
 name = "soroban-fixed-point-math"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96667fe060746279499e44bd9636e195191894324124f1368e0ab115a143cf62"
 dependencies = [
  "soroban-sdk",
+]
+
+[[package]]
+name = "soroban-insurance-fund-contract"
+version = "0.1.0"
+dependencies = [
+ "access_control",
+ "paste",
+ "soroban-fixed-point-math",
+ "soroban-sdk",
+ "upgrade",
+ "utils",
 ]
 
 [[package]]
@@ -1194,9 +1197,9 @@ name = "soroban-liquidity-pool-contract"
 version = "0.1.0"
 dependencies = [
  "access_control",
+ "incentives",
  "paste",
  "rand",
- "rewards",
  "sep-40-oracle",
  "soroban-fixed-point-math",
  "soroban-sdk",
@@ -1204,16 +1207,6 @@ dependencies = [
  "token_synthetic",
  "upgrade",
  "utils",
-]
-
-[[package]]
-name = "soroban-liquidity-pool-liquidity-calculator-contract"
-version = "0.1.0"
-dependencies = [
- "access_control",
- "soroban-fixed-point-math",
- "soroban-sdk",
- "upgrade",
 ]
 
 [[package]]
@@ -1236,24 +1229,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "soroban-liquidity-pool-provider-swap-fee-factory-contract"
-version = "0.1.0"
-dependencies = [
- "access_control",
- "paste",
- "sep-40-oracle",
- "soroban-sdk",
- "upgrade",
- "utils",
-]
-
-[[package]]
 name = "soroban-liquidity-pool-router-contract"
 version = "0.1.0"
 dependencies = [
  "access_control",
+ "incentives",
  "paste",
- "rewards",
  "sep-40-oracle",
  "soroban-sdk",
  "token_share",

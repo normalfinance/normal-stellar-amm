@@ -9,11 +9,6 @@ pub(crate) mod swap_fee {
         file = "../../wasm/soroban_liquidity_pool_provider_swap_fee_contract.wasm"
     );
 }
-pub(crate) mod swap_fee_factory {
-    soroban_sdk::contractimport!(
-        file = "../../wasm/soroban_liquidity_pool_provider_swap_fee_factory_contract.wasm"
-    );
-}
 pub(crate) mod router {
     soroban_sdk::contractimport!(file = "../../wasm/soroban_liquidity_pool_router_contract.wasm");
 }

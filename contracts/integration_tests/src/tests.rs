@@ -1,7 +1,7 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::testutils::{ create_token_contract, get_token_admin_client, Setup };
+use crate::testutils::{ create_token_contract, deploy_provider_swap_fee_contract, get_token_admin_client, Setup };
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::{ vec, Address, Vec };
@@ -53,7 +53,7 @@ fn test_integration() {
     );
 
     // deploy provider swap fee contract
-    let swap_fee = setup.deploy_swap_fee_contract(&setup.operator, &setup.admin, 1000);
+    let swap_fee = deploy_provider_swap_fee_contract(&setup.env, &setup.operator, &setup.admin, &setup.admin);
 
     // now swap with additional provider fee
     xlm_admin.mint(&user, &10_0000000);
