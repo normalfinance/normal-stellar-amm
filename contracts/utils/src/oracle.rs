@@ -22,6 +22,7 @@ pub enum OracleSource {
     #[default]
     Reflector,
     // Band,
+    // DIA,
     QuoteAsset,
 }
 
