@@ -40,6 +40,9 @@ pub struct Pool {
 
     pub oracle_guard_rails: OracleGuardRails,
 
+    // The pool's claim on the insurance fund
+    pub insurance_claim: InsuranceClaim,
+
     pub expiry_ts: u64,
     pub expiry_price: u128,
 }
@@ -217,4 +220,23 @@ impl Pool {
             1;
         (result, dy_w_fee - out_amount)
     }
+}
+
+#[contracttype]
+#[derive(Default, Clone, Eq, PartialEq, Debug)]
+#[repr(C)]
+pub struct InsuranceClaim {
+    /// The amount of revenue last settled
+    /// Positive if funds left the pool,
+    /// negative if funds were pulled into the pool
+    /// precision: QUOTE_PRECISION
+    pub rev_withdraw_since_last_settle: i64,
+    /// The max amount of insurance that the pool can use to resolve liquidity deficits
+    /// precision: QUOTE_PRECISION
+    pub quote_max_insurance: u64,
+    /// The amount of insurance that has been used to resolve liquidity deficits
+    /// precision: QUOTE_PRECISION
+    pub quote_settled_insurance: u64,
+    /// The last time revenue was settled in/out of the pool
+    pub last_revenue_withdraw_ts: i64,
 }
