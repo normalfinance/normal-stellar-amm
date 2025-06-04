@@ -63,6 +63,19 @@ impl ProviderSwapFeeCollector {
         set_buffer_fraction(&e, &buffer_fraction);
     }
 
+    pub fn update_buffer_fraction(e: Env, operator: Address, buffer_fraction: u32) {
+        operator.require_auth();
+        if operator != get_operator(&e) {
+            panic_with_error!(&e, Error::Unauthorized);
+        }
+
+        // if buffer_fraction < MIN_BUFFER_FRACTION {
+        //     panic_with_error!(&e, Error::FeeFractionTooHigh);
+        // }
+
+        set_buffer_fraction(&e, &buffer_fraction);
+    }
+
     // get_max_swap_fee_fraction
     // Returns the maximum swap fee in basis points.
     //
@@ -161,7 +174,7 @@ impl ProviderSwapFeeCollector {
     pub fn claim_fees_and_swap(
         e: Env,
         operator: Address,
-        swaps_chain: Vec<(Vec<Address>, BytesN<32>, Address)>,
+        swap: (Vec<Address>, BytesN<32>, Address),
         token: Address,
         out_min: u128
     ) -> u128 {
@@ -169,7 +182,7 @@ impl ProviderSwapFeeCollector {
         if operator != get_operator(&e) {
             panic_with_error!(&e, Error::Unauthorized);
         }
-        let (_, _, token_out) = match swaps_chain.last() {
+        let (_, _, token_out) = match swap.last() {
             Some(v) => v,
             None => panic_with_error!(&e, Error::PathIsEmpty),
         };

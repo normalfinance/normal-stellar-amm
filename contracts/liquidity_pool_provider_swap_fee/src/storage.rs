@@ -16,7 +16,7 @@ enum DataKey {
     Buffer, // Address of the Buffer.
     FeeDestination, // Fee destination address
     MaxSwapFeeFraction, // Max swap fee in basis points (100 = 1%)
-    BufferFraction, //
+    BufferFraction, // The portion of all fees to settle to the Buffer in basis points (100 = 1%)
 }
 
 generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
@@ -28,8 +28,4 @@ generate_instance_storage_getter_and_setter!(
     DataKey::MaxSwapFeeFraction,
     u32
 );
-generate_instance_storage_getter_and_setter!(
-    buffer_fraction,
-    DataKey::BufferFraction,
-    u32
-);
+generate_instance_storage_getter_and_setter!(buffer_fraction, DataKey::BufferFraction, u32);
