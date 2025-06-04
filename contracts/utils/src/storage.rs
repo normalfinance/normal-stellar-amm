@@ -1,5 +1,5 @@
 use sep_40_oracle::Asset;
-use soroban_sdk::{ contracttype, Address, BytesN, String, Vec };
+use soroban_sdk::{ contracttype, Address, BytesN, String, Symbol, Vec };
 
 use crate::oracle::{ OracleSource };
 
@@ -141,4 +141,38 @@ pub struct LiquidityPoolInfo {
     pub pool_address: Address,
     pub pool_response: PoolResponse,
     pub total_fee_bps: u32,
+}
+
+// Oracle Registry
+
+//     ______     _______        __       ______   ___       _______
+//    /    " \   /"      \      /""\     /" _  "\ |"  |     /"     "|
+//   // ____  \ |:        |    /    \   (: ( \___)||  |    (: ______)
+//  /  /    ) :)|_____/   )   /' /\  \   \/ \     |:  |     \/    |
+// (: (____/ //  //      /   //  __'  \  //  \ _   \  |___  // ___)_
+//  \        /  |:  __   \  /   /  \\  \(:   _) \ ( \_|:  \(:      "|
+//   \"_____/   |__|  \___)(___/    \___)\_______) \_______)\_______)
+//   _______    _______   _______   __      ________  ___________  _______   ___  ___
+//  /"      \  /"     "| /" _   "| |" \    /"       )("     _   ")/"      \ |"  \/"  |
+// |:        |(: ______)(: ( \___) ||  |  (:   \___/  )__/  \\__/|:        | \   \  /
+// |_____/   ) \/    |   \/ \      |:  |   \___  \       \\_ /   |_____/   )  \\  \/
+//  //      /  // ___)_  //  \ ___ |.  |    __/  \\      |.  |    //      /   /   /
+// |:  __   \ (:      "|(:   _(  _|/\  |\  /" \   :)     \:  |   |:  __   \  /   /
+// |__|  \___) \_______) \_______)(__\_|_)(_______/       \__|   |__|  \___)|___/
+
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[contracttype]
+pub struct AssetId {
+    pub symbol: Symbol, // e.g. "BTC", "ETH"
+    pub chain: Symbol, // optional: e.g. "Ethereum", "Solana"
+}
+
+#[derive(Clone, Debug)]
+#[contracttype]
+pub struct OracleInfo {
+    pub oracle_address: Address,
+    pub source: OracleSource,
+    pub decimals: u32, // Optional: for price normalization
+    pub frozen: bool,
+    pub last_updated: u64,
 }

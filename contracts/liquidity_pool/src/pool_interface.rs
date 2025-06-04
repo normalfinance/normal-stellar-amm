@@ -102,9 +102,6 @@ pub trait AdminInterfaceTrait {
     // Get map of privileged roles
     fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>>;
 
-    //
-    fn set_oracle_guardrails(e: Env, admin: Address, oracle_guard_rails: OracleGuardRails);
-
     // Set target asset tier
     fn set_tier(e: Env, admin: Address, tier: PoolTier);
 

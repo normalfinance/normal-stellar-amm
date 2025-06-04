@@ -161,6 +161,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         );
 
         set_router(&e, &params.router);
+        set_oracle_registry(&e, &params.oracle_registry);
 
         if params.tokens.len() != 2 {
             panic_with_error!(&e, LiquidityPoolValidationError::WrongInputVecSize);
@@ -168,8 +169,6 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         let token_a = params.tokens.get(0).unwrap();
         let token_b = params.tokens.get(1).unwrap();
-
-        // TODO: validate oracle
 
         // deploy and initialize LP token contract
         let share_contract = create_contract(
@@ -203,7 +202,6 @@ impl LiquidityPoolTrait for LiquidityPool {
             fee_fraction: params.fee_fraction,
             base_oracle: params.oracles.base_oracle,
             quote_oracle: params.oracles.quote_oracle,
-            oracle_guard_rails: params.oracle_guard_rails,
             target_asset: params.target_asset,
             expiry_ts: 0,
             expiry_price: 0,
@@ -827,16 +825,6 @@ impl AdminInterfaceTrait for LiquidityPool {
         );
 
         result
-    }
-
-    fn set_oracle_guardrails(e: Env, admin: Address, oracle_guard_rails: OracleGuardRails) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-
-        let mut pool = get_pool(&e);
-        pool.oracle_guard_rails = oracle_guard_rails;
-
-        set_pool(&e, &pool);
     }
 
     fn set_tier(e: Env, admin: Address, tier: PoolTier) {

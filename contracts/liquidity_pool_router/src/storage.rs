@@ -73,7 +73,6 @@ enum DataKey {
     RewardTokensList, // Tokens for reward
     RewardTokensPoolsLiquidity(BytesN<32>), // Per pool liquidity
 
-    OracleGuardRails,
     SupportedQuoteTokens,
 }
 

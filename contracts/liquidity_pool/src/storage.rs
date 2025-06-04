@@ -16,11 +16,10 @@ use crate::pool::Pool;
 enum DataKey {
     ReserveA,
     ReserveB,
-    /// stores historically witnessed oracle data
-    HistoricalOracleData,
-    /// struct containing infrequently updated pool data
+    // struct containing infrequently updated pool data
     Pool,
     Router,
+    OracleRegistry,
     IsKilledSwap,
     IsKilledDeposit,
     IsKilledWithdraw,
@@ -89,19 +88,6 @@ pub fn put_reserve_a(e: &Env, amount: u128) {
     e.storage().instance().set(&DataKey::ReserveA, &amount)
 }
 
-pub fn get_historical_oracle_data(e: &Env) -> HistoricalOracleData {
-    bump_instance(e);
-    match e.storage().instance().get(&DataKey::HistoricalOracleData) {
-        Some(v) => v,
-        None => panic_with_error!(e, StorageError::ValueNotInitialized),
-    }
-}
-
-pub fn put_historical_oracle_data(e: &Env, data: &HistoricalOracleData) {
-    bump_instance(e);
-    e.storage().instance().set(&DataKey::HistoricalOracleData, data)
-}
-
 pub fn put_reserve_b(e: &Env, amount: u128) {
     bump_instance(e);
     e.storage().instance().set(&DataKey::ReserveB, &amount)
@@ -115,6 +101,20 @@ pub(crate) fn set_router(e: &Env, router: &Address) {
 
 pub(crate) fn get_router(e: &Env) -> Address {
     let key = DataKey::Router;
+    match e.storage().instance().get(&key) {
+        Some(v) => v,
+        None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
+}
+
+pub(crate) fn set_oracle_registry(e: &Env, oracle_registry: &Address) {
+    let key = DataKey::OracleRegistry;
+    bump_instance(e);
+    e.storage().instance().set(&key, oracle_registry);
+}
+
+pub(crate) fn get_oracle_registry(e: &Env) -> Address {
+    let key = DataKey::OracleRegistry;
     match e.storage().instance().get(&key) {
         Some(v) => v,
         None => panic_with_error!(e, StorageError::ValueNotInitialized),

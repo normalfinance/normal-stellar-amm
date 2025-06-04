@@ -22,131 +22,6 @@ use crate::{
     storage::{ get_historical_oracle_data, put_historical_oracle_data },
 };
 
-#[contracttype]
-#[derive(Default, Clone, Copy, Eq, PartialEq, Debug)]
-pub struct HistoricalOracleData {
-    /// precision: PRICE_PRECISION
-    pub last_oracle_price: i64,
-    /// precision: PRICE_PRECISION
-    pub last_oracle_conf: u64,
-    /// number of slots since last update
-    pub last_oracle_delay: i64,
-    /// precision: PRICE_PRECISION
-    pub last_oracle_price_twap: i64,
-    /// unix_timestamp of last snapshot
-    pub last_oracle_price_twap_ts: i64,
-}
-
-impl HistoricalOracleData {
-    pub fn default_quote_oracle() -> Self {
-        HistoricalOracleData {
-            last_oracle_price: PRICE_PRECISION_I64,
-            last_oracle_conf: 0,
-            last_oracle_delay: 0,
-            last_oracle_price_twap: PRICE_PRECISION_I64,
-            ..HistoricalOracleData::default()
-        }
-    }
-
-    pub fn default_price(price: i64) -> Self {
-        HistoricalOracleData {
-            last_oracle_price: price,
-            last_oracle_conf: 0,
-            last_oracle_delay: 10,
-            last_oracle_price_twap: price,
-            ..HistoricalOracleData::default()
-        }
-    }
-
-    pub fn default_with_current_oracle(oracle_price_data: OraclePriceData) -> Self {
-        HistoricalOracleData {
-            last_oracle_price: oracle_price_data.price,
-            last_oracle_conf: oracle_price_data.confidence,
-            last_oracle_delay: oracle_price_data.delay,
-            last_oracle_price_twap: oracle_price_data.price,
-            // last_oracle_price_twap_ts: now,
-            ..HistoricalOracleData::default()
-        }
-    }
-}
-
-pub fn get_oracle_price(
-    e: &Env,
-    oracle_source: &OracleSource,
-    price_oracle: &Address,
-    asset: &Asset,
-    now: u64
-) -> OraclePriceData {
-    match oracle_source {
-        OracleSource::Reflector => get_reflector_price(e, price_oracle, asset, now, 1),
-        // OracleSource::Band => None,
-        OracleSource::QuoteAsset =>
-            OraclePriceData {
-                price: PRICE_PRECISION_I64,
-                confidence: 1,
-                delay: 0,
-                has_sufficient_data_points: true,
-            },
-    }
-}
-
-pub fn get_reflector_price(
-    e: &Env,
-    oracle: &Address,
-    asset: &Asset,
-    now: u64,
-    multiple: u128
-) -> OraclePriceData {
-    let price_feed_client = ReflectorOracleClient::new(&e, oracle);
-
-    let oracle_price: i128;
-    let oracle_conf: u64;
-    let mut has_sufficient_data_points: bool = true;
-    let mut oracle_precision: u128;
-    let published_ts: u64;
-
-    let oracle_price_data = price_feed_client.lastprice(asset).unwrap();
-
-    oracle_price = oracle_price_data.price;
-    // FIXME: unsupported by reflector
-    oracle_conf = 0;
-    // oracle_precision = (10_u128).pow(oracle_price_data.exponent.unsigned_abs());
-    oracle_precision = (10_u128).pow(1);
-    published_ts = oracle_price_data.timestamp;
-
-    if oracle_precision <= multiple {
-        // msg!("Multiple larger than oracle precision");
-        panic_with_error!(e, LiquidityPoolError::InvalidOracle);
-    }
-    oracle_precision = oracle_precision.checked_div(multiple).unwrap();
-
-    let mut oracle_scale_mult = 1;
-    let mut oracle_scale_div = 1;
-
-    if oracle_precision > PRICE_PRECISION {
-        oracle_scale_div = oracle_precision.checked_div(PRICE_PRECISION).unwrap();
-    } else {
-        oracle_scale_mult = PRICE_PRECISION.checked_div(oracle_precision).unwrap();
-    }
-
-    let oracle_price_scaled = (oracle_price as i128)
-        .fixed_mul_floor(oracle_scale_mult as i128, oracle_scale_div as i128)
-        .unwrap();
-
-    let oracle_conf_scaled = oracle_conf
-        .fixed_mul_floor(oracle_scale_mult as u64, oracle_scale_div as u64)
-        .unwrap();
-
-    let oracle_delay: i64 = (now as i64).safe_sub(e, published_ts as i64);
-
-    OraclePriceData {
-        price: oracle_price_scaled as i64,
-        confidence: oracle_conf_scaled,
-        delay: oracle_delay,
-        has_sufficient_data_points,
-    }
-}
-
 // Gets the current pool price.
 //
 // # Arguments
@@ -158,24 +33,15 @@ pub fn get_reflector_price(
 //
 // The price of the pool as a u128.
 pub fn get_target_oracle_price(e: &Env, pool: &Pool) -> u128 {
-    let base_oracle_price_data = get_base_oracle_price(e, pool);
-    let quote_oracle_price_data = get_quote_oracle_price(e, pool);
+    let now = e.ledger().timestamp();
+    let base_oracle_price_data = get_base_oracle_price(e, pool, now);
+    let quote_oracle_price_data = get_quote_oracle_price(e, pool, now);
 
     if base_oracle_price_data.price == 0 || quote_oracle_price_data.price == 0 {
         return 0;
     }
 
     // validate price...
-
-    // update historical oracle data
-    let new_historical_data = HistoricalOracleData {
-        last_oracle_price: 0,
-        last_oracle_conf: 0,
-        last_oracle_delay: 0,
-        last_oracle_price_twap: 0,
-        last_oracle_price_twap_ts: 0,
-    };
-    put_historical_oracle_data(e, &new_historical_data);
 
     (quote_oracle_price_data.price as u128)
         .fixed_div_floor(base_oracle_price_data.price as u128, PRICE_PRECISION)
@@ -189,14 +55,19 @@ pub fn get_target_oracle_price(e: &Env, pool: &Pool) -> u128 {
 // # Returns
 //
 // The price of the token as a u128.
-pub fn get_base_oracle_price(e: &Env, pool: &Pool) -> OraclePriceData {
-    get_oracle_price(
-        e,
-        &pool.base_oracle.source,
-        &pool.base_oracle.address,
-        &pool.target_asset,
-        e.ledger().timestamp()
-    )
+pub fn get_base_oracle_price(e: &Env, pool: &Pool, now: u64) -> OraclePriceData {
+    let oracle_price_data: OraclePriceData = e.invoke_contract(
+        &&get_oracle_registry(&e),
+        &Symbol::new(&e, "get_oracle_price"),
+        Vec::from_array(&e, [
+            e.current_contract_address().to_val(),
+            pool.base_oracle.source.to_val(),
+            pool.base_oracle.address.clone().to_val(),
+            pool.target_asset.into_val(&e),
+            now.into_val(&e),
+        ])
+    );
+    oracle_price_data
 }
 
 // Gets the quote (token_b) oracle price.
@@ -206,14 +77,19 @@ pub fn get_base_oracle_price(e: &Env, pool: &Pool) -> OraclePriceData {
 // # Returns
 //
 // The price of the token as a u128.
-pub fn get_quote_oracle_price(e: &Env, pool: &Pool) -> OraclePriceData {
-    get_oracle_price(
-        e,
-        &pool.quote_oracle.source,
-        &pool.quote_oracle.address,
-        &Asset::Other(Symbol::new(e, "XLM")),
-        e.ledger().timestamp()
-    )
+pub fn get_quote_oracle_price(e: &Env, pool: &Pool, now: u64) -> OraclePriceData {
+    let oracle_price_data: OraclePriceData = e.invoke_contract(
+        &&get_oracle_registry(&e),
+        &Symbol::new(&e, "get_oracle_price"),
+        Vec::from_array(&e, [
+            e.current_contract_address().to_val(),
+            pool.quote_oracle.source.to_val(),
+            pool.quote_oracle.address.clone().to_val(),
+            Asset::Other(Symbol::new(e, "XLM")).into_val(&e),
+            now.into_val(&e),
+        ])
+    );
+    oracle_price_data
 }
 
 pub fn block_operation(

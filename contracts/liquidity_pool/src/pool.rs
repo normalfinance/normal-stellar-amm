@@ -34,11 +34,9 @@ pub struct Pool {
     pub fee_fraction: u32, // 1 = 0.01%
 
     // Oracle address for the base (synthetic) asset (i.e. nBTC)
-    pub base_oracle: OracleAndSource,
+    pub base_oracle: AssetId,
     // Oracle address for the quote asset (TokenB) - usually XLM or USDC
-    pub quote_oracle: OracleAndSource,
-
-    pub oracle_guard_rails: OracleGuardRails,
+    pub quote_oracle: AssetId,
 
     // The pool's claim on the insurance fund
     pub insurance_claim: InsuranceClaim,
