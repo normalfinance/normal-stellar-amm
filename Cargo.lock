@@ -1234,6 +1234,7 @@ dependencies = [
 name = "soroban-liquidity-pool-provider-swap-fee-contract"
 version = "0.1.0"
 dependencies = [
+ "incentives",
  "paste",
  "sep-40-oracle",
  "soroban-sdk",

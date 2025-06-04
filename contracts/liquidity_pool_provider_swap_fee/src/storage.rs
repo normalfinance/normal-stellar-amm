@@ -13,16 +13,15 @@ use utils::{
 enum DataKey {
     Router, // Address of the AMM router.
     Operator, // Address of the operator. Operator is capable to configure fees and claim them.
-    InsuranceFund, // Address of the Insurance Fund.
+    Buffer, // Address of the Buffer.
     FeeDestination, // Fee destination address
     MaxSwapFeeFraction, // Max swap fee in basis points (100 = 1%)
-    MinFeeInsuranceFraction, //
-    UserFeeCheckpointA,
+    BufferFraction, //
 }
 
 generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
 generate_instance_storage_getter_and_setter!(operator, DataKey::Operator, Address);
-generate_instance_storage_getter_and_setter!(insurance_fund, DataKey::InsuranceFund, Address);
+generate_instance_storage_getter_and_setter!(buffer, DataKey::Buffer, Address);
 generate_instance_storage_getter_and_setter!(fee_destination, DataKey::FeeDestination, Address);
 generate_instance_storage_getter_and_setter!(
     max_swap_fee_fraction,
@@ -30,12 +29,7 @@ generate_instance_storage_getter_and_setter!(
     u32
 );
 generate_instance_storage_getter_and_setter!(
-    min_fee_insurance_fraction,
-    DataKey::MinFeeInsuranceFraction,
+    buffer_fraction,
+    DataKey::BufferFraction,
     u32
-);
-generate_instance_storage_getter_and_setter!(
-    user_fee_checkpoint_a,
-    DataKey::UserFeeCheckpointA,
-    Map<Address, u128>
 );

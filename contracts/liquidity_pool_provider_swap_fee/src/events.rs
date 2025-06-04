@@ -20,7 +20,7 @@ pub(crate) trait ProviderFeeEvents {
 
     fn claim_fee(&self, token: Address, amount: u128, swapped_to: Address, swapped_amount: u128);
 
-    fn settle_fees_to_insurance_fund(&self, token: Address, amount: u128);
+    fn settle_revenue(&self, token: Address, amount: u128);
 }
 
 impl ProviderFeeEvents for Events {
@@ -39,9 +39,9 @@ impl ProviderFeeEvents for Events {
             );
     }
 
-    fn settle_fees_to_insurance_fund(&self, token: Address, amount: u128) {
+    fn settle_revenue(&self, token: Address, amount: u128) {
         self.env()
             .events()
-            .publish((Symbol::new(self.env(), "insurance_fee"),), (token, amount));
+            .publish((Symbol::new(self.env(), "settle_revenue"),), (token, amount));
     }
 }

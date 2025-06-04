@@ -3,16 +3,14 @@ use crate::events::{ Events, ProviderFeeEvents };
 use crate::helpers;
 use crate::interface::ProviderSwapFeeInterface;
 use crate::storage::{
+    get_buffer,
     get_fee_destination,
-    get_insurance_fund,
     get_max_swap_fee_fraction,
-    get_min_fee_insurance_fraction,
     get_operator,
     get_router,
+    set_buffer,
     set_fee_destination,
-    set_insurance_fund,
     set_max_swap_fee_fraction,
-    set_min_fee_insurance_fraction,
     set_operator,
     set_router,
 };
@@ -45,24 +43,24 @@ impl ProviderSwapFeeCollector {
     //   - router: The address of the swap router contract.
     //   - operator: The address authorized to claim funds.
     //   - fee_destination: The address where fees are sent.
-    //   - insurance_fund: The address of the insurance fund contract.
+    //   - buffer: The address of the insurance fund contract.
     //   - max_swap_fee_fraction: The maximum fee in basis points (bps).
-    //   - min_fee_insurance_fraction: Portion of revenue for insurance in basis points (bps).
+    //   - buffer_fraction: Portion of revenue for insurance in basis points (bps).
     pub fn __constructor(
         e: Env,
         router: Address,
         operator: Address,
         fee_destination: Address,
-        insurance_fund: Address,
+        buffer: Address,
         max_swap_fee_fraction: u32,
-        min_fee_insurance_fraction: u32
+        buffer_fraction: u32
     ) {
         set_router(&e, &router);
         set_operator(&e, &operator);
         set_fee_destination(&e, &fee_destination);
-        set_insurance_fund(&e, &insurance_fund);
+        set_buffer(&e, &buffer);
         set_max_swap_fee_fraction(&e, &max_swap_fee_fraction);
-        set_min_fee_insurance_fraction(&e, &min_fee_insurance_fraction);
+        set_buffer_fraction(&e, &buffer_fraction);
     }
 
     // get_max_swap_fee_fraction
@@ -77,7 +75,7 @@ impl ProviderSwapFeeCollector {
         get_max_swap_fee_fraction(&e)
     }
 
-    // get_min_fee_insurance_fraction
+    // get_buffer_fraction
     // Returns the maximum swap fee in basis points.
     //
     // Arguments:
@@ -85,8 +83,8 @@ impl ProviderSwapFeeCollector {
     //
     // Returns:
     //   - A u32 value representing the maximum fee in basis points.
-    pub fn get_min_fee_insurance_fraction(e: Env) -> u32 {
-        get_min_fee_insurance_fraction(&e)
+    pub fn get_buffer_fraction(e: Env) -> u32 {
+        get_buffer_fraction(&e)
     }
 
     // get_router
@@ -113,7 +111,7 @@ impl ProviderSwapFeeCollector {
         get_fee_destination(&e)
     }
 
-    // get_insurance_fund
+    // get_buffer
     // Returns the address where fees are sent.
     //
     // Arguments:
@@ -121,89 +119,8 @@ impl ProviderSwapFeeCollector {
     //
     // Returns:
     //   - An Address representing the fee destination.
-    pub fn get_insurance_fund(e: Env) -> Address {
-        get_insurance_fund(&e)
-    }
-
-    pub fn resolve_liquidity_deficit(e: Env) {
-        let now = e.ledger().timestamp();
-
-        helpers::attempt_settle_revenue_to_insurance_fund(&e, now);
-
-        let insurance_vault_amount = ctx.accounts.insurance_fund_vault.amount;
-
-        let pay_from_insurance = {
-            // let pool =
-            if perp_market.amm.curve_update_intensity > 0 {
-                validate!(
-                    perp_market.amm.last_oracle_valid,
-                    ErrorCode::InvalidOracle,
-                    "Oracle Price detected as invalid"
-                )?;
-
-                validate!(
-                    oracle_map.slot == perp_market.amm.last_update_slot,
-                    ErrorCode::AMMNotUpdatedInSameSlot,
-                    "AMM must be updated in a prior instruction within same slot"
-                )?;
-            }
-
-            validate!(
-                !perp_market.is_in_settlement(now),
-                ErrorCode::MarketActionPaused,
-                "Market is in settlement mode"
-            )?;
-
-            let oracle_price = oracle_map.get_price_data(&perp_market.amm.oracle)?.price;
-            controller::orders::validate_market_within_price_band(
-                perp_market,
-                state,
-                oracle_price
-            )?;
-
-            controller::insurance::resolve_perp_pnl_deficit(
-                spot_market_vault_amount,
-                insurance_vault_amount,
-                spot_market,
-                perp_market,
-                clock.unix_timestamp
-            )?
-        };
-
-        if pay_from_insurance > 0 {
-            validate!(
-                &e,
-                pay_from_insurance < insurance_fund_vault_amount,
-                ErrorCode::InsufficientCollateral,
-                "Insurance Fund balance InsufficientCollateral for payment: !{} < {}",
-                pay_from_insurance,
-                insurance_fund_vault_amount
-            );
-
-            // send tokens from IF to pool
-            let token_client = SorobanTokenClient::new(&e, &get_deposit_token(&e));
-            token_client.transfer(
-                &e.current_contract_address(),
-                &get_insurance_fund(&e),
-                &(pay_from_insurance as i128)
-            );
-            controller::token::send_from_program_vault(
-                &ctx.accounts.token_program,
-                &ctx.accounts.insurance_fund_vault,
-                &ctx.accounts.spot_market_vault,
-                &ctx.accounts.drift_signer,
-                state.signer_nonce,
-                pay_from_insurance,
-                &mint
-            )?;
-
-            validate!(
-                &e,
-                insurance_fund_vault_amount > 0,
-                ErrorCode::InvalidIFDetected,
-                "insurance_fund_vault.amount must remain > 0"
-            );
-        }
+    pub fn get_buffer(e: Env) -> Address {
+        get_buffer(&e)
     }
 
     // claim_fees
@@ -222,72 +139,10 @@ impl ProviderSwapFeeCollector {
             panic_with_error!(&e, Error::Unauthorized);
         }
         let token_client = SorobanTokenClient::new(&e, &token);
-
-        let total_amount = token_client.balance(&e.current_contract_address());
-        let amount_less_insurance = total_amount * (1 - get_min_fee_insurance_fraction(e));
-
-        token_client.transfer(
-            &e.current_contract_address(),
-            &get_fee_destination(&e),
-            &amount_less_insurance
-        );
-        Events::new(&e).claim_fee(
-            token.clone(),
-            amount_less_insurance as u128,
-            token,
-            amount_less_insurance as u128
-        );
-        amount_less_insurance as u128
-    }
-
-    pub fn settle_fees_to_insurance_fund(
-        e: Env,
-        operator: Address,
-        token: Address,
-        fraction: u32
-    ) -> u128 {
-        operator.require_auth();
-        if operator != get_operator(&e) {
-            panic_with_error!(&e, Error::Unauthorized);
-        }
-
-        if fraction < get_min_fee_insurance_fraction(&e) {
-            panic_with_error!(&e, Error::InsuranceFractionTooLow);
-        }
-
-        let insurance_fund = get_insurance_fund(&e);
-        let token_client = SorobanTokenClient::new(&e, &token);
-
-        let total_amount = token_client.balance(&e.current_contract_address());
-        let amount = ((total_amount as u128) * (fraction as u128)) / PRICE_PRECISION;
-
-        e.authorize_as_current_contract(
-            vec![
-                &e,
-                InvokerContractAuthEntry::Contract(SubContractInvocation {
-                    context: ContractContext {
-                        contract: token.clone(),
-                        fn_name: Symbol::new(&e, "transfer"),
-                        args: (
-                            e.current_contract_address(),
-                            insurance_fund.clone(),
-                            amount as i128,
-                        ).into_val(&e),
-                    },
-                    sub_invocations: vec![&e],
-                })
-            ]
-        );
-
-        let collected_amount: u128 = e.invoke_contract(
-            &&get_insurance_fund(&e),
-            &Symbol::new(&e, "settle_revenue"),
-            Vec::from_array(&e, [e.current_contract_address().to_val(), amount.into_val(&e)])
-        );
-
-        // token_client.transfer(&e.current_contract_address(), &get_insurance_fund(&e), &amount);
-        Events::new(&e).settle_fees_to_insurance_fund(token.clone(), collected_amount as u128);
-        collected_amount as u128
+        let amount = token_client.balance(&e.current_contract_address());
+        token_client.transfer(&e.current_contract_address(), &get_fee_destination(&e), &amount);
+        Events::new(&e).claim_fee(token.clone(), amount as u128, token, amount as u128);
+        amount as u128
     }
 
     // claim_fees_and_swap
@@ -321,7 +176,6 @@ impl ProviderSwapFeeCollector {
         let router = get_router(&e);
         let token_client = SorobanTokenClient::new(&e, &token);
         let amount = token_client.balance(&e.current_contract_address()) as u128;
-        // FIXME: update less insurance amount
         e.authorize_as_current_contract(
             vec![
                 &e,
@@ -341,7 +195,7 @@ impl ProviderSwapFeeCollector {
         );
         let out_amount: u128 = e.invoke_contract(
             &get_router(&e),
-            &Symbol::new(&e, "swap_chained"),
+            &Symbol::new(&e, "swap"),
             Vec::from_array(&e, [
                 e.current_contract_address().to_val(),
                 swaps_chain.to_val(),
@@ -437,21 +291,56 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
         );
         Events::new(&e).charge_provider_fee(swap.2, fee_amount);
 
-        // Update total incentives data and refresh/initialize user incentive
-        let incentives = get_incentives_manager(&e);
-        let total_shares = get_total_shares(&e);
-        let user_shares = get_user_balance_shares(&e, &user);
-        let token_a_fees_collected = 0;
-        let token_b_fees_collected = 0;
-        incentives
-            .manager()
-            .checkpoint_user(
-                &user,
-                total_shares,
-                user_shares,
-                token_a_fees_collected,
-                token_b_fees_collected
-            );
+        // Send portion of fee to the Buffer
+        let fee_amount_for_buffer = fee_amount * get_buffer_fraction(&e);
+        let buffer = get_buffer(&e);
+
+        let token_client = SorobanTokenClient::new(&e, &token);
+
+        e.authorize_as_current_contract(
+            vec![
+                &e,
+                InvokerContractAuthEntry::Contract(SubContractInvocation {
+                    context: ContractContext {
+                        contract: token.clone(),
+                        fn_name: Symbol::new(&e, "transfer"),
+                        args: (
+                            e.current_contract_address(),
+                            buffer.clone(),
+                            fee_amount_for_buffer as i128,
+                        ).into_val(&e),
+                    },
+                    sub_invocations: vec![&e],
+                })
+            ]
+        );
+
+        let settled_amount: u128 = e.invoke_contract(
+            &get_buffer(&e),
+            &Symbol::new(&e, "settle_revenue"),
+            Vec::from_array(&e, [
+                e.current_contract_address().to_val(),
+                fee_amount_for_buffer.into_val(&e),
+            ])
+        );
+
+        Events::new(&e).settle_revenue(token.clone(), settled_amount as u128);
+
+        // // Update total incentives data and refresh/initialize user incentive
+        // let incentives = get_incentives_manager(&e);
+        // let total_shares = get_total_shares(&e);
+        // let user_shares = get_user_balance_shares(&e, &user);
+        // let token_a_fees_collected = 0;
+        // let token_b_fees_collected = 0;
+        // incentives
+        //     .manager()
+        //     .checkpoint_user(
+        //         &user,
+        //         total_shares,
+        //         user_shares,
+        //         token_a_fees_collected,
+        //         token_b_fees_collected
+        //     );
 
         amount_out_w_fee
     }
@@ -538,10 +427,42 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
             );
         }
         Events::new(&e).charge_provider_fee(token_in, fee_amount);
-        amount_in_with_fee
-    }
 
-    fn collect_lp_fees(e: Env, user: Address) {
-        user.require_auth();
+        // Send portion of fee to the Buffer
+        let fee_amount_for_buffer = fee_amount * get_buffer_fraction(&e);
+        let buffer = get_buffer(&e);
+
+        let token_client = SorobanTokenClient::new(&e, &token);
+
+        e.authorize_as_current_contract(
+            vec![
+                &e,
+                InvokerContractAuthEntry::Contract(SubContractInvocation {
+                    context: ContractContext {
+                        contract: token.clone(),
+                        fn_name: Symbol::new(&e, "transfer"),
+                        args: (
+                            e.current_contract_address(),
+                            buffer.clone(),
+                            fee_amount_for_buffer as i128,
+                        ).into_val(&e),
+                    },
+                    sub_invocations: vec![&e],
+                })
+            ]
+        );
+
+        let settled_amount: u128 = e.invoke_contract(
+            &get_buffer(&e),
+            &Symbol::new(&e, "settle_revenue"),
+            Vec::from_array(&e, [
+                e.current_contract_address().to_val(),
+                fee_amount_for_buffer.into_val(&e),
+            ])
+        );
+
+        Events::new(&e).settle_revenue(token.clone(), settled_amount as u128);
+
+        amount_in_with_fee
     }
 }
