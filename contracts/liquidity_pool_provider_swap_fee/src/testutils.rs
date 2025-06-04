@@ -69,12 +69,10 @@ impl Setup<'_> {
         // init swap router with all it's complexity
         let pool_hash = install_liq_pool_hash(&e);
         let token_hash = install_token_wasm(&e);
-        let plane = deploy_plane_contract(&e);
         let router = deploy_liqpool_router_contract(e.clone());
         router.init_admin(&admin);
         router.set_pool_hash(&admin, &pool_hash);
         router.set_token_hash(&admin, &token_hash);
-        router.set_pools_plane(&admin, &plane);
 
         let insurance_fund = deploy_insurance_fund_contract(e.clone());
 
@@ -190,11 +188,4 @@ fn install_liq_pool_hash(e: &Env) -> BytesN<32> {
         file = "../../target/wasm32v1-none/release/soroban_liquidity_pool_contract.wasm"
     );
     e.deployer().upload_contract_wasm(WASM)
-}
-
-fn deploy_plane_contract<'a>(e: &Env) -> Address {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/soroban_liquidity_pool_plane_contract.wasm"
-    );
-    Client::new(e, &e.register(WASM, ())).address
 }

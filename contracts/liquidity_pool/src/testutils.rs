@@ -1,6 +1,5 @@
 #![cfg(test)]
 extern crate std;
-use crate::plane::{ pool_plane, PoolPlaneClient };
 use crate::LiquidityPoolClient;
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use sep_40_oracle::testutils::{ Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM };
@@ -73,7 +72,6 @@ pub(crate) struct Setup<'a> {
     pub(crate) token_reward_admin_client: SorobanTokenAdminClient<'a>,
     pub(crate) token_share: ShareTokenClient<'a>,
     pub(crate) liq_pool: LiquidityPoolClient<'a>,
-    pub(crate) plane: PoolPlaneClient<'a>,
 
     pub(crate) admin: Address,
     pub(crate) emergency_admin: Address,
@@ -122,8 +120,6 @@ impl Setup<'_> {
         } else {
             create_token_contract(&e, &admin)
         };
-
-        let plane = create_plane_contract(&e);
 
         if &token2.address < &token1.address {
             std::mem::swap(&mut token1, &mut token2);
@@ -207,8 +203,7 @@ impl Setup<'_> {
             &String::from_str(&e, "nSOL-LP"),
             &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
             &reward_token.address,
-            config.liq_pool_fee,
-            &plane.address
+            config.liq_pool_fee
         );
         token_reward_admin_client.mint(&liq_pool.address, &config.rewards_count);
 
@@ -253,7 +248,6 @@ impl Setup<'_> {
             token_reward_admin_client,
             token_share,
             liq_pool: liq_pool,
-            plane,
             admin,
             emergency_admin,
             rewards_admin,
@@ -300,10 +294,6 @@ pub(crate) fn get_token_admin_client<'a>(
     SorobanTokenAdminClient::new(e, address)
 }
 
-pub(crate) fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
-    PoolPlaneClient::new(e, &e.register(pool_plane::WASM, ()))
-}
-
 pub fn create_liqpool_contract<'a>(
     e: &Env,
     admin: &Address,
@@ -316,8 +306,7 @@ pub fn create_liqpool_contract<'a>(
     lp_token_symbol: &String,
     tokens: &Vec<Address>,
     reward_token: &Address,
-    fee_fraction: u32,
-    plane: &Address
+    fee_fraction: u32
 ) -> LiquidityPoolClient<'a> {
     let liqpool = LiquidityPoolClient::new(e, &e.register(crate::LiquidityPool {}, ()));
     let params = InitializeAllParams {
@@ -345,7 +334,6 @@ pub fn create_liqpool_contract<'a>(
         reward_config: RewardConfig {
             reward_token: reward_token.clone(),
         },
-        plane: plane.clone(),
     };
     liqpool.initialize_all(&params);
     liqpool

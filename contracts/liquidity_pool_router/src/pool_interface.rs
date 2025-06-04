@@ -239,11 +239,3 @@ pub trait PoolsManagementTrait {
         end: u128
     ) -> Vec<(Vec<Address>, Map<BytesN<32>, Address>)>;
 }
-
-pub trait PoolPlaneInterface {
-    // configure pools plane address to be used as lightweight proxy to optimize instructions & batch operations
-    fn set_pools_plane(e: Env, admin: Address, plane: Address);
-
-    // get pools plane address
-    fn get_plane(e: Env) -> Address;
-}

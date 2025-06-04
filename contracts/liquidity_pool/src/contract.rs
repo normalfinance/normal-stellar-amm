@@ -2,8 +2,6 @@ use crate::errors::{ LiquidityPoolError, LiquidityPoolValidationError };
 use crate::events::Events as PoolEvents;
 use crate::events::LiquidityPoolEvents;
 use crate::oracle;
-use crate::plane::update_plane;
-use crate::plane_interface::Plane;
 use crate::pool::{ Pool };
 use crate::pool_interface::{
     AdminInterfaceTrait,
@@ -19,20 +17,17 @@ use crate::storage::{
     get_is_killed_deposit,
     get_is_killed_swap,
     get_is_killed_withdraw,
-    get_plane,
     get_pool,
     get_reserve_a,
     get_reserve_b,
     get_router,
     get_token_future_wasm,
-    has_plane,
     put_reserve_a,
     put_reserve_b,
     set_is_killed_claim,
     set_is_killed_deposit,
     set_is_killed_swap,
     set_is_killed_withdraw,
-    set_plane,
     set_pool,
     set_router,
     set_token_future_wasm,
@@ -120,7 +115,6 @@ impl LiquidityPoolCrunch for LiquidityPool {
     fn initialize_all(e: Env, params: InitializeAllParams) {
         // merge whole initialize process into one because lack of caching of VM components
         // https://github.com/stellar/rs-soroban-env/issues/827
-        Self::init_pools_plane(e.clone(), params.plane);
         Self::initialize(e.clone(), params.base);
         Self::initialize_rewards_config(e.clone(), params.reward_config.reward_token);
     }
@@ -215,9 +209,6 @@ impl LiquidityPoolTrait for LiquidityPool {
             expiry_price: 0,
         };
         set_pool(&e, &pool);
-
-        // update plane data for every pool update
-        update_plane(&e);
     }
 
     // Returns the pool's share token address.
@@ -304,9 +295,6 @@ impl LiquidityPoolTrait for LiquidityPool {
                 total_shares + shares_to_mint,
                 user_shares + shares_to_mint
             );
-
-        // update plane data for every pool update
-        update_plane(&e);
 
         PoolEvents::new(&e).deposit_liquidity(pool.token_b, token_b_amount, shares_to_mint);
 
@@ -433,9 +421,6 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // rebalance the pool after swapping
         pool.rebalance(&e);
-
-        // update plane data for every pool update
-        update_plane(&e);
 
         PoolEvents::new(&e).trade(
             user,
@@ -618,9 +603,6 @@ impl LiquidityPoolTrait for LiquidityPool {
             put_reserve_b(&e, reserve_b - out_amount);
         }
 
-        // update plane data for every pool update
-        update_plane(&e);
-
         PoolEvents::new(&e).trade(
             user.clone(),
             sell_token,
@@ -717,9 +699,6 @@ impl LiquidityPoolTrait for LiquidityPool {
         rewards
             .manager()
             .update_working_balance(&user, total_shares - share_amount, user_shares - share_amount);
-
-        // update plane data for every pool update
-        update_plane(&e);
 
         PoolEvents::new(&e).withdraw_liquidity(pool.token_b, share_amount, share_amount);
 
@@ -1470,52 +1449,6 @@ impl RewardsTrait for LiquidityPool {
         RewardEvents::new(&e).claim(user, reward_token, reward);
 
         reward
-    }
-}
-
-#[contractimpl]
-impl Plane for LiquidityPool {
-    // Sets the plane for the pool.
-    //
-    // # Arguments
-    //
-    // * `e` - The environment.
-    // * `plane` - The address of the plane.
-    //
-    // # Panics
-    //
-    // If the plane has already been initialized.
-    fn init_pools_plane(e: Env, plane: Address) {
-        if has_plane(&e) {
-            panic_with_error!(&e, LiquidityPoolError::PlaneAlreadyInitialized);
-        }
-
-        set_plane(&e, &plane);
-    }
-
-    fn set_pools_plane(e: Env, admin: Address, plane: Address) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-
-        set_plane(&e, &plane);
-    }
-
-    // Returns the plane of the pool.
-    //
-    // # Arguments
-    //
-    // * `e` - The environment.
-    //
-    // # Returns
-    //
-    // The address of the plane.
-    fn get_pools_plane(e: Env) -> Address {
-        get_plane(&e)
-    }
-
-    // Updates the plane data in case the plane contract was updated.
-    fn backfill_plane_data(e: Env) {
-        update_plane(&e);
     }
 }
 

@@ -6,8 +6,6 @@ use crate::storage::{
     add_tokens_set,
     get_constant_product_pool_hash,
     get_pool_next_counter,
-    get_pool_plane,
-    get_pools_plain,
     get_token_hash,
     LiquidityPoolType,
 };
@@ -154,8 +152,6 @@ fn init_standard_pool(
     let pause_admin = access_control.get_role_safe(&Role::PauseAdmin).unwrap_or(admin.clone());
     let emergency_pause_admins = access_control.get_role_addresses(&Role::EmergencyPauseAdmin);
 
-    let plane = get_pool_plane(e);
-
     let params = InitializeAllParams {
         base: InitializeParams {
             admin,
@@ -182,7 +178,6 @@ fn init_standard_pool(
         reward_config: RewardConfig {
             reward_token,
         },
-        plane,
     };
 
     e.invoke_contract::<()>(

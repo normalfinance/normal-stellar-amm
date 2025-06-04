@@ -170,8 +170,6 @@ pub struct InitializeParams {
 pub struct InitializeAllParams {
     pub base: InitializeParams,
     pub reward_config: RewardConfig,
-    /// The address of the plane.
-    pub plane: Address,
 }
 
 //  Queries

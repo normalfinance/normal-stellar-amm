@@ -4,11 +4,15 @@ extern crate std;
 use rand::rngs::StdRng;
 use rand::{ Rng, SeedableRng };
 use utils::constant::{ PERCENTAGE_PRECISION_U64, PRICE_PRECISION, PRICE_PRECISION_I128 };
-use utils::oracle::{OracleGuardRails, OracleSource, PriceDivergenceGuardRails, ValidityGuardRails};
+use utils::oracle::{
+    OracleGuardRails,
+    OracleSource,
+    PriceDivergenceGuardRails,
+    ValidityGuardRails,
+};
 
 use crate::testutils::{
     create_liqpool_contract,
-    create_plane_contract,
     create_token_contract,
     get_token_admin_client,
     install_token_wasm,
@@ -438,45 +442,6 @@ fn initialize_already_initialized() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #202)")]
-fn initialize_already_initialized_plane() {
-    let setup = Setup::default();
-
-    let users = Setup::generate_random_users(&setup.env, 3);
-    let token1 = create_token_contract(&setup.env, &users[1]);
-    let token2 = create_token_contract(&setup.env, &users[2]);
-
-    let params = InitializeAllParams {
-        base: InitializeParams {
-            admin: users[0].clone(),
-            privileged_addrs: PrivilegedAddresses {
-                emergency_admin: users[0].clone(),
-                rewards_admin: users[0].clone(),
-                operations_admin: users[0].clone(),
-                pause_admin: users[0].clone(),
-                emergency_pause_admins: Vec::from_array(&setup.env, [users[0].clone()]),
-            },
-            router: users[0].clone(),
-            oracles: setup.oracles.clone(),
-            target_asset: setup.target_asset.clone(),
-            tokens: Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]),
-            lp_token_info: TokenInitInfo {
-                token_wasm_hash: install_token_wasm(&setup.env),
-                name: String::from_str(&setup.env, "Pool Share Token"),
-                symbol: String::from_str(&setup.env, "Pool Share Token"),
-            },
-            fee_fraction: 10_u32,
-        },
-        reward_config: RewardConfig {
-            reward_token: setup.token_reward.address,
-        },
-        plane: setup.plane.address,
-    };
-
-    setup.liq_pool.initialize_all(&params);
-}
-
-#[test]
 fn test_custom_fee() {
     let config = TestConfig {
         mint_to_user: 1000000_0000000,
@@ -512,8 +477,7 @@ fn test_custom_fee() {
                 setup.token2.address.clone(),
             ]),
             &setup.token_reward.address,
-            fee_config.0, // ten percent
-            &setup.plane.address
+            fee_config.0 // ten percent
         );
         liqpool.deposit(&setup.users[0], &100_0000000);
         assert_eq!(liqpool.estimate_swap(&1, &0, &1_0000000), (fee_config.1, 0));
@@ -669,7 +633,6 @@ fn test_two_users_rewards() {
     assert_eq!(token_reward.balance(&users[0]) as u128, (total_reward_1 / 4) * 3);
     assert_eq!(token_reward.balance(&users[1]) as u128, total_reward_1 / 4);
 }
-
 
 #[test]
 fn test_lazy_user_rewards() {
@@ -1493,8 +1456,6 @@ fn test_withdraw_rewards() {
     let mut token1 = create_token_contract(&e, &admin);
     let mut token2 = create_token_contract(&e, &admin);
 
-    let plane = create_plane_contract(&e);
-
     if &token2.address < &token1.address {
         std::mem::swap(&mut token1, &mut token2);
     }
@@ -1569,8 +1530,7 @@ fn test_withdraw_rewards() {
         &String::from_str(&e, "Pool Share Token"),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         &token_reward_admin_client.address,
-        30,
-        &plane.address
+        30
     );
     let token_share = ShareTokenClient::new(&e, &liq_pool.share_id());
 
@@ -1617,8 +1577,6 @@ fn test_withdraw_rewards() {
 // //     let mut token1 = create_token_contract(&e, &admin);
 // //     let mut token2 = create_token_contract(&e, &admin);
 
-// //     let plane = create_plane_contract(&e);
-
 // //     if &token2.address < &token1.address {
 // //         std::mem::swap(&mut token1, &mut token2);
 // //     }
@@ -1639,8 +1597,7 @@ fn test_withdraw_rewards() {
 // //         &install_token_wasm(&e),
 // //         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
 // //         &token_reward_admin_client.address,
-// //         30,
-// //         &plane.address
+// //         30
 // //     );
 
 // //     liq_pool.set_rewards_config(
@@ -1672,8 +1629,6 @@ fn test_withdraw_rewards() {
 // //     let mut token1 = create_token_contract(&e, &admin);
 // //     let mut token2 = create_token_contract(&e, &admin);
 
-// //     let plane = create_plane_contract(&e);
-
 // //     if &token2.address < &token1.address {
 // //         std::mem::swap(&mut token1, &mut token2);
 // //     }
@@ -1695,8 +1650,7 @@ fn test_withdraw_rewards() {
 // //         &install_token_wasm(&e),
 // //         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
 // //         &token_reward_admin_client.address,
-// //         30,
-// //         &plane.address
+// //         30
 // //     );
 // //     let liq_pool2 = create_liqpool_contract(
 // //         &e,
@@ -1707,8 +1661,7 @@ fn test_withdraw_rewards() {
 // //         &install_token_wasm(&e),
 // //         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
 // //         &token_reward_admin_client.address,
-// //         30,
-// //         &plane.address
+// //         30
 // //     );
 // //     // token1_admin_client.mint(&user1, &200_0000000);
 // //     token2_admin_client.mint(&user1, &200_0000000);
@@ -1779,8 +1732,6 @@ fn test_withdraw_rewards() {
 // //     let mut token1 = create_token_contract(&e, &admin);
 // //     let mut token2 = create_token_contract(&e, &admin);
 
-// //     let plane = create_plane_contract(&e);
-
 // //     if &token2.address < &token1.address {
 // //         std::mem::swap(&mut token1, &mut token2);
 // //     }
@@ -1801,8 +1752,7 @@ fn test_withdraw_rewards() {
 // //         &install_token_wasm(&e),
 // //         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
 // //         &token_reward_admin_client.address,
-// //         30,
-// //         &plane.address
+// //         30
 // //     );
 
 // //     // token1_admin_client.mint(&user1, &100_0000000);
@@ -1880,8 +1830,6 @@ fn test_withdraw_rewards() {
 //     let mut token1 = create_token_contract(&e, &admin);
 //     let mut token2 = create_token_contract(&e, &admin);
 
-//     let plane = create_plane_contract(&e);
-
 //     // if &token2.address < &token1.address {
 //     //     std::mem::swap(&mut token1, &mut token2);
 //     // }
@@ -1903,8 +1851,7 @@ fn test_withdraw_rewards() {
 //         &String::from_str(&e, "Pool Share Token"),
 //         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
 //         &token_reward_admin_client.address,
-//         30,
-//         &plane.address
+//         30
 //     );
 
 //     liq_pool.set_rewards_config(

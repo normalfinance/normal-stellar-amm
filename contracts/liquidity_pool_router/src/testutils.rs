@@ -39,16 +39,6 @@ pub fn install_liq_pool_hash(e: &Env) -> BytesN<32> {
     e.deployer().upload_contract_wasm(standard_pool::WASM)
 }
 
-mod pool_plane {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/soroban_liquidity_pool_plane_contract.wasm"
-    );
-}
-
-pub fn create_plane_contract<'a>(e: &Env) -> pool_plane::Client<'a> {
-    pool_plane::Client::new(e, &e.register(pool_plane::WASM, ()))
-}
-
 pub(crate) struct Setup<'a> {
     pub(crate) env: Env,
 
@@ -131,9 +121,6 @@ impl Default for Setup<'_> {
             &emergency_admin
         );
         router.apply_transfer_ownership(&admin, &Symbol::new(&env, "EmergencyAdmin"));
-
-        let plane = create_plane_contract(&env);
-        router.set_pools_plane(&admin, &plane.address);
 
         Setup {
             env,

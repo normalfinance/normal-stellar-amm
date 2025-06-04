@@ -497,25 +497,6 @@ fn test_set_privileged_addresses() {
 }
 
 #[test]
-fn test_set_pools_plane() {
-    let setup = Setup::default();
-    let pool = setup.liq_pool;
-    let plane = Address::generate(&setup.env);
-    let user = Address::generate(&setup.env);
-
-    for (addr, is_ok) in [
-        (user, false),
-        (setup.admin, true),
-        (setup.rewards_admin, false),
-        (setup.operations_admin, false),
-        (setup.pause_admin, false),
-        (setup.emergency_pause_admin, false),
-    ] {
-        assert_eq!(pool.try_set_pools_plane(&addr, &plane).is_ok(), is_ok);
-    }
-}
-
-#[test]
 fn test_set_rewards_config() {
     let setup = Setup::default();
     let pool = setup.liq_pool;

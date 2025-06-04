@@ -1222,15 +1222,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "soroban-liquidity-pool-plane-contract"
-version = "0.1.0"
-dependencies = [
- "access_control",
- "soroban-sdk",
- "upgrade",
-]
-
-[[package]]
 name = "soroban-liquidity-pool-provider-swap-fee-contract"
 version = "0.1.0"
 dependencies = [

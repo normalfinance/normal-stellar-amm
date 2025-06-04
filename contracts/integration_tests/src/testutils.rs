@@ -46,14 +46,12 @@ impl Setup<'_> {
         // init swap router
         let pool_hash = e.deployer().upload_contract_wasm(contracts::constant_product_pool::WASM);
         let token_hash = e.deployer().upload_contract_wasm(contracts::lp_token::WASM);
-        let plane = deploy_plane_contract(&e);
 
         let router = deploy_liqpool_router_contract(e.clone());
         router.init_admin(&admin);
         router.set_pool_hash(&admin, &pool_hash);
         router.set_token_hash(&admin, &token_hash);
         router.set_reward_token(&admin, &reward_token.address);
-        router.set_pools_plane(&admin, &plane.address);
 
         let fee_collector = deploy_provider_swap_fee_contract(
             &e,
@@ -124,8 +122,4 @@ pub fn deploy_provider_swap_fee_contract<'a>(
 
 fn deploy_liqpool_router_contract<'a>(e: Env) -> contracts::router::Client<'a> {
     contracts::router::Client::new(&e, &e.register(contracts::router::WASM, ()))
-}
-
-fn deploy_plane_contract<'a>(e: &Env) -> contracts::pool_plane::Client {
-    contracts::pool_plane::Client::new(e, &e.register(contracts::pool_plane::WASM, ()))
 }

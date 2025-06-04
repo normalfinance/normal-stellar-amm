@@ -18,7 +18,6 @@ use crate::rewards::get_rewards_manager;
 use crate::router_interface::AdminInterface;
 use crate::storage::{
     get_pool,
-    get_pool_plane,
     get_pools_plain,
     get_pools_vec,
     get_reward_tokens,
@@ -30,7 +29,6 @@ use crate::storage::{
     has_pool,
     remove_pool,
     set_constant_product_pool_hash,
-    set_pool_plane,
     set_reward_tokens,
     set_reward_tokens_detailed,
     set_rewards_config,
@@ -1099,30 +1097,6 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
             result.push_back((tokens.clone(), Self::get_pools(e.clone(), tokens)));
         }
         result
-    }
-}
-
-// The `PoolPlaneInterface` trait provides the interface for interacting with a pool plane.
-#[contractimpl]
-impl PoolPlaneInterface for LiquidityPoolRouter {
-    // Sets the pool plane.
-    // Pool plane is a contract which knows current state of every pool
-    // and can be used to estimate swaps without calling pool contracts.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin user.
-    // * `plane` - The address of the plane.
-    fn set_pools_plane(e: Env, admin: Address, plane: Address) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-
-        set_pool_plane(&e, &plane);
-    }
-
-    // Returns the address of the pool plane.
-    fn get_plane(e: Env) -> Address {
-        get_pool_plane(&e)
     }
 }
 
