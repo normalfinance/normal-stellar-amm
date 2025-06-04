@@ -84,6 +84,7 @@ use token_synthetic::put_token_synthetic;
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
 use utils::constant::FEE_MULTIPLIER;
+use utils::math::safe_math::SafeMath;
 use utils::oracle::{ OracleGuardRails, OraclePriceData };
 use utils::storage::{
     AddressAndAmount,
@@ -94,6 +95,7 @@ use utils::storage::{
     PoolStatus,
     PoolTier,
 };
+use utils::validate;
 
 // Metadata that is added on to the WASM custom section
 contractmeta!(
@@ -907,6 +909,136 @@ impl AdminInterfaceTrait for LiquidityPool {
         // Rebalance the pool
         let pool = get_pool(&e);
         pool.rebalance(&e);
+    }
+
+    fn get_pay_from_insurance(e: Env, sender: Address, insurance_vault_amount: u128) {
+        // check pool has liquidity deficit
+
+        let pool: Pool = get_pool(&e);
+
+        validate!(
+            !perp_market.is_in_settlement(now),
+            ErrorCode::MarketActionPaused,
+            "Market is in settlement mode"
+        )?;
+
+        let oracle_price = oracle_map.get_price_data(&perp_market.amm.oracle)?.price;
+        controller::orders::validate_market_within_price_band(perp_market, state, oracle_price)?;
+
+        let pnl_pool_token_amount = get_token_amount(
+            market.pnl_pool.scaled_balance,
+            spot_market,
+            &SpotBalanceType::Deposit
+        )?;
+
+        validate!(
+            pnl_pool_token_amount == 0,
+            ErrorCode::SufficientPerpPnlPool,
+            "pnl_pool_token_amount > 0 (={})",
+            pnl_pool_token_amount
+        )?;
+
+        // update_twap()
+
+        let excess_pool_reserve_imbalance = if pool.unrealized_pnl_max_imbalance > 0 {
+            let net_pool_reserve_imbalance = pool.calculate_net_reserve_imbalance(
+                historical_oracle_data.last_oracle_price
+            );
+
+            net_pool_reserve_imbalance.safe_sub(&e, pool.unrealized_pnl_max_imbalance)
+        } else {
+            0
+        };
+
+        validate!(
+            &e,
+            excess_pool_reserve_imbalance > 0,
+            LiquidityPoolError::LiquidityDeficitBelowThreshold,
+            "No excess_pool_reserve_imbalance({}) to settle",
+            excess_pool_reserve_imbalance
+        );
+
+        let max_insurance_withdraw = pool.insurance_claim.quote_max_insurance.safe_sub(
+            &e,
+            pool.insurance_claim.quote_settled_insurance
+        ) as i128;
+
+        validate!(
+            &e,
+            max_insurance_withdraw > 0,
+            ErrorCode::MaxIFWithdrawReached,
+            "max_insurance_withdraw={}/{} as already been reached",
+            pool.insurance_claim.quote_settled_insurance,
+            pool.insurance_claim.quote_max_insurance
+        );
+
+        let insurance_withdraw = excess_pool_reserve_imbalance
+            .min(max_insurance_withdraw)
+            .min(insurance_vault_amount.saturating_sub(1));
+
+        validate!(
+            &e,
+            insurance_withdraw > 0,
+            ErrorCode::NoIFWithdrawAvailable,
+            "No available funds for insurance_withdraw({}) for user_pnl_imbalance={}",
+            insurance_withdraw,
+            excess_pool_reserve_imbalance
+        );
+
+        pool.insurance_claim.rev_withdraw_since_last_settle =
+            pool.insurance_claim.rev_withdraw_since_last_settle.safe_add(&e, insurance_withdraw);
+
+        pool.insurance_claim.quote_settled_insurance =
+            pool.insurance_claim.quote_settled_insurance.safe_add(&e, insurance_withdraw);
+
+        validate!(
+            &e,
+            pool.insurance_claim.quote_settled_insurance <=
+                pool.insurance_claim.quote_max_insurance,
+            ErrorCode::MaxIFWithdrawReached,
+            "quote_settled_insurance breached its max {}/{}",
+            pool.insurance_claim.quote_settled_insurance,
+            pool.insurance_claim.quote_max_insurance
+        );
+
+        pool.insurance_claim.last_revenue_withdraw_ts = now;
+
+        // update_spot_balances(
+        //     insurance_withdraw.cast()?,
+        //     &SpotBalanceType::Deposit,
+        //     spot_market,
+        //     &mut market.pnl_pool,
+        //     false
+        // )?;
+
+        // emit!(InsuranceFundRecord {
+        //     ts: now,
+        //     spot_market_index: spot_market.market_index,
+        //     perp_market_index: market.market_index,
+        //     amount: -insurance_withdraw.cast()?,
+        //     user_if_factor: spot_market.insurance_fund.user_factor,
+        //     total_if_factor: spot_market.insurance_fund.total_factor,
+        //     vault_amount_before: vault_amount,
+        //     insurance_vault_amount_before: insurance_vault_amount,
+        //     total_if_shares_before,
+        //     total_if_shares_after: spot_market.insurance_fund.total_shares,
+        // });
+
+        insurance_withdraw
+    }
+
+    fn pay_insurance_claim(e: Env, sender: Address, amount: u128) {
+        sender.require_auth();
+
+        let pool = get_pool(&e);
+
+        // Deposit token_b from Insurance Fund to Pool
+        let token_client = SorobanTokenClient::new(&e, &pool.token_b);
+        token_client.transfer(&sender, &e.current_contract_address(), &(amount as i128));
+
+        // Update the reserves
+        let reserve_b = get_reserve_b(&e);
+        put_reserve_b(&e, reserve_b + amount);
     }
 
     // Stops the pool deposits instantly.

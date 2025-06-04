@@ -26,10 +26,8 @@ pub(crate) trait InsuranceFundEvents {
         amount: u64,
         insurance_vault_amount_before: u64,
         if_shares_before: u128,
-        user_if_shares_before: u128,
         total_if_shares_before: u128,
         if_shares_after: u128,
-        user_if_shares_after: u128,
         total_if_shares_after: u128
     );
 
@@ -73,10 +71,8 @@ impl InsuranceFundEvents for Events {
         amount: u64,
         insurance_vault_amount_before: u64,
         if_shares_before: u128,
-        user_if_shares_before: u128,
         total_if_shares_before: u128,
         if_shares_after: u128,
-        user_if_shares_after: u128,
         total_if_shares_after: u128
     ) {
         self.env()

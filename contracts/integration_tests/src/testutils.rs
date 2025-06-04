@@ -19,7 +19,6 @@ pub(crate) struct Setup<'a> {
     pub(crate) router: contracts::router::Client<'a>,
     pub(crate) fee_destination: Address,
     pub(crate) reward_token: Address,
-    pub(crate) locked_token: Address,
 }
 
 impl Default for Setup<'_> {
@@ -40,8 +39,6 @@ impl Setup<'_> {
         let fee_destination = Address::generate(&e);
 
         let reward_token = create_token_contract(&e, &admin);
-        let locked_token = create_token_contract(&e, &admin);
-        let locked_token_admin = get_token_admin_client(&e, &locked_token.address);
 
         // init swap router
         let pool_hash = e.deployer().upload_contract_wasm(contracts::constant_product_pool::WASM);
@@ -69,7 +66,6 @@ impl Setup<'_> {
             fee_collector,
             router,
             reward_token: reward_token.address,
-            locked_token: locked_token.address,
         }
     }
 

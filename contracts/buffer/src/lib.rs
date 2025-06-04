@@ -5,4 +5,6 @@ pub mod errors;
 mod events;
 mod buffer_interface;
 mod storage;
-// test
+mod test;
+mod test_permissions;
+mod testutils;

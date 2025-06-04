@@ -120,6 +120,12 @@ pub trait AdminInterfaceTrait {
     // Rebalance pool reserves
     fn rebalance(e: Env, admin: Address);
 
+    // 
+    fn get_pay_from_insurance(e: Env);
+
+    //
+    fn pay_insurance_claim(e: Env, sender: Address, token: Address, amount: u128);
+
     // Stop pool instantly
     fn kill_deposit(e: Env, admin: Address);
     fn kill_withdraw(e: Env, admin: Address);

@@ -17,6 +17,8 @@ pub enum LiquidityPoolError {
     InvalidOracle = 210,
     InvalidExpiryTimestamp = 211,
     // pool specific validation errors
+
+    LiquidityDeficitBelowThreshold = 212,
 }
 
 #[contracterror]

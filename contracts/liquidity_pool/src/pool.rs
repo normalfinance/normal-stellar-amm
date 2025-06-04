@@ -45,6 +45,17 @@ pub struct Pool {
 }
 
 impl Pool {
+    pub fn calculate_net_reserve_imbalance(&self, oracle_price: i64) -> i128 {
+        validate!(oracle_price > 0, ErrorCode::InvalidOracle, "oracle_price <= 0")?;
+
+        let net_user_base_asset_value = amm.base_asset_amount_with_amm
+            .safe_add(amm.base_asset_amount_with_unsettled_lp)?
+            .safe_mul(oracle_price.cast()?)?
+            .safe_div(PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO.cast()?)?;
+
+        net_user_base_asset_value.safe_add(calculate_net_user_cost_basis(amm)?)
+    }
+
     // Gets the current pool price.
     //
     // # Arguments

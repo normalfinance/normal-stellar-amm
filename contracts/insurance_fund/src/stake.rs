@@ -4,9 +4,8 @@ use crate::storage::{
     get_insurance_vault_amount,
     get_shares_base,
     get_total_shares,
-    put_shares_base,
-    put_total_shares,
-    put_user_shares,
+    set_total_shares,
+    set_shares_base,
 };
 use soroban_sdk::{ contracttype, log, panic_with_error, Address, Env };
 use utils::bump::{ bump_instance, bump_persistent, bump_temporary };
@@ -115,6 +114,7 @@ pub fn save_stake(e: &Env, key: &Address, stake_info: &Stake) {
 
 pub fn apply_rebase_to_insurance_fund(e: &Env, insurance_vault_amount: u128) {
     let total_shares = get_total_shares(e);
+    let shares_base = get_shares_base(e);
 
     if insurance_vault_amount != 0 && insurance_vault_amount < total_shares {
         let (expo_diff, rebase_divisor) = calculate_rebase_info(
@@ -123,15 +123,14 @@ pub fn apply_rebase_to_insurance_fund(e: &Env, insurance_vault_amount: u128) {
             insurance_vault_amount
         );
 
-        put_total_shares(e, total_shares / rebase_divisor); // safe_div
-        put_user_shares(e, user_shares / rebase_divisor); // safe_div\
-        put_shares_base(e, shares_base + expo_diff); // safe_add
+        set_total_shares(e, &total_shares.safe_div(e, rebase_divisor));
+        set_shares_base(e, &shares_base.safe_add(e, expo_diff));
 
         log!(e, "rebasing insurance fund: expo_diff={}", expo_diff);
     }
 
     if insurance_vault_amount != 0 && total_shares == 0 {
-        put_total_shares(e, insurance_vault_amount as u128);
+        set_total_shares(e, &(insurance_vault_amount as u128));
     }
 }
 
@@ -258,110 +257,4 @@ pub fn calculate_if_shares_lost(e: &Env, stake: &Stake, insurance_vault_amount: 
     };
 
     if_shares_lost
-}
-
-pub fn settle_revenue_to_insurance_fund(
-    e: &Env,
-    insurance_vault_amount: u64,
-    now: i64,
-    check_invariants: bool
-) -> u64 {
-    // update_spot_market_cumulative_interest(spot_market, None, now)?;
-
-    validate!(
-        e,
-        user_factor <= total_factor,
-        InsuranceFundError::RevenueSettingsCannotSettleToIF,
-        "invalid if_factor settings on spot market"
-    );
-
-    let depositors_claim = validate_spot_market_vault_amount(
-        spot_market,
-        spot_market_vault_amount
-    )?;
-
-    // let mut token_amount = get_token_amount(
-    //     spot_market.revenue_pool.scaled_balance,
-    //     spot_market,
-    //     &SpotBalanceType::Deposit,
-    // )?;
-    // let mut token_amount = get_insurance_vault_amount(e);
-
-    if depositors_claim < token_amount.cast()? {
-        // only allow half of withdraw available when utilization is high
-        token_amount = depositors_claim.max(0).cast::<u128>()?.safe_div(2)?;
-    }
-
-    if user_shares > 0 {
-        // only allow MAX_APR_PER_REVENUE_SETTLE_TO_INSURANCE_FUND_VAULT or 1/10th of revenue pool to be settled
-        let capped_apr_amount = insurance_vault_amount
-
-            .safe_mul(MAX_APR_PER_REVENUE_SETTLE_TO_INSURANCE_FUND_VAULT.cast::<u128>()?)?
-            .safe_div(PERCENTAGE_PRECISION)?
-            .safe_div(ONE_YEAR.safe_div(revenue_settle_period.cast()?)?.max(1))?;
-        let capped_token_pct_amount = token_amount.safe_div(10)?;
-        token_amount = capped_token_pct_amount.min(capped_apr_amount);
-    }
-
-    let insurance_fund_token_amount = token_amount.fixed_mul_floor(
-        e,
-        &SHARE_OF_REVENUE_ALLOCATED_TO_INSURANCE_FUND_VAULT_NUMERATOR,
-        &SHARE_OF_REVENUE_ALLOCATED_TO_INSURANCE_FUND_VAULT_DENOMINATOR
-    );
-    // let insurance_fund_token_amount = get_proportion_u128(
-    //     token_amount,
-    //     SHARE_OF_REVENUE_ALLOCATED_TO_INSURANCE_FUND_VAULT_NUMERATOR,
-    //     SHARE_OF_REVENUE_ALLOCATED_TO_INSURANCE_FUND_VAULT_DENOMINATOR,
-    // )?
-    // .cast::<u64>()?;
-
-    if check_invariants {
-        validate!(
-            &e,
-            insurance_fund_token_amount != 0,
-            InsuranceFundError::NoRevenueToSettleToIF,
-            "no amount to settle to insurance fund"
-        );
-    }
-
-    last_revenue_settle_ts = now;
-
-    let protocol_if_factor = total_factor.safe_sub(user_factor);
-
-    // give protocol its cut
-    if protocol_if_factor > 0 {
-        let n_shares = vault_amount_to_if_shares(
-            insurance_fund_token_amount
-                .safe_mul(protocol_if_factor.cast()?)?
-                .safe_div(spot_market.insurance_fund.total_factor.cast()?)?,
-            spot_market.insurance_fund.total_shares,
-            insurance_vault_amount
-        )?;
-
-        put_total_shares(e, total_shares + n_shares);
-    }
-
-    let total_if_shares_before = total_shares;
-
-    update_revenue_pool_balances(
-        insurance_fund_token_amount.cast::<u128>()?,
-        &SpotBalanceType::Borrow,
-        spot_market
-    )?;
-
-    // emit!(InsuranceFundRecord {
-    //     ts: now,
-    //     spot_market_index: spot_market.market_index,
-    //     perp_market_index: 0, // todo: make option?
-    //     amount: insurance_fund_token_amount.cast()?,
-
-    //     user_if_factor: spot_market.insurance_fund.user_factor,
-    //     total_if_factor: spot_market.insurance_fund.total_factor,
-    //     vault_amount_before: spot_market_vault_amount,
-    //     insurance_vault_amount_before: insurance_vault_amount,
-    //     total_if_shares_before,
-    //     total_if_shares_after: spot_market.insurance_fund.total_shares,
-    // });
-
-    insurance_fund_token_amount.cast()
 }

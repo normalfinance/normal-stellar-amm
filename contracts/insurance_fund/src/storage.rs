@@ -16,11 +16,9 @@ enum DataKey {
     UnstakingPeriod,
     MaxShares,
 
-    TotalShares,
     UserShares,
     SharesBase, // exponent for lp shares (for rebasing)
     LastRevenueSettleTs,
-    TotalFactor, // percentage of interest for total insurance
     UserFactor, // percentage of interest for user staked insurance
 
     IsKilledDeposit,
@@ -47,7 +45,7 @@ generate_instance_storage_getter_and_setter_with_default!(
     false
 );
 
-// 
+//
 generate_instance_storage_getter_and_setter_with_default!(
     last_revenue_settle_ts,
     DataKey::LastRevenueSettleTs,
@@ -60,19 +58,19 @@ generate_instance_storage_getter_and_setter_with_default!(
     u64,
     0
 );
-
-pub fn get_unstaking_period(e: &Env) -> u64 {
-    bump_instance(e);
-    match e.storage().instance().get(&DataKey::UnstakingPeriod) {
-        Some(v) => v,
-        None => panic_with_error!(e, StorageError::ValueNotInitialized),
-    }
-}
-
-pub fn put_unstaking_period(e: &Env, amount: u64) {
-    bump_instance(e);
-    e.storage().instance().set(&DataKey::UnstakingPeriod, &amount)
-}
+generate_instance_storage_getter_and_setter_with_default!(
+    total_shares,
+    DataKey::TotalShares,
+    u128,
+    0
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    shares_base,
+    DataKey::SharesBase,
+    u128,
+    0
+);
+generate_instance_storage_getter_and_setter_with_default!(max_shares, DataKey::MaxShares, u128, 0);
 
 pub fn get_deposit_token(e: &Env) -> Address {
     bump_instance(e);
@@ -85,45 +83,6 @@ pub fn get_deposit_token(e: &Env) -> Address {
 pub fn put_deposit_token(e: &Env, amount: Address) {
     bump_instance(e);
     e.storage().instance().set(&DataKey::TokenDeposit, &amount)
-}
-
-pub fn get_total_shares(e: &Env) -> u128 {
-    bump_instance(e);
-    match e.storage().instance().get(&DataKey::TotalShares) {
-        Some(v) => v,
-        None => panic_with_error!(e, StorageError::ValueNotInitialized),
-    }
-}
-
-pub fn put_total_shares(e: &Env, amount: u128) {
-    bump_instance(e);
-    e.storage().instance().set(&DataKey::TotalShares, &amount)
-}
-
-pub fn get_user_shares(e: &Env) -> u128 {
-    bump_instance(e);
-    match e.storage().instance().get(&DataKey::UserShares) {
-        Some(v) => v,
-        None => panic_with_error!(e, StorageError::ValueNotInitialized),
-    }
-}
-
-pub fn put_user_shares(e: &Env, amount: u128) {
-    bump_instance(e);
-    e.storage().instance().set(&DataKey::UserShares, &amount)
-}
-
-pub fn get_shares_base(e: &Env) -> u128 {
-    bump_instance(e);
-    match e.storage().instance().get(&DataKey::SharesBase) {
-        Some(v) => v,
-        None => panic_with_error!(e, StorageError::ValueNotInitialized),
-    }
-}
-
-pub fn put_shares_base(e: &Env, amount: u128) {
-    bump_instance(e);
-    e.storage().instance().set(&DataKey::SharesBase, &amount)
 }
 
 pub fn get_insurance_vault_amount(e: &Env) -> u128 {
