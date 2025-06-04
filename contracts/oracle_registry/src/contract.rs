@@ -65,22 +65,6 @@ impl OracleRegistryTrait for OracleRegistry {
     }
 }
 
-// The `IndexOracleTrait` trait provides the interface for interacting with an index token.
-#[contractimpl]
-impl IndexOracleTrait for OracleRegistry {
-    fn create_index(e: Env, user: Address) {
-        user.require_auth();
-
-        // ...
-    }
-
-    fn update_index(e: Env, user: Address, asset_id: AssetId) {
-        user.require_auth();
-
-        // ...
-    }
-}
-
 // The `UpgradeableContract` trait provides the interface for upgrading the contract.
 #[contractimpl]
 impl UpgradeableContract for OracleRegistry {

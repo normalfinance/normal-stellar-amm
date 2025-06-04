@@ -6,13 +6,6 @@ pub trait OracleRegistryTrait {
     fn get_price(e: Env, user: Address, asset_id: AssetId, cached: bool) -> OraclePriceData;
 }
 
-pub trait IndexOracleTrait {
-    //
-    fn create_index(e: Env, user: Address);
-
-    fn update_index(e: Env, user: Address, asset_id: AssetId);
-}
-
 pub trait AdminInterface {
     // Initialize admin user. Will panic if called twice
     fn init_admin(e: Env, account: Address);
