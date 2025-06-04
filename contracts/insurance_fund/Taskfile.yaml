@@ -11,9 +11,8 @@ tasks:
 
   build:
     cmds:
-      - task -d ../liquidity_pool build || exit 1
-      - soroban contract build --package soroban-liquidity-pool-router-contract
-      - soroban contract optimize --wasm ../../target/wasm32v1-none/release/soroban_liquidity_pool_router_contract.wasm --wasm-out ../../target/wasm32v1-none/release/soroban_liquidity_pool_router_contract.wasm
+      - soroban contract build --package soroban-insurance-fund-contract
+      - soroban contract optimize --wasm ../../target/wasm32v1-none/release/soroban_insurnace_fund_contract.wasm --wasm-out ../../target/wasm32v1-none/release/soroban_insurnace_fund_contract.wasm
       - ls -l ../../target/wasm32v1-none/release/*.wasm
 
   test:

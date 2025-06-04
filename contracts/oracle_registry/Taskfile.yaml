@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 tasks:
   clean:
     cmd: cargo clean
@@ -11,9 +11,8 @@ tasks:
 
   build:
     cmds:
-      - task -d ../liquidity_pool build || exit 1
-      - soroban contract build --package soroban-liquidity-pool-router-contract
-      - soroban contract optimize --wasm ../../target/wasm32v1-none/release/soroban_liquidity_pool_router_contract.wasm --wasm-out ../../target/wasm32v1-none/release/soroban_liquidity_pool_router_contract.wasm
+      - soroban contract build --package soroban-oracle-registry-contract
+      - soroban contract optimize --wasm ../../target/wasm32v1-none/release/soroban_oracle_registry_contract.wasm --wasm-out ../../target/wasm32v1-none/release/soroban_oracle_registry_contract.wasm
       - ls -l ../../target/wasm32v1-none/release/*.wasm
 
   test:

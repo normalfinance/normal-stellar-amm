@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 
 env:
   SUBDIRS:
@@ -18,7 +18,10 @@ tasks:
 
   build:
     cmds:
+      - task -d contracts/oracle_registry build || exit 1
       - task -d contracts/liquidity_pool_router build || exit 1
+      - task -d contracts/buffer build || exit 1
+      - task -d contracts/insurance_fund build || exit 1
       - task -d contracts/liquidity_pool_provider_swap_fee build || exit 1
       - cp ./target/wasm32v1-none/release/*.wasm ./wasm
 
@@ -48,9 +51,8 @@ tasks:
         sh: find ./target/wasm32v1-none/release/ -maxdepth 1 -type f \( -name '*.wasm' -and -not -name 'soroban_liquidity_pool_provider_swap_fee_contract.wasm' \)
     cmds:
       - for: { var: WASMS }
-        cmd:
-          echo "Checking bindings for {{ .ITEM }}" &&
-          soroban contract info interface --wasm {{ .ITEM }} | grep commit_transfer_ownership && 
+        cmd: echo "Checking bindings for {{ .ITEM }}" &&
+          soroban contract info interface --wasm {{ .ITEM }} | grep commit_transfer_ownership &&
           soroban contract info interface --wasm {{ .ITEM }} | grep apply_transfer_ownership
           || exit 1
 
@@ -60,18 +62,17 @@ tasks:
         sh: find ./target/wasm32v1-none/release/ -maxdepth 1 -type f \( -name '*.wasm' -and -not -name 'soroban_token_contract.wasm' -and -not -name 'soroban_liquidity_pool_provider_swap_fee_contract.wasm' \)
     cmds:
       - for: { var: WASMS }
-        cmd:
-          echo "Checking bindings for {{ .ITEM }}" &&
-          soroban contract info interface --wasm {{ .ITEM }} | grep apply_upgrade && 
-          soroban contract info interface --wasm {{ .ITEM }} | grep commit_upgrade 
+        cmd: echo "Checking bindings for {{ .ITEM }}" &&
+          soroban contract info interface --wasm {{ .ITEM }} | grep apply_upgrade &&
+          soroban contract info interface --wasm {{ .ITEM }} | grep commit_upgrade
           || exit 1
 
   _check_bindings_upgrade:
     vars:
       WASM: "./target/wasm32v1-none/release/soroban_token_contract.wasm"
     cmds:
-      - echo "Checking upgrade bindings for {{ .WASM }}" && 
-        soroban contract info interface --wasm {{ .WASM }} | grep upgrade 
+      - echo "Checking upgrade bindings for {{ .WASM }}" &&
+        soroban contract info interface --wasm {{ .WASM }} | grep upgrade
         || exit 1
 
   check_bindings:
