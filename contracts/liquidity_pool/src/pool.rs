@@ -16,14 +16,13 @@ use utils::constant::{ FEE_MULTIPLIER, PRICE_PRECISION };
 use utils::oracle::oracle_validity;
 use utils::oracle::OracleGuardRails;
 use utils::oracle::OracleValidity;
-use utils::storage::OracleAndSource;
 use utils::storage::PoolStatus;
 use utils::storage::PoolTier;
 
 #[contracttype]
 #[derive(Clone)]
 pub struct Pool {
-    pub target_asset: Asset,
+    pub asset: Address,
 
     pub token_a: Address,
     pub token_b: Address,

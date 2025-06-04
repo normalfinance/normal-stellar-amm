@@ -1,6 +1,6 @@
 use soroban_sdk::{ Address, BytesN, Env, Map, Symbol, Vec };
 use utils::{
-    oracle::{OracleGuardRails, OracleSource},
+    oracle::{ OracleGuardRails },
     storage::{ InitializeAllParams, InitializeParams, LiquidityPoolInfo, PoolStatus, PoolTier },
 };
 
@@ -112,10 +112,10 @@ pub trait AdminInterfaceTrait {
     fn set_expiry_ts(e: Env, admin: Address, expiry_ts: u64);
 
     // Failsafe to update the base oracle address
-    fn set_base_oracle(e: Env, admin: Address, oracle: Address, oracle_source: OracleSource);
+    fn set_base_oracle(e: Env, admin: Address, oracle: Address);
 
     // Failsafe to update the quote oracle address
-    fn set_quote_oracle(e: Env, admin: Address, oracle: Address, oracle_source: OracleSource);
+    fn set_quote_oracle(e: Env, admin: Address, oracle: Address);
 
     // Rebalance pool reserves
     fn rebalance(e: Env, admin: Address);

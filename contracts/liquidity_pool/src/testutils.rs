@@ -11,16 +11,10 @@ use soroban_sdk::token::{
 use soroban_sdk::String;
 use soroban_sdk::{ testutils::Address as _, Address, BytesN, Env, Symbol, Vec };
 use utils::constant::PERCENTAGE_PRECISION_U64;
-use utils::oracle::{
-    OracleGuardRails,
-    OracleSource,
-    PriceDivergenceGuardRails,
-    ValidityGuardRails,
-};
+use utils::oracle::{ OracleGuardRails, PriceDivergenceGuardRails, ValidityGuardRails };
 use utils::storage::{
     InitializeAllParams,
     InitializeParams,
-    OracleAndSource,
     OraclePair,
     PrivilegedAddresses,
     RewardConfig,
@@ -57,7 +51,7 @@ pub(crate) struct Setup<'a> {
     pub(crate) env: Env,
     pub(crate) router: Address,
     pub(crate) oracles: OraclePair,
-    pub(crate) target_asset: Asset,
+    pub(crate) asset: Address,
     pub(crate) base_oracle_price: i128,
     pub(crate) base_oracle_client: MockPriceOracleClient<'a>,
     pub(crate) quote_oracle_price: i128,
@@ -132,8 +126,8 @@ impl Setup<'_> {
         // let xlm = Address::generate(&e);
         let usdc = Address::generate(&e);
 
-        let target_asset = Asset::Other(Symbol::new(&e, "SOL"));
-        let target_asset_mock = MockAsset::Other(Symbol::new(&e, "SOL"));
+        let asset = Asset::Other(Symbol::new(&e, "SOL"));
+        let asset_mock = MockAsset::Other(Symbol::new(&e, "SOL"));
         // let quote_asset = Asset::Other(Symbol::new(&e, "XLM"));
         let quote_asset_mock = MockAsset::Other(Symbol::new(&e, "XLM"));
 
@@ -141,14 +135,8 @@ impl Setup<'_> {
         let quote_oracle_price = 0_5000000; // $0.50
 
         let oracles = OraclePair {
-            base_oracle: OracleAndSource {
-                address: e.register(MockPriceOracleWASM, ()),
-                source: OracleSource::Reflector,
-            },
-            quote_oracle: OracleAndSource {
-                address: e.register(MockPriceOracleWASM, ()),
-                source: OracleSource::Reflector,
-            },
+            base_oracle: e.register(MockPriceOracleWASM, ()),
+            quote_oracle: e.register(MockPriceOracleWASM, ()),
         };
 
         let base_oracle_client = MockPriceOracleClient::new(&e, &oracles.base_oracle.address);
@@ -158,7 +146,7 @@ impl Setup<'_> {
         base_oracle_client.set_data(
             &admin,
             &MockAsset::Stellar(usdc.clone()),
-            &Vec::from_array(&e, [target_asset_mock.clone()]),
+            &Vec::from_array(&e, [asset_mock.clone()]),
             &7,
             &(5 * 60 * 60)
         );
@@ -196,8 +184,7 @@ impl Setup<'_> {
             &admin,
             &router,
             &oracles,
-            &oracle_guard_rails,
-            &target_asset,
+            &asset,
             &install_token_wasm(&e),
             &String::from_str(&e, "nSOL / XLM Pool Token"),
             &String::from_str(&e, "nSOL-LP"),
@@ -233,7 +220,7 @@ impl Setup<'_> {
             env: e,
             router,
             oracles,
-            target_asset,
+            asset,
             base_oracle_price,
             base_oracle_client,
             quote_oracle_price,
@@ -299,8 +286,7 @@ pub fn create_liqpool_contract<'a>(
     admin: &Address,
     router: &Address,
     oracles: &OraclePair,
-    oracle_guard_rails: &OracleGuardRails,
-    target_asset: &Asset,
+    asset: &Asset,
     token_wasm_hash: &BytesN<32>,
     lp_token_name: &String,
     lp_token_symbol: &String,
@@ -321,8 +307,7 @@ pub fn create_liqpool_contract<'a>(
             },
             router: router.clone(),
             oracles: oracles.clone(),
-            oracle_guard_rails: oracle_guard_rails.clone(),
-            target_asset: target_asset.clone(),
+            asset: asset.clone(),
             tokens: tokens.clone(),
             lp_token_info: TokenInitInfo {
                 token_wasm_hash: token_wasm_hash.clone(),

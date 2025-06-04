@@ -27,9 +27,6 @@ impl OracleRegistryEvents for Events {
     fn update_oracle(&self, user: Address) {
         self.env()
             .events()
-            .publish(
-                (Symbol::new(self.env(), "update_oracle"), user),
-                (ƒ)
-            );
+            .publish((Symbol::new(self.env(), "update_oracle"), user), ());
     }
 }

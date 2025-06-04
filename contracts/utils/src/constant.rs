@@ -32,6 +32,7 @@ pub const QUOTE_PRECISION_U64: u64 = 1_000_000; // expo = -6
 
 // Pool
 pub const FEE_MULTIPLIER: u128 = 10_000;
+pub const DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR: i64 = 3; // '3' here means clamp new data point to 33% (1/3) divergence from current twap (if twap > 0)
 
 // Pool Router
 pub const MAX_POOLS_FOR_PAIR: u32 = 1;
@@ -42,6 +43,18 @@ pub const FEE_DENOMINATOR: u32 = 10000;
 
 // Incentives
 pub const REWARD_PRECISION: u128 = 1_000_000_000_000_000_0000000;
+
+// TIME PERIODS
+pub const ONE_MINUTE: i128 = 60_i128;
+pub const FIVE_MINUTE: i128 = (60 * 5) as i128;
+pub const ONE_HOUR: i64 = 3600;
+pub const ONE_HOUR_I128: i128 = ONE_HOUR as i128;
+pub const TWENTY_FOUR_HOUR: i64 = 3600 * 24;
+pub const THIRTEEN_DAY: i64 = TWENTY_FOUR_HOUR * 13; // IF unstake default
+pub const EPOCH_DURATION: i64 = TWENTY_FOUR_HOUR * 28;
+pub const THIRTY_DAY: i64 = TWENTY_FOUR_HOUR * 30;
+pub const THIRTY_DAY_I128: i128 = (TWENTY_FOUR_HOUR * 30) as i128;
+pub const ONE_YEAR: u128 = 31536000;
 
 // QUOTE AMOUNTS
 pub const ONE_HUNDRED_MILLION_QUOTE: u64 = 100_000_000_u64 * QUOTE_PRECISION_U64;

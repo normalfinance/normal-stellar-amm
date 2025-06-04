@@ -11,7 +11,6 @@ use utils::{
         oracle_validity,
         NormalAction,
         OraclePriceData,
-        OracleSource,
         OracleStatus,
     },
 };
@@ -58,12 +57,12 @@ pub fn get_target_oracle_price(e: &Env, pool: &Pool) -> u128 {
 pub fn get_base_oracle_price(e: &Env, pool: &Pool, now: u64) -> OraclePriceData {
     let oracle_price_data: OraclePriceData = e.invoke_contract(
         &&get_oracle_registry(&e),
-        &Symbol::new(&e, "get_oracle_price"),
+        &Symbol::new(&e, "get_price"),
         Vec::from_array(&e, [
             e.current_contract_address().to_val(),
             pool.base_oracle.source.to_val(),
             pool.base_oracle.address.clone().to_val(),
-            pool.target_asset.into_val(&e),
+            pool.asset.into_val(&e),
             now.into_val(&e),
         ])
     );
@@ -80,7 +79,7 @@ pub fn get_base_oracle_price(e: &Env, pool: &Pool, now: u64) -> OraclePriceData 
 pub fn get_quote_oracle_price(e: &Env, pool: &Pool, now: u64) -> OraclePriceData {
     let oracle_price_data: OraclePriceData = e.invoke_contract(
         &&get_oracle_registry(&e),
-        &Symbol::new(&e, "get_oracle_price"),
+        &Symbol::new(&e, "get_price"),
         Vec::from_array(&e, [
             e.current_contract_address().to_val(),
             pool.quote_oracle.source.to_val(),

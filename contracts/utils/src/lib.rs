@@ -11,4 +11,3 @@ pub mod oracle;
 
 pub mod errors;
 pub mod math;
-pub mod interfaces;

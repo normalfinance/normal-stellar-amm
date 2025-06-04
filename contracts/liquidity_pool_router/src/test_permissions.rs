@@ -481,7 +481,7 @@ fn test_distribute_rewards() {
     let (pool_hash, _pool_address) = router.init_standard_pool(
         &user,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -537,7 +537,7 @@ fn test_remove_pool() {
         let (pool_hash, _pool_address) = router.init_standard_pool(
             &user.clone(),
             &setup.oracles,
-            &setup.target_asset,
+            &setup.asset,
             &tokens,
             &String::from_str(&e, "Pool Share Token"),
             &String::from_str(&e, "Pool Share Token"),

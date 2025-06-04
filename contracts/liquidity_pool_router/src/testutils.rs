@@ -45,7 +45,7 @@ pub(crate) struct Setup<'a> {
     pub(crate) admin: Address,
 
     pub(crate) oracles: OraclePair,
-    pub(crate) target_asset: Asset,
+    pub(crate) asset: Address,
 
     pub(crate) tokens: [test_token::Client<'a>; 4],
     pub(crate) reward_token: test_token::Client<'a>,
@@ -87,7 +87,7 @@ impl Default for Setup<'_> {
             quote_oracle: env.register(MockPriceOracleWASM, ()),
         };
 
-        let target_asset = Asset::Other(Symbol::new(&env, "SOL"));
+        let asset = Asset::Other(Symbol::new(&env, "SOL"));
 
         let reward_admin = Address::generate(&env);
         let admin = Address::generate(&env);
@@ -126,7 +126,7 @@ impl Default for Setup<'_> {
             env,
             admin,
             oracles,
-            target_asset,
+            asset,
             tokens,
             reward_token,
             router,

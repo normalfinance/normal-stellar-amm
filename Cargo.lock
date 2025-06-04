@@ -1252,6 +1252,7 @@ version = "0.1.0"
 dependencies = [
  "access_control",
  "paste",
+ "sep-40-oracle",
  "soroban-fixed-point-math",
  "soroban-sdk",
  "upgrade",

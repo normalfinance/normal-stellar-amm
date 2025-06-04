@@ -1,16 +1,17 @@
-use soroban_sdk::{ contracttype, panic_with_error, Address, Env, Map, Vec };
-use soroban_sdk::token::{ TokenClient as SorobanTokenClient };
+use soroban_sdk::{ contracttype, panic_with_error, Env, Map };
 use utils::bump::{ bump_instance, bump_persistent, bump_temporary };
-use utils::constant::PRICE_PRECISION_I64;
+use utils::constant::{ PRICE_PRECISION_I128 };
 use utils::errors::storage_errors::StorageError;
 use utils::oracle::{ OracleGuardRails, OraclePriceData };
-use utils::storage::{AssetId, OracleInfo};
+use utils::storage::{ AssetId, OracleInfo };
 use utils::{
     generate_instance_storage_getter_and_setter_with_default,
     generate_instance_storage_getter_with_default,
     generate_instance_storage_setter,
 };
 use paste::paste;
+
+use crate::errors::OracleRegistryError;
 
 #[derive(Clone)]
 #[contracttype]
@@ -33,13 +34,13 @@ enum DataKey {
 #[derive(Default, Clone, Copy, Eq, PartialEq, Debug)]
 pub struct HistoricalOracleData {
     /// precision: PRICE_PRECISION
-    pub last_oracle_price: i64,
+    pub last_oracle_price: i128,
     /// precision: PRICE_PRECISION
     pub last_oracle_conf: u64,
     /// amount of time since last update
     pub last_oracle_delay: i64,
     /// precision: PRICE_PRECISION
-    pub last_oracle_price_twap: i64,
+    pub last_oracle_price_twap: i128,
     /// unix_timestamp of last snapshot
     pub last_oracle_price_twap_ts: i64,
 }
@@ -47,15 +48,15 @@ pub struct HistoricalOracleData {
 impl HistoricalOracleData {
     pub fn default_quote_oracle() -> Self {
         HistoricalOracleData {
-            last_oracle_price: PRICE_PRECISION_I64,
+            last_oracle_price: PRICE_PRECISION_I128,
             last_oracle_conf: 0,
             last_oracle_delay: 0,
-            last_oracle_price_twap: PRICE_PRECISION_I64,
+            last_oracle_price_twap: PRICE_PRECISION_I128,
             ..HistoricalOracleData::default()
         }
     }
 
-    pub fn default_price(price: i64) -> Self {
+    pub fn default_price(price: i128) -> Self {
         HistoricalOracleData {
             last_oracle_price: price,
             last_oracle_conf: 0,
@@ -111,7 +112,7 @@ pub fn get_oracle(e: &Env, asset_id: &AssetId) -> OracleInfo {
     let oracles = get_oracles(e);
     match oracles.get(asset_id) {
         Some(data) => data,
-        None => panic_with_error!(&e, Error::PoolNotFound),
+        None => panic_with_error!(&e, OracleRegistryError::OracleNotFound),
     }
 }
 
@@ -145,24 +146,7 @@ pub fn put_oracle_guard_rails(e: &Env, guard_rails: &OracleGuardRails) {
     bump_persistent(e, &key);
 }
 
-pub fn get_oracles_set(e: &Env, index: u128) -> Vec<Address> {
-    let key = DataKey::OraclesSet(index);
-    match e.storage().persistent().get(&key) {
-        Some(v) => {
-            bump_persistent(e, &key);
-            v
-        }
-        None => panic_with_error!(&e, StorageError::ValueNotInitialized),
-    }
-}
-
-pub fn put_oracles_set(e: &Env, index: u128, tokens: &Vec<Address>) {
-    let key = DataKey::OraclesSet(index);
-    e.storage().persistent().set(&key, tokens);
-    bump_persistent(e, &key);
-}
-
-pub fn get_historical_oracle_data(e: &Env, &asset_id: AssetId) -> HistoricalOracleData {
+pub fn get_historical_oracle_data(e: &Env, asset_id: &AssetId) -> HistoricalOracleData {
     let key = DataKey::HistoricalOracleData;
     match e.storage().persistent().get(&key).get(asset_id) {
         Some(data) => data,
@@ -170,7 +154,7 @@ pub fn get_historical_oracle_data(e: &Env, &asset_id: AssetId) -> HistoricalOrac
     }
 }
 
-pub fn put_historical_oracle_data(e: &Env, asset_id: AssetId, data: &HistoricalOracleData) {
+pub fn put_historical_oracle_data(e: &Env, asset_id: &AssetId, data: &HistoricalOracleData) {
     let key = DataKey::HistoricalOracleData(asset_id);
     e.storage().instance().set(&key, data)
 }

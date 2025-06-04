@@ -9,7 +9,7 @@ use soroban_sdk::token::{
     TokenClient as SorobanTokenClient,
 };
 use soroban_sdk::{ Address, BytesN, Env, String, Symbol, Vec };
-use utils::storage::{ OracleAndSource, OraclePair };
+use utils::storage::{ OraclePair };
 
 pub(crate) struct TestConfig {
     pub(crate) max_provider_fee: u32,
@@ -77,14 +77,8 @@ impl Setup<'_> {
         let buffer = deploy_buffer_contract(e.clone());
 
         let oracles = OraclePair {
-            base_oracle: OracleAndSource {
-                address: e.register(MockPriceOracleWASM, ()),
-                source: OracleSource::Reflector,
-            },
-            quote_oracle: OracleAndSource {
-                address: e.register(MockPriceOracleWASM, ()),
-                source: OracleSource::Reflector,
-            },
+            base_oracle:  e.register(MockPriceOracleWASM, ()),
+            quote_oracle:  e.register(MockPriceOracleWASM, ()),
         };
 
         // create swap pool & deposit initial liquidity

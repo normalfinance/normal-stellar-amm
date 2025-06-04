@@ -1,7 +1,4 @@
-use sep_40_oracle::Asset;
 use soroban_sdk::{ contracttype, Address, BytesN, String, Symbol, Vec };
-
-use crate::oracle::{ OracleSource };
 
 #[contracttype]
 #[derive(Default, Clone)]
@@ -67,16 +64,9 @@ pub struct PrivilegedAddresses {
 
 #[contracttype]
 #[derive(Clone)]
-pub struct OracleAndSource {
-    pub address: Address,
-    pub source: OracleSource,
-}
-
-#[contracttype]
-#[derive(Clone)]
 pub struct OraclePair {
-    pub base_oracle: OracleAndSource,
-    pub quote_oracle: OracleAndSource,
+    pub base_oracle: Address,
+    pub quote_oracle: Address,
 }
 
 #[contracttype]
@@ -96,7 +86,7 @@ pub struct InitializeParams {
     pub router: Address,
     pub oracle_registry: Address,
     pub oracles: OraclePair,
-    pub target_asset: Asset,
+    pub asset: Address,
     pub lp_token_info: TokenInitInfo,
     /// A vector of token addresses.
     pub tokens: Vec<Address>,
@@ -171,7 +161,7 @@ pub struct AssetId {
 #[contracttype]
 pub struct OracleInfo {
     pub oracle_address: Address,
-    pub source: OracleSource,
+    pub asset: Option<Address>,
     pub decimals: u32, // Optional: for price normalization
     pub frozen: bool,
     pub last_updated: u64,

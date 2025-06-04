@@ -3,7 +3,7 @@ use core::cmp::max;
 use soroban_sdk::{ contracttype, log, Address, Env };
 
 use crate::{
-    constant::{ PERCENTAGE_PRECISION_U64, PRICE_PRECISION_I64 },
+    constant::{ PERCENTAGE_PRECISION_U64 },
     errors::oracle_error::OracleError,
     math::safe_math::SafeMath,
 };
@@ -17,22 +17,11 @@ use crate::{
 //      \__|    |___/   (_______)    \_______)(_______/
 
 #[contracttype]
-#[derive(Clone, Copy, Eq, PartialEq, Debug, Default)]
-pub enum OracleSource {
-    #[default]
-    Reflector,
-    // Band,
-    // DIA,
-    QuoteAsset,
-}
-
-#[contracttype]
 #[derive(Default, Clone, Copy, Debug)]
 pub struct OraclePriceData {
-    pub price: i64,
-    pub confidence: u64,
+    pub price: i128,
+    // pub confidence: u64,
     pub delay: i64,
-    pub has_sufficient_data_points: bool,
 }
 
 #[contracttype]
@@ -171,7 +160,6 @@ pub fn oracle_validity(
         price: oracle_price,
         confidence: oracle_conf,
         delay: oracle_delay,
-        has_sufficient_data_points,
         ..
     } = *oracle_price_data;
 
@@ -202,8 +190,6 @@ pub fn oracle_validity(
         OracleValidity::TooVolatile
     } else if is_conf_too_large {
         OracleValidity::TooUncertain
-    } else if !has_sufficient_data_points {
-        OracleValidity::InsufficientDataPoints
     } else if is_stale_for_amm {
         OracleValidity::StaleForAMM
     } else {
@@ -211,10 +197,6 @@ pub fn oracle_validity(
     };
 
     if log_validity {
-        if !has_sufficient_data_points {
-            log!(e, "Invalid {} Oracle: Insufficient Data Points", pool_address);
-        }
-
         if is_oracle_price_nonpositive {
             log!(e, "Invalid {} Oracle: Non-positive (oracle_price <=0)", pool_address);
         }
@@ -244,15 +226,4 @@ pub fn oracle_validity(
     }
 
     oracle_validity
-}
-
-impl OraclePriceData {
-    pub fn default_usd() -> Self {
-        OraclePriceData {
-            price: PRICE_PRECISION_I64,
-            confidence: 1,
-            delay: 0,
-            has_sufficient_data_points: true,
-        }
-    }
 }

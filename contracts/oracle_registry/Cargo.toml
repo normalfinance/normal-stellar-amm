@@ -15,6 +15,7 @@ access_control = { workspace = true }
 utils = { workspace = true }
 upgrade = { workspace = true }
 soroban-fixed-point-math = { workspace = true }
+sep-40-oracle = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

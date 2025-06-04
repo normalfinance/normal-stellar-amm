@@ -6,7 +6,6 @@ use rand::{ Rng, SeedableRng };
 use utils::constant::{ PERCENTAGE_PRECISION_U64, PRICE_PRECISION, PRICE_PRECISION_I128 };
 use utils::oracle::{
     OracleGuardRails,
-    OracleSource,
     PriceDivergenceGuardRails,
     ValidityGuardRails,
 };
@@ -27,7 +26,6 @@ use soroban_sdk::{ String };
 use utils::storage::{
     InitializeAllParams,
     InitializeParams,
-    OracleAndSource,
     OraclePair,
     PoolTier,
     PrivilegedAddresses,
@@ -426,7 +424,7 @@ fn initialize_already_initialized() {
         },
         router: users[0].clone(),
         oracles: setup.oracles.clone(),
-        target_asset: setup.target_asset.clone(),
+        asset: setup.asset.clone(),
         tokens: Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]),
         lp_token_info: TokenInitInfo {
             token_wasm_hash: install_token_wasm(&setup.env),
@@ -468,7 +466,7 @@ fn test_custom_fee() {
             &setup.users[0],
             &setup.oracles,
             &setup.oracle_guard_rails,
-            &setup.target_asset,
+            &setup.asset,
             &install_token_wasm(&setup.env),
             &String::from_str(&setup.env, "Pool Share Token"),
             &String::from_str(&setup.env, "Pool Share Token"),
@@ -1467,20 +1465,14 @@ fn test_withdraw_rewards() {
     let usdc = Address::generate(&e);
 
     // Setup oracles
-    let target_asset = Asset::Other(Symbol::new(&e, "SOL"));
-    let target_asset_mock = MockAsset::Other(Symbol::new(&e, "SOL"));
+    let asset = Asset::Other(Symbol::new(&e, "SOL"));
+    let asset_mock = MockAsset::Other(Symbol::new(&e, "SOL"));
     // let quote_asset = Asset::Other(Symbol::new(&e, "XLM"));
     let quote_asset_mock = MockAsset::Other(Symbol::new(&e, "XLM"));
 
     let oracles = OraclePair {
-        base_oracle: OracleAndSource {
-            address: e.register(MockPriceOracleWASM, ()),
-            source: OracleSource::Reflector,
-        },
-        quote_oracle: OracleAndSource {
-            address: e.register(MockPriceOracleWASM, ()),
-            source: OracleSource::Reflector,
-        },
+        base_oracle: e.register(MockPriceOracleWASM, ()),
+        quote_oracle:e.register(MockPriceOracleWASM, ()),
     };
 
     let base_oracle_client = MockPriceOracleClient::new(&e, &oracles.base_oracle.address);
@@ -1490,7 +1482,7 @@ fn test_withdraw_rewards() {
     base_oracle_client.set_data(
         &admin,
         &MockAsset::Stellar(usdc.clone()),
-        &Vec::from_array(&e, [target_asset_mock.clone()]),
+        &Vec::from_array(&e, [asset_mock.clone()]),
         &7,
         &(5 * 60 * 60)
     );
@@ -1524,7 +1516,7 @@ fn test_withdraw_rewards() {
         &router,
         &oracles,
         &oracle_guard_rails,
-        &target_asset,
+        &asset,
         &install_token_wasm(&e),
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -1586,14 +1578,14 @@ fn test_withdraw_rewards() {
 
 // //     let router = Address::generate(&e);
 // //     let oracle = Address::generate(&e);
-// //     let target_asset = Asset::Other(Symbol::new(&e, "SOL"));
+// //     let asset = Asset::Other(Symbol::new(&e, "SOL"));
 
 // //     let liq_pool = create_liqpool_contract(
 // //         &e,
 // //         &admin,
 // //         &router,
 // //         &oracle,
-// //         &target_asset,
+// //         &asset,
 // //         &install_token_wasm(&e),
 // //         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
 // //         &token_reward_admin_client.address,
@@ -1638,7 +1630,7 @@ fn test_withdraw_rewards() {
 
 // //     let router = Address::generate(&e);
 // //     let oracle = Address::generate(&e);
-// //     let target_asset = Asset::Other(Symbol::new(&e, "SOL"));
+// //     let asset = Asset::Other(Symbol::new(&e, "SOL"));
 
 // //     // we compare two pools to check swap in both directions
 // //     let liq_pool1 = create_liqpool_contract(
@@ -1646,7 +1638,7 @@ fn test_withdraw_rewards() {
 // //         &admin,
 // //         &router,
 // //         &oracle,
-// //         &target_asset,
+// //         &asset,
 // //         &install_token_wasm(&e),
 // //         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
 // //         &token_reward_admin_client.address,
@@ -1657,7 +1649,7 @@ fn test_withdraw_rewards() {
 // //         &admin,
 // //         &router,
 // //         &oracle,
-// //         &target_asset,
+// //         &asset,
 // //         &install_token_wasm(&e),
 // //         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
 // //         &token_reward_admin_client.address,
@@ -1741,14 +1733,14 @@ fn test_withdraw_rewards() {
 
 // //     let router = Address::generate(&e);
 // //     let oracle = Address::generate(&e);
-// //     let target_asset = Asset::Other(Symbol::new(&e, "SOL"));
+// //     let asset = Asset::Other(Symbol::new(&e, "SOL"));
 
 // //     let liq_pool = create_liqpool_contract(
 // //         &e,
 // //         &admin,
 // //         &router,
 // //         &oracle,
-// //         &target_asset,
+// //         &asset,
 // //         &install_token_wasm(&e),
 // //         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
 // //         &token_reward_admin_client.address,
@@ -1838,14 +1830,14 @@ fn test_withdraw_rewards() {
 
 //     let router = Address::generate(&e);
 
-//     let target_asset = Asset::Other(Symbol::new(&e, "SOL"));
+//     let asset = Asset::Other(Symbol::new(&e, "SOL"));
 
 //     let liq_pool = create_liqpool_contract(
 //         &e,
 //         &admin,
 //         &router,
 //         &oracles,
-//         &target_asset,
+//         &asset,
 //         &install_token_wasm(&e),
 //         &String::from_str(&e, "Pool Share Token"),
 //         &String::from_str(&e, "Pool Share Token"),

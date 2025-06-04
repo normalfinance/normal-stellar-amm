@@ -84,13 +84,12 @@ use token_synthetic::put_token_synthetic;
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
 use utils::constant::FEE_MULTIPLIER;
-use utils::oracle::{ OracleGuardRails, OraclePriceData, OracleSource };
+use utils::oracle::{ OracleGuardRails, OraclePriceData };
 use utils::storage::{
     AddressAndAmount,
     InitializeAllParams,
     InitializeParams,
     LiquidityPoolInfo,
-    OracleAndSource,
     PoolResponse,
     PoolStatus,
     PoolTier,
@@ -202,7 +201,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             fee_fraction: params.fee_fraction,
             base_oracle: params.oracles.base_oracle,
             quote_oracle: params.oracles.quote_oracle,
-            target_asset: params.target_asset,
+            asset: params.asset,
             expiry_ts: 0,
             expiry_price: 0,
         };
@@ -862,7 +861,7 @@ impl AdminInterfaceTrait for LiquidityPool {
         set_pool(&e, &pool);
     }
 
-    fn set_base_oracle(e: Env, admin: Address, oracle: Address, oracle_source: OracleSource) {
+    fn set_base_oracle(e: Env, admin: Address, oracle: Address) {
         admin.require_auth();
         require_operations_admin_or_owner(&e, &admin);
 
@@ -875,16 +874,13 @@ impl AdminInterfaceTrait for LiquidityPool {
             price: _oracle_price,
             delay: _oracle_delay,
             ..
-        } = oracle::get_oracle_price(&e, &oracle_source, &oracle, &pool.target_asset, now);
+        } = oracle::get_oracle_price(&e, &oracle_source, &oracle, &pool.asset, now);
 
-        pool.base_oracle = OracleAndSource {
-            address: oracle,
-            source: oracle_source,
-        };
+        pool.base_oracle = oracle;
         set_pool(&e, &pool);
     }
 
-    fn set_quote_oracle(e: Env, admin: Address, oracle: Address, oracle_source: OracleSource) {
+    fn set_quote_oracle(e: Env, admin: Address, oracle: Address) {
         admin.require_auth();
         require_operations_admin_or_owner(&e, &admin);
 
@@ -899,10 +895,7 @@ impl AdminInterfaceTrait for LiquidityPool {
         //     ..
         // } = oracle::get_oracle_price(&e, &oracle_source, &oracle, &get_tokn, now);
 
-        pool.quote_oracle = OracleAndSource {
-            address: oracle,
-            source: oracle_source,
-        };
+        pool.quote_oracle = oracle;
         set_pool(&e, &pool);
     }
 

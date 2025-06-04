@@ -1,6 +1,6 @@
-use crate::errors::{ OracleRegistryError };
-use crate::events::{ OracleRegistryEvents, Events as OracleRegistryEvents };
-use crate::oracle::get_oracle_price;
+use crate::errors::OracleRegistryError;
+use crate::events::{ Events, OracleRegistryEvents };
+use crate::oracle::{ get_oracle_price, update_twap };
 use crate::registry_interface::{ AdminInterface, IndexOracleTrait, OracleRegistryTrait };
 use crate::storage::{
     get_historical_oracle_data,
@@ -8,8 +8,8 @@ use crate::storage::{
     get_price_override_limit,
     has_oracle,
     put_oracle_guard_rails,
-    put_oracles_set,
     set_oracle,
+    HistoricalOracleData,
 };
 
 use access_control::access::{ AccessControl, AccessControlTrait };
@@ -21,27 +21,11 @@ use access_control::management::{ MultipleAddressesManagementTrait, SingleAddres
 use access_control::role::Role;
 use access_control::role::SymbolRepresentation;
 use access_control::transfer::TransferOwnershipTrait;
-use access_control::utils::{
-    require_pause_admin_or_owner,
-    require_pause_or_emergency_pause_admin_or_owner,
-};
-use soroban_sdk::token::TokenClient as SorobanTokenClient;
-use soroban_sdk::{
-    contract,
-    contractimpl,
-    log,
-    panic_with_error,
-    Address,
-    BytesN,
-    Env,
-    Map,
-    Symbol,
-    Vec,
-};
+use soroban_sdk::{ contract, contractimpl, panic_with_error, Address, BytesN, Env, Symbol, Vec };
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
-use utils::oracle::{ OracleGuardRails, OraclePriceData, OracleSource };
+use utils::oracle::{ OracleGuardRails, OraclePriceData };
 use utils::storage::{ AssetId, OracleInfo };
 
 #[contract]
@@ -50,7 +34,7 @@ pub struct OracleRegistry;
 // The `OracleRegistryTrait` trait provides the interface for interacting with a liquidity pool.
 #[contractimpl]
 impl OracleRegistryTrait for OracleRegistry {
-    fn get_oracle_price(e: Env, user: Address, asset_id: AssetId, cached: bool) -> OraclePriceData {
+    fn get_price(e: Env, user: Address, asset_id: AssetId, cached: bool) -> OraclePriceData {
         user.require_auth();
 
         let now = e.ledger().timestamp();
@@ -68,14 +52,13 @@ impl OracleRegistryTrait for OracleRegistry {
             // Fetch a new price
             oracle_price_data = get_oracle_price(
                 &e,
-                oracle_info.source,
-                oracle_info.oracle_address,
-                asset,
+                &oracle_info.oracle_address,
+                &oracle_info.asset,
                 now
             );
 
-            // update data
-            // ...
+            // Update data
+            update_twap(&e, asset_id, oracle_price_data, sanitize_clamp_denominator, now);
         }
 
         oracle_price_data
@@ -205,13 +188,7 @@ impl AdminInterface for OracleRegistry {
         put_oracle_guard_rails(&e, &oracle_guard_rails);
     }
 
-    fn register_oracle(
-        e: Env,
-        admin: Address,
-        asset_id: AssetId,
-        oracle_address: Address,
-        source: OracleSource
-    ) {
+    fn register_oracle(e: Env, admin: Address, asset_id: AssetId, oracle_address: Address) {
         admin.require_auth();
 
         if has_oracle(&e, asset_id) {
@@ -220,7 +197,7 @@ impl AdminInterface for OracleRegistry {
 
         let oracle_info = OracleInfo {
             oracle_address,
-            source,
+            asset,
             decimals: 7,
             frozen: false,
             last_updated: e.ledger().timestamp(),
@@ -234,19 +211,12 @@ impl AdminInterface for OracleRegistry {
     //
     // * `admin` - The address of the admin.
     // * `oracle_guard_rails` - The address of the rewards admin.
-    fn update_oracle(
-        e: Env,
-        admin: Address,
-        asset_id: AssetId,
-        oracle_address: Address,
-        source: OracleSource
-    ) {
+    fn update_oracle(e: Env, admin: Address, asset_id: AssetId, oracle_address: Address) {
         admin.require_auth();
 
         let oracle_info = get_oracle(&e, &asset_id);
 
         oracle_info.oracle_address = oracle_address;
-        oracle_info.source = source;
 
         put_oracle_data(&e, data);
     }
@@ -266,13 +236,7 @@ impl AdminInterface for OracleRegistry {
         let oracle_info = get_oracle(&e, &asset_id);
 
         // Pull latest price
-        let oracle_price_data = get_oracle_price(
-            &e,
-            oracle_info.source,
-            oracle_info.oracle_address,
-            asset,
-            now
-        );
+        let oracle_price_data = get_oracle_price(&e, &oracle_info.oracle_address, asset, now);
 
         put_historical_oracle_data(&e, asset_id, data);
 
@@ -286,8 +250,16 @@ impl AdminInterface for OracleRegistry {
     // * `admin` - The address of the admin.
     // * `asset_id` - The address of the rewards admin.
     // * `price` - The address of the rewards admin.
-    fn set_oracle_price(e: Env, admin: Address, asset_id: AssetId, price: u128) {
+    fn set_oracle_price(
+        e: Env,
+        admin: Address,
+        asset_id: AssetId,
+        oracle_price_twap: i128,
+        price: i128
+    ) {
         admin.require_auth();
+
+        let now = e.ledger().timestamp();
 
         // let oracle_info = get_oracle(&e, &asset_id);
         let historical_oracle_data = get_historical_oracle_data(&e, &asset_id);
@@ -297,6 +269,14 @@ impl AdminInterface for OracleRegistry {
         }
 
         // TODO: update price
+        let new_price = HistoricalOracleData {
+            last_oracle_price_twap: oracle_price_twap,
+            last_oracle_price: price,
+            last_oracle_conf: 1,
+            last_oracle_delay: 0,
+            last_oracle_price_twap_ts: now,
+        };
+        put_historical_oracle_data(e, asset_id, &new_historical_oracle_data);
     }
 
     // Sets the oracle status to frozen.

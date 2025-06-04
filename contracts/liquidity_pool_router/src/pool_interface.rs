@@ -198,7 +198,7 @@ pub trait PoolsManagementTrait {
         user: Address,
         oracles: OraclePair,
         oracle_guard_rails: OracleGuardRails,
-        target_asset: Asset,
+        asset: Address,
         tokens: Vec<Address>,
         lp_token_name: String,
         lp_token_symbol: String,

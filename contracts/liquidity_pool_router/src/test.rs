@@ -56,7 +56,7 @@ fn test_total_liquidity() {
         let (pool_hash, _pool_address) = setup.router.init_standard_pool(
             &user1,
             &setup.oracles,
-            &setup.target_asset,
+            &setup.asset,
             &tokens,
             &String::from_str(&e, "Pool Share Token"),
             &String::from_str(&e, "Pool Share Token"),
@@ -87,7 +87,7 @@ fn test_constant_product_pool() {
     let (pool_hash, pool_address) = router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -203,7 +203,7 @@ fn test_add_pool_after_removal() {
     let (pool_hash, pool_address) = router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -215,7 +215,7 @@ fn test_add_pool_after_removal() {
     let (pool_hash_new, pool_address_new) = router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -241,7 +241,7 @@ fn test_init_pool_twice() {
     let (pool_hash1, pool_address1) = router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -250,7 +250,7 @@ fn test_init_pool_twice() {
     let (pool_hash2, pool_address2) = router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -265,7 +265,7 @@ fn test_init_pool_twice() {
     router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -276,7 +276,7 @@ fn test_init_pool_twice() {
     router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -287,7 +287,7 @@ fn test_init_pool_twice() {
     router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -316,7 +316,7 @@ fn test_init_pool_bad_tokens() {
     router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -344,7 +344,7 @@ fn test_init_standard_pool_bad_tokens() {
     router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -372,7 +372,7 @@ fn test_simple_ongoing_reward() {
     let (standard_pool_hash, standard_pool_address) = router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -507,7 +507,7 @@ fn test_rewards_distribution() {
     let (standard_pool_hash1, standard_pool_address1) = router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens1,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -516,7 +516,7 @@ fn test_rewards_distribution() {
     let (standard_pool_hash2, standard_pool_address2) = router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens2,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -672,7 +672,7 @@ fn test_rewards_distribution_as_operator() {
     let (standard_pool_hash, _standard_pool_address) = router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -770,7 +770,7 @@ fn test_rewards_distribution_override() {
     let (standard_pool_hash, _standard_pool_address) = router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -867,7 +867,7 @@ fn test_liqidity_not_filled() {
     let (standard_pool_hash, _standard_pool_address) = router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -899,7 +899,7 @@ fn test_fill_liqidity_reentrancy() {
     let (standard_pool_hash, _standard_pool_address) = router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -931,7 +931,7 @@ fn test_config_pool_rewards_reentrancy() {
     let (standard_pool_hash, _standard_pool_address) = router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -963,7 +963,7 @@ fn test_config_pool_rewards_after_new_global_config() {
     let (standard_pool_hash, _standard_pool_address) = router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -1003,7 +1003,7 @@ fn test_config_pool_after_liquidity_fill() {
     let (standard_pool_1_hash, _standard_pool_1_address) = router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -1024,7 +1024,7 @@ fn test_config_pool_after_liquidity_fill() {
     let (standard_pool_2_hash, _standard_pool_2_address) = router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -1051,7 +1051,7 @@ fn test_fill_liquidity_no_config() {
     let (standard_pool_hash, _standard_pool_address) = router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -1081,7 +1081,7 @@ fn test_config_rewards_not_admin() {
     router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -1110,7 +1110,7 @@ fn test_config_rewards_duplicated_tokens() {
     router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -1141,7 +1141,7 @@ fn test_config_rewards_tokens_not_sorted() {
     router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -1196,7 +1196,7 @@ fn test_unexpected_fee() {
     router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -1223,7 +1223,7 @@ fn test_event_correct() {
     let (pool_hash, pool_address) = router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -1344,7 +1344,7 @@ fn test_tokens_storage() {
             router.init_standard_pool(
                 &user1,
                 &setup.oracles,
-                &setup.target_asset,
+                &setup.asset,
                 &pair,
                 &String::from_str(&e, "Pool Share Token"),
                 &String::from_str(&e, "Pool Share Token"),
@@ -1387,7 +1387,7 @@ fn test_create_pool_payment() {
     router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -1416,7 +1416,7 @@ fn test_rewards_distribution_without_outstanding_rewards() {
     let (standard_pool_hash1, standard_pool_address1) = router.init_standard_pool(
         &user,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
@@ -1481,7 +1481,7 @@ fn test_privileged_users() {
     let (_, standard_address) = router.init_standard_pool(
         &user1,
         &setup.oracles,
-        &setup.target_asset,
+        &setup.asset,
         &tokens,
         &String::from_str(&e, "Pool Share Token"),
         &String::from_str(&e, "Pool Share Token"),
