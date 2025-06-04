@@ -9,7 +9,7 @@ use soroban_sdk::token::{
     TokenClient as SorobanTokenClient,
 };
 use soroban_sdk::{ Address, BytesN, Env, String, Symbol, Vec };
-use utils::storage::{OracleAndSource, OraclePair};
+use utils::storage::{ OracleAndSource, OraclePair };
 
 pub(crate) struct TestConfig {
     pub(crate) max_provider_fee: u32,
@@ -29,7 +29,7 @@ pub(crate) struct Setup<'a> {
     pub(crate) contract: ProviderSwapFeeCollectorClient<'a>,
     pub(crate) router: swap_router::Client<'a>,
     pub(crate) operator: Address,
-    pub(crate) insurance_fund: insurance_fund::Client<'a>,
+    pub(crate) buffer: buffer::Client<'a>,
     pub(crate) fee_destination: Address,
     pub(crate) token_a: SorobanTokenClient<'a>,
     pub(crate) token_a_admin_client: SorobanTokenAdminClient<'a>,
@@ -74,7 +74,7 @@ impl Setup<'_> {
         router.set_pool_hash(&admin, &pool_hash);
         router.set_token_hash(&admin, &token_hash);
 
-        let insurance_fund = deploy_insurance_fund_contract(e.clone());
+        let buffer = deploy_buffer_contract(e.clone());
 
         let oracles = OraclePair {
             base_oracle: OracleAndSource {
@@ -116,7 +116,7 @@ impl Setup<'_> {
             fee_destination,
             contract,
             router,
-            insurance_fund,
+            buffer,
             token_a,
             token_a_admin_client,
             token_b,
@@ -166,14 +166,14 @@ fn deploy_liqpool_router_contract<'a>(e: Env) -> swap_router::Client<'a> {
     swap_router::Client::new(&e, &e.register(swap_router::WASM, ()))
 }
 
-pub mod insurance_fund {
+pub mod buffer {
     soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/soroban_insurance_fund_contract.wasm"
+        file = "../../target/wasm32v1-none/release/soroban_buffer_contract.wasm"
     );
 }
 
-fn deploy_insurance_fund_contract<'a>(e: Env) -> insurance_fund::Client<'a> {
-    insurance_fund::Client::new(&e, &e.register(insurance_fund::WASM, ()))
+fn deploy_buffer_contract<'a>(e: Env) -> buffer::Client<'a> {
+    buffer::Client::new(&e, &e.register(buffer::WASM, ()))
 }
 
 fn install_token_wasm(e: &Env) -> BytesN<32> {
