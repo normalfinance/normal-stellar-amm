@@ -1,9 +1,9 @@
 #![no_std]
 
-mod constants;
 mod contract;
 mod errors;
 mod events;
+mod helpers;
 mod interface;
 mod storage;
 mod test;

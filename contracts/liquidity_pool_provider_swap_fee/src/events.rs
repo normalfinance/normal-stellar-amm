@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, Env, Symbol};
+use soroban_sdk::{ Address, Env, Symbol };
 
 #[derive(Clone)]
 pub(crate) struct Events(Env);
@@ -19,20 +19,29 @@ pub(crate) trait ProviderFeeEvents {
     fn charge_provider_fee(&self, token: Address, amount: u128);
 
     fn claim_fee(&self, token: Address, amount: u128, swapped_to: Address, swapped_amount: u128);
+
+    fn settle_fees_to_insurance_fund(&self, token: Address, amount: u128);
 }
 
 impl ProviderFeeEvents for Events {
     fn charge_provider_fee(&self, token: Address, amount: u128) {
-        self.env().events().publish(
-            (Symbol::new(self.env(), "charge_provider_fee"),),
-            (token, amount),
-        );
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "charge_provider_fee"),), (token, amount));
     }
 
     fn claim_fee(&self, token: Address, amount: u128, swapped_to: Address, swapped_amount: u128) {
-        self.env().events().publish(
-            (Symbol::new(self.env(), "withdraw_fee"),),
-            (token, amount, swapped_to, swapped_amount),
-        );
+        self.env()
+            .events()
+            .publish(
+                (Symbol::new(self.env(), "withdraw_fee"),),
+                (token, amount, swapped_to, swapped_amount)
+            );
+    }
+
+    fn settle_fees_to_insurance_fund(&self, token: Address, amount: u128) {
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "insurance_fee"),), (token, amount));
     }
 }

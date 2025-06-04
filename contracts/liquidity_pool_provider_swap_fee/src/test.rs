@@ -256,7 +256,7 @@ fn test_claim_fee_and_swap() {
     setup.token_a_admin_client.mint(&user, &1_0000000);
     setup.contract.swap(
         &user,
-        &(tokens.clone(), pool_index.clone(), setup.token_b.address.clone()),
+        (tokens.clone(), pool_index.clone(), setup.token_b.address.clone()),
         &setup.token_a.address,
         &1_0000000,
         &0,
@@ -265,7 +265,7 @@ fn test_claim_fee_and_swap() {
     assert_eq!(
         setup.contract.claim_fees_and_swap(
             &setup.operator,
-            &(tokens, pool_index, setup.token_a.address.clone()),
+            &Vec::from_array(&setup.env, [(tokens, pool_index, setup.token_a.address.clone())]),
             &setup.token_b.address,
             &0
         ),
@@ -274,4 +274,41 @@ fn test_claim_fee_and_swap() {
     assert_eq!(setup.contract.claim_fees(&setup.operator, &setup.token_a.address), 0);
     assert_eq!(setup.token_a.balance(&setup.fee_destination), 99399);
     assert_eq!(setup.token_b.balance(&setup.fee_destination), 0);
+}
+
+#[test]
+fn test_settle_fee_to_insurance_fund() {
+    let setup = Setup::default();
+
+    let tokens = Vec::from_array(&setup.env, [
+        setup.token_a.address.clone(),
+        setup.token_b.address.clone(),
+    ]);
+    let (pool_index, _pool_address) = setup.router.get_pools(&tokens).iter().last().unwrap();
+
+    let user = Address::generate(&setup.env);
+    setup.token_a_admin_client.mint(&user, &1_0000000);
+    setup.contract.swap(
+        &user,
+        &(tokens, pool_index, setup.token_b.address.clone()),
+        &setup.token_a.address,
+        &1_0000000,
+        &0,
+        &100
+    );
+    assert_eq!(
+        setup.contract.settle_fees_to_insurance_fund(&setup.operator, &setup.token_b.address),
+        99699
+    ); // ~ (10000000 - .3%) * 1%
+    assert_eq!(
+        setup.contract.settle_fees_to_insurance_fund(&setup.operator, &setup.token_a.address),
+        0
+    );
+    assert_eq!(setup.token_a.balance(&setup.fee_destination), 0);
+    assert_eq!(setup.token_b.balance(&setup.fee_destination), 99699);
+
+    assert_eq!(setup.contract.claim_fees(&setup.operator, &setup.token_b.address), 99699); // ~ (10000000 - .3%) * 1%
+    assert_eq!(setup.contract.claim_fees(&setup.operator, &setup.token_a.address), 0);
+    assert_eq!(setup.token_a.balance(&setup.fee_destination), 0);
+    assert_eq!(setup.token_b.balance(&setup.fee_destination), 99699);
 }

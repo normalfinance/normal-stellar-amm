@@ -9,7 +9,7 @@ use soroban_sdk::token::{
     TokenClient as SorobanTokenClient,
 };
 use soroban_sdk::{ Address, BytesN, Env, String, Symbol, Vec };
-use utils::storage::OraclePair;
+use utils::storage::{OracleAndSource, OraclePair};
 
 pub(crate) struct TestConfig {
     pub(crate) max_provider_fee: u32,
@@ -29,6 +29,7 @@ pub(crate) struct Setup<'a> {
     pub(crate) contract: ProviderSwapFeeCollectorClient<'a>,
     pub(crate) router: swap_router::Client<'a>,
     pub(crate) operator: Address,
+    pub(crate) insurance_fund: insurance_fund::Client<'a>,
     pub(crate) fee_destination: Address,
     pub(crate) token_a: SorobanTokenClient<'a>,
     pub(crate) token_a_admin_client: SorobanTokenAdminClient<'a>,
@@ -73,12 +74,19 @@ impl Setup<'_> {
         router.init_admin(&admin);
         router.set_pool_hash(&admin, &pool_hash);
         router.set_token_hash(&admin, &token_hash);
-        router.set_reward_token(&admin, &token_a.address);
         router.set_pools_plane(&admin, &plane);
 
+        let insurance_fund = deploy_insurance_fund_contract(e.clone());
+
         let oracles = OraclePair {
-            base_oracle: e.register(MockPriceOracleWASM, ()),
-            quote_oracle: e.register(MockPriceOracleWASM, ()),
+            base_oracle: OracleAndSource {
+                address: e.register(MockPriceOracleWASM, ()),
+                source: OracleSource::Reflector,
+            },
+            quote_oracle: OracleAndSource {
+                address: e.register(MockPriceOracleWASM, ()),
+                source: OracleSource::Reflector,
+            },
         };
 
         // create swap pool & deposit initial liquidity
@@ -110,6 +118,7 @@ impl Setup<'_> {
             fee_destination,
             contract,
             router,
+            insurance_fund,
             token_a,
             token_a_admin_client,
             token_b,
@@ -157,6 +166,16 @@ pub mod swap_router {
 
 fn deploy_liqpool_router_contract<'a>(e: Env) -> swap_router::Client<'a> {
     swap_router::Client::new(&e, &e.register(swap_router::WASM, ()))
+}
+
+pub mod insurance_fund {
+    soroban_sdk::contractimport!(
+        file = "../../target/wasm32v1-none/release/soroban_insurance_fund_contract.wasm"
+    );
+}
+
+fn deploy_insurance_fund_contract<'a>(e: Env) -> insurance_fund::Client<'a> {
+    insurance_fund::Client::new(&e, &e.register(insurance_fund::WASM, ()))
 }
 
 fn install_token_wasm(e: &Env) -> BytesN<32> {
