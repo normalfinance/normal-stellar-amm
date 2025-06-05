@@ -12,7 +12,6 @@ use crate::pool_utils::{
     get_standard_pool_salt,
     get_tokens_salt,
     get_total_liquidity,
-    validate_tokens_contracts,
 };
 use crate::rewards::get_rewards_manager;
 use crate::router_interface::AdminInterface;
@@ -72,6 +71,7 @@ use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
 use utils::constant::CONSTANT_PRODUCT_FEE_AVAILABLE;
 use utils::oracle::OracleGuardRails;
 use utils::storage::{ LiquidityPoolInfo, OraclePair, PoolTier };
+use utils::token::validate_tokens_contracts;
 
 #[contract]
 pub struct LiquidityPoolRouter;
