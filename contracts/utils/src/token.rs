@@ -7,3 +7,8 @@ pub fn validate_tokens_contracts(e: &Env, tokens: &Vec<Address>) {
         SorobanTokenClient::new(e, &token).balance(&e.current_contract_address());
     }
 }
+
+pub fn transfer_token(e: &Env, token: &Address, from: &Address, to: &Address, amount: &i128) {
+    let token_client = SorobanTokenClient::new(e, token);
+    token_client.transfer(from, to, amount);
+}
