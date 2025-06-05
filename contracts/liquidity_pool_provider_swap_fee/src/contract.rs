@@ -330,9 +330,10 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
 
         let settled_amount: u128 = e.invoke_contract(
             &get_buffer(&e),
-            &Symbol::new(&e, "settle_revenue"),
+            &Symbol::new(&e, "deposit"),
             Vec::from_array(&e, [
                 e.current_contract_address().to_val(),
+                &token,
                 fee_amount_for_buffer.into_val(&e),
             ])
         );
@@ -467,9 +468,10 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
 
         let settled_amount: u128 = e.invoke_contract(
             &get_buffer(&e),
-            &Symbol::new(&e, "settle_revenue"),
+            &Symbol::new(&e, "deposit"),
             Vec::from_array(&e, [
                 e.current_contract_address().to_val(),
+                &token,
                 fee_amount_for_buffer.into_val(&e),
             ])
         );

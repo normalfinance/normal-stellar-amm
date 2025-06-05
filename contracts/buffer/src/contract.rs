@@ -1,12 +1,22 @@
 use crate::errors::{ BufferError };
-use crate::events::{ BufferFundEvents, Events as BufferEvents };
+use crate::events::{ BufferEvents, Events as BufferEvents };
 use crate::buffer_interface::{ AdminInterface, BufferTrait };
 use crate::storage::{
+    get_buffer_reserve_amount,
     get_buffer_vault_amount,
     get_deposit_token,
+    get_last_payout_timestamp,
     get_max_balance,
+    get_min_time_between_payouts,
+    get_reserve,
+    get_reserves,
+    put_reserve,
     set_deposit_token,
+    set_fee_collector,
+    set_last_payout_timestamp,
     set_max_balance,
+    set_min_time_between_payouts,
+    set_router,
 };
 
 use access_control::access::{ AccessControl, AccessControlTrait };
@@ -38,150 +48,287 @@ use soroban_sdk::{
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
+use utils::token::{ transfer_token, validate_tokens_contracts };
 
 #[contract]
 pub struct Buffer;
 
-// The `BufferTrait` trait provides the interface for interacting with a liquidity pool.
-#[contractimpl]
-impl BufferTrait for Buffer {
-    fn initialize(e: Env, deposit_token: Address, max_balance: u128) {
-        set_deposit_token(&e, &deposit_token);
-        set_max_balance(&e, &max_balance);
-    }
-
-    fn settle_revenue(e: Env, user: Address, amount: u128) {
-        user.require_auth();
-
-        let balance = get_buffer_vault_amount(&e);
-        let max_balance = get_max_balance(&e);
-
-        if balance + amount > max_balance {
-            panic_with_error!(&e, BufferError::MaxBalanceHit);
+impl Buffer {
+    pub fn __constructor(
+        e: Env,
+        admin: Address,
+        router: Address,
+        fee_collector: Address,
+        min_time_between_payouts: u64
+    ) {
+        let access_control = AccessControl::new(&e);
+        if access_control.get_role_safe(&Role::Admin).is_some() {
+            panic_with_error!(&e, AccessControlError::AdminAlreadySet);
         }
+        access_control.set_role_address(&Role::Admin, &admin);
 
-        // Transfer token to Buffer
-        let token_client = SorobanTokenClient::new(&e, &get_deposit_token(&e));
-        token_client.transfer(&user, &e.current_contract_address(), &(amount as i128));
-
-        BufferEvents::settle(&self, tokens, user, pool_address, token, amount);
-    }
-
-    fn claim_funds(e: Env, user: Address, amount: u128) {
-        user.require_auth();
-
-        // ...
-
-        BufferEvents::claim(&self, tokens, user, pool_address, reward_token, reward_amount);
+        set_router(&e, &router);
+        set_fee_collector(&e, &fee_collector);
+        set_min_time_between_payouts(&e, &min_time_between_payouts);
     }
 }
 
-// The `UpgradeableContract` trait provides the interface for upgrading the contract.
+// The `BufferTrait` trait provides the interface for interacting with the buffer.
 #[contractimpl]
-impl UpgradeableContract for Buffer {
-    // Returns the version of the contract.
+impl BufferTrait for Buffer {
+    fn deposit(e: Env, sender: Address, token: Address, amount: u128) {
+        sender.require_auth();
+
+        let router = get_router(&e);
+        if sender != router {
+            panic_with_error!(&e, BufferError::NotAuthorized);
+        }
+
+        validate_tokens_contracts(&e, &Vec::from_array(&e, [token]));
+
+        let reserve = get_reserve(&e, &token);
+
+        if reserve.balance + amount > reserve.max_balance {
+            panic_with_error!(&e, BufferError::MaxBalanceHit);
+        }
+
+        // Transfer token to the Buffer
+        let token_client = SorobanTokenClient::new(&e, &token);
+        token_client.transfer(&sender, &e.current_contract_address(), &(amount as i128));
+
+        // Update the Buffer
+        put_reserve(&e, &token, &reserve.deposit(&e, amount));
+
+        BufferEvents::deposit(&self, token, sender, amount);
+    }
+
+    fn request_payout(e: Env, sender: Address, token: Address, amount: u128) {
+        sender.require_auth();
+
+        let router = get_router(&e);
+        if sender != router {
+            panic_with_error!(&e, BufferError::NotAuthorized);
+        }
+
+        let now = e.ledger().timestamp();
+
+        // Error if too soon since last payout
+        if now - get_last_payout_timestamp(&e) <= get_min_time_between_payouts(&e) {
+            panic_with_error!(&e, BufferError::AdminNotSet);
+        }
+
+        let mut reserve = get_reserve(&e, &token);
+
+        // Error if insuffient balance
+        if amount > balance {
+            panic_with_error!(&e, BufferError::AdminNotSet);
+        }
+
+        // Transfer tokens to Pool
+        transfer_token(&e, &token, &e.current_contract_address(), &sender, &(amount as i128));
+
+        // Update the Buffer
+        put_reserve(&e, &token, &reserve.payout(&e, amount, now));
+
+        BufferEvents::request_payout(&self, token, sender, amount);
+    }
+
+    // Returns the pool's reserves.
     //
     // # Returns
     //
-    // The version of the contract as a u32.
-    fn version() -> u32 {
-        150
-    }
-
-    // Commits a new wasm hash for a future upgrade.
-    // The upgrade will be available through `apply_upgrade` after the standard upgrade delay
-    // unless the system is in emergency mode.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `new_wasm_hash` - The new wasm hash to commit.
-    fn commit_upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32>) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-        commit_upgrade(&e, &new_wasm_hash);
-        UpgradeEvents::new(&e).commit_upgrade(Vec::from_array(&e, [new_wasm_hash.clone()]));
-    }
-
-    // Applies the committed upgrade.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    fn apply_upgrade(e: Env, admin: Address) -> BytesN<32> {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-        let new_wasm_hash = apply_upgrade(&e);
-        UpgradeEvents::new(&e).apply_upgrade(Vec::from_array(&e, [new_wasm_hash.clone()]));
-        new_wasm_hash
-    }
-
-    // Reverts the committed upgrade.
-    // This can be used to cancel a previously committed upgrade.
-    // The upgrade will be canceled only if it has not been applied yet.
-    // If the upgrade has already been applied, it cannot be reverted.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    fn revert_upgrade(e: Env, admin: Address) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-        revert_upgrade(&e);
-        UpgradeEvents::new(&e).revert_upgrade();
-    }
-
-    // Sets the emergency mode.
-    // When the emergency mode is set to true, the contract will allow instant upgrades without the delay.
-    // This is useful in case of critical issues that need to be fixed immediately.
-    // When the emergency mode is set to false, the contract will require the standard upgrade delay.
-    // The emergency mode can only be set by the emergency admin.
-    //
-    // # Arguments
-    //
-    // * `emergency_admin` - The address of the emergency admin.
-    // * `value` - The value to set the emergency mode to.
-    fn set_emergency_mode(e: Env, emergency_admin: Address, value: bool) {
-        emergency_admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&emergency_admin, &Role::EmergencyAdmin);
-        set_emergency_mode(&e, &value);
-        AccessControlEvents::new(&e).set_emergency_mode(value);
-    }
-
-    // Returns the emergency mode flag value.
-    fn get_emergency_mode(e: Env) -> bool {
-        get_emergency_mode(&e)
+    // A vector of the pool's reserves.
+    fn get_reserves(e: Env) -> Map<Address, Reserve> {
+        get_reserves(&e)
     }
 }
 
 // The `AdminInterface` trait provides the interface for administrative actions.
 #[contractimpl]
 impl AdminInterface for Buffer {
-    // Initializes the admin user.
-    //
-    // # Arguments
-    //
-    // * `account` - The address of the admin user.
-    fn init_admin(e: Env, account: Address) {
-        let access_control = AccessControl::new(&e);
-        if access_control.get_role_safe(&Role::Admin).is_some() {
-            panic_with_error!(&e, AccessControlError::AdminAlreadySet);
-        }
-        access_control.set_role_address(&Role::Admin, &account);
-    }
-
-    // Sets the privileged addresses.
+    // Sets the router address.
     //
     // # Arguments
     //
     // * `admin` - The address of the admin.
-    // * `rewards_admin` - The address of the rewards admin.
-    fn set_max_balance(e: Env, admin: Address, max_balance: u128) {
+    // * `router` - The address of the router contract.
+    fn set_router(e: Env, admin: Address, router: Address) {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
         access_control.assert_address_has_role(&admin, &Role::Admin);
 
-        set_max_balance(&e, &max_balance);
+        set_router(&e, &router);
+    }
+
+    // Sets the fee collector address.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `fee_collector` - The address of the fee collector.
+    fn set_fee_collector(e: Env, admin: Address, fee_collector: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, &Role::Admin);
+
+        set_fee_collector(&e, &fee_collector);
+    }
+
+    // Sets the max reserve balance.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `token` - The address of the token in reserve.
+    // * `max_balance` - The new reserve max balance.
+    fn set_reserve_max_balance(e: Env, admin: Address, token: Address, max_balance: u128) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, &Role::Admin);
+
+        let mut reserve = get_reserve(&e, &token);
+        put_reserve(&e, &token, &reserve.update_max_balance(&e, max_balance));
+    }
+
+    // Sets the minimum time between payouts.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `min_time` - The new minimum time between payouts.
+    fn set_min_time_between_payouts(e: Env, admin: Address, min_time: u64) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, &Role::Admin);
+
+        set_max_balance(&e, &min_time);
+    }
+
+    // Withdraws surplus reservess.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `token` - The address of the token in reserve to withdraw.
+    // * `amount` - The amount to withdraw.
+    fn withdraw_surplus(e: Env, admin: Address, token: Address, amount: u128) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, &Role::Admin);
+
+        validate_tokens_contracts(&e, &Vec::from_array(&e, [token]));
+
+        let mut reserve = get_reserve(&e, &token);
+
+        if amount > reserve.balance {
+            panic!("insufficient reserve");
+        }
+
+        // must leave minimum buffer
+        let min_reserve_ratio = get_min_reserve_ratio(&e);
+        let min_reserve = (reserve.balance * (min_reserve_ratio as u128)) / 10_000;
+        if reserve.balance - amount < min_reserve {
+            panic!("withdrawal violates minimum reserve policy");
+        }
+
+        put_reserve(&e, &token, &reserve.withdraw(&e, amount));
+
+        transfer_token(&e, &token, &e.current_contract_address(), &admin, &(amount as i128));
+
+        BufferEvents::withdraw_surplus(&self, token, admin, amount);
+    }
+
+    // Sync actual token balances with reserves.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn sync(e: Env, admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, &Role::Admin);
+
+        let reserves = get_reserves(&e);
+        let tokens = reserves.keys();
+
+        for i in tokens {
+            let reserve = reserves.get(token);
+            let balance = get_buffer_reserve_amount(&e, token);
+            put_reserve(&e, token, &reserve.update_balance(&e, balance));
+        }
+    }
+
+    // Skim excess token balances.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn skim(e: Env, admin: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, &Role::Admin);
+    }
+
+    // Stops the buffer deposits instantly.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn kill_deposit(e: Env, admin: Address) {
+        admin.require_auth();
+        require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
+
+        set_is_killed_deposit(&e, &true);
+        BufferEvents::new(&e).kill_deposit();
+    }
+
+    // Stops the buffer payouts instantly.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn kill_request_payout(e: Env, admin: Address) {
+        admin.require_auth();
+        require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
+
+        set_is_killed_request_payout(&e, &true);
+        BufferEvents::new(&e).kill_withdraw();
+    }
+
+    // Resumes the buffer deposits.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn unkill_deposit(e: Env, admin: Address) {
+        admin.require_auth();
+        require_pause_admin_or_owner(&e, &admin);
+
+        set_is_killed_deposit(&e, &false);
+        BufferEvents::new(&e).unkill_deposit();
+    }
+
+    // Resumes the buffer payouts.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn unkill_request_payout(e: Env, admin: Address) {
+        admin.require_auth();
+        require_pause_admin_or_owner(&e, &admin);
+
+        set_is_killed_request_payout(&e, &false);
+        BufferEvents::new(&e).unkill_request_payout();
+    }
+
+    // Get deposit killswitch status.
+    fn get_is_killed_deposit(e: Env) -> bool {
+        get_is_killed_deposit(&e)
+    }
+
+    // Get payout killswitch status.
+    fn get_is_killed_request_payout(e: Env) -> bool {
+        get_is_killed_request_payout(&e)
     }
 }
 
@@ -264,5 +411,83 @@ impl TransferableContract for Buffer {
                 }
             _ => access_control.get_future_address(&role),
         }
+    }
+}
+
+// The `UpgradeableContract` trait provides the interface for upgrading the contract.
+#[contractimpl]
+impl UpgradeableContract for Buffer {
+    // Returns the version of the contract.
+    //
+    // # Returns
+    //
+    // The version of the contract as a u32.
+    fn version() -> u32 {
+        150
+    }
+
+    // Commits a new wasm hash for a future upgrade.
+    // The upgrade will be available through `apply_upgrade` after the standard upgrade delay
+    // unless the system is in emergency mode.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `new_wasm_hash` - The new wasm hash to commit.
+    fn commit_upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32>) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        commit_upgrade(&e, &new_wasm_hash);
+        UpgradeEvents::new(&e).commit_upgrade(Vec::from_array(&e, [new_wasm_hash.clone()]));
+    }
+
+    // Applies the committed upgrade.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn apply_upgrade(e: Env, admin: Address) -> BytesN<32> {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        let new_wasm_hash = apply_upgrade(&e);
+        UpgradeEvents::new(&e).apply_upgrade(Vec::from_array(&e, [new_wasm_hash.clone()]));
+        new_wasm_hash
+    }
+
+    // Reverts the committed upgrade.
+    // This can be used to cancel a previously committed upgrade.
+    // The upgrade will be canceled only if it has not been applied yet.
+    // If the upgrade has already been applied, it cannot be reverted.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn revert_upgrade(e: Env, admin: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        revert_upgrade(&e);
+        UpgradeEvents::new(&e).revert_upgrade();
+    }
+
+    // Sets the emergency mode.
+    // When the emergency mode is set to true, the contract will allow instant upgrades without the delay.
+    // This is useful in case of critical issues that need to be fixed immediately.
+    // When the emergency mode is set to false, the contract will require the standard upgrade delay.
+    // The emergency mode can only be set by the emergency admin.
+    //
+    // # Arguments
+    //
+    // * `emergency_admin` - The address of the emergency admin.
+    // * `value` - The value to set the emergency mode to.
+    fn set_emergency_mode(e: Env, emergency_admin: Address, value: bool) {
+        emergency_admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&emergency_admin, &Role::EmergencyAdmin);
+        set_emergency_mode(&e, &value);
+        AccessControlEvents::new(&e).set_emergency_mode(value);
+    }
+
+    // Returns the emergency mode flag value.
+    fn get_emergency_mode(e: Env) -> bool {
+        get_emergency_mode(&e)
     }
 }

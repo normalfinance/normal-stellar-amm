@@ -17,49 +17,62 @@ impl Events {
     }
 }
 
-pub(crate) trait BufferFundEvents {
-    fn settle(
-        &self,
-        tokens: Vec<Address>,
-        user: Address,
-        pool_address: Address,
-        reward_token: Address,
-        reward_amount: u128
-    );
+pub(crate) trait BufferEvents {
+    fn deposit(&self, token: Address, user: Address, amount: u128);
 
-    fn claim(
-        &self,
-        tokens: Vec<Address>,
-        user: Address,
-        pool_address: Address,
-        reward_token: Address,
-        reward_amount: u128
-    );
+    fn request_payout(&self, token: Address, user: Address, amount: u128);
+
+    fn withdraw_surplus(&self, token: Address, user: Address, amount: u128);
+
+    fn kill_deposit(&self);
+
+    fn unkill_deposit(&self);
+
+    fn kill_request_payout(&self);
+
+    fn unkill_request_payout(&self);
 }
 
-impl BufferFundEvents for Events {
-    fn settle(&self, token: Address, user: Address, pool_address: Address, amount: u128) {
+impl BufferEvents for Events {
+    fn deposit(&self, token: Address, user: Address, amount: u128) {
         self.env()
             .events()
-            .publish(
-                (Symbol::new(self.env(), "claim"), token, user),
-                (pool_address, token, amount)
-            );
+            .publish((Symbol::new(self.env(), "deposit"), token, user), amount);
     }
 
-    fn claim(
-        &self,
-        tokens: Vec<Address>,
-        user: Address,
-        pool_address: Address,
-        reward_token: Address,
-        reward_amount: u128
-    ) {
+    fn request_payout(&self, token: Address, user: Address, amount: u128) {
         self.env()
             .events()
-            .publish(
-                (Symbol::new(self.env(), "claim"), tokens, user),
-                (pool_address, reward_token, reward_amount)
-            );
+            .publish((Symbol::new(self.env(), "request_payout"), token, user), amount);
+    }
+
+    fn withdraw_surplus(&self, token: Address, user: Address, amount: u128) {
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "withdraw_surplus"), token, user), amount);
+    }
+
+    fn kill_deposit(&self) {
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "kill_deposit"),), ())
+    }
+
+    fn unkill_deposit(&self) {
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "unkill_deposit"),), ())
+    }
+
+    fn kill_request_payout(&self) {
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "kill_request_payout"),), ())
+    }
+
+    fn unkill_request_payout(&self) {
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "unkill_request_payout"),), ())
     }
 }
