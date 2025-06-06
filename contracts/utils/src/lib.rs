@@ -4,6 +4,7 @@ pub mod bump;
 pub mod constant;
 pub mod helpers;
 pub mod storage;
+pub mod test;
 pub mod test_utils;
 pub mod token;
 pub mod macros;
