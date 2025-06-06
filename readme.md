@@ -31,6 +31,18 @@ Normal is a synthetic asset protocol enabling investors to trade any crypto asse
 - **liquidity_pool** - Exchange liquidity pool based on constant product formula (xy=k)
 - **token** - [SEP-0041](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0041.md) compatible token smart contract designed for liquidity pool share management
 - **liquidity_pool_router** - entry point and catalogue of liquidity pools which is capable to deploy new pools if necessary
+- **buffer** - Initial backstop to cover pool liquidity deficits. Receives a portion of all protocol revenue
+- **insurance_fund** - Additional backstop or liquidity deficits. Funded via liquidity provider staking deposits
+- **oracle_registry** - Oracle aggregator, data validator, and
+
+## Modules
+
+- **access_control** - Handles permissioned access to contracts using role-based authentication
+- **incentives** - Handles how liquidity provider fees and pool rewards are calculated and claimed
+- **token_share** - Handles LP token utilities
+- **token_synthetic** - Handles synthetic token utilities
+- **upgrade** - Handles contract upgrades
+- **utils** - Handles shared types, utils, constants, errors, macros, and more
 
 ![Normal AMM Swap Flow](./docs/images/swap.png "Swap Flow")
 
@@ -87,12 +99,12 @@ Don't forget to give the project a star! Thanks again!
 ## Contact
 
 - 📧 Email: [hello@normalfinance.io](mailto:hello@normalfinance.io)
-- Telegram: [@aquarius_HOME](https://t.me/aquarius_HOME)
+- ✈️ Telegram: [@normalfinance](https://t.me/normalfinance)
 - 🐣 Twitter: [@normalfi](https://twitter.com/normalfi)
 - 🥷🏼 GitHub: [@normalfinance](https://github.com/normalfinance)
-- 👾 Discord: [@Normal](https://discord.gg/sgzFscHp4C)
-- 📚 Docs: [@aquarius-aqua](https://docs.normalfinance.io/)
-- 🤓 Blog: [@aquarius-aqua](https://blog.normalfinance.io/)
+- 👾 Discord: [@Normal](https://discord.gg/xQMvceZjeS)
+- 📚 Docs: [@normalfinance](https://docs.normalfinance.io/)
+- 🤓 Blog: [@normalfinance](https://blog.normalfinance.io/)
 
 ## License
 
