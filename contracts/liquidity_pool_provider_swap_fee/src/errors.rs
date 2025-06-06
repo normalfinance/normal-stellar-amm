@@ -4,7 +4,7 @@ use soroban_sdk::contracterror;
 #[derive(Copy, Clone)]
 #[repr(u32)]
 pub enum Error {
-    #[doc = "LiquidityPoolProviderSwapFeeError"]
+    #[doc = "PoolProviderSwapFeeError"]
     Unauthorized = 102,
     InsuranceFractionTooLow = 103, // TODO: is 103 taken?
     PathIsEmpty = 307,

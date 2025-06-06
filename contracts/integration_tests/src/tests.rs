@@ -24,13 +24,13 @@ fn test_integration() {
     let xlm_admin = get_token_admin_client(&setup.env, &xlm.address);
 
     // deploy pools
-    let (standard_pool, standard_pool_hash) = setup.deploy_standard_pool(
+    let (pool, pool_hash) = setup.deploy_pool(
         &nbtc.address,
         &xlm.address,
         30
     );
     xlm_admin.mint(&setup.admin, &344_000_0000000);
-    standard_pool.deposit(&setup.admin, &100_000_0000000);
+    pool.deposit(&setup.admin, &100_000_0000000);
 
     // swap through many pools at once
     let user = Address::generate(&setup.env);
@@ -62,7 +62,7 @@ fn test_integration() {
             &user,
             &(
                 vec![&setup.env, xlm.address.clone(), nbtc.address.clone()],
-                standard_pool_hash.clone(),
+                pool_hash.clone(),
                 nbtc.address.clone(),
             ),
             &xlm.address,

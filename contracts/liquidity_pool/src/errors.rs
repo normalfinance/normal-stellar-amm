@@ -3,8 +3,8 @@ use soroban_sdk::contracterror;
 #[contracterror]
 #[derive(Copy, Clone)]
 #[repr(u32)]
-pub enum LiquidityPoolError {
-    #[doc = "LiquidityPoolError: AlreadyInitialized"]
+pub enum PoolError {
+    #[doc = "PoolError: AlreadyInitialized"]
     AlreadyInitialized = 201,
     PlaneAlreadyInitialized = 202,
     RewardsAlreadyInitialized = 203,
@@ -24,8 +24,8 @@ pub enum LiquidityPoolError {
 #[contracterror]
 #[derive(Copy, Clone)]
 #[repr(u32)]
-pub enum LiquidityPoolValidationError {
-    #[doc = "LiquidityPoolValidationError: WrongInputVecSize"]
+pub enum PoolValidationError {
+    #[doc = "PoolValidationError: WrongInputVecSize"]
     WrongInputVecSize = 2001,
     FeeOutOfBounds = 2003,
     AllCoinsRequired = 2004,

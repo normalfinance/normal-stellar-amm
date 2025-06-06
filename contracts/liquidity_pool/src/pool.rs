@@ -1,10 +1,10 @@
-use crate::errors::LiquidityPoolError;
+use crate::errors::PoolError;
 use crate::oracle;
 use crate::events::Events as PoolEvents;
-use crate::events::LiquidityPoolEvents;
+use crate::events::PoolEvents;
 use crate::storage::get_historical_oracle_data;
 use crate::storage::{ get_reserve_a, get_reserve_b, put_reserve_a };
-use crate::{ errors::LiquidityPoolValidationError };
+use crate::{ errors::PoolValidationError };
 use sep_40_oracle::Asset;
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::contracttype;
@@ -176,7 +176,7 @@ impl Pool {
 
         // cannot repeg if oracle is invalid
         if !oracle_is_valid {
-            panic_with_error!(e, LiquidityPoolError::InvalidOracle);
+            panic_with_error!(e, PoolError::InvalidOracle);
         }
 
         let new_reserve_a = get_reserve_a(&e);
@@ -219,7 +219,7 @@ impl Pool {
         );
         // if total value including fee is more than the reserve, math can't be done properly
         if dy_w_fee >= reserve_buy {
-            panic_with_error!(e, LiquidityPoolValidationError::InsufficientBalance);
+            panic_with_error!(e, PoolValidationError::InsufficientBalance);
         }
         // +1 just in case there were some rounding errors & convert to real units in place
         let result =

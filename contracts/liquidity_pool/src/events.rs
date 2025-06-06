@@ -21,7 +21,7 @@ impl Events {
 // It provides methods for emitting events when liquidity is deposited into the pool,
 //  when liquidity is withdrawn from the pool, and when a trade occurs in the pool.
 // Events structured to ease integration with third party tools.
-pub trait LiquidityPoolEvents {
+pub trait PoolEvents {
     fn deposit_liquidity(&self, token: Address, amount: u128, share_amount: u128);
 
     fn withdraw_liquidity(&self, token: Address, amount: u128, share_amount: u128);
@@ -58,7 +58,7 @@ pub trait LiquidityPoolEvents {
 // This trait is used to emit events related to liquidity pool operations.
 // It provides methods for emitting events when liquidity is deposited into the pool,
 //  when liquidity is withdrawn from the pool, and when a trade occurs in the pool.
-impl LiquidityPoolEvents for Events {
+impl PoolEvents for Events {
     fn deposit_liquidity(&self, token: Address, amount: u128, share_amount: u128) {
         // topics
         // [

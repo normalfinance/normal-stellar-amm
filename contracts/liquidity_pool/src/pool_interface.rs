@@ -1,15 +1,15 @@
 use soroban_sdk::{ Address, BytesN, Env, Map, Symbol, Vec };
 use utils::{
     oracle::{ OracleGuardRails },
-    storage::{ InitializeAllParams, InitializeParams, LiquidityPoolInfo, PoolStatus, PoolTier },
+    storage::{ InitializeAllParams, InitializeParams, PoolInfo, PoolStatus, PoolTier },
 };
 
-pub trait LiquidityPoolCrunch {
+pub trait PoolCrunch {
     // Initialize pool completely to reduce calculations cost
     fn initialize_all(e: Env, params: InitializeAllParams);
 }
 
-pub trait LiquidityPoolTrait {
+pub trait PoolTrait {
     // Get symbolic explanation of pool type.
     fn pool_type(e: Env) -> Symbol;
 
@@ -85,7 +85,7 @@ pub trait LiquidityPoolTrait {
     fn get_fee_fraction(e: Env) -> u32;
 
     // Get dictionary of basic pool information: type, fee, special parameters if any.
-    fn get_info(e: Env) -> LiquidityPoolInfo;
+    fn get_info(e: Env) -> PoolInfo;
 }
 
 pub trait AdminInterfaceTrait {

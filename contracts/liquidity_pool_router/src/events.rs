@@ -15,7 +15,7 @@ impl Events {
     }
 }
 
-pub(crate) trait LiquidityPoolRouterEvents {
+pub(crate) trait PoolRouterEvents {
     fn deposit(
         &self,
         tokens: Vec<Address>,
@@ -72,7 +72,7 @@ pub(crate) trait LiquidityPoolRouterEvents {
     );
 }
 
-impl LiquidityPoolRouterEvents for Events {
+impl PoolRouterEvents for Events {
     fn deposit(
         &self,
         tokens: Vec<Address>,

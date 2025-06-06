@@ -28,9 +28,9 @@ Normal is a synthetic asset protocol enabling investors to trade any crypto asse
 
 ## Smart Contracts
 
-- **liquidity_pool** - Exchange liquidity pool based on constant product formula (xy=k)
+- **pool** - Exchange liquidity pool based on constant product formula (xy=k)
 - **token** - [SEP-0041](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0041.md) compatible token smart contract designed for liquidity pool share management
-- **liquidity_pool_router** - entry point and catalogue of liquidity pools which is capable to deploy new pools if necessary
+- **pool_router** - entry point and catalogue of liquidity pools which is capable to deploy new pools if necessary
 - **buffer** - Initial backstop to cover pool liquidity deficits. Receives a portion of all protocol revenue
 - **insurance_fund** - Additional backstop or liquidity deficits. Funded via liquidity provider staking deposits
 - **oracle_registry** - Oracle aggregator, data validator, and

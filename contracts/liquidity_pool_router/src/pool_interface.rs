@@ -1,8 +1,8 @@
 use sep_40_oracle::Asset;
 use soroban_sdk::{ Address, BytesN, Env, Map, String, Symbol, Val, Vec, U256 };
-use utils::{ oracle::OracleGuardRails, storage::{ LiquidityPoolInfo, OraclePair, PoolTier } };
+use utils::{ oracle::OracleGuardRails, storage::{ PoolInfo, OraclePair, PoolTier } };
 
-pub trait LiquidityPoolInterfaceTrait {
+pub trait PoolInterfaceTrait {
     // Get symbolic explanation of pool type.
     fn pool_type(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Symbol;
 
@@ -193,11 +193,10 @@ pub trait PoolsManagementTrait {
     // Initialize standard pool with custom arguments.
     // fee_fraction should match pre-defined set of values: 0.1%, 0.3%, 1%
     // 10 = 0.1%, 30 = 0.3%, 100 = 1%
-    fn init_standard_pool(
+    fn init_pool(
         e: Env,
         user: Address,
         oracles: OraclePair,
-        oracle_guard_rails: OracleGuardRails,
         asset: Address,
         tokens: Vec<Address>,
         lp_token_name: String,
@@ -210,10 +209,10 @@ pub trait PoolsManagementTrait {
     fn query_pools(e: Env) -> Vec<Address>;
 
     //
-    fn query_pool_details(env: Env, pool_address: Address) -> LiquidityPoolInfo;
+    fn query_pool_details(env: Env, pool_address: Address) -> PoolInfo;
 
     //
-    fn query_all_pools_details(env: Env) -> Vec<LiquidityPoolInfo>;
+    fn query_all_pools_details(env: Env) -> Vec<PoolInfo>;
 
     // Get pools for given pair
     fn get_pools(e: Env, tokens: Vec<Address>) -> Map<BytesN<32>, Address>;

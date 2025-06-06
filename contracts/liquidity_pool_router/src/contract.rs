@@ -1,15 +1,15 @@
-use crate::errors::LiquidityPoolRouterError;
-use crate::events::{ Events, LiquidityPoolRouterEvents };
+use crate::errors::PoolRouterError;
+use crate::events::{ Events, PoolRouterEvents };
 use crate::pool_interface::{
-    LiquidityPoolInterfaceTrait,
+    PoolInterfaceTrait,
     PoolPlaneInterface,
     PoolsManagementTrait,
     RewardsInterfaceTrait,
 };
 use crate::pool_utils::{
     assert_tokens_sorted,
-    deploy_standard_pool,
-    get_standard_pool_salt,
+    deploy_pool,
+    get_pool_salt,
     get_tokens_salt,
     get_total_liquidity,
 };
@@ -22,7 +22,6 @@ use crate::storage::{
     get_reward_tokens,
     get_reward_tokens_detailed,
     get_rewards_config,
-    get_supported_quote_tokens,
     get_tokens_set,
     get_tokens_set_count,
     has_pool,
@@ -31,10 +30,9 @@ use crate::storage::{
     set_reward_tokens,
     set_reward_tokens_detailed,
     set_rewards_config,
-    set_supported_quote_tokens,
     set_token_hash,
     GlobalRewardsConfig,
-    LiquidityPoolRewardInfo,
+    PoolRewardInfo,
 };
 use access_control::access::{ AccessControl, AccessControlTrait };
 use access_control::emergency::{ get_emergency_mode, set_emergency_mode };
@@ -70,15 +68,15 @@ use upgrade::interface::UpgradeableContract;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
 use utils::constant::CONSTANT_PRODUCT_FEE_AVAILABLE;
 use utils::oracle::OracleGuardRails;
-use utils::storage::{ LiquidityPoolInfo, OraclePair, PoolTier };
+use utils::storage::{ AssetId, PoolInfo, OraclePair, PoolTier };
 use utils::token::validate_tokens_contracts;
 
 #[contract]
-pub struct LiquidityPoolRouter;
+pub struct PoolRouter;
 
-// The `LiquidityPoolInterfaceTrait` trait provides the interface for interacting with a liquidity pool.
+// The `PoolInterfaceTrait` trait provides the interface for interacting with a liquidity pool.
 #[contractimpl]
-impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
+impl PoolInterfaceTrait for PoolRouter {
     // Returns the type of the pool.
     //
     // # Arguments
@@ -336,7 +334,7 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
 
 // The `UpgradeableContract` trait provides the interface for upgrading the contract.
 #[contractimpl]
-impl UpgradeableContract for LiquidityPoolRouter {
+impl UpgradeableContract for PoolRouter {
     // Returns the version of the contract.
     //
     // # Returns
@@ -414,7 +412,7 @@ impl UpgradeableContract for LiquidityPoolRouter {
 
 // The `AdminInterface` trait provides the interface for administrative actions.
 #[contractimpl]
-impl AdminInterface for LiquidityPoolRouter {
+impl AdminInterface for PoolRouter {
     // Initializes the admin user.
     //
     // # Arguments
@@ -522,19 +520,11 @@ impl AdminInterface for LiquidityPoolRouter {
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
         get_rewards_manager(&e).storage().put_reward_token(reward_token);
     }
-
-    fn set_supported_quote_tokens(e: Env, admin: Address, tokens: Vec<Address>) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-
-        validate_tokens_contracts(&e, &tokens);
-        set_supported_quote_tokens(&e, &tokens);
-    }
 }
 
 // The `RewardsInterfaceTrait` trait provides the interface for interacting with rewards.
 #[contractimpl]
-impl RewardsInterfaceTrait for LiquidityPoolRouter {
+impl RewardsInterfaceTrait for PoolRouter {
     // Retrieves the global rewards configuration and returns it as a `Map`.
     //
     // This function fetches the global rewards configuration from the contract's state.
@@ -591,7 +581,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         for (tokens, voting_share) in tokens_votes {
             assert_tokens_sorted(&e, &tokens);
 
-            tokens_with_liquidity.set(tokens, LiquidityPoolRewardInfo {
+            tokens_with_liquidity.set(tokens, PoolRewardInfo {
                 voting_share,
                 processed: false,
                 total_liquidity: U256::from_u32(&e, 0),
@@ -602,7 +592,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
             sum += reward_info.voting_share;
         }
         if sum > 1_0000000 {
-            panic_with_error!(e, LiquidityPoolRouterError::VotingShareExceedsMax);
+            panic_with_error!(e, PoolRouterError::VotingShareExceedsMax);
         }
 
         set_reward_tokens(&e, &tokens_with_liquidity);
@@ -653,14 +643,14 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         };
 
         if pool_configured {
-            panic_with_error!(&e, LiquidityPoolRouterError::RewardsAlreadyConfigured);
+            panic_with_error!(&e, PoolRouterError::RewardsAlreadyConfigured);
         }
 
         let reward_info = match tokens_reward_info {
             Some(v) => v,
             // if tokens not found in current config, deactivate them
             None =>
-                LiquidityPoolRewardInfo {
+                PoolRewardInfo {
                     voting_share: 0,
                     processed: true,
                     total_liquidity: U256::from_u32(&e, 0),
@@ -668,7 +658,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
         };
 
         if !reward_info.processed {
-            panic_with_error!(&e, LiquidityPoolRouterError::LiquidityNotFilled);
+            panic_with_error!(&e, PoolRouterError::LiquidityNotFilled);
         }
         // it's safe to convert tps to u128 since it cannot be bigger than total tps which is u128
         let pool_tps = if pool_liquidity > U256::from_u32(&e, 0) {
@@ -929,7 +919,7 @@ impl RewardsInterfaceTrait for LiquidityPoolRouter {
 
 // The `PoolsManagementTrait` trait provides the interface for managing liquidity pools.
 #[contractimpl]
-impl PoolsManagementTrait for LiquidityPoolRouter {
+impl PoolsManagementTrait for PoolRouter {
     // Initializes a standard pool with custom arguments.
     //
     // # Arguments
@@ -943,11 +933,11 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
     // A tuple containing:
     // * The pool index hash.
     // * The address of the pool.
-    fn init_standard_pool(
+    fn init_pool(
         e: Env,
         user: Address,
-        oracles: OraclePair,
-        oracle_guard_rails: OracleGuardRails,
+        base_oracle_registry_id: AssetId,
+        quote_oracle_registry_id: AssetId,
         asset: Address,
         tokens: Vec<Address>,
         lp_token_name: String,
@@ -958,26 +948,20 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         user.require_auth();
 
         if !CONSTANT_PRODUCT_FEE_AVAILABLE.contains(&fee_fraction) {
-            panic_with_error!(&e, LiquidityPoolRouterError::BadFee);
-        }
-
-        let supported_quote_tokens = get_supported_quote_tokens(&e);
-        if !supported_quote_tokens.contains(&tokens.get(1).unwrap()) {
-            panic_with_error!(&e, LiquidityPoolRouterError::UnsupportedQuoteToken);
+            panic_with_error!(&e, PoolRouterError::BadFee);
         }
 
         let salt = get_tokens_salt(&e, &tokens);
         let pools = get_pools_plain(&e, salt);
-        let pool_index = get_standard_pool_salt(&e, &fee_fraction);
+        let pool_index = get_pool_salt(&e, &fee_fraction);
 
         match pools.get(pool_index.clone()) {
             Some(pool_address) => (pool_index, pool_address),
             None =>
-                deploy_standard_pool(
+                deploy_pool(
                     &e,
                     &tokens,
                     &oracles,
-                    &oracle_guard_rails,
                     &asset,
                     &lp_token_name,
                     &lp_token_symbol,
@@ -992,8 +976,8 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         get_pools_vec(&e)
     }
 
-    fn query_pool_details(env: Env, pool_address: Address) -> LiquidityPoolInfo {
-        let pool_response: LiquidityPoolInfo = env.invoke_contract(
+    fn query_pool_details(env: Env, pool_address: Address) -> PoolInfo {
+        let pool_response: PoolInfo = env.invoke_contract(
             &pool_address,
             &Symbol::new(&env, "get_info"),
             Vec::new(&env)
@@ -1001,11 +985,11 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         pool_response
     }
 
-    fn query_all_pools_details(env: Env) -> Vec<LiquidityPoolInfo> {
+    fn query_all_pools_details(env: Env) -> Vec<PoolInfo> {
         let all_pool_vec_addresses = get_pools_vec(&env);
         let mut result = Vec::new(&env);
         for address in all_pool_vec_addresses {
-            let pool_response: LiquidityPoolInfo = env.invoke_contract(
+            let pool_response: PoolInfo = env.invoke_contract(
                 &address,
                 &Symbol::new(&env, "get_info"),
                 Vec::new(&env)
@@ -1102,7 +1086,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
 
 // The `TransferableContract` trait provides the interface for transferring ownership of the contract.
 #[contractimpl]
-impl TransferableContract for LiquidityPoolRouter {
+impl TransferableContract for PoolRouter {
     // Commits an ownership transfer.
     //
     // # Arguments

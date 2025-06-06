@@ -1,7 +1,7 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::LiquidityPoolRouterClient;
+use crate::PoolRouterClient;
 use sep_40_oracle::testutils::MockPriceOracleWASM;
 use sep_40_oracle::Asset;
 use soroban_sdk::testutils::Address as _;
@@ -17,8 +17,8 @@ pub fn create_token_contract<'a>(e: &Env, admin: &Address) -> test_token::Client
     test_token::Client::new(e, &e.register_stellar_asset_contract_v2(admin.clone()).address())
 }
 
-pub fn create_liqpool_router_contract<'a>(e: &Env) -> LiquidityPoolRouterClient<'a> {
-    let router = LiquidityPoolRouterClient::new(e, &e.register(crate::LiquidityPoolRouter {}, ()));
+pub fn create_pool_router_contract<'a>(e: &Env) -> PoolRouterClient<'a> {
+    let router = PoolRouterClient::new(e, &e.register(crate::PoolRouter {}, ()));
     router
 }
 
@@ -29,14 +29,14 @@ pub fn install_token_wasm(e: &Env) -> BytesN<32> {
     e.deployer().upload_contract_wasm(WASM)
 }
 
-pub mod standard_pool {
+pub mod pool {
     soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/soroban_liquidity_pool_contract.wasm"
+        file = "../../target/wasm32v1-none/release/soroban_pool_contract.wasm"
     );
 }
 
 pub fn install_liq_pool_hash(e: &Env) -> BytesN<32> {
-    e.deployer().upload_contract_wasm(standard_pool::WASM)
+    e.deployer().upload_contract_wasm(pool::WASM)
 }
 
 pub(crate) struct Setup<'a> {
@@ -50,7 +50,7 @@ pub(crate) struct Setup<'a> {
     pub(crate) tokens: [test_token::Client<'a>; 4],
     pub(crate) reward_token: test_token::Client<'a>,
 
-    pub(crate) router: LiquidityPoolRouterClient<'a>,
+    pub(crate) router: PoolRouterClient<'a>,
 
     pub(crate) emergency_admin: Address,
     pub(crate) rewards_admin: Address,
@@ -97,7 +97,7 @@ impl Default for Setup<'_> {
        
         let pool_hash = install_liq_pool_hash(&env);
         let token_hash = install_token_wasm(&env);
-        let router = create_liqpool_router_contract(&env);
+        let router = create_pool_router_contract(&env);
         router.init_admin(&admin);
         let rewards_admin = soroban_sdk::Address::generate(&env);
         let operations_admin = soroban_sdk::Address::generate(&env);

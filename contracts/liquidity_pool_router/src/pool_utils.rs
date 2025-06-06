@@ -1,5 +1,5 @@
-use crate::errors::LiquidityPoolRouterError;
-use crate::events::{ Events, LiquidityPoolRouterEvents };
+use crate::errors::PoolRouterError;
+use crate::events::{ Events, PoolRouterEvents };
 use crate::rewards::get_rewards_manager;
 use crate::storage::{
     add_pool,
@@ -7,7 +7,7 @@ use crate::storage::{
     get_constant_product_pool_hash,
     get_pool_next_counter,
     get_token_hash,
-    LiquidityPoolType,
+    PoolType,
 };
 use access_control::access::AccessControl;
 use access_control::management::{ MultipleAddressesManagementTrait, SingleAddressManagementTrait };
@@ -41,7 +41,7 @@ use utils::storage::{
     TokenInitInfo,
 };
 
-pub fn get_standard_pool_salt(e: &Env, fee_fraction: &u32) -> BytesN<32> {
+pub fn get_pool_salt(e: &Env, fee_fraction: &u32) -> BytesN<32> {
     let mut salt = Bytes::new(e);
     salt.append(&symbol_short!("standard").to_xdr(e));
     salt.append(&symbol_short!("0x00").to_xdr(e));
@@ -65,11 +65,10 @@ pub fn merge_salt(e: &Env, left: BytesN<32>, right: BytesN<32>) -> BytesN<32> {
     e.crypto().sha256(&salt).to_bytes()
 }
 
-pub fn deploy_standard_pool(
+pub fn deploy_pool(
     e: &Env,
     tokens: &Vec<Address>,
     oracles: &OraclePair,
-    oracle_guard_rails: &OracleGuardRails,
     asset: &Address,
     lp_token_name: &String,
     lp_token_symbol: &String,
@@ -77,8 +76,8 @@ pub fn deploy_standard_pool(
     tier: &PoolTier
 ) -> (BytesN<32>, Address) {
     let tokens_salt = get_tokens_salt(e, tokens);
-    let liquidity_pool_wasm_hash = get_constant_product_pool_hash(e);
-    let subpool_salt = get_standard_pool_salt(e, &fee_fraction);
+    let pool_wasm_hash = get_constant_product_pool_hash(e);
+    let subpool_salt = get_pool_salt(e, &fee_fraction);
 
     let pool_contract_id = e
         .deployer()
@@ -89,12 +88,11 @@ pub fn deploy_standard_pool(
                 get_pool_counter_salt(e)
             )
         )
-        .deploy_v2(liquidity_pool_wasm_hash, ());
-    init_standard_pool(
+        .deploy_v2(pool_wasm_hash, ());
+    init_pool(
         e,
         tokens,
         oracles,
-        oracle_guard_rails,
         asset,
         &pool_contract_id,
         lp_token_name,
@@ -108,7 +106,7 @@ pub fn deploy_standard_pool(
         e,
         tokens_salt,
         subpool_salt.clone(),
-        LiquidityPoolType::ConstantProduct,
+        PoolType::ConstantProduct,
         pool_contract_id.clone()
     );
 
@@ -123,11 +121,10 @@ pub fn deploy_standard_pool(
     (subpool_salt, pool_contract_id)
 }
 
-fn init_standard_pool(
+fn init_pool(
     e: &Env,
     tokens: &Vec<Address>,
     oracles: &OraclePair,
-    oracle_guard_rails: &OracleGuardRails,
     asset: &Address,
     pool_contract_id: &Address,
     lp_token_name: &String,
@@ -191,10 +188,10 @@ pub fn assert_tokens_sorted(e: &Env, tokens: &Vec<Address>) {
         let left = tokens.get_unchecked(i);
         let right = tokens.get_unchecked(i + 1);
         if left > right {
-            panic_with_error!(e, LiquidityPoolRouterError::TokensNotSorted);
+            panic_with_error!(e, PoolRouterError::TokensNotSorted);
         }
         if left == right {
-            panic_with_error!(e, LiquidityPoolRouterError::DuplicatesNotAllowed);
+            panic_with_error!(e, PoolRouterError::DuplicatesNotAllowed);
         }
     }
 }

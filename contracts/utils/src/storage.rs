@@ -127,7 +127,7 @@ pub struct PoolResponse {
 
 #[contracttype]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct LiquidityPoolInfo {
+pub struct PoolInfo {
     pub pool_address: Address,
     pub pool_response: PoolResponse,
     pub total_fee_bps: u32,

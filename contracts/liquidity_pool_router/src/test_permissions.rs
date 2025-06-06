@@ -478,7 +478,7 @@ fn test_distribute_rewards() {
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
     setup.reward_token.mint(&user, &1_0000000);
     setup.reward_token.mint(&router.address, &1_0000000);
-    let (pool_hash, _pool_address) = router.init_standard_pool(
+    let (pool_hash, _pool_address) = router.init_pool(
         &user,
         &setup.oracles,
         &setup.asset,
@@ -534,7 +534,7 @@ fn test_remove_pool() {
         (setup.pause_admin, false),
         (setup.emergency_pause_admin, false),
     ] {
-        let (pool_hash, _pool_address) = router.init_standard_pool(
+        let (pool_hash, _pool_address) = router.init_pool(
             &user.clone(),
             &setup.oracles,
             &setup.asset,

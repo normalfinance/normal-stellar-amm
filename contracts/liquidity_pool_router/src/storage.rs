@@ -1,4 +1,4 @@
-use crate::errors::LiquidityPoolRouterError;
+use crate::errors::PoolRouterError;
 use crate::pool_utils::get_tokens_salt;
 use paste::paste;
 use soroban_sdk::{
@@ -26,7 +26,7 @@ use utils::{
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u32)]
-pub enum LiquidityPoolType {
+pub enum PoolType {
     MissingPool = 0,
     ConstantProduct = 1,
     // StableSwap = 2,
@@ -35,8 +35,8 @@ pub enum LiquidityPoolType {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct LiquidityPoolData {
-    pub pool_type: LiquidityPoolType,
+pub struct PoolData {
+    pub pool_type: PoolType,
     pub address: Address,
 }
 
@@ -49,7 +49,7 @@ pub struct GlobalRewardsConfig {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct LiquidityPoolRewardInfo {
+pub struct PoolRewardInfo {
     pub voting_share: u32,
     pub processed: bool,
     pub total_liquidity: U256,
@@ -65,15 +65,11 @@ enum DataKey {
     TokenHash,
     ConstantPoolHash,
     PoolCounter,
-    PoolPlane,
-    LiquidityCalculator,
 
     // Temporary storage
     RewardsConfig, // Global reward config
     RewardTokensList, // Tokens for reward
     RewardTokensPoolsLiquidity(BytesN<32>), // Per pool liquidity
-
-    SupportedQuoteTokens,
 }
 
 #[contracterror]
@@ -85,7 +81,7 @@ pub enum PoolError {
     PoolNotFound = 404,
 }
 
-fn get_pools(e: &Env, salt: BytesN<32>) -> Map<BytesN<32>, LiquidityPoolData> {
+fn get_pools(e: &Env, salt: BytesN<32>) -> Map<BytesN<32>, PoolData> {
     let key = DataKey::TokensSetPools(salt);
     match e.storage().persistent().get(&key) {
         Some(value) => {
@@ -131,11 +127,6 @@ generate_instance_storage_getter_and_setter_with_default!(
     u128,
     0
 );
-generate_instance_storage_getter_and_setter!(
-    supported_quote_tokens,
-    DataKey::SupportedQuoteTokens,
-    Vec<Address>
-);
 
 pub fn get_rewards_config(e: &Env) -> GlobalRewardsConfig {
     match e.storage().temporary().get(&DataKey::RewardsConfig) {
@@ -157,18 +148,18 @@ pub fn set_rewards_config(e: &Env, value: &GlobalRewardsConfig) {
     bump_temporary(e, &key);
 }
 
-pub fn get_reward_tokens(e: &Env) -> Map<Vec<Address>, LiquidityPoolRewardInfo> {
+pub fn get_reward_tokens(e: &Env) -> Map<Vec<Address>, PoolRewardInfo> {
     let key = DataKey::RewardTokensList;
     match e.storage().temporary().get(&key) {
         Some(v) => {
             bump_temporary(e, &key);
             v
         }
-        None => panic_with_error!(&e, LiquidityPoolRouterError::RewardsNotConfigured),
+        None => panic_with_error!(&e, PoolRouterError::RewardsNotConfigured),
     }
 }
 
-pub fn set_reward_tokens(e: &Env, value: &Map<Vec<Address>, LiquidityPoolRewardInfo>) {
+pub fn set_reward_tokens(e: &Env, value: &Map<Vec<Address>, PoolRewardInfo>) {
     let key = DataKey::RewardTokensList;
     e.storage().temporary().set(&key, value);
     bump_temporary(e, &key);
@@ -181,7 +172,7 @@ pub fn get_reward_tokens_detailed(e: &Env, salt: BytesN<32>) -> Map<BytesN<32>, 
             bump_temporary(e, &key);
             v
         }
-        None => panic_with_error!(&e, LiquidityPoolRouterError::LiquidityNotFilled),
+        None => panic_with_error!(&e, PoolRouterError::LiquidityNotFilled),
     }
 }
 
@@ -205,7 +196,7 @@ pub fn get_pools_plain(e: &Env, salt: BytesN<32>) -> Map<BytesN<32>, Address> {
     pools_plain
 }
 
-pub fn put_pools(e: &Env, salt: BytesN<32>, pools: &Map<BytesN<32>, LiquidityPoolData>) {
+pub fn put_pools(e: &Env, salt: BytesN<32>, pools: &Map<BytesN<32>, PoolData>) {
     let key = DataKey::TokensSetPools(salt);
     e.storage().persistent().set(&key, pools);
     bump_persistent(e, &key);
@@ -228,17 +219,17 @@ pub fn add_pool(
     e: &Env,
     salt: BytesN<32>,
     pool_index: BytesN<32>,
-    pool_type: LiquidityPoolType,
+    pool_type: PoolType,
     pool_address: Address
 ) {
     let mut pools = get_pools(e, salt.clone());
-    pools.set(pool_index, LiquidityPoolData {
+    pools.set(pool_index, PoolData {
         pool_type,
         address: pool_address.clone(),
     });
 
     if pools.len() > MAX_POOLS_FOR_PAIR {
-        panic_with_error!(&e, LiquidityPoolRouterError::PoolsOverMax);
+        panic_with_error!(&e, PoolRouterError::PoolsOverMax);
     }
     put_pools(e, salt, &pools);
 

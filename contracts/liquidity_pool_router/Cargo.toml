@@ -1,5 +1,5 @@
 [package]
-name = "soroban-liquidity-pool-router-contract"
+name = "soroban-pool-router-contract"
 version.workspace = true
 edition = "2021"
 publish = false

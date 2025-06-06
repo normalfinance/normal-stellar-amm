@@ -16,7 +16,7 @@ use utils::{
 };
 
 use crate::{
-    errors::LiquidityPoolError,
+    errors::PoolError,
     pool::Pool,
     storage::{ get_historical_oracle_data, put_historical_oracle_data },
 };

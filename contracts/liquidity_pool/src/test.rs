@@ -11,7 +11,7 @@ use utils::oracle::{
 };
 
 use crate::testutils::{
-    create_liqpool_contract,
+    create_pool_contract,
     create_token_contract,
     get_token_admin_client,
     install_token_wasm,
@@ -460,7 +460,7 @@ fn test_custom_fee() {
         (3000, 356435_u128, 0_i128), // 30% 0.03564356436
         (5000, 198019_u128, 0_i128), // 50%  0.0198019802
     ] {
-        let liqpool = create_liqpool_contract(
+        let pool = create_pool_contract(
             &setup.env,
             &Address::generate(&setup.env),
             &setup.users[0],
@@ -477,25 +477,25 @@ fn test_custom_fee() {
             &setup.token_reward.address,
             fee_config.0 // ten percent
         );
-        liqpool.deposit(&setup.users[0], &100_0000000);
-        assert_eq!(liqpool.estimate_swap(&1, &0, &1_0000000), (fee_config.1, 0));
-        assert_eq!(liqpool.swap(&setup.users[0], &1, &0, &1_0000000, &0), fee_config.1);
+        pool.deposit(&setup.users[0], &100_0000000);
+        assert_eq!(pool.estimate_swap(&1, &0, &1_0000000), (fee_config.1, 0));
+        assert_eq!(pool.swap(&setup.users[0], &1, &0, &1_0000000, &0), fee_config.1);
 
         // FIXME:
         // full withdraw & deposit to reset pool reserves
-        liqpool.withdraw(
+        pool.withdraw(
             &setup.users[0],
             &(
-                SorobanTokenClient::new(&setup.env, &liqpool.share_id()).balance(
+                SorobanTokenClient::new(&setup.env, &pool.share_id()).balance(
                     &setup.users[0]
                 ) as u128
             )
         );
-        liqpool.deposit(&setup.users[0], &100_0000000);
-        assert_eq!(liqpool.estimate_swap(&1, &0, &1_0000000), (fee_config.1, fee_config.2)); // re-check swap result didn't change
-        assert_eq!(liqpool.estimate_swap_strict_receive(&1, &0, &fee_config.1), (1_0000000, 0));
+        pool.deposit(&setup.users[0], &100_0000000);
+        assert_eq!(pool.estimate_swap(&1, &0, &1_0000000), (fee_config.1, fee_config.2)); // re-check swap result didn't change
+        assert_eq!(pool.estimate_swap_strict_receive(&1, &0, &fee_config.1), (1_0000000, 0));
         assert_eq!(
-            liqpool.swap_strict_receive(&setup.users[0], &1, &0, &fee_config.1, &1_0000000),
+            pool.swap_strict_receive(&setup.users[0], &1, &0, &fee_config.1, &1_0000000),
             1_0000000
         );
     }
@@ -1510,7 +1510,7 @@ fn test_withdraw_rewards() {
     };
 
     // Create pool
-    let liq_pool = create_liqpool_contract(
+    let liq_pool = create_pool_contract(
         &e,
         &admin,
         &router,
@@ -1580,7 +1580,7 @@ fn test_withdraw_rewards() {
 // //     let oracle = Address::generate(&e);
 // //     let asset = Asset::Other(Symbol::new(&e, "SOL"));
 
-// //     let liq_pool = create_liqpool_contract(
+// //     let liq_pool = create_pool_contract(
 // //         &e,
 // //         &admin,
 // //         &router,
@@ -1633,7 +1633,7 @@ fn test_withdraw_rewards() {
 // //     let asset = Asset::Other(Symbol::new(&e, "SOL"));
 
 // //     // we compare two pools to check swap in both directions
-// //     let liq_pool1 = create_liqpool_contract(
+// //     let liq_pool1 = create_pool_contract(
 // //         &e,
 // //         &admin,
 // //         &router,
@@ -1644,7 +1644,7 @@ fn test_withdraw_rewards() {
 // //         &token_reward_admin_client.address,
 // //         30
 // //     );
-// //     let liq_pool2 = create_liqpool_contract(
+// //     let liq_pool2 = create_pool_contract(
 // //         &e,
 // //         &admin,
 // //         &router,
@@ -1735,7 +1735,7 @@ fn test_withdraw_rewards() {
 // //     let oracle = Address::generate(&e);
 // //     let asset = Asset::Other(Symbol::new(&e, "SOL"));
 
-// //     let liq_pool = create_liqpool_contract(
+// //     let liq_pool = create_pool_contract(
 // //         &e,
 // //         &admin,
 // //         &router,
@@ -1832,7 +1832,7 @@ fn test_withdraw_rewards() {
 
 //     let asset = Asset::Other(Symbol::new(&e, "SOL"));
 
-//     let liq_pool = create_liqpool_contract(
+//     let liq_pool = create_pool_contract(
 //         &e,
 //         &admin,
 //         &router,

@@ -1,6 +1,6 @@
 #![cfg(test)]
 extern crate std;
-use crate::LiquidityPoolClient;
+use crate::PoolClient;
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use sep_40_oracle::testutils::{ Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM };
 use sep_40_oracle::Asset;
@@ -65,7 +65,7 @@ pub(crate) struct Setup<'a> {
     pub(crate) token_reward: SorobanTokenClient<'a>,
     pub(crate) token_reward_admin_client: SorobanTokenAdminClient<'a>,
     pub(crate) token_share: ShareTokenClient<'a>,
-    pub(crate) liq_pool: LiquidityPoolClient<'a>,
+    pub(crate) liq_pool: PoolClient<'a>,
 
     pub(crate) admin: Address,
     pub(crate) emergency_admin: Address,
@@ -94,7 +94,7 @@ impl Setup<'_> {
 
     // Create users, token1, token2, reward token, lp token
     //
-    // Mint reward token (1_000_000_0000000) & approve for liquidity_pool token
+    // Mint reward token (1_000_000_0000000) & approve for pool token
     pub(crate) fn setup(config: &TestConfig) -> Self {
         let e: Env = Env::default();
         e.mock_all_auths();
@@ -179,7 +179,7 @@ impl Setup<'_> {
             },
         };
 
-        let liq_pool = create_liqpool_contract(
+        let liq_pool = create_pool_contract(
             &e,
             &admin,
             &router,
@@ -281,7 +281,7 @@ pub(crate) fn get_token_admin_client<'a>(
     SorobanTokenAdminClient::new(e, address)
 }
 
-pub fn create_liqpool_contract<'a>(
+pub fn create_pool_contract<'a>(
     e: &Env,
     admin: &Address,
     router: &Address,
@@ -293,8 +293,8 @@ pub fn create_liqpool_contract<'a>(
     tokens: &Vec<Address>,
     reward_token: &Address,
     fee_fraction: u32
-) -> LiquidityPoolClient<'a> {
-    let liqpool = LiquidityPoolClient::new(e, &e.register(crate::LiquidityPool {}, ()));
+) -> PoolClient<'a> {
+    let pool = PoolClient::new(e, &e.register(crate::Pool {}, ()));
     let params = InitializeAllParams {
         base: InitializeParams {
             admin: admin.clone(),
@@ -320,8 +320,8 @@ pub fn create_liqpool_contract<'a>(
             reward_token: reward_token.clone(),
         },
     };
-    liqpool.initialize_all(&params);
-    liqpool
+    pool.initialize_all(&params);
+    pool
 }
 
 pub fn install_token_wasm(e: &Env) -> BytesN<32> {

@@ -69,7 +69,7 @@ impl Setup<'_> {
         // init swap router with all it's complexity
         let pool_hash = install_liq_pool_hash(&e);
         let token_hash = install_token_wasm(&e);
-        let router = deploy_liqpool_router_contract(e.clone());
+        let router = deploy_pool_router_contract(e.clone());
         router.init_admin(&admin);
         router.set_pool_hash(&admin, &pool_hash);
         router.set_token_hash(&admin, &token_hash);
@@ -82,7 +82,7 @@ impl Setup<'_> {
         };
 
         // create swap pool & deposit initial liquidity
-        let (_, pool_address) = router.init_standard_pool(
+        let (_, pool_address) = router.init_pool(
             &admin,
             &oracles,
             &Asset::Other(Symbol::new(&e, "SOL")),
@@ -91,7 +91,7 @@ impl Setup<'_> {
             &String::from_str(&e, "Pool Share Token"),
             &30
         );
-        let swap_pool = liquidity_pool::Client::new(&e, &pool_address);
+        let swap_pool = pool::Client::new(&e, &pool_address);
         token_b_admin_client.mint(&admin, &1_000_000_000_0000000);
         swap_pool.deposit(&admin, &1_000_000_000_0000000);
 
@@ -123,9 +123,9 @@ pub(crate) fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanToke
     SorobanTokenClient::new(e, &e.register_stellar_asset_contract_v2(admin.clone()).address())
 }
 
-pub mod liquidity_pool {
+pub mod pool {
     soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/soroban_liquidity_pool_contract.wasm"
+        file = "../../target/wasm32v1-none/release/soroban_pool_contract.wasm"
     );
 }
 
@@ -152,11 +152,11 @@ pub fn create_contract<'a>(
 
 pub mod swap_router {
     soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/soroban_liquidity_pool_router_contract.wasm"
+        file = "../../target/wasm32v1-none/release/soroban_pool_router_contract.wasm"
     );
 }
 
-fn deploy_liqpool_router_contract<'a>(e: Env) -> swap_router::Client<'a> {
+fn deploy_pool_router_contract<'a>(e: Env) -> swap_router::Client<'a> {
     swap_router::Client::new(&e, &e.register(swap_router::WASM, ()))
 }
 
@@ -179,7 +179,7 @@ fn install_token_wasm(e: &Env) -> BytesN<32> {
 
 fn install_liq_pool_hash(e: &Env) -> BytesN<32> {
     soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/soroban_liquidity_pool_contract.wasm"
+        file = "../../target/wasm32v1-none/release/soroban_pool_contract.wasm"
     );
     e.deployer().upload_contract_wasm(WASM)
 }

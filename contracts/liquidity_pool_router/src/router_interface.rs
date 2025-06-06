@@ -25,7 +25,4 @@ pub trait AdminInterface {
 
     // Set reward token address
     fn set_reward_token(e: Env, admin: Address, reward_token: Address);
-
-    // Set list of supported token b addresses
-    fn set_supported_quote_tokens(e: Env, admin: Address, tokens: Vec<Address>);
 }

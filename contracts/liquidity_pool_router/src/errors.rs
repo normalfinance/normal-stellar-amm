@@ -3,8 +3,8 @@ use soroban_sdk::contracterror;
 #[contracterror]
 #[derive(Copy, Clone)]
 #[repr(u32)]
-pub enum LiquidityPoolRouterError {
-    #[doc = "LiquidityPoolRouterError: PoolNotFound"]
+pub enum PoolRouterError {
+    #[doc = "PoolRouterError: PoolNotFound"]
     PoolNotFound = 301,
     BadFee = 302,
     StableswapHashMissing = 303,
@@ -23,5 +23,4 @@ pub enum LiquidityPoolRouterError {
 
     TokensNotSorted = 2002,
     InMaxNotSatisfied = 2020,
-    UnsupportedQuoteToken = 2021,
 }

@@ -12,4 +12,4 @@ mod test;
 mod test_permissions;
 mod testutils;
 
-pub use contract::{LiquidityPoolRouter, LiquidityPoolRouterClient};
+pub use contract::{PoolRouter, PoolRouterClient};

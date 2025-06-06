@@ -44,7 +44,7 @@ impl Setup<'_> {
         let pool_hash = e.deployer().upload_contract_wasm(contracts::constant_product_pool::WASM);
         let token_hash = e.deployer().upload_contract_wasm(contracts::lp_token::WASM);
 
-        let router = deploy_liqpool_router_contract(e.clone());
+        let router = deploy_pool_router_contract(e.clone());
         router.init_admin(&admin);
         router.set_pool_hash(&admin, &pool_hash);
         router.set_token_hash(&admin, &token_hash);
@@ -69,7 +69,7 @@ impl Setup<'_> {
         }
     }
 
-    pub(crate) fn deploy_standard_pool(
+    pub(crate) fn deploy_pool(
         &self,
         token_a: &Address,
         token_b: &Address,
@@ -80,7 +80,7 @@ impl Setup<'_> {
             base_oracle: self.env.register(MockPriceOracleWASM, ()),
             quote_oracle: self.env.register(MockPriceOracleWASM, ()),
         };
-        let (pool_hash, pool_address) = self.router.init_standard_pool(
+        let (pool_hash, pool_address) = self.router.init_pool(
             &self.admin,
             &oracles,
             &Asset::Other(Symbol::new(&self.env, "SOL")),
@@ -116,6 +116,6 @@ pub fn deploy_provider_swap_fee_contract<'a>(
     )
 }
 
-fn deploy_liqpool_router_contract<'a>(e: Env) -> contracts::router::Client<'a> {
+fn deploy_pool_router_contract<'a>(e: Env) -> contracts::router::Client<'a> {
     contracts::router::Client::new(&e, &e.register(contracts::router::WASM, ()))
 }

@@ -1,12 +1,12 @@
-use crate::errors::{ LiquidityPoolError, LiquidityPoolValidationError };
+use crate::errors::{ PoolError, PoolValidationError };
 use crate::events::Events as PoolEvents;
-use crate::events::LiquidityPoolEvents;
+use crate::events::PoolEvents;
 use crate::oracle;
 use crate::pool::{ Pool };
 use crate::pool_interface::{
     AdminInterfaceTrait,
-    LiquidityPoolCrunch,
-    LiquidityPoolTrait,
+    PoolCrunch,
+    PoolTrait,
     RewardsTrait,
     UpgradeableContract,
     UpgradeableLPTokenTrait,
@@ -90,7 +90,7 @@ use utils::storage::{
     AddressAndAmount,
     InitializeAllParams,
     InitializeParams,
-    LiquidityPoolInfo,
+    PoolInfo,
     PoolResponse,
     PoolStatus,
     PoolTier,
@@ -104,10 +104,10 @@ contractmeta!(
 );
 
 #[contract]
-pub struct LiquidityPool;
+pub struct Pool;
 
 #[contractimpl]
-impl LiquidityPoolCrunch for LiquidityPool {
+impl PoolCrunch for Pool {
     // Initializes all the components of the liquidity pool.
     //
     // # Arguments
@@ -122,7 +122,7 @@ impl LiquidityPoolCrunch for LiquidityPool {
 }
 
 #[contractimpl]
-impl LiquidityPoolTrait for LiquidityPool {
+impl PoolTrait for Pool {
     // Returns the type of the pool.
     //
     // # Returns
@@ -140,7 +140,7 @@ impl LiquidityPoolTrait for LiquidityPool {
     fn initialize(e: Env, params: InitializeParams) {
         let access_control = AccessControl::new(&e);
         if access_control.get_role_safe(&Role::Admin).is_some() {
-            panic_with_error!(&e, LiquidityPoolError::AlreadyInitialized);
+            panic_with_error!(&e, PoolError::AlreadyInitialized);
         }
         access_control.set_role_address(&Role::Admin, &params.admin);
         access_control.set_role_address(
@@ -165,7 +165,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         set_oracle_registry(&e, &params.oracle_registry);
 
         if params.tokens.len() != 2 {
-            panic_with_error!(&e, LiquidityPoolValidationError::WrongInputVecSize);
+            panic_with_error!(&e, PoolValidationError::WrongInputVecSize);
         }
 
         let token_a = params.tokens.get(0).unwrap();
@@ -187,7 +187,7 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // 0.01% = 1; 1% = 100; 0.3% = 30
         if (params.fee_fraction as u128) > FEE_MULTIPLIER - 1 {
-            panic_with_error!(&e, LiquidityPoolValidationError::FeeOutOfBounds);
+            panic_with_error!(&e, PoolValidationError::FeeOutOfBounds);
         }
 
         put_token_share(&e, share_contract);
@@ -253,7 +253,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         user.require_auth();
 
         if get_is_killed_deposit(&e) {
-            panic_with_error!(e, LiquidityPoolError::PoolDepositKilled);
+            panic_with_error!(e, PoolError::PoolDepositKilled);
         }
 
         let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
@@ -265,7 +265,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         rewards.manager().checkpoint_user(&user, total_shares, user_shares);
 
         if reserve_a == 0 && reserve_b == 0 && token_b_amount == 0 {
-            panic_with_error!(&e, LiquidityPoolValidationError::AllCoinsRequired);
+            panic_with_error!(&e, PoolValidationError::AllCoinsRequired);
         }
 
         let pool = get_pool(&e);
@@ -324,23 +324,23 @@ impl LiquidityPoolTrait for LiquidityPool {
         user.require_auth();
 
         if get_is_killed_swap(&e) {
-            panic_with_error!(e, LiquidityPoolError::PoolSwapKilled);
+            panic_with_error!(e, PoolError::PoolSwapKilled);
         }
 
         if in_idx == out_idx {
-            panic_with_error!(&e, LiquidityPoolValidationError::CannotSwapSameToken);
+            panic_with_error!(&e, PoolValidationError::CannotSwapSameToken);
         }
 
         if in_idx > 1 {
-            panic_with_error!(&e, LiquidityPoolValidationError::InTokenOutOfBounds);
+            panic_with_error!(&e, PoolValidationError::InTokenOutOfBounds);
         }
 
         if out_idx > 1 {
-            panic_with_error!(&e, LiquidityPoolValidationError::OutTokenOutOfBounds);
+            panic_with_error!(&e, PoolValidationError::OutTokenOutOfBounds);
         }
 
         if in_amount == 0 {
-            panic_with_error!(e, LiquidityPoolValidationError::ZeroAmount);
+            panic_with_error!(e, PoolValidationError::ZeroAmount);
         }
 
         // Rebalance the pool before swapping
@@ -355,13 +355,13 @@ impl LiquidityPoolTrait for LiquidityPool {
         let reserve_sell = reserves.get(in_idx).unwrap();
         let reserve_buy = reserves.get(out_idx).unwrap();
         if reserve_sell == 0 || reserve_buy == 0 {
-            panic_with_error!(&e, LiquidityPoolValidationError::EmptyPool);
+            panic_with_error!(&e, PoolValidationError::EmptyPool);
         }
 
         let (out, fee) = pool.get_amount_out(&e, in_amount, reserve_sell, reserve_buy);
 
         if out < out_min {
-            panic_with_error!(&e, LiquidityPoolValidationError::OutMinNotSatisfied);
+            panic_with_error!(&e, PoolValidationError::OutMinNotSatisfied);
         }
 
         // Transfer the amount being sold to the contract
@@ -407,7 +407,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let old_inv_b = residue_denominator.mul(&U256::from_u128(&e, reserve_b));
 
         if new_inv_a.mul(&new_inv_b) < old_inv_a.mul(&old_inv_b) {
-            panic_with_error!(&e, LiquidityPoolError::InvariantDoesNotHold);
+            panic_with_error!(&e, PoolError::InvariantDoesNotHold);
         }
 
         if out_idx == 0 {
@@ -446,15 +446,15 @@ impl LiquidityPoolTrait for LiquidityPool {
     // A tuple containing the estimated amount of the output token that would be received and the amount of token_a to mint/burn.
     fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: u128) -> (u128, i128) {
         if in_idx == out_idx {
-            panic_with_error!(&e, LiquidityPoolValidationError::CannotSwapSameToken);
+            panic_with_error!(&e, PoolValidationError::CannotSwapSameToken);
         }
 
         if in_idx > 1 {
-            panic_with_error!(&e, LiquidityPoolValidationError::InTokenOutOfBounds);
+            panic_with_error!(&e, PoolValidationError::InTokenOutOfBounds);
         }
 
         if out_idx > 1 {
-            panic_with_error!(&e, LiquidityPoolValidationError::OutTokenOutOfBounds);
+            panic_with_error!(&e, PoolValidationError::OutTokenOutOfBounds);
         }
 
         let reserve_a = get_reserve_a(&e);
@@ -496,23 +496,23 @@ impl LiquidityPoolTrait for LiquidityPool {
         user.require_auth();
 
         if get_is_killed_swap(&e) {
-            panic_with_error!(e, LiquidityPoolError::PoolSwapKilled);
+            panic_with_error!(e, PoolError::PoolSwapKilled);
         }
 
         if in_idx == out_idx {
-            panic_with_error!(&e, LiquidityPoolValidationError::CannotSwapSameToken);
+            panic_with_error!(&e, PoolValidationError::CannotSwapSameToken);
         }
 
         if in_idx > 1 {
-            panic_with_error!(&e, LiquidityPoolValidationError::InTokenOutOfBounds);
+            panic_with_error!(&e, PoolValidationError::InTokenOutOfBounds);
         }
 
         if out_idx > 1 {
-            panic_with_error!(&e, LiquidityPoolValidationError::OutTokenOutOfBounds);
+            panic_with_error!(&e, PoolValidationError::OutTokenOutOfBounds);
         }
 
         if out_amount == 0 {
-            panic_with_error!(e, LiquidityPoolValidationError::ZeroAmount);
+            panic_with_error!(e, PoolValidationError::ZeroAmount);
         }
 
         // Rebalance the pool
@@ -527,7 +527,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let reserve_sell = reserves.get(in_idx).unwrap();
         let reserve_buy = reserves.get(out_idx).unwrap();
         if reserve_sell == 0 || reserve_buy == 0 {
-            panic_with_error!(&e, LiquidityPoolValidationError::EmptyPool);
+            panic_with_error!(&e, PoolValidationError::EmptyPool);
         }
 
         let (in_amount, fee) = pool.get_amount_out_strict_receive(
@@ -538,7 +538,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         );
 
         if in_amount > in_max {
-            panic_with_error!(&e, LiquidityPoolValidationError::InMaxNotSatisfied);
+            panic_with_error!(&e, PoolValidationError::InMaxNotSatisfied);
         }
 
         // Transfer the amount being sold to the contract
@@ -591,7 +591,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let old_inv_b = residue_denominator.mul(&U256::from_u128(&e, reserve_b));
 
         if new_inv_a.mul(&new_inv_b) < old_inv_a.mul(&old_inv_b) {
-            panic_with_error!(&e, LiquidityPoolError::InvariantDoesNotHold);
+            panic_with_error!(&e, PoolError::InvariantDoesNotHold);
         }
 
         if out_idx == 0 {
@@ -635,15 +635,15 @@ impl LiquidityPoolTrait for LiquidityPool {
         out_amount: u128
     ) -> (u128, i128) {
         if in_idx == out_idx {
-            panic_with_error!(&e, LiquidityPoolValidationError::CannotSwapSameToken);
+            panic_with_error!(&e, PoolValidationError::CannotSwapSameToken);
         }
 
         if in_idx > 1 {
-            panic_with_error!(&e, LiquidityPoolValidationError::InTokenOutOfBounds);
+            panic_with_error!(&e, PoolValidationError::InTokenOutOfBounds);
         }
 
         if out_idx > 1 {
-            panic_with_error!(&e, LiquidityPoolValidationError::OutTokenOutOfBounds);
+            panic_with_error!(&e, PoolValidationError::OutTokenOutOfBounds);
         }
 
         let reserve_a = get_reserve_a(&e);
@@ -673,7 +673,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         user.require_auth();
 
         if get_is_killed_withdraw(&e) {
-            panic_with_error!(e, LiquidityPoolError::PoolWithdrawKilled);
+            panic_with_error!(e, PoolError::PoolWithdrawKilled);
         }
 
         // Before actual changes were made to the pool, update total rewards data and refresh user reward
@@ -739,7 +739,7 @@ impl LiquidityPoolTrait for LiquidityPool {
     // # Returns
     //
     // A map of Symbols to Vals representing the pool's information.
-    fn get_info(e: Env) -> LiquidityPoolInfo {
+    fn get_info(e: Env) -> PoolInfo {
         let pool = get_pool(&e);
         let pool_response = PoolResponse {
             asset_a: AddressAndAmount {
@@ -756,7 +756,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             },
         };
 
-        LiquidityPoolInfo {
+        PoolInfo {
             pool_address: e.current_contract_address(),
             pool_response,
             total_fee_bps: pool.fee_fraction,
@@ -765,7 +765,7 @@ impl LiquidityPoolTrait for LiquidityPool {
 }
 
 #[contractimpl]
-impl AdminInterfaceTrait for LiquidityPool {
+impl AdminInterfaceTrait for Pool {
     // Sets the privileged addresses.
     //
     // # Arguments
@@ -853,7 +853,7 @@ impl AdminInterfaceTrait for LiquidityPool {
         require_operations_admin_or_owner(&e, &admin);
 
         if e.ledger().timestamp() < expiry_ts {
-            panic_with_error!(e, LiquidityPoolError::InvalidExpiryTimestamp);
+            panic_with_error!(e, PoolError::InvalidExpiryTimestamp);
         }
 
         let mut pool = get_pool(&e);
@@ -953,7 +953,7 @@ impl AdminInterfaceTrait for LiquidityPool {
         validate!(
             &e,
             excess_pool_reserve_imbalance > 0,
-            LiquidityPoolError::LiquidityDeficitBelowThreshold,
+            PoolError::LiquidityDeficitBelowThreshold,
             "No excess_pool_reserve_imbalance({}) to settle",
             excess_pool_reserve_imbalance
         );
@@ -1168,7 +1168,7 @@ impl AdminInterfaceTrait for LiquidityPool {
 
 // The `UpgradeableContract` trait provides the interface for upgrading the contract.
 #[contractimpl]
-impl UpgradeableContract for LiquidityPool {
+impl UpgradeableContract for Pool {
     // Returns the version of the contract.
     //
     // # Returns
@@ -1264,7 +1264,7 @@ impl UpgradeableContract for LiquidityPool {
 }
 
 #[contractimpl]
-impl UpgradeableLPTokenTrait for LiquidityPool {
+impl UpgradeableLPTokenTrait for Pool {
     // legacy upgrade. not compatible with token contract version 140+ due to different arguments
     fn upgrade_token_legacy(e: Env, admin: Address, new_token_wasm: BytesN<32>) {
         admin.require_auth();
@@ -1279,7 +1279,7 @@ impl UpgradeableLPTokenTrait for LiquidityPool {
 }
 
 #[contractimpl]
-impl RewardsTrait for LiquidityPool {
+impl RewardsTrait for Pool {
     // Initializes the rewards configuration.
     //
     // # Arguments
@@ -1289,7 +1289,7 @@ impl RewardsTrait for LiquidityPool {
     fn initialize_rewards_config(e: Env, reward_token: Address) {
         let rewards = get_rewards_manager(&e);
         if rewards.storage().has_reward_token() {
-            panic_with_error!(&e, LiquidityPoolError::RewardsAlreadyInitialized);
+            panic_with_error!(&e, PoolError::RewardsAlreadyInitialized);
         }
 
         rewards.storage().put_reward_token(reward_token);
@@ -1530,7 +1530,7 @@ impl RewardsTrait for LiquidityPool {
     // The amount of tokens rewarded to the user as a u128.
     fn claim(e: Env, user: Address) -> u128 {
         if get_is_killed_claim(&e) {
-            panic_with_error!(e, LiquidityPoolError::PoolClaimKilled);
+            panic_with_error!(e, PoolError::PoolClaimKilled);
         }
 
         let rewards = get_rewards_manager(&e);
@@ -1555,7 +1555,7 @@ impl RewardsTrait for LiquidityPool {
                 &e.current_contract_address()
             ) as u128;
             if reserves.get(i).unwrap() > balance {
-                panic_with_error!(&e, LiquidityPoolValidationError::InsufficientBalance);
+                panic_with_error!(&e, PoolValidationError::InsufficientBalance);
             }
         }
 
@@ -1567,7 +1567,7 @@ impl RewardsTrait for LiquidityPool {
 
 // The `TransferableContract` trait provides the interface for transferring ownership of the contract.
 #[contractimpl]
-impl TransferableContract for LiquidityPool {
+impl TransferableContract for Pool {
     // Commits an ownership transfer.
     //
     // # Arguments
