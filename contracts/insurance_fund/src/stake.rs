@@ -1,25 +1,12 @@
 use crate::errors::{ InsuranceFundError };
 use soroban_fixed_point_math::SorobanFixedPoint;
-use crate::storage::{
-    get_shares_base,
-    get_total_shares,
-    set_total_shares,
-    set_shares_base,
-};
+use crate::storage::{ get_shares_base, get_total_shares, set_total_shares, set_shares_base };
 use soroban_sdk::{ contracttype, log, panic_with_error, Address, Env };
 use utils::bump::{ bump_instance, bump_persistent, bump_temporary };
 use utils::helpers::log10_iter;
 use utils::math::safe_math::SafeMath;
 use utils::{ safe_decrement, safe_increment, validate };
 use utils::errors::math_errors::MathError;
-
-//   ________  ___________   __       __   ___  _______
-//  /"       )("     _   ") /""\     |/"| /  ")/"     "|
-// (:   \___/  )__/  \\__/ /    \    (: |/   /(: ______)
-//  \___  \       \\_ /   /' /\  \   |    __/  \/    |
-//   __/  \\      |.  |  //  __'  \  (// _  \  // ___)_
-//  /" \   :)     \:  | /   /  \\  \ |: | \  \(:      "|
-// (_______/       \__|(___/    \___)(__|  \__)\_______)
 
 #[contracttype]
 #[derive(Clone, Copy, PartialEq, Eq)]

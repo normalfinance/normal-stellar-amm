@@ -6,10 +6,10 @@ use super::safe_math::SafeMath;
 
 pub fn sanitize_new_price(
     e: &Env,
-    new_price: i128,
-    last_price_twap: i128,
+    new_price: u128,
+    last_price_twap: u128,
     sanitize_clamp_denominator: Option<i64>
-) -> i128 {
+) -> u128 {
     // when/if twap is 0, dont try to normalize new_price
     if last_price_twap == 0 {
         return new_price;
@@ -31,11 +31,9 @@ pub fn sanitize_new_price(
         return new_price;
     }
 
-    let price_twap_price_band = last_price_twap.safe_div(e, sanitize_clamp_denominator as i128);
+    let price_twap_price_band = last_price_twap.safe_div(e, sanitize_clamp_denominator as u128);
 
-    let capped_update_price = if
-        new_price_spread.unsigned_abs() > price_twap_price_band.unsigned_abs()
-    {
+    let capped_update_price = if new_price_spread > price_twap_price_band {
         if new_price > last_price_twap {
             last_price_twap.safe_add(e, price_twap_price_band)
         } else {

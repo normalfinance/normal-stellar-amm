@@ -1,4 +1,3 @@
-#[cfg(test)]
 pub fn log10(n: u128) -> u128 {
     if n < 10 { 0 } else if n == 10 { 1 } else { log10(n / 10) + 1 }
 }

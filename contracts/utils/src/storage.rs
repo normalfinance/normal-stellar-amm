@@ -161,7 +161,7 @@ pub struct AssetId {
 #[contracttype]
 pub struct OracleInfo {
     pub oracle_address: Address,
-    pub asset: Option<Address>,
+    pub asset: Address,
     pub decimals: u32, // Optional: for price normalization
     pub frozen: bool,
     pub last_updated: u64,

@@ -19,9 +19,8 @@ use crate::{
 #[contracttype]
 #[derive(Default, Clone, Copy, Debug)]
 pub struct OraclePriceData {
-    pub price: i128,
-    // pub confidence: u64,
-    pub delay: i64,
+    pub price: u128,
+    pub delay: u64,
 }
 
 #[contracttype]
@@ -33,7 +32,7 @@ pub struct PriceDivergenceGuardRails {
 #[contracttype]
 #[derive(Copy, Clone, Default, Debug)]
 pub struct ValidityGuardRails {
-    pub slots_before_stale_for_amm: i64,
+    pub slots_before_stale_for_pool: u64,
     pub confidence_interval_max_size: u64,
     pub too_volatile_ratio: i64,
 }
@@ -87,7 +86,7 @@ impl Default for OracleGuardRails {
                 oracle_twap_percent_divergence: PERCENTAGE_PRECISION_U64 / 2,
             },
             validity: ValidityGuardRails {
-                slots_before_stale_for_amm: 10, // ~5 seconds
+                slots_before_stale_for_pool: 10, // ~5 seconds
                 confidence_interval_max_size: 20_000, // 2% of price
                 too_volatile_ratio: 5, // 5x or 80% down
             },
@@ -150,47 +149,27 @@ pub fn is_oracle_price_too_divergent(
 pub fn oracle_validity(
     e: &Env,
     pool_address: Address,
-    last_oracle_twap: i64,
+    last_oracle_twap: u128,
     oracle_price_data: &OraclePriceData,
     valid_oracle_guard_rails: &ValidityGuardRails,
-    max_confidence_interval_multiplier: u64,
     log_validity: bool
 ) -> OracleValidity {
-    let OraclePriceData {
-        price: oracle_price,
-        confidence: oracle_conf,
-        delay: oracle_delay,
-        ..
-    } = *oracle_price_data;
+    let OraclePriceData { price: oracle_price, delay: oracle_delay, .. } = *oracle_price_data;
 
     let is_oracle_price_nonpositive = oracle_price <= 0;
 
     let is_oracle_price_too_volatile = oracle_price
         .max(last_oracle_twap)
         .safe_div(e, last_oracle_twap.min(oracle_price).max(1))
-        .gt(&valid_oracle_guard_rails.too_volatile_ratio);
+        .gt(&(valid_oracle_guard_rails.too_volatile_ratio as u128));
 
-    let conf_pct_of_price = max(1, oracle_conf)
-        .safe_mul(e, PERCENTAGE_PRECISION_U64)
-        .safe_div(e, oracle_price as u64);
-
-    // TooUncertain
-    let is_conf_too_large = conf_pct_of_price.gt(
-        &valid_oracle_guard_rails.confidence_interval_max_size.safe_mul(
-            e,
-            max_confidence_interval_multiplier
-        )
-    );
-
-    let is_stale_for_amm = oracle_delay.gt(&valid_oracle_guard_rails.slots_before_stale_for_amm);
+    let is_stale_for_pool = oracle_delay.gt(&valid_oracle_guard_rails.slots_before_stale_for_pool);
 
     let oracle_validity = if is_oracle_price_nonpositive {
         OracleValidity::NonPositive
     } else if is_oracle_price_too_volatile {
         OracleValidity::TooVolatile
-    } else if is_conf_too_large {
-        OracleValidity::TooUncertain
-    } else if is_stale_for_amm {
+    } else if is_stale_for_pool {
         OracleValidity::StaleForAMM
     } else {
         OracleValidity::Valid
@@ -211,16 +190,16 @@ pub fn oracle_validity(
             );
         }
 
-        if is_conf_too_large {
-            log!(
-                e,
-                "Invalid {} Oracle: Confidence Too Large (is_conf_too_large={:?})",
-                pool_address,
-                conf_pct_of_price
-            );
-        }
+        // if is_conf_too_large {
+        //     log!(
+        //         e,
+        //         "Invalid {} Oracle: Confidence Too Large (is_conf_too_large={:?})",
+        //         pool_address,
+        //         conf_pct_of_price
+        //     );
+        // }
 
-        if is_stale_for_amm {
+        if is_stale_for_pool {
             log!(e, "Invalid {} Oracle: Stale (oracle_delay={:?})", pool_address, oracle_delay);
         }
     }
