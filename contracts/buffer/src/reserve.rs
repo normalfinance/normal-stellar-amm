@@ -26,14 +26,14 @@ impl Reserve {
         }
     }
 
-    pub fn update_max_balance(&mut self, e: &Env, max_balance: u128) -> Self {
+    pub fn update_max_balance(self, max_balance: u128) -> Self {
         Reserve {
             max_balance,
             ..self
         }
     }
 
-    pub fn deposit(&mut self, e: &Env, amount: u128) -> Self {
+    pub fn deposit(self, e: &Env, amount: u128) -> Self {
         Reserve {
             balance: self.balance.safe_add(e, amount),
             total_inflow: self.total_inflow.safe_add(e, amount),
@@ -41,7 +41,7 @@ impl Reserve {
         }
     }
 
-    pub fn payout(&mut self, e: &Env, amount: u128, now: u64) -> Self {
+    pub fn payout(self, e: &Env, amount: u128, now: u64) -> Self {
         Reserve {
             balance: self.balance.safe_sub(e, amount),
             total_outflow: self.total_outflow.safe_add(e, amount),
@@ -51,7 +51,7 @@ impl Reserve {
         }
     }
 
-    pub fn withdraw(&mut self, e: &Env, amount: u128) -> Self {
+    pub fn withdraw(self, e: &Env, amount: u128) -> Self {
         Reserve {
             balance: self.balance.safe_sub(e, amount),
             total_outflow: self.total_outflow.safe_add(e, amount),
@@ -60,7 +60,7 @@ impl Reserve {
         }
     }
 
-    pub fn update_balance(&mut self, e: &Env, amount: u128) -> Self {
+    pub fn update_balance(self, amount: u128) -> Self {
         Reserve {
             balance: amount,
             ..self

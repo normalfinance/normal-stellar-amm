@@ -1,6 +1,4 @@
-use soroban_sdk::{ Address, BytesN, Env, Symbol, Val, Vec };
-
-use crate::stake::StakeAction;
+use soroban_sdk::{ Address, Env, Symbol };
 
 #[derive(Clone)]
 pub(crate) struct Events(Env);

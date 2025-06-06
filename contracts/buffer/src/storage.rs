@@ -1,4 +1,4 @@
-use soroban_sdk::{ contracttype, panic_with_error, Address, Env };
+use soroban_sdk::{ contracttype, panic_with_error, Address, Env, Map };
 use soroban_sdk::token::{ TokenClient as SorobanTokenClient };
 use utils::bump::{ bump_instance, bump_persistent, bump_temporary };
 use utils::errors::storage_errors::StorageError;
@@ -66,12 +66,7 @@ pub(crate) fn get_fee_collector(e: &Env) -> Address {
     }
 }
 
-pub(crate) fn get_reserves(e: &Env) -> Map<Address, Reserve> {
-    let key = DataKey::Reserve(token);
-    e.storage().persistent().get(&key)
-}
-
-pub(crate) fn get_reserve(e: &Env, token: &Address) -> Reserve {
+pub(crate) fn get_reserve(e: &Env, token: Address) -> Reserve {
     let key = DataKey::Reserve(token);
     match e.storage().persistent().get(&key) {
         Some(value) => {
@@ -82,7 +77,7 @@ pub(crate) fn get_reserve(e: &Env, token: &Address) -> Reserve {
     }
 }
 
-pub(crate) fn put_reserve(e: &Env, token: &Address, reserve_info: &Reserve) {
+pub(crate) fn put_reserve(e: &Env, token: Address, reserve_info: &Reserve) {
     let key = DataKey::Reserve(token);
     e.storage().persistent().set(&key, reserve_info);
     bump_persistent(e, &key);
@@ -103,7 +98,7 @@ generate_instance_storage_getter_and_setter_with_default!(
 generate_instance_storage_getter_and_setter_with_default!(
     min_reserve_ratio,
     DataKey::MinReserveRatio,
-    u64,
+    u128,
     1000 // 10%
 );
 

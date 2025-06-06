@@ -1,20 +1,21 @@
 use crate::errors::{ BufferError };
-use crate::events::{ BufferEvents, Events as BufferEvents };
+use crate::events::{ Events, BufferEvents };
 use crate::buffer_interface::{ AdminInterface, BufferTrait };
+use crate::reserve::Reserve;
 use crate::storage::{
     get_buffer_reserve_amount,
-    get_buffer_vault_amount,
-    get_deposit_token,
+    get_is_killed_deposit,
+    get_is_killed_request_payout,
     get_last_payout_timestamp,
-    get_max_balance,
+    get_min_reserve_ratio,
     get_min_time_between_payouts,
     get_reserve,
-    get_reserves,
+    get_router,
     put_reserve,
-    set_deposit_token,
     set_fee_collector,
+    set_is_killed_deposit,
+    set_is_killed_request_payout,
     set_last_payout_timestamp,
-    set_max_balance,
     set_min_time_between_payouts,
     set_router,
 };
@@ -36,7 +37,6 @@ use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{
     contract,
     contractimpl,
-    log,
     panic_with_error,
     Address,
     BytesN,
@@ -48,6 +48,7 @@ use soroban_sdk::{
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
+use utils::math::safe_math::SafeMath;
 use utils::token::{ transfer_token, validate_tokens_contracts };
 
 #[contract]
@@ -84,7 +85,7 @@ impl BufferTrait for Buffer {
             panic_with_error!(&e, BufferError::NotAuthorized);
         }
 
-        validate_tokens_contracts(&e, &Vec::from_array(&e, [token]));
+        validate_tokens_contracts(&e, &Vec::from_array(&e, [token.clone()]));
 
         let reserve = get_reserve(&e, &token);
 
@@ -99,7 +100,7 @@ impl BufferTrait for Buffer {
         // Update the Buffer
         put_reserve(&e, &token, &reserve.deposit(&e, amount));
 
-        BufferEvents::deposit(&self, token, sender, amount);
+        Events::new(&e).deposit(token, sender, amount);
     }
 
     fn request_payout(e: Env, sender: Address, token: Address, amount: u128) {
@@ -129,8 +130,9 @@ impl BufferTrait for Buffer {
 
         // Update the Buffer
         put_reserve(&e, &token, &reserve.payout(&e, amount, now));
+        set_last_payout_timestamp(&e, &now);
 
-        BufferEvents::request_payout(&self, token, sender, amount);
+        Events::new(&e).request_payout(token, sender, amount);
     }
 
     // Returns the pool's reserves.
@@ -138,8 +140,16 @@ impl BufferTrait for Buffer {
     // # Returns
     //
     // A vector of the pool's reserves.
-    fn get_reserves(e: Env) -> Map<Address, Reserve> {
-        get_reserves(&e)
+    fn get_reserve(e: Env, token: Address) -> Reserve {
+        get_reserve(&e, &token)
+    }
+
+    fn get_min_reserve_ratio(e: Env) -> u128 {
+        get_min_reserve_ratio(&e)
+    }
+
+    fn get_last_payout_timestamp(e: Env) -> u64 {
+        get_last_payout_timestamp(&e)
     }
 }
 
@@ -187,7 +197,7 @@ impl AdminInterface for Buffer {
         access_control.assert_address_has_role(&admin, &Role::Admin);
 
         let mut reserve = get_reserve(&e, &token);
-        put_reserve(&e, &token, &reserve.update_max_balance(&e, max_balance));
+        put_reserve(&e, &token, &reserve.update_max_balance(max_balance));
     }
 
     // Sets the minimum time between payouts.
@@ -201,7 +211,7 @@ impl AdminInterface for Buffer {
         let access_control = AccessControl::new(&e);
         access_control.assert_address_has_role(&admin, &Role::Admin);
 
-        set_max_balance(&e, &min_time);
+        set_min_time_between_payouts(&e, &min_time);
     }
 
     // Withdraws surplus reservess.
@@ -216,9 +226,9 @@ impl AdminInterface for Buffer {
         let access_control = AccessControl::new(&e);
         access_control.assert_address_has_role(&admin, &Role::Admin);
 
-        validate_tokens_contracts(&e, &Vec::from_array(&e, [token]));
+        validate_tokens_contracts(&e, &Vec::from_array(&e, [token.clone()]));
 
-        let mut reserve = get_reserve(&e, &token);
+        let reserve = get_reserve(&e, &token);
 
         if amount > reserve.balance {
             panic!("insufficient reserve");
@@ -231,31 +241,27 @@ impl AdminInterface for Buffer {
             panic!("withdrawal violates minimum reserve policy");
         }
 
-        put_reserve(&e, &token, &reserve.withdraw(&e, amount));
+        put_reserve(&e, token.clone(), &reserve.withdraw(&e, amount));
 
         transfer_token(&e, &token, &e.current_contract_address(), &admin, &(amount as i128));
 
-        BufferEvents::withdraw_surplus(&self, token, admin, amount);
+        Events::new(&e).withdraw_surplus(token, admin, amount);
     }
 
-    // Sync actual token balances with reserves.
+    // Sync token balances with reserves.
     //
     // # Arguments
     //
     // * `admin` - The address of the admin.
-    fn sync(e: Env, admin: Address) {
+    // * `token` - The address of the token to sync.
+    fn sync(e: Env, admin: Address, token: Address) {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
         access_control.assert_address_has_role(&admin, &Role::Admin);
 
-        let reserves = get_reserves(&e);
-        let tokens = reserves.keys();
-
-        for i in tokens {
-            let reserve = reserves.get(token);
-            let balance = get_buffer_reserve_amount(&e, token);
-            put_reserve(&e, token, &reserve.update_balance(&e, balance));
-        }
+        let reserve = get_reserve(&e, &token);
+        let balance = get_buffer_reserve_amount(&e, &token);
+        put_reserve(&e, &token, &reserve.update_balance(balance));
     }
 
     // Skim excess token balances.
@@ -263,10 +269,21 @@ impl AdminInterface for Buffer {
     // # Arguments
     //
     // * `admin` - The address of the admin.
-    fn skim(e: Env, admin: Address) {
+    // * `token` - The address of the token to skim.
+    fn skim(e: Env, admin: Address, token: Address) -> u128 {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
         access_control.assert_address_has_role(&admin, &Role::Admin);
+
+        let reserve = get_reserve(&e, &token);
+        let balance = get_buffer_reserve_amount(&e, &token);
+        let reserve_balance = reserve.balance;
+        put_reserve(&e, &token, &reserve.update_balance(balance));
+
+        let balance_delta = balance.safe_sub(&e, reserve_balance);
+        transfer_token(&e, &token, &e.current_contract_address(), &admin, &(balance_delta as i128));
+
+        balance_delta
     }
 
     // Stops the buffer deposits instantly.
@@ -279,7 +296,7 @@ impl AdminInterface for Buffer {
         require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
 
         set_is_killed_deposit(&e, &true);
-        BufferEvents::new(&e).kill_deposit();
+        Events::new(&e).kill_deposit();
     }
 
     // Stops the buffer payouts instantly.
@@ -292,7 +309,7 @@ impl AdminInterface for Buffer {
         require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
 
         set_is_killed_request_payout(&e, &true);
-        BufferEvents::new(&e).kill_withdraw();
+        Events::new(&e).kill_request_payout();
     }
 
     // Resumes the buffer deposits.
@@ -305,7 +322,7 @@ impl AdminInterface for Buffer {
         require_pause_admin_or_owner(&e, &admin);
 
         set_is_killed_deposit(&e, &false);
-        BufferEvents::new(&e).unkill_deposit();
+        Events::new(&e).unkill_deposit();
     }
 
     // Resumes the buffer payouts.
@@ -318,7 +335,7 @@ impl AdminInterface for Buffer {
         require_pause_admin_or_owner(&e, &admin);
 
         set_is_killed_request_payout(&e, &false);
-        BufferEvents::new(&e).unkill_request_payout();
+        Events::new(&e).unkill_request_payout();
     }
 
     // Get deposit killswitch status.
