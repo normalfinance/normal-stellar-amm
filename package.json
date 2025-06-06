@@ -1,0 +1,17 @@
+{
+  "name": "@normalfinance/normal-stellar-amm",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "env": "cp .env.example .env",
+    "setup": "node initialize.js",
+    "test": "pnpm run test:integration && pnpm run test:unit",
+    "lint": "prettier --check . && eslint .",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "glob": "^11.0.2"
+  },
+  "type": "module",
+  "dependencies": {}
+}
