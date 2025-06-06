@@ -14,21 +14,22 @@ use crate::stake::{
     StakeAction,
 };
 use crate::storage::{
-    get_deposit_token,
     get_insurance_vault_amount,
     get_is_killed_deposit,
     get_is_killed_request_withdraw,
     get_is_killed_withdraw,
+    get_max_shares,
     get_shares_base,
+    get_token,
     get_total_shares,
     get_unstaking_period,
-    put_deposit_token,
+    put_token,
     set_is_killed_deposit,
     set_is_killed_request_withdraw,
     set_is_killed_withdraw,
-    set_last_revenue_settle_ts,
     set_max_shares,
     set_total_shares,
+    set_unstaking_period,
 };
 use access_control::access::{ AccessControl, AccessControlTrait };
 use access_control::emergency::{ get_emergency_mode, set_emergency_mode };
@@ -43,16 +44,17 @@ use access_control::utils::{
     require_pause_admin_or_owner,
     require_pause_or_emergency_pause_admin_or_owner,
 };
-use soroban_sdk::token::TokenClient as SorobanTokenClient;
+use soroban_sdk::auth::{ ContractContext, InvokerContractAuthEntry, SubContractInvocation };
 use soroban_sdk::{
     contract,
     contractimpl,
     log,
     panic_with_error,
+    vec,
     Address,
     BytesN,
     Env,
-    Map,
+    IntoVal,
     Symbol,
     Vec,
 };
@@ -60,23 +62,35 @@ use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
 use utils::math::safe_math::SafeMath;
+use utils::token::transfer_token;
 use utils::validate;
 
 #[contract]
 pub struct InsuranceFund;
 
-// The `InsuranceFundTrait` trait provides the interface for interacting with a liquidity pool.
-#[contractimpl]
-impl InsuranceFundTrait for InsuranceFund {
-    fn initialize(e: Env, deposit_token: Address, unstaking_period: u64, max_shares: u128) {
-        // set_router(&e, &params.router);
+impl InsuranceFund {
+    pub fn __constructor(
+        e: Env,
+        admin: Address,
+        token: Address,
+        unstaking_period: u64,
+        max_shares: u128
+    ) {
+        let access_control = AccessControl::new(&e);
+        if access_control.get_role_safe(&Role::Admin).is_some() {
+            panic_with_error!(&e, AccessControlError::AdminAlreadySet);
+        }
+        access_control.set_role_address(&Role::Admin, &admin);
 
         set_unstaking_period(&e, &unstaking_period);
         set_max_shares(&e, &max_shares);
-
-        put_deposit_token(&e, &deposit_token)
+        put_token(&e, &token)
     }
+}
 
+// The `InsuranceFundTrait` trait provides the interface for interacting with a liquidity pool.
+#[contractimpl]
+impl InsuranceFundTrait for InsuranceFund {
     fn deposit(e: Env, user: Address, amount: u128) {
         user.require_auth();
 
@@ -97,9 +111,11 @@ impl InsuranceFundTrait for InsuranceFund {
 
         let insurance_vault_amount = get_insurance_vault_amount(&e);
 
-        if !(insurance_vault_amount == 0 && total_shares != 0) {
-            panic_with_error!(e, InsuranceFundError::IFWithdrawRequestTooSmall);
-        }
+        validate!(
+            !(insurance_vault_amount == 0 && total_shares != 0),
+            InsuranceFundError::InvalidIFForNewStakes,
+            "Insurance Fund balance should be non-zero for new stakers to enter"
+        )?;
 
         apply_rebase_to_insurance_fund(&e, insurance_vault_amount);
         apply_rebase_to_stake(&e, &mut stake);
@@ -136,8 +152,7 @@ impl InsuranceFundTrait for InsuranceFund {
         let new_total_shares = get_total_shares(&e);
 
         let now = e.ledger().timestamp();
-        FundEvents::if_stake_record(
-            &e,
+        FundEvents::new(&e).if_stake_record(
             now,
             user.clone(),
             StakeAction::Deposit,
@@ -149,8 +164,7 @@ impl InsuranceFundTrait for InsuranceFund {
             new_total_shares
         );
 
-        let token_client = SorobanTokenClient::new(&e, &get_deposit_token(&e));
-        token_client.transfer(&user, &e.current_contract_address(), &(amount as i128));
+        transfer_token(&e, &get_token(&e), &user, &e.current_contract_address(), &(amount as i128));
     }
 
     fn request_withdraw(e: Env, user: Address, amount: u128) {
@@ -219,20 +233,19 @@ impl InsuranceFundTrait for InsuranceFund {
             stake.last_withdraw_request_shares,
             total_shares,
             insurance_vault_amount
-        ).min(insurance_vault_amount.saturating_sub(1) as i128);
+        ).min(insurance_vault_amount.saturating_sub(1));
 
         validate!(
             &e,
             stake.last_withdraw_request_value == 0 ||
-                stake.last_withdraw_request_value < (insurance_vault_amount as i128),
+                stake.last_withdraw_request_value < insurance_vault_amount,
             InsuranceFundError::InvalidIFUnstakeSize,
             "Requested withdraw value is not below Insurance Fund balance"
         );
 
         let if_shares_after = stake.checked_if_shares(&e);
 
-        InsuranceFundEvents::if_stake_record(
-            &e,
+        FundEvents::new(&e).if_stake_record(
             now,
             user.clone(),
             StakeAction::WithdrawRequest,
@@ -295,8 +308,7 @@ impl InsuranceFundTrait for InsuranceFund {
 
         let if_shares_after = stake.checked_if_shares(&e);
 
-        InsuranceFundEvents::if_stake_record(
-            &e,
+        FundEvents::new(&e).if_stake_record(
             now,
             user.clone(),
             StakeAction::WithdrawCancelRequest,
@@ -375,8 +387,7 @@ impl InsuranceFundTrait for InsuranceFund {
 
         let if_shares_after = stake.checked_if_shares(&e);
 
-        FundEvents::if_stake_record(
-            &e,
+        FundEvents::new(&e).if_stake_record(
             now,
             user.clone(),
             StakeAction::Withdraw,
@@ -388,8 +399,13 @@ impl InsuranceFundTrait for InsuranceFund {
             total_shares
         );
 
-        let token_client = SorobanTokenClient::new(&e, &get_deposit_token(&e));
-        token_client.transfer(&e.current_contract_address(), &user, &(withdraw_amount as i128));
+        transfer_token(
+            &e,
+            &get_token(&e),
+            &e.current_contract_address(),
+            &user,
+            &(withdraw_amount as i128)
+        );
 
         let insurance_vault_amount = get_insurance_vault_amount(&e);
         validate!(
@@ -398,10 +414,6 @@ impl InsuranceFundTrait for InsuranceFund {
             InsuranceFundError::InvalidIFDetected,
             "insurance_fund_vault.amount must remain > 0"
         );
-    }
-
-    fn collect_reward(e: Env, user: Address) {
-        user.require_auth();
     }
 }
 
@@ -486,19 +498,6 @@ impl UpgradeableContract for InsuranceFund {
 // The `AdminInterface` trait provides the interface for administrative actions.
 #[contractimpl]
 impl AdminInterface for InsuranceFund {
-    // Initializes the admin user.
-    //
-    // # Arguments
-    //
-    // * `account` - The address of the admin user.
-    fn init_admin(e: Env, account: Address) {
-        let access_control = AccessControl::new(&e);
-        if access_control.get_role_safe(&Role::Admin).is_some() {
-            panic_with_error!(&e, AccessControlError::AdminAlreadySet);
-        }
-        access_control.set_role_address(&Role::Admin, &account);
-    }
-
     // Sets the unstaking period.
     //
     // # Arguments
@@ -527,7 +526,12 @@ impl AdminInterface for InsuranceFund {
         set_max_shares(&e, &max_shares);
     }
 
+    // Sets the max shares the Insurance Fund can have.
     //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `max_shares` - The max number of shares.ƒ
     fn resolve_liquidity_deficit(e: Env, admin: Address, pool_address: Address) {
         admin.require_auth();
 
@@ -545,11 +549,11 @@ impl AdminInterface for InsuranceFund {
         if pay_from_insurance > 0 {
             validate!(
                 &e,
-                pay_from_insurance < insurance_fund_vault_amount,
+                pay_from_insurance < insurance_vault_amount,
                 InsuranceFundError::InsufficientCollateral,
                 "Insurance Fund balance InsufficientCollateral for payment: !{} < {}",
                 pay_from_insurance,
-                insurance_fund_vault_amount
+                insurance_vault_amount
             );
 
             e.authorize_as_current_contract(
@@ -557,7 +561,7 @@ impl AdminInterface for InsuranceFund {
                     &e,
                     InvokerContractAuthEntry::Contract(SubContractInvocation {
                         context: ContractContext {
-                            contract: token.clone(),
+                            contract: get_token(&e).clone(),
                             fn_name: Symbol::new(&e, "transfer"),
                             args: (
                                 e.current_contract_address(),
@@ -579,10 +583,10 @@ impl AdminInterface for InsuranceFund {
                 ])
             );
 
-            let new_insurance_fund_vault_amount = get_insurance_vault_amount(&e);
+            let new_insurance_vault_amount = get_insurance_vault_amount(&e);
             validate!(
                 &e,
-                new_insurance_fund_vault_amount > 0,
+                new_insurance_vault_amount > 0,
                 InsuranceFundError::InvalidIFDetected,
                 "insurance_fund_vault_amount must remain > 0"
             );

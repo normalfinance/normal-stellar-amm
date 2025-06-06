@@ -1,4 +1,4 @@
-use soroban_sdk::{ Address, BytesN, Env, Symbol, Val, Vec };
+use soroban_sdk::{ Address, Env, Symbol };
 
 use crate::stake::StakeAction;
 
@@ -20,34 +20,16 @@ impl Events {
 pub(crate) trait InsuranceFundEvents {
     fn if_stake_record(
         &self,
-        ts: i64,
+        ts: u64,
         user: Address,
         action: StakeAction,
-        amount: u64,
-        insurance_vault_amount_before: u64,
+        amount: u128,
+        insurance_vault_amount_before: u128,
         if_shares_before: u128,
         total_if_shares_before: u128,
         if_shares_after: u128,
         total_if_shares_after: u128
     );
-
-    // fn claim(
-    //     &self,
-    //     tokens: Vec<Address>,
-    //     user: Address,
-    //     pool_address: Address,
-    //     reward_token: Address,
-    //     reward_amount: u128,
-    // );
-
-    // fn collect_reward(
-    //     &self,
-    //     tokens: Vec<Address>,
-    //     user: Address,
-    //     pool_address: Address,
-    //     reward_token: Address,
-    //     reward_amount: u128,
-    // );
 
     fn kill_deposit(&self);
 
@@ -65,11 +47,11 @@ pub(crate) trait InsuranceFundEvents {
 impl InsuranceFundEvents for Events {
     fn if_stake_record(
         &self,
-        ts: i64,
+        ts: u64,
         user: Address,
         action: StakeAction,
-        amount: u64,
-        insurance_vault_amount_before: u64,
+        amount: u128,
+        insurance_vault_amount_before: u128,
         if_shares_before: u128,
         total_if_shares_before: u128,
         if_shares_after: u128,
@@ -78,24 +60,18 @@ impl InsuranceFundEvents for Events {
         self.env()
             .events()
             .publish(
-                (Symbol::new(self.env(), "deposit"), tokens, user),
-                (pool_id, amount, share_amount)
+                (Symbol::new(self.env(), "deposit"), user, action),
+                (
+                    ts,
+                    amount,
+                    insurance_vault_amount_before,
+                    if_shares_before,
+                    total_if_shares_before,
+                    if_shares_after,
+                    total_if_shares_after,
+                )
             );
     }
-
-    // fn claim(
-    //     &self,
-    //     tokens: Vec<Address>,
-    //     user: Address,
-    //     pool_address: Address,
-    //     reward_token: Address,
-    //     reward_amount: u128,
-    // ) {
-    //     self.env().events().publish(
-    //         (Symbol::new(self.env(), "claim"), tokens, user),
-    //         (pool_address, reward_token, reward_amount),
-    //     );
-    // }
 
     fn kill_deposit(&self) {
         self.env()

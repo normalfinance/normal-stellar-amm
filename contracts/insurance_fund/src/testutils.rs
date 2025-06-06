@@ -1,58 +1,42 @@
 #![cfg(test)]
 extern crate std;
-use crate::plane::{ pool_plane, PoolPlaneClient };
-use crate::LiquidityPoolClient;
-use access_control::constants::ADMIN_ACTIONS_DELAY;
+use crate::InsuranceFundClient;
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient,
     TokenClient as SorobanTokenClient,
 };
-use soroban_sdk::{ testutils::Address as _, Address, BytesN, Env, Symbol, Vec };
-use std::vec;
-use token_share::token_contract::{ Client as ShareTokenClient, WASM };
-use utils::test_utils::jump;
+use soroban_sdk::{ Address, BytesN, Env, String, Symbol, Vec };
+use utils::storage::{ OraclePair };
 
 pub(crate) struct TestConfig {
-    pub(crate) users_count: u32,
-    pub(crate) mint_to_user: i128,
-    pub(crate) rewards_count: i128,
-    pub(crate) liq_pool_fee: u32,
-    pub(crate) reward_tps: u128,
-    pub(crate) reward_token_in_pool: bool,
+    pub(crate) min_time_between_payouts: u64,
 }
 
 impl Default for TestConfig {
     fn default() -> Self {
         TestConfig {
-            users_count: 2,
-            mint_to_user: 1000,
-            rewards_count: 1_000_000_0000000,
-            liq_pool_fee: 30,
-            reward_tps: 10_5000000_u128,
-            reward_token_in_pool: false,
+            min_time_between_payouts: 30, // 30 seconds
         }
     }
 }
 
 pub(crate) struct Setup<'a> {
     pub(crate) env: Env,
-    pub(crate) router: Address,
-    pub(crate) insurance_fund: Address,
-    pub(crate) users: vec::Vec<Address>,
-    pub(crate) token1: SorobanTokenClient<'a>,
-    pub(crate) token1_admin_client: SorobanTokenAdminClient<'a>,
-    pub(crate) token2: SorobanTokenClient<'a>,
-    pub(crate) token2_admin_client: SorobanTokenAdminClient<'a>,
-    pub(crate) token_reward: SorobanTokenClient<'a>,
-    pub(crate) token_reward_admin_client: SorobanTokenAdminClient<'a>,
-    pub(crate) token_share: ShareTokenClient<'a>,
-    pub(crate) liq_pool: LiquidityPoolClient<'a>,
-
     pub(crate) admin: Address,
+    pub(crate) insurance_fund: InsuranceFundClient<'a>,
+    pub(crate) router: swap_router::Client<'a>,
+    pub(crate) fee_collector: fee_collector::Client<'a>,
+    pub(crate) operator: Address,
+
+    pub(crate) token_a: SorobanTokenClient<'a>,
+    pub(crate) token_a_admin_client: SorobanTokenAdminClient<'a>,
+    pub(crate) token_b: SorobanTokenClient<'a>,
+    pub(crate) token_b_admin_client: SorobanTokenAdminClient<'a>,
 }
 
 impl Default for Setup<'_> {
-    // Create setup from default config and mint tokens for all users & set rewards config
+    // Create setup from default config
     fn default() -> Self {
         let default_config = TestConfig::default();
         Self::new_with_config(&default_config)
@@ -60,115 +44,86 @@ impl Default for Setup<'_> {
 }
 
 impl Setup<'_> {
-    // Create setup from config and mint tokens for all users
     pub(crate) fn new_with_config(config: &TestConfig) -> Self {
         let setup = Self::setup(config);
-        setup.mint_tokens_for_users(config.mint_to_user);
-        setup.set_rewards_config(config.reward_tps);
         setup
     }
 
-    // Create users, token1, token2, reward token, lp token
-    //
-    // Mint reward token (1_000_000_0000000) & approve for liquidity_pool token
     pub(crate) fn setup(config: &TestConfig) -> Self {
         let e: Env = Env::default();
         e.mock_all_auths();
         e.cost_estimate().budget().reset_unlimited();
 
-        let users = Self::generate_random_users(&e, config.users_count);
-        let admin = users[0].clone();
+        let admin = Address::generate(&e);
+        let operator = Address::generate(&e);
+        let fee_collector = Address::generate(&e);
 
-        let mut token1 = create_token_contract(&e, &admin);
-        let mut token2 = create_token_contract(&e, &admin);
-        let reward_token = if config.reward_token_in_pool {
-            SorobanTokenClient::new(&e, &token1.address.clone())
-        } else {
-            create_token_contract(&e, &admin)
+        let token_a = create_token_contract(&e, &admin);
+        let token_b = create_token_contract(&e, &admin);
+
+        let token_a_admin_client = get_token_admin_client(&e, &token_a.address.clone());
+        let token_b_admin_client = get_token_admin_client(&e, &token_b.address.clone());
+
+        // init swap router with all it's complexity
+        let pool_hash = install_liq_pool_hash(&e);
+        let token_hash = install_token_wasm(&e);
+        let router = deploy_liqpool_router_contract(e.clone());
+        router.init_admin(&admin);
+        router.set_pool_hash(&admin, &pool_hash);
+        router.set_token_hash(&admin, &token_hash);
+
+        let oracles = OraclePair {
+            base_oracle: e.register(MockPriceOracleWASM, ()),
+            quote_oracle: e.register(MockPriceOracleWASM, ()),
         };
 
-        let plane = create_plane_contract(&e);
+        // create swap pool & deposit initial liquidity
+        let (_, pool_address) = router.init_standard_pool(
+            &admin,
+            &oracles,
+            &Vec::from_array(&e, [token_a.address.clone(), token_b.address.clone()]),
+            &String::from_str(&e, "Pool Share Token"),
+            &String::from_str(&e, "Pool Share Token"),
+            &30
+        );
+        let swap_pool = liquidity_pool::Client::new(&e, &pool_address);
+        token_b_admin_client.mint(&admin, &1_000_000_000_0000000);
+        swap_pool.deposit(&admin, &1_000_000_000_0000000);
 
-        if &token2.address < &token1.address {
-            std::mem::swap(&mut token1, &mut token2);
-        }
-        let token1_admin_client = get_token_admin_client(&e, &token1.address.clone());
-        let token2_admin_client = get_token_admin_client(&e, &token2.address.clone());
-        let token_reward_admin_client = get_token_admin_client(&e, &reward_token.address.clone());
+        // init fee collector
+        let fee_collector = deploy_fee_collector_contract(e.clone());
 
-        let router = Address::generate(&e);
-
-        let liq_pool = create_liqpool_contract(
+        let insurance_fund = create_insurance_fund(
             &e,
             &admin,
-            &router,
-            &install_token_wasm(&e),
-            &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
-            &reward_token.address,
-            &reward_boost_token.address,
-            &reward_boost_feed.address,
-            config.liq_pool_fee,
-            &plane.address
+            &router.address,
+            &fee_collector.address,
+            config.min_time_between_payouts
         );
-        token_reward_admin_client.mint(&liq_pool.address, &config.rewards_count);
-
-        liq_pool.set_privileged_addrs(
-            &admin,
-            &rewards_admin.clone(),
-            &operations_admin.clone(),
-            &pause_admin.clone(),
-            &Vec::from_array(&e, [emergency_pause_admin.clone()])
-        );
-
-        let emergency_admin = Address::generate(&e);
-        liq_pool.commit_transfer_ownership(
-            &admin,
-            &Symbol::new(&e, "EmergencyAdmin"),
-            &emergency_admin
-        );
-        jump(&e, ADMIN_ACTIONS_DELAY + 1); // delay is mandatory since emergency admin was set during initialization
-        liq_pool.apply_transfer_ownership(&admin, &Symbol::new(&e, "EmergencyAdmin"));
-
-        let token_share = ShareTokenClient::new(&e, &liq_pool.share_id());
 
         Self {
             env: e,
-            router,
-            insurance_fund,
-            users,
-            token1,
-            token1_admin_client,
-            token2,
-            token2_admin_client,
-            token_reward: reward_token,
-            token_reward_admin_client,
-            token_share,
-            liq_pool: liq_pool,
             admin,
-        }
-    }
-
-    pub(crate) fn generate_random_users(e: &Env, users_count: u32) -> vec::Vec<Address> {
-        let mut users = vec![];
-        for _c in 0..users_count {
-            users.push(Address::generate(e));
-        }
-        users
-    }
-
-    pub(crate) fn mint_tokens_for_users(&self, amount: i128) {
-        for user in self.users.iter() {
-            self.token1_admin_client.mint(user, &amount);
-            assert_eq!(self.token1.balance(user), amount.clone());
-
-            self.token2_admin_client.mint(user, &amount);
-            assert_eq!(self.token2.balance(user), amount.clone());
+            operator,
+            insurance_fund,
+            router,
+            fee_collector,
+            token_a,
+            token_a_admin_client,
+            token_b,
+            token_b_admin_client,
         }
     }
 }
 
 pub(crate) fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanTokenClient<'a> {
     SorobanTokenClient::new(e, &e.register_stellar_asset_contract_v2(admin.clone()).address())
+}
+
+pub mod liquidity_pool {
+    soroban_sdk::contractimport!(
+        file = "../../target/wasm32v1-none/release/soroban_liquidity_pool_contract.wasm"
+    );
 }
 
 pub(crate) fn get_token_admin_client<'a>(
@@ -178,51 +133,40 @@ pub(crate) fn get_token_admin_client<'a>(
     SorobanTokenAdminClient::new(e, address)
 }
 
-pub fn create_liqpool_contract<'a>(
+pub fn create_contract<'a>(
     e: &Env,
     admin: &Address,
     router: &Address,
-    token_wasm_hash: &BytesN<32>,
-    tokens: &Vec<Address>,
-    reward_token: &Address,
-    reward_boost_token: &Address,
-    reward_boost_feed: &Address,
-    fee_fraction: u32,
-    plane: &Address
-) -> LiquidityPoolClient<'a> {
-    let liqpool = LiquidityPoolClient::new(e, &e.register(crate::LiquidityPool {}, ()));
-    liqpool.initialize_all(
-        &admin,
-        &(
-            admin.clone(),
-            admin.clone(),
-            admin.clone(),
-            admin.clone(),
-            Vec::from_array(e, [admin.clone()]),
-        ),
-        router,
-        token_wasm_hash,
-        tokens,
-        &fee_fraction,
-        &(reward_token.clone(), reward_boost_token.clone(), reward_boost_feed.clone()),
-        plane
+    fee_collector: &Address,
+    min_time_between_payouts: u64
+) -> InsuranceFundClient<'a> {
+    let contract = InsuranceFundClient::new(
+        e,
+        &e.register(crate::InsuranceFund, (admin, router, fee_collector, min_time_between_payouts))
     );
-    liqpool
+    contract
 }
 
-pub fn install_token_wasm(e: &Env) -> BytesN<32> {
+pub mod swap_router {
+    soroban_sdk::contractimport!(
+        file = "../../target/wasm32v1-none/release/soroban_liquidity_pool_router_contract.wasm"
+    );
+}
+
+fn deploy_liqpool_router_contract<'a>(e: Env) -> swap_router::Client<'a> {
+    swap_router::Client::new(&e, &e.register(swap_router::WASM, ()))
+}
+
+fn install_token_wasm(e: &Env) -> BytesN<32> {
+    soroban_sdk::contractimport!(
+        file = "../../target/wasm32v1-none/release/soroban_token_contract.wasm"
+    );
     e.deployer().upload_contract_wasm(WASM)
 }
 
-#[test]
-fn test() {
-    let config = TestConfig {
-        users_count: 2,
-        mint_to_user: 1000,
-        rewards_count: 1_000_000_0000000,
-        liq_pool_fee: 30,
-        reward_tps: 10_5000000_u128,
-        reward_token_in_pool: false,
-    };
-    let _setup = Setup::new_with_config(&config);
+fn install_liq_pool_hash(e: &Env) -> BytesN<32> {
+    soroban_sdk::contractimport!(
+        file = "../../target/wasm32v1-none/release/soroban_liquidity_pool_contract.wasm"
+    );
+    e.deployer().upload_contract_wasm(WASM)
 }

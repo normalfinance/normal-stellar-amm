@@ -1,7 +1,6 @@
 use crate::errors::{ InsuranceFundError };
 use soroban_fixed_point_math::SorobanFixedPoint;
 use crate::storage::{
-    get_insurance_vault_amount,
     get_shares_base,
     get_total_shares,
     set_total_shares,
@@ -40,13 +39,12 @@ pub struct Stake {
     pub last_valid_ts: u64,
     pub last_withdraw_request_value: u128,
     pub last_withdraw_request_ts: u64,
-    pub cost_basis: i64,
+    pub cost_basis: u128,
 }
 
 impl Stake {
     pub fn new(now: u64) -> Self {
         Stake {
-            // authority,
             last_withdraw_request_shares: 0,
             last_withdraw_request_value: 0,
             last_withdraw_request_ts: 0,
@@ -124,7 +122,7 @@ pub fn apply_rebase_to_insurance_fund(e: &Env, insurance_vault_amount: u128) {
         );
 
         set_total_shares(e, &total_shares.safe_div(e, rebase_divisor));
-        set_shares_base(e, &shares_base.safe_add(e, expo_diff));
+        set_shares_base(e, &shares_base.safe_add(e, expo_diff as u128));
 
         log!(e, "rebasing insurance fund: expo_diff={}", expo_diff);
     }

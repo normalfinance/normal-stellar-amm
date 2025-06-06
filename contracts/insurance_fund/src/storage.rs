@@ -12,14 +12,11 @@ use paste::paste;
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
-    TokenDeposit,
+    Token,
     UnstakingPeriod,
     MaxShares,
-
-    UserShares,
+    TotalShares,
     SharesBase, // exponent for lp shares (for rebasing)
-    LastRevenueSettleTs,
-    UserFactor, // percentage of interest for user staked insurance
 
     IsKilledDeposit,
     IsKilledRequestWithdraw,
@@ -44,14 +41,6 @@ generate_instance_storage_getter_and_setter_with_default!(
     bool,
     false
 );
-
-//
-generate_instance_storage_getter_and_setter_with_default!(
-    last_revenue_settle_ts,
-    DataKey::LastRevenueSettleTs,
-    u64,
-    0
-);
 generate_instance_storage_getter_and_setter_with_default!(
     unstaking_period,
     DataKey::UnstakingPeriod,
@@ -72,19 +61,19 @@ generate_instance_storage_getter_and_setter_with_default!(
 );
 generate_instance_storage_getter_and_setter_with_default!(max_shares, DataKey::MaxShares, u128, 0);
 
-pub fn get_deposit_token(e: &Env) -> Address {
+pub fn get_token(e: &Env) -> Address {
     bump_instance(e);
-    match e.storage().instance().get(&DataKey::TokenDeposit) {
+    match e.storage().instance().get(&DataKey::Token) {
         Some(v) => v,
         None => panic_with_error!(e, StorageError::ValueNotInitialized),
     }
 }
 
-pub fn put_deposit_token(e: &Env, amount: Address) {
+pub fn put_token(e: &Env, token: &Address) {
     bump_instance(e);
-    e.storage().instance().set(&DataKey::TokenDeposit, &amount)
+    e.storage().instance().set(&DataKey::Token, token)
 }
 
 pub fn get_insurance_vault_amount(e: &Env) -> u128 {
-    SorobanTokenClient::new(e, &get_deposit_token(e)).balance(&e.current_contract_address()) as u128
+    SorobanTokenClient::new(e, &get_token(e)).balance(&e.current_contract_address()) as u128
 }
