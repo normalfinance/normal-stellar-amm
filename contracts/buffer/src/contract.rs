@@ -94,8 +94,7 @@ impl BufferTrait for Buffer {
         }
 
         // Transfer token to the Buffer
-        let token_client = SorobanTokenClient::new(&e, &token);
-        token_client.transfer(&sender, &e.current_contract_address(), &(amount as i128));
+        transfer_token(&e, &token, &sender, &e.current_contract_address(), &(amount as i128));
 
         // Update the Buffer
         put_reserve(&e, &token, &reserve.deposit(&e, amount));

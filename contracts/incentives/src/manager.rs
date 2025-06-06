@@ -299,10 +299,12 @@ impl Manager {
 
         // Transfer tokens
         let reward_token = self.storage.get_reward_token();
-        Client::new(&self.env, &reward_token).transfer(
+        transfer_token(
+            &e,
+            &reward_token,
             &self.env.current_contract_address(),
             user,
-            &(reward_amount as i128),
+            &(reward_amount as i128)
         );
 
         // Reset user reward

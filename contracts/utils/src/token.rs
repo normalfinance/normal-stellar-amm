@@ -9,6 +9,16 @@ pub fn validate_tokens_contracts(e: &Env, tokens: &Vec<Address>) {
 }
 
 pub fn transfer_token(e: &Env, token: &Address, from: &Address, to: &Address, amount: &i128) {
-    let token_client = SorobanTokenClient::new(e, token);
-    token_client.transfer(from, to, amount);
+    SorobanTokenClient::new(e, token).transfer(from, to, amount);
+}
+
+pub fn transfer_token_from(
+    e: &Env,
+    token: &Address,
+    spender: &Address,
+    from: &Address,
+    to: &Address,
+    amount: &i128
+) {
+    SorobanTokenClient::new(e, token).transfer_from(spender, from, to, amount);
 }

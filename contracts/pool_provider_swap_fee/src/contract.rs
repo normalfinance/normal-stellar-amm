@@ -29,6 +29,7 @@ use soroban_sdk::{
     Vec,
 };
 use utils::constant::{ FEE_DENOMINATOR, PRICE_PRECISION };
+use utils::token::transfer_token;
 
 #[contract]
 pub struct ProviderSwapFeeCollector;
@@ -151,9 +152,14 @@ impl ProviderSwapFeeCollector {
         if operator != get_operator(&e) {
             panic_with_error!(&e, Error::Unauthorized);
         }
-        let token_client = SorobanTokenClient::new(&e, &token);
         let amount = token_client.balance(&e.current_contract_address());
-        token_client.transfer(&e.current_contract_address(), &get_fee_destination(&e), &amount);
+        transfer_token(
+            &e,
+            &token,
+            &e.current_contract_address(),
+            &get_fee_destination(&e),
+            &amount
+        );
         Events::new(&e).claim_fee(token.clone(), amount as u128, token, amount as u128);
         amount as u128
     }
@@ -217,7 +223,9 @@ impl ProviderSwapFeeCollector {
                 out_min.into_val(&e),
             ])
         );
-        SorobanTokenClient::new(&e, &token_out).transfer(
+        transfer_token(
+            &e,
+            &token_out,
             &e.current_contract_address(),
             &get_fee_destination(&e),
             &(out_amount as i128)
@@ -258,11 +266,8 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
             panic_with_error!(&e, Error::FeeFractionTooHigh);
         }
 
-        SorobanTokenClient::new(&e, &token_in).transfer(
-            &user,
-            &e.current_contract_address(),
-            &(in_amount as i128)
-        );
+        transfer_token(&e, &token_in, &user, &e.current_contract_address(), &(in_amount as i128));
+
         let router = get_router(&e);
         e.authorize_as_current_contract(
             vec![
@@ -297,7 +302,9 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
         if amount_out_w_fee < out_min {
             panic_with_error!(&e, Error::OutMinNotSatisfied);
         }
-        SorobanTokenClient::new(&e, &swap.2).transfer(
+        transfer_token(
+            &e,
+            &swap.2,
             &e.current_contract_address(),
             &user,
             &(amount_out_w_fee as i128)
@@ -388,11 +395,7 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
             panic_with_error!(&e, Error::FeeFractionTooHigh);
         }
 
-        SorobanTokenClient::new(&e, &token_in).transfer(
-            &user,
-            &e.current_contract_address(),
-            &(in_max as i128)
-        );
+        transfer_token(&e, &token_in, &user, &e.current_contract_address(), &(in_max as i128));
         let router = get_router(&e);
         e.authorize_as_current_contract(
             vec![
@@ -422,11 +425,7 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
                 in_max.into_val(&e),
             ])
         );
-        SorobanTokenClient::new(&e, &swap.2).transfer(
-            &e.current_contract_address(),
-            &user,
-            &(out_amount as i128)
-        );
+        transfer_token(&e, &swap.2, &e.current_contract_address(), &user, &(out_amount as i128));
         let fee_amount = (amount_in * (fee_fraction as u128)) / (FEE_DENOMINATOR as u128);
         let amount_in_with_fee = amount_in + fee_amount;
         if amount_in_with_fee > in_max {
@@ -434,11 +433,7 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
         }
         let surplus = in_max - amount_in_with_fee;
         if surplus > 0 {
-            SorobanTokenClient::new(&e, &token_in).transfer(
-                &e.current_contract_address(),
-                &user,
-                &(surplus as i128)
-            );
+            transfer_token(&e, &token_in, &e.current_contract_address(), &user, &(surplus as i128));
         }
         Events::new(&e).charge_provider_fee(token_in, fee_amount);
 

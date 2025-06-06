@@ -271,8 +271,13 @@ impl PoolTrait for Pool {
         let pool = get_pool(&e);
 
         // Deposit Token B
-        let token_b_client = SorobanTokenClient::new(&e, &pool.token_b);
-        token_b_client.transfer(&user, &e.current_contract_address(), &(token_b_amount as i128));
+        transfer_token(
+            &e,
+            &pool.token_b,
+            &user,
+            &e.current_contract_address(),
+            &(token_b_amount as i128)
+        );
 
         // Increase reserves
         put_reserve_b(&e, reserve_b + token_b_amount);
@@ -1033,8 +1038,13 @@ impl AdminInterfaceTrait for Pool {
         let pool = get_pool(&e);
 
         // Deposit token_b from Insurance Fund to Pool
-        let token_client = SorobanTokenClient::new(&e, &pool.token_b);
-        token_client.transfer(&sender, &e.current_contract_address(), &(amount as i128));
+        transfer_token(
+            &e,
+            &pool.token_b,
+            &sender,
+            &e.current_contract_address(),
+            &(amount as i128)
+        );
 
         // Update the reserves
         let reserve_b = get_reserve_b(&e);
@@ -1364,7 +1374,9 @@ impl RewardsTrait for Pool {
         }
 
         let reward_token = get_rewards_manager(&e).storage().get_reward_token();
-        SorobanTokenClient::new(&e, &reward_token).transfer(
+        transfer_token(
+            &e,
+            &reward_token,
             &e.current_contract_address(),
             &get_router(&e),
             &(unused_reward as i128)

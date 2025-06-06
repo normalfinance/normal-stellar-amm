@@ -69,7 +69,7 @@ use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
 use utils::constant::CONSTANT_PRODUCT_FEE_AVAILABLE;
 use utils::oracle::OracleGuardRails;
 use utils::storage::{ AssetId, PoolInfo, OraclePair, PoolTier };
-use utils::token::validate_tokens_contracts;
+use utils::token::{ transfer_token, transfer_token_from, validate_tokens_contracts };
 
 #[contract]
 pub struct PoolRouter;
@@ -865,14 +865,18 @@ impl RewardsInterfaceTrait for PoolRouter {
         let reward_token = rewards.storage().get_reward_token();
 
         if from != e.current_contract_address() {
-            SorobanTokenClient::new(&e, &reward_token).transfer_from(
+            transfer_token_from(
+                &e,
+                &reward_token,
                 &e.current_contract_address(),
                 &from,
                 &pool_id,
                 &(outstanding_reward as i128)
             );
         } else {
-            SorobanTokenClient::new(&e, &reward_token).transfer(
+            transfer_token(
+                &e,
+                &reward_token,
                 &e.current_contract_address(),
                 &pool_id,
                 &(outstanding_reward as i128)
