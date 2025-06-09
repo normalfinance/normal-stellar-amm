@@ -41,9 +41,9 @@ pub struct Pool {
     // The pool's claim on the insurance fund
     pub insurance_claim: InsuranceClaim,
 
-    /// The max pnl imbalance before positive pnl asset weight is discounted
-    /// pnl imbalance is the difference between long and short pnl. When it's greater than 0,
-    /// the amm has negative pnl and the initial asset weight for positive pnl is discounted
+    /// The max liquidity imbalance before price premiums are added and/or the buffer/if is used
+    /// liquidity imbalance is the difference between quote token and base token value. When it's less than 0,
+    /// the pool does not have enough liquidity to fill all orders and will apply a price premium to new swaps.
     /// precision = QUOTE_PRECISION
     pub liquidity_max_imbalance: u64,
 
@@ -52,25 +52,34 @@ pub struct Pool {
 }
 
 impl Pool {
-    // Gets the current pool price.
+    // Gets the current pool liquidity imbalance.
     //
     // # Arguments
     //
-    // * a_in_b - Should the price be denominated in Token A or B.
-    // * in_usd - Should that price be in USD.
+    // * base_oracle_price - Price of the base token.
+    // * quote_oracle_price - Price of the quote token.
     //
     // # Returns
     //
-    // The price of the pool as a u128.
-    pub fn calculate_net_liquidity_imbalance(&self, e: &Env, oracle_price: u128) -> i128 {
-        validate!(e, oracle_price > 0, ErrorCode::InvalidOracle, "oracle_price <= 0");
+    // The liquidity imbalance of the pool as an i128.
+    pub fn calculate_net_liquidity_imbalance(
+        &self,
+        e: &Env,
+        base_oracle_price: u128,
+        quote_oracle_price: u128
+    ) -> i128 {
+        validate!(e, base_oracle_price > 0, ErrorCode::InvalidOracle, "base_oracle_price <= 0");
+        validate!(e, quote_oracle_price > 0, ErrorCode::InvalidOracle, "quote_oracle_price <= 0");
 
-        let net_base_asset_value = (1)
-            .safe_mul(e, oracle_price)
+        let base_token_supply = get_total_synthetic_tokens(&e);
+        let reserve_b = get_reserve_b(e);
+
+        let net_base_asset_value = base_token_supply
+            .safe_mul(e, base_oracle_price)
             .safe_div(e, PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO);
 
-        let net_quote_asset_value = (1)
-            .safe_mul(e, oracle_price)
+        let net_quote_asset_value = reserve_b
+            .safe_mul(e, quote_oracle_price)
             .safe_div(e, PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO);
 
         net_quote_asset_value.safe_sub(e, net_base_asset_value)
