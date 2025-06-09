@@ -13,6 +13,7 @@ use soroban_sdk::{ panic_with_error, Env };
 
 use token_synthetic::{ burn_synthetic, mint_synthetic };
 use utils::constant::{ FEE_MULTIPLIER, PRICE_PRECISION };
+use utils::math::safe_math::SafeMath;
 use utils::oracle::oracle_validity;
 use utils::oracle::OracleGuardRails;
 use utils::oracle::OracleValidity;
@@ -40,20 +41,39 @@ pub struct Pool {
     // The pool's claim on the insurance fund
     pub insurance_claim: InsuranceClaim,
 
+    /// The max pnl imbalance before positive pnl asset weight is discounted
+    /// pnl imbalance is the difference between long and short pnl. When it's greater than 0,
+    /// the amm has negative pnl and the initial asset weight for positive pnl is discounted
+    /// precision = QUOTE_PRECISION
+    pub liquidity_max_imbalance: u64,
+
     pub expiry_ts: u64,
     pub expiry_price: u128,
 }
 
 impl Pool {
-    pub fn calculate_net_reserve_imbalance(&self, oracle_price: i64) -> i128 {
-        validate!(oracle_price > 0, ErrorCode::InvalidOracle, "oracle_price <= 0")?;
+    // Gets the current pool price.
+    //
+    // # Arguments
+    //
+    // * a_in_b - Should the price be denominated in Token A or B.
+    // * in_usd - Should that price be in USD.
+    //
+    // # Returns
+    //
+    // The price of the pool as a u128.
+    pub fn calculate_net_liquidity_imbalance(&self, e: &Env, oracle_price: u128) -> i128 {
+        validate!(e, oracle_price > 0, ErrorCode::InvalidOracle, "oracle_price <= 0");
 
-        let net_user_base_asset_value = amm.base_asset_amount_with_amm
-            .safe_add(amm.base_asset_amount_with_unsettled_lp)?
-            .safe_mul(oracle_price.cast()?)?
-            .safe_div(PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO.cast()?)?;
+        let net_base_asset_value = (1)
+            .safe_mul(e, oracle_price)
+            .safe_div(e, PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO);
 
-        net_user_base_asset_value.safe_add(calculate_net_user_cost_basis(amm)?)
+        let net_quote_asset_value = (1)
+            .safe_mul(e, oracle_price)
+            .safe_div(e, PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO);
+
+        net_quote_asset_value.safe_sub(e, net_base_asset_value)
     }
 
     // Gets the current pool price.
@@ -66,7 +86,7 @@ impl Pool {
     // # Returns
     //
     // The price of the pool as a u128.
-    pub fn get_current_price(self, e: &Env, a_in_b: bool, in_usd: bool) -> u128 {
+    pub fn get_current_price(self, e: &Env, a_in_b: bool, in_usd: bool, now: u64) -> u128 {
         let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
 
         let mut price = 0_u128;
@@ -80,7 +100,7 @@ impl Pool {
             price = reserve_b.fixed_div_floor(e, &reserve_a, &PRICE_PRECISION);
 
             if in_usd {
-                let quote_oracle_price_data = oracle::get_quote_oracle_price(e, &self);
+                let quote_oracle_price_data = oracle::get_quote_oracle_price(e, &self, now);
                 price = price.fixed_mul_floor(
                     e,
                     &(quote_oracle_price_data.price as u128),
@@ -92,7 +112,7 @@ impl Pool {
             price = reserve_a.fixed_div_floor(e, &reserve_b, &PRICE_PRECISION);
 
             if in_usd {
-                let base_oracle_price_data = oracle::get_base_oracle_price(e, &self);
+                let base_oracle_price_data = oracle::get_base_oracle_price(e, &self, now);
                 price = price.fixed_mul_floor(
                     e,
                     &(base_oracle_price_data.price as u128),
@@ -161,7 +181,7 @@ impl Pool {
         }
 
         let historical_oracle_data = get_historical_oracle_data(&e);
-        let oracle_price_data = oracle::get_base_oracle_price(e, &self);
+        let oracle_price_data = oracle::get_base_oracle_price(e, &self, now);
 
         let oracle_is_valid =
             oracle_validity(

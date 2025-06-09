@@ -2,7 +2,7 @@ use crate::errors::{ PoolError, PoolValidationError };
 use crate::events::Events as PoolEvents;
 use crate::events::PoolEvents;
 use crate::oracle;
-use crate::pool::{ Pool };
+use crate::pool::{ InsuranceClaim, Pool as PoolType };
 use crate::pool_interface::{
     AdminInterfaceTrait,
     PoolCrunch,
@@ -83,7 +83,13 @@ use token_share::{
 use token_synthetic::put_token_synthetic;
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
-use utils::constant::FEE_MULTIPLIER;
+use utils::constant::{
+    FEE_MULTIPLIER,
+    INSURANCE_A_MAX,
+    INSURANCE_B_MAX,
+    INSURANCE_C_MAX,
+    INSURANCE_SPECULATIVE_MAX,
+};
 use utils::math::safe_math::SafeMath;
 use utils::oracle::{ OracleGuardRails, OraclePriceData };
 use utils::storage::{
@@ -164,6 +170,8 @@ impl PoolTrait for Pool {
         set_router(&e, &params.router);
         set_oracle_registry(&e, &params.oracle_registry);
 
+        // TODO: validate oracle asset ids
+
         if params.tokens.len() != 2 {
             panic_with_error!(&e, PoolValidationError::WrongInputVecSize);
         }
@@ -195,7 +203,7 @@ impl PoolTrait for Pool {
         put_reserve_a(&e, 0);
         put_reserve_b(&e, 0);
 
-        let pool = Pool {
+        let pool = PoolType {
             token_a,
             token_b,
             tier: params.tier,
@@ -206,6 +214,13 @@ impl PoolTrait for Pool {
             asset: params.asset,
             expiry_ts: 0,
             expiry_price: 0,
+            insurance_claim: InsuranceClaim {
+                rev_withdraw_since_last_settle: 0,
+                quote_max_insurance: params.quote_max_insurance,
+                quote_settled_insurance: 0,
+                last_revenue_withdraw_ts: 0,
+            },
+            liquidity_max_imbalance: 0,
         };
         set_pool(&e, &pool);
     }
@@ -725,7 +740,7 @@ impl PoolTrait for Pool {
     // The pool's price as a u128.
     fn get_price(e: Env, a_in_b: bool, in_usd: bool) -> u128 {
         let pool = get_pool(&e);
-        pool.get_current_price(&e, a_in_b, in_usd)
+        pool.get_current_price(&e, a_in_b, in_usd, e.ledger().timestamp())
     }
 
     // Returns the pool's fee fraction.
@@ -853,6 +868,49 @@ impl AdminInterfaceTrait for Pool {
         set_pool(&e, &pool);
     }
 
+    fn set_max_imbalances(
+        e: Env,
+        admin: Address,
+        liquidity_max_imbalance: u64,
+        quote_max_insurance: u64
+    ) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+
+        let mut pool = get_pool(&e);
+
+        let max_insurance_for_tier = match pool.tier {
+            PoolTier::A => INSURANCE_A_MAX,
+            PoolTier::B => INSURANCE_B_MAX,
+            PoolTier::C => INSURANCE_C_MAX,
+            PoolTier::Speculative => INSURANCE_SPECULATIVE_MAX,
+            PoolTier::HighlySpeculative => INSURANCE_SPECULATIVE_MAX,
+            PoolTier::Isolated => INSURANCE_SPECULATIVE_MAX,
+        };
+
+        validate!(
+            &e,
+            liquidity_max_imbalance <= max_insurance_for_tier + 1 &&
+                quote_max_insurance <= max_insurance_for_tier,
+            ErrorCode::DefaultError,
+            "all maxs must be less than max_insurance for PoolTier ={}",
+            max_insurance_for_tier
+        );
+
+        validate!(
+            &e,
+            pool.insurance_claim.quote_settled_insurance <= quote_max_insurance,
+            ErrorCode::DefaultError,
+            "quote_max_insurance must be above pool.insurance_claim.quote_settled_insurance={}",
+            pool.insurance_claim.quote_settled_insurance
+        );
+
+        pool.unrealized_pnl_max_imbalance = liquidity_max_imbalance;
+        pool.insurance_claim.quote_max_insurance = quote_max_insurance;
+
+        set_pool(&e, &pool);
+    }
+
     fn set_expiry_ts(e: Env, admin: Address, expiry_ts: u64) {
         admin.require_auth();
         require_operations_admin_or_owner(&e, &admin);
@@ -865,44 +923,6 @@ impl AdminInterfaceTrait for Pool {
         pool.status = PoolStatus::ReduceOnly;
         pool.expiry_ts = expiry_ts;
 
-        set_pool(&e, &pool);
-    }
-
-    fn set_base_oracle(e: Env, admin: Address, oracle: Address) {
-        admin.require_auth();
-        require_operations_admin_or_owner(&e, &admin);
-
-        let now = e.ledger().timestamp();
-
-        let mut pool = get_pool(&e);
-
-        // Verify oracle is readable
-        let OraclePriceData {
-            price: _oracle_price,
-            delay: _oracle_delay,
-            ..
-        } = oracle::get_oracle_price(&e, &oracle_source, &oracle, &pool.asset, now);
-
-        pool.base_oracle = oracle;
-        set_pool(&e, &pool);
-    }
-
-    fn set_quote_oracle(e: Env, admin: Address, oracle: Address) {
-        admin.require_auth();
-        require_operations_admin_or_owner(&e, &admin);
-
-        // let now = e.ledger().timestamp();
-
-        let mut pool = get_pool(&e);
-
-        // TODO: Verify oracle is readable
-        // let OraclePriceData {
-        //     price: _oracle_price,
-        //     delay: _oracle_delay,
-        //     ..
-        // } = oracle::get_oracle_price(&e, &oracle_source, &oracle, &get_tokn, now);
-
-        pool.quote_oracle = oracle;
         set_pool(&e, &pool);
     }
 
@@ -919,48 +939,38 @@ impl AdminInterfaceTrait for Pool {
     fn get_pay_from_insurance(e: Env, sender: Address, insurance_vault_amount: u128) {
         // check pool has liquidity deficit
 
-        let pool: Pool = get_pool(&e);
+        let pool = get_pool(&e);
 
         validate!(
             !perp_market.is_in_settlement(now),
             ErrorCode::MarketActionPaused,
             "Market is in settlement mode"
-        )?;
+        );
 
         let oracle_price = oracle_map.get_price_data(&perp_market.amm.oracle)?.price;
-        controller::orders::validate_market_within_price_band(perp_market, state, oracle_price)?;
+        controller::orders::validate_market_within_price_band(perp_market, state, oracle_price);
 
-        let pnl_pool_token_amount = get_token_amount(
-            market.pnl_pool.scaled_balance,
-            spot_market,
-            &SpotBalanceType::Deposit
-        )?;
-
-        validate!(
-            pnl_pool_token_amount == 0,
-            ErrorCode::SufficientPerpPnlPool,
-            "pnl_pool_token_amount > 0 (={})",
-            pnl_pool_token_amount
-        )?;
+        // TODO: validate pool balances?
 
         // update_twap()
 
-        let excess_pool_reserve_imbalance = if pool.unrealized_pnl_max_imbalance > 0 {
-            let net_pool_reserve_imbalance = pool.calculate_net_reserve_imbalance(
+        let excess_liquidity_imbalance = if pool.liquidity_max_imbalance > 0 {
+            let net_liquidity_imbalance = pool.calculate_net_liquidity_imbalance(
+                &e,
                 historical_oracle_data.last_oracle_price
             );
 
-            net_pool_reserve_imbalance.safe_sub(&e, pool.unrealized_pnl_max_imbalance)
+            net_liquidity_imbalance.safe_sub(&e, pool.liquidity_max_imbalance)
         } else {
             0
         };
 
         validate!(
             &e,
-            excess_pool_reserve_imbalance > 0,
+            excess_liquidity_imbalance > 0,
             PoolError::LiquidityDeficitBelowThreshold,
-            "No excess_pool_reserve_imbalance({}) to settle",
-            excess_pool_reserve_imbalance
+            "No excess_liquidity_imbalance({}) to settle",
+            excess_liquidity_imbalance
         );
 
         let max_insurance_withdraw = pool.insurance_claim.quote_max_insurance.safe_sub(
@@ -977,7 +987,7 @@ impl AdminInterfaceTrait for Pool {
             pool.insurance_claim.quote_max_insurance
         );
 
-        let insurance_withdraw = excess_pool_reserve_imbalance
+        let insurance_withdraw = excess_liquidity_imbalance
             .min(max_insurance_withdraw)
             .min(insurance_vault_amount.saturating_sub(1));
 
@@ -987,7 +997,7 @@ impl AdminInterfaceTrait for Pool {
             ErrorCode::NoIFWithdrawAvailable,
             "No available funds for insurance_withdraw({}) for user_pnl_imbalance={}",
             insurance_withdraw,
-            excess_pool_reserve_imbalance
+            excess_liquidity_imbalance
         );
 
         pool.insurance_claim.rev_withdraw_since_last_settle =
@@ -1007,27 +1017,6 @@ impl AdminInterfaceTrait for Pool {
         );
 
         pool.insurance_claim.last_revenue_withdraw_ts = now;
-
-        // update_spot_balances(
-        //     insurance_withdraw.cast()?,
-        //     &SpotBalanceType::Deposit,
-        //     spot_market,
-        //     &mut market.pnl_pool,
-        //     false
-        // )?;
-
-        // emit!(InsuranceFundRecord {
-        //     ts: now,
-        //     spot_market_index: spot_market.market_index,
-        //     perp_market_index: market.market_index,
-        //     amount: -insurance_withdraw.cast()?,
-        //     user_if_factor: spot_market.insurance_fund.user_factor,
-        //     total_if_factor: spot_market.insurance_fund.total_factor,
-        //     vault_amount_before: vault_amount,
-        //     insurance_vault_amount_before: insurance_vault_amount,
-        //     total_if_shares_before,
-        //     total_if_shares_after: spot_market.insurance_fund.total_shares,
-        // });
 
         insurance_withdraw
     }

@@ -108,19 +108,21 @@ pub trait AdminInterfaceTrait {
     // Set pool status
     fn set_status(e: Env, admin: Address, status: PoolStatus);
 
+    //
+    fn set_max_imbalances(
+        e: Env,
+        admin: Address,
+        liquidity_max_imbalance: u64,
+        quote_max_insurance: u64
+    );
+
     // Set when the pool will expire
     fn set_expiry_ts(e: Env, admin: Address, expiry_ts: u64);
-
-    // Failsafe to update the base oracle address
-    fn set_base_oracle(e: Env, admin: Address, oracle: Address);
-
-    // Failsafe to update the quote oracle address
-    fn set_quote_oracle(e: Env, admin: Address, oracle: Address);
 
     // Rebalance pool reserves
     fn rebalance(e: Env, admin: Address);
 
-    // 
+    //
     fn get_pay_from_insurance(e: Env);
 
     //
