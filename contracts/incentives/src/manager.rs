@@ -1,18 +1,20 @@
 use crate::errors::RewardsError;
 use crate::storage::{
+    LPTokenStorageTrait,
+    PoolIncentiveData,
+    PoolIncentivesStorageTrait,
     PoolRewardConfig,
-    PoolRewardData,
-    PoolRewardsStorageTrait,
     RewardInvDataStorageTrait,
     RewardTokenStorageTrait,
     Storage,
-    UserRewardData,
-    UserRewardsStorageTrait,
+    UserIncentiveData,
+    UserIncentivesStorageTrait,
     WorkingBalancesStorageTrait,
 };
-use crate::RewardsConfig;
+use crate::IncentivesConfig;
 use soroban_fixed_point_math::SorobanFixedPoint;
-use soroban_sdk::{ panic_with_error, Address, Env, Vec };
+use soroban_sdk::token::TokenClient as SorobanTokenClient;
+use soroban_sdk::{ panic_with_error, token::TokenClient as Client, Address, Env, Vec };
 use utils::bump::bump_instance;
 use utils::constant::REWARD_PRECISION;
 use utils::token::transfer_token;
@@ -22,11 +24,11 @@ use utils::token::transfer_token;
 pub struct Manager {
     env: Env,
     storage: Storage,
-    config: RewardsConfig,
+    config: IncentivesConfig,
 }
 
 impl Manager {
-    pub fn new(e: &Env, storage: Storage, config: &RewardsConfig) -> Manager {
+    pub fn new(e: &Env, storage: Storage, config: &IncentivesConfig) -> Manager {
         Manager {
             env: e.clone(),
             storage,
@@ -78,23 +80,28 @@ impl Manager {
     // # Panics
     //
     // This method will panic if the expiration time is in the past or if the tokens per second is zero and the configuration has already expired.
-    pub fn set_reward_config(&mut self, total_shares: u128, mut expired_at: u64, tps: u128) {
+    pub fn set_incentive_config(
+        &mut self,
+        total_shares: u128,
+        mut reward_expired_at: u64,
+        reward_tps: u128
+    ) {
         let now = self.env.ledger().timestamp();
-        let old_config = self.storage.get_pool_reward_config();
-        // if we stop rewards manually by setting tps to zero,
+        let old_config = self.storage.get_pool_incentive_config();
+        // if we stop rewards manually by setting reward_tps to zero,
         //  set expiration to the lowest possible value to avoid extra blocks
-        if tps == 0 {
-            expired_at = now;
-        } else if old_config.expired_at == expired_at {
+        if reward_tps == 0 {
+            reward_expired_at = now;
+        } else if old_config.reward_expired_at == reward_expired_at {
             // expiration time should differ as we rely on it inside the rewards manager
-            panic_with_error!(&self.env, RewardsError::SameRewardsConfig);
+            panic_with_error!(&self.env, RewardsError::SameIncentivesConfig);
         }
 
-        if expired_at < now {
+        if reward_expired_at < now {
             panic_with_error!(&self.env, RewardsError::PastTimeNotAllowed);
         }
 
-        if old_config.expired_at < now && tps == 0 {
+        if old_config.reward_expired_at < now && reward_tps == 0 {
             // Already expired, no need to override
             return;
         }
@@ -102,13 +109,13 @@ impl Manager {
         let working_supply = self.get_working_supply(total_shares);
 
         // Bring pool data up-to-date
-        self.update_rewards_data(working_supply);
-        self.snapshot_rewards_data(working_supply);
+        self.update_incentives_data(working_supply);
+        self.snapshot_incentives_data(working_supply);
 
-        let config = PoolRewardConfig { tps, expired_at };
+        let config = PoolRewardConfig { reward_tps, reward_expired_at };
 
         bump_instance(&self.env);
-        self.storage.set_pool_reward_config(&config);
+        self.storage.set_pool_incentive_config(&config);
     }
 
     // ------------------------------------
@@ -123,34 +130,52 @@ impl Manager {
     //
     // # Returns
     //
-    // * The updated `PoolRewardData` instance.
-    fn update_rewards_data(&mut self, working_supply: u128) -> PoolRewardData {
-        let config = self.storage.get_pool_reward_config();
-        let mut data = self.storage.get_pool_reward_data();
+    // * The updated `PoolIncentiveData` instance.
+    fn update_incentives_data(
+        &mut self,
+        user: &Address,
+        working_supply: u128,
+        lp_supply: u128,
+        fee_growth_a: u128
+    ) -> PoolIncentiveData {
+        let config = self.storage.get_pool_incentive_config();
+        let mut data = self.storage.get_pool_incentive_data();
         let now = self.env.ledger().timestamp();
 
-        if now <= config.expired_at {
+        // LP fees
+        let lp_token_client = SorobanTokenClient::new(&self.env, &self.storage.get_lp_token());
+        let total_lp_supply = 0;
+
+        let fee_growth_a = fees_a / total_lp_supply;
+        let fee_growth_b = fees_b / total_lp_supply;
+
+        if now <= config.reward_expired_at {
             // config not expired yet, yield rewards
-            let generated_tokens = ((now - data.last_time) as u128) * config.tps;
-            self.create_new_rewards_data(generated_tokens, working_supply, PoolRewardData {
+            let generated_tokens = ((now - data.rewards_last_time) as u128) * config.reward_tps;
+            self.create_new_incentives_data(generated_tokens, working_supply, PoolIncentiveData {
                 block: data.block + 1,
-                accumulated: data.accumulated + generated_tokens,
-                claimed: data.claimed,
-                last_time: now,
+                accumulated_rewards: data.accumulated_rewards + generated_tokens,
+                claimed_rewards: data.claimed_rewards,
+                rewards_last_time: now,
+                fee_growth_a_per_lp: data.fee_growth_a_per_lp + fee_growth_a,
+                fee_growth_b_per_lp: data.fee_growth_b_per_lp + fee_growth_b,
             })
         } else {
             // Already expired
-            if data.last_time < config.expired_at {
+            if data.rewards_last_time < config.reward_expired_at {
                 // last snapshot was before config expiration - yield up to expiration
-                let generated_tokens = ((config.expired_at - data.last_time) as u128) * config.tps;
-                data = self.create_new_rewards_data(
+                let generated_tokens =
+                    ((config.reward_expired_at - data.rewards_last_time) as u128) * config.tps;
+                data = self.create_new_incentives_data(
                     generated_tokens,
                     working_supply,
-                    PoolRewardData {
+                    PoolIncentiveData {
                         block: data.block + 1,
-                        accumulated: data.accumulated + generated_tokens,
-                        claimed: data.claimed,
-                        last_time: config.expired_at,
+                        accumulated_rewards: data.accumulated_rewards + generated_tokens,
+                        claimed_rewards: data.claimed_rewards,
+                        rewards_last_time: config.reward_expired_at,
+                        fee_growth_a_per_lp: data.fee_growth_a_per_lp + fee_growth_a,
+                        fee_growth_b_per_lp: data.fee_growth_b_per_lp + fee_growth_b,
                     }
                 );
             }
@@ -171,16 +196,16 @@ impl Manager {
     //
     // # Returns
     //
-    // * The updated `PoolRewardData` instance.
-    fn snapshot_rewards_data(&mut self, working_supply: u128) -> PoolRewardData {
-        let data = self.storage.get_pool_reward_data();
+    // * The updated `PoolIncentiveData` instance.
+    fn snapshot_incentives_data(&mut self, working_supply: u128) -> PoolIncentiveData {
+        let data = self.storage.get_pool_incentive_data();
         let now = self.env.ledger().timestamp();
 
         if data.last_time == now {
             // snapshot already made
             data
         } else {
-            self.create_new_rewards_data(0, working_supply, PoolRewardData {
+            self.create_new_incentives_data(0, working_supply, PoolIncentiveData {
                 block: data.block + 1,
                 accumulated: data.accumulated,
                 claimed: data.claimed,
@@ -189,7 +214,7 @@ impl Manager {
         }
     }
 
-    // Updates the reward data for a specific user.
+    // Updates the LP fees and reward data for a specific user.
     //
     // # Arguments
     //
@@ -199,22 +224,28 @@ impl Manager {
     //
     // # Returns
     //
-    // * The updated `UserRewardData` instance for the user.
-    fn update_user_reward(
+    // * The updated `UserIncentiveData` instance for the user.
+    fn update_user_incentives(
         &mut self,
-        pool_data: &PoolRewardData,
+        pool_data: &PoolIncentiveData,
         user: &Address,
         user_balance_shares: u128
-    ) -> UserRewardData {
-        if let Some(user_data) = self.storage.get_user_reward_data(user) {
+    ) -> UserIncentiveData {
+        if let Some(user_data) = self.storage.get_user_incentive_data(user) {
             // If no new accumulation, just return
-            if user_data.pool_accumulated == pool_data.accumulated {
+            if user_data.pool_accumulated_rewards == pool_data.accumulated_rewards {
                 return user_data;
             }
 
+            // let fee = self.calculate_user_fee(
+            //     // user_data.last_block + 1,
+            //     // pool_data.block,
+            //     user_balance_shares
+            // );
+
             if user_balance_shares == 0 {
                 // No new reward
-                return self.create_new_user_data(user, pool_data, user_data.to_claim);
+                return self.create_new_user_data(user, pool_data, user_data.rewards_to_claim, fee, fee);
             }
 
             let reward = self.calculate_user_reward(
@@ -222,9 +253,9 @@ impl Manager {
                 pool_data.block,
                 user_balance_shares
             );
-            self.create_new_user_data(user, pool_data, user_data.to_claim + reward)
+            self.create_new_user_data(user, pool_data, user_data.rewards_to_claim + reward, fee, fee)
         } else {
-            self.create_new_user_data(user, pool_data, 0)
+            self.create_new_user_data(user, pool_data, 0, 0, 0)
         }
     }
 
@@ -250,6 +281,12 @@ impl Manager {
         (result * user_share) / REWARD_PRECISION
     }
 
+    fn calculate_user_fee(&mut self) -> u128 {
+        let result = self.calculate_fee();
+        // scale by REWARD_PRECISION
+        (result * 1) / REWARD_PRECISION
+    }
+
     // ------------------------------------
     // Public user methods
     // ------------------------------------
@@ -265,34 +302,47 @@ impl Manager {
     // # Returns
     //
     // * The amount of reward the user is eligible to claim.
-    pub fn get_amount_to_claim(
+    pub fn get_reward_amount_to_claim(
         &mut self,
         user: &Address,
         total_shares: u128,
         user_balance_shares: u128
     ) -> u128 {
         // update pool data & calculate reward
-        self.checkpoint_user(user, total_shares, user_balance_shares).to_claim
+        self.checkpoint_user(user, total_shares, user_balance_shares).rewards_to_claim
     }
 
-    // Actually claims the user's reward and transfers tokens.
-    pub fn claim_reward(
+    pub fn get_fee_amounts_to_claim(
         &mut self,
         user: &Address,
         total_shares: u128,
         user_balance_shares: u128
-    ) -> u128 {
+    ) -> (u128, u128, u128) {
         // update pool data & calculate reward
-        let UserRewardData {
+        let checkpoint = self.checkpoint_user(user, total_shares, user_balance_shares);
+        (checkpoint.fee_checkpoint_a, checkpoint.fee_checkpoint_b)
+    }
+
+    // Actually claims the user's LP fees and reward and transfers tokens.
+    pub fn claim_incentives(
+        &mut self,
+        user: &Address,
+        total_shares: u128,
+        user_balance_shares: u128
+    ) -> (u128, u128, u128) {
+        // update pool data & calculate reward
+        let UserIncentiveData {
             last_block,
             pool_accumulated,
             to_claim: reward_amount,
+            checkpoint_a: token_a_fee_amount,
+            checkpoint_b: token_b_fee_amount,
         } = self.checkpoint_user(user, total_shares, user_balance_shares);
 
         // Increase total claimed in the pool
-        let mut pool_data = self.storage.get_pool_reward_data();
-        pool_data.claimed += reward_amount;
-        self.storage.set_pool_reward_data(&pool_data);
+        let mut pool_data = self.storage.get_pool_incentive_data();
+        pool_data.claimed_rewards += reward_amount;
+        self.storage.set_pool_incentive_data(&pool_data);
 
         // Transfer tokens
         let reward_token = self.storage.get_reward_token();
@@ -304,35 +354,56 @@ impl Manager {
             &(reward_amount as i128)
         );
 
-        // Reset user reward
-        let new_data = UserRewardData {
+        Client::new(&self.env, &self.config.token_a).transfer(
+            &self.env.current_contract_address(),
+            user,
+            &(token_a_fee_amount as i128)
+        );
+
+        Client::new(&self.env, &self.config.token_b).transfer(
+            &self.env.current_contract_address(),
+            user,
+            &(token_b_fee_amount as i128)
+        );
+
+        // Reset user incentives
+        let new_data = UserIncentiveData {
             last_block,
             pool_accumulated,
             to_claim: 0,
+            checkpoint_a: 0,
+            checkpoint_b: 0,
         };
-        self.storage.set_user_reward_data(user, &new_data);
+        self.storage.set_user_incentive_data(user, &new_data);
 
-        reward_amount
+        (reward_amount, token_a_fee_amount, token_b_fee_amount)
     }
 
-    // Forces an update of the user's reward data based on the new working balance.
+    // Forces an update of the user's incentive data based on the new working balance.
     pub fn checkpoint_user(
         &mut self,
         user: &Address,
         total_shares: u128,
-        user_balance_shares: u128
-    ) -> UserRewardData {
+        user_balance_shares: u128,
+        total_token_a_fees: u128,
+        total_token_b_fees: u128
+    ) -> UserIncentiveData {
         let (working_balance, new_working_supply) = self.update_working_balance(
             user,
             total_shares,
             user_balance_shares
         );
 
-        let pool_data = self.update_rewards_data(new_working_supply);
-        let user_data = self.update_user_reward(&pool_data, user, working_balance);
+        let pool_data = self.update_incentives_data(
+            new_working_supply,
+            0,
+            total_token_a_fees,
+            total_token_b_fees
+        );
+        let user_data = self.update_user_incentives(&pool_data, user, working_balance);
 
         // Bump storage for the user's data
-        self.storage.bump_user_reward_data(user);
+        self.storage.bump_user_incentive_data(user);
         user_data
     }
 
@@ -417,6 +488,14 @@ impl Manager {
     // * `aggregated_page` - The aggregated page data.
     fn set_reward_inv_data(&mut self, pow: u32, page_number: u64, aggregated_page: Vec<u128>) {
         self.storage.set_reward_inv_data(pow, page_number, aggregated_page);
+    }
+
+    // ------------------------------------
+    // Reward calculation by blocks
+    // ------------------------------------
+
+    fn calculate_fee(&mut self) -> u128 {
+        0
     }
 
     // ------------------------------------
@@ -522,7 +601,7 @@ impl Manager {
             0
         };
 
-        let data = self.storage.get_pool_reward_data();
+        let data = self.storage.get_pool_incentive_data();
         self.add_reward_inv(data.block, reward_per_share);
     }
 
@@ -530,14 +609,14 @@ impl Manager {
     // Helpers for consistent data writes
     // ------------------------------------
 
-    fn create_new_rewards_data(
+    fn create_new_incentives_data(
         &mut self,
         generated_tokens: u128,
         working_supply: u128,
-        new_data: PoolRewardData
-    ) -> PoolRewardData {
+        new_data: PoolIncentiveData
+    ) -> PoolIncentiveData {
         // Persist the new pool data
-        self.storage.set_pool_reward_data(&new_data);
+        self.storage.set_pool_incentive_data(&new_data);
 
         // Update the reward_inv with newly generated tokens
         self.update_reward_inv(generated_tokens, working_supply);
@@ -547,15 +626,19 @@ impl Manager {
     fn create_new_user_data(
         &self,
         user: &Address,
-        pool_data: &PoolRewardData,
-        to_claim: u128
-    ) -> UserRewardData {
-        let new_data = UserRewardData {
+        pool_data: &PoolIncentiveData,
+        rewards_to_claim: u128,
+        checkpoint_a: u128,
+        checkpoint_b: u128
+    ) -> UserIncentiveData {
+        let new_data = UserIncentiveData {
             last_block: pool_data.block,
-            pool_accumulated: pool_data.accumulated,
-            to_claim,
+            pool_accumulated: pool_data.accumulated_rewards,
+            rewards_to_claim,
+            checkpoint_a,
+            checkpoint_b,
         };
-        self.storage.set_user_reward_data(user, &new_data);
+        self.storage.set_user_incentive_data(user, &new_data);
         new_data
     }
 
@@ -565,28 +648,28 @@ impl Manager {
 
     pub fn get_total_accumulated_reward(&mut self, total_shares: u128) -> u128 {
         let working_supply = self.get_working_supply(total_shares);
-        let data = self.update_rewards_data(working_supply);
-        data.accumulated
+        let data = self.update_incentives_data(working_supply);
+        data.accumulated_rewards
     }
 
     pub fn get_total_claimed_reward(&mut self, total_shares: u128) -> u128 {
         let working_supply = self.get_working_supply(total_shares);
-        let data = self.update_rewards_data(working_supply);
-        data.claimed
+        let data = self.update_incentives_data(working_supply);
+        data.claimed_rewards
     }
 
     pub fn get_total_configured_reward(&mut self, total_shares: u128) -> u128 {
-        let config = self.storage.get_pool_reward_config();
+        let config = self.storage.get_pool_incentive_config();
         let working_supply = self.get_working_supply(total_shares);
-        let data = self.update_rewards_data(working_supply);
-        let rewarded_amount = data.accumulated;
+        let data = self.update_incentives_data(working_supply);
+        let rewarded_amount = data.accumulated_rewards;
 
         let now = self.env.ledger().timestamp();
-        if config.expired_at <= now {
+        if config.reward_expired_at <= now {
             // no rewards configured in future
             rewarded_amount
         } else {
-            let outstanding_reward = ((config.expired_at - now) as u128) * config.tps;
+            let outstanding_reward = ((config.reward_expired_at - now) as u128) * config.reward_tps;
             rewarded_amount + outstanding_reward
         }
     }

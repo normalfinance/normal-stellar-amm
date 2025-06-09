@@ -24,11 +24,9 @@ use soroban_sdk::{
     BytesN,
     Env,
     IntoVal,
-    Map,
     Symbol,
     Val,
     Vec,
-    U256,
 };
 use utils::oracle::OracleGuardRails;
 use utils::storage::{
@@ -37,7 +35,6 @@ use utils::storage::{
     OraclePair,
     PoolTier,
     PrivilegedAddresses,
-    RewardConfig,
     TokenInitInfo,
 };
 

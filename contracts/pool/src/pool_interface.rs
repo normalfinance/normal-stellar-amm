@@ -93,7 +93,6 @@ pub trait AdminInterfaceTrait {
     fn set_privileged_addrs(
         e: Env,
         admin: Address,
-        rewards_admin: Address,
         operations_admin: Address,
         pause_admin: Address,
         emergency_pause_admins: Vec<Address>
@@ -171,14 +170,14 @@ pub trait UpgradeableLPTokenTrait {
     fn upgrade_token_legacy(e: Env, admin: Address, new_token_wasm: BytesN<32>);
 }
 
-pub trait RewardsTrait {
-    // Initialize rewards token address
-    fn initialize_rewards_config(e: Env, reward_token: Address);
+pub trait IncentivesTrait {
+    // Initialize incentives token address
+    fn initialize_incentives_config(e: Env, reward_token: Address);
 
-    // Configure rewards for pool. Every second tps of coins
+    // Configure incentives for pool. Every second tps of coins
     // being distributed across all liquidity providers
     // after expired_at timestamp distribution ends
-    fn set_rewards_config(e: Env, admin: Address, expired_at: u64, tps: u128);
+    fn set_incentives_config(e: Env, admin: Address, expired_at: u64, tps: u128);
 
     // Calculate reward token surplus
     fn get_unused_reward(e: Env) -> u128;
@@ -186,17 +185,20 @@ pub trait RewardsTrait {
     // Return reward token above the configured amount back to the router
     fn return_unused_reward(e: Env, admin: Address) -> u128;
 
-    // Get rewards status for the pool,
+    // Get incentives status for the pool,
     // including amount available for the user
-    fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128>;
+    fn get_incentives_info(e: Env, user: Address) -> Map<Symbol, i128>;
 
     // Get amount of reward tokens available for the user to claim.
     fn get_user_reward(e: Env, user: Address) -> u128;
 
-    // Checkpoints the reward for the user.
+    //
+    fn get_user_fees(e: Env, user: Address) -> (u128, u128);
+
+    // Checkpoints the LP fees and reward for the user.
     // Useful when user moves funds by itself to avoid re-entrancy issue.
     // Can be called only by the token contract to notify pool external changes happened.
-    fn checkpoint_reward(e: Env, token_contract: Address, user: Address, user_shares: u128);
+    fn checkpoint_incentive(e: Env, token_contract: Address, user: Address, user_shares: u128);
 
     // Checkpoints total working balance and the working balance for the user.
     // Useful when user moves funds by itself to avoid re-entrancy issue.
@@ -217,7 +219,7 @@ pub trait RewardsTrait {
     // Get total amount of claimed reward for the pool
     fn get_total_claimed_reward(e: Env) -> u128;
 
-    // Claim reward as a user.
+    // Claim LP fees and reward as a user.
     // returns amount of tokens rewarded to the user
     fn claim(e: Env, user: Address) -> u128;
 }
