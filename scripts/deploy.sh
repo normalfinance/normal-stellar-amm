@@ -102,33 +102,6 @@ stellar contract invoke \
     --router $ROUTER_ADDR \
     --operator $FEE_COLLECTOR_ADDR
 
-#   _______   _______   _______       ______    ______    ___      ___       _______   ______  ___________  ______     _______
-#  /"     "| /"     "| /"     "|     /" _  "\  /    " \  |"  |    |"  |     /"     "| /" _  "\("     _   ")/    " \   /"      \
-# (: ______)(: ______)(: ______)    (: ( \___)// ____  \ ||  |    ||  |    (: ______)(: ( \___))__/  \\__/// ____  \ |:        |
-#  \/    |   \/    |   \/    |       \/ \    /  /    ) :)|:  |    |:  |     \/    |   \/ \        \\_ /  /  /    ) :)|_____/   )
-#  // ___)   // ___)_  // ___)_      //  \ _(: (____/ //  \  |___  \  |___  // ___)_  //  \ _     |.  | (: (____/ //  //      /
-# (:  (     (:      "|(:      "|    (:   _) \\        /  ( \_|:  \( \_|:  \(:      "|(:   _) \    \:  |  \        /  |:  __   \
-#  \__/      \_______) \_______)     \_______)\"_____/    \_______)\_______)\_______) \_______)    \__|   \"_____/   |__|  \___)
-
-echo "Initialize fee collector..."
-
-FEE_COLLECTOR_ADDR=$(soroban contract deploy \
-    --wasm soroban_pool_provider_swap_fee_contract.optimized.wasm \
-    --source $IDENTITY_STRING \
-    --network $NETWORK)
-
-stellar contract invoke \
-    --id $FEE_COLLECTOR_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    --router $ROUTER_ADDR \
-    --operator $ADMIN_ADDRESS \
-    --fee_destination $ADMIN_ADDRESS \
-    --buffer $BUFFER_ADDR \
-    --max_swap_fee_fraction 30 \
-    --buffer_fraction 10
-
 #  _______   ____  ____   _______   _______   _______   _______
 # |   _  "\ ("  _||_ " | /"     "| /"     "| /"     "| /"      \
 # (. |_)  :)|   (  ) : |(: ______)(: ______)(: ______)|:        |
@@ -192,6 +165,56 @@ stellar contract invoke \
     --token $XLM \
     --unstaking_period 13 \
     --max_shares 1000000
+
+#   _______   _______   _______       ______    ______    ___      ___       _______   ______  ___________  ______     _______
+#  /"     "| /"     "| /"     "|     /" _  "\  /    " \  |"  |    |"  |     /"     "| /" _  "\("     _   ")/    " \   /"      \
+# (: ______)(: ______)(: ______)    (: ( \___)// ____  \ ||  |    ||  |    (: ______)(: ( \___))__/  \\__// ____  \ |:        |
+#  \/    |   \/    |   \/    |       \/ \    /  /    ) :)|:  |    |:  |     \/    |   \/ \        \\_ /  /  /    ) :)|_____/   )
+#  // ___)   // ___)_  // ___)_      //  \ _(: (____/ //  \  |___  \  |___  // ___)_  //  \ _     |.  | (: (____/ //  //      /
+# (:  (     (:      "|(:      "|    (:   _) \\        /  ( \_|:  \( \_|:  \(:      "|(:   _) \    \:  |  \        /  |:  __   \
+#  \__/      \_______) \_______)     \_______)\"_____/    \_______)\_______)\_______) \_______)    \__|   \"_____/   |__|  \___)
+
+echo "Initialize fee collector..."
+
+FEE_COLLECTOR_ADDR=$(soroban contract deploy \
+    --wasm soroban_pool_provider_swap_fee_contract.optimized.wasm \
+    --source $IDENTITY_STRING \
+    --network $NETWORK)
+
+stellar contract invoke \
+    --id $FEE_COLLECTOR_ADDR \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    -- \
+    init_admin \
+    --admin $ADMIN_ADDRESS
+
+stellar contract invoke \
+    --id $FEE_COLLECTOR_ADDR \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    -- \
+    set_router \
+    --admin $ADMIN_ADDRESS \
+    --router $ROUTER_ADDR
+
+stellar contract invoke \
+    --id $FEE_COLLECTOR_ADDR \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    -- \
+    set_buffer \
+    --admin $ADMIN_ADDRESS \
+    --buffer $BUFFER_ADDR
+
+stellar contract invoke \
+    --id $FEE_COLLECTOR_ADDR \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    -- \
+    set_fee_destination \
+    --admin $ADMIN_ADDRESS \
+    --fee_destination $ADMIN_ADDRESS
 
 #   _______     ______    ____  ____  ___________  _______   _______
 #  /"      \   /    " \  ("  _||_ " |("     _   ")/"     "| /"      \

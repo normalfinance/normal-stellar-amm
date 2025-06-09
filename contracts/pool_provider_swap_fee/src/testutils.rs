@@ -26,9 +26,8 @@ impl Default for TestConfig {
 pub(crate) struct Setup<'a> {
     pub(crate) env: Env,
     pub(crate) admin: Address,
-    pub(crate) contract: ProviderSwapFeeCollectorClient<'a>,
-    pub(crate) router: swap_router::Client<'a>,
-    pub(crate) operator: Address,
+    pub(crate) fee_collector: ProviderSwapFeeCollectorClient<'a>,
+    pub(crate) router: pool_router::Client<'a>,
     pub(crate) buffer: buffer::Client<'a>,
     pub(crate) fee_destination: Address,
     pub(crate) token_a: SorobanTokenClient<'a>,
@@ -57,7 +56,6 @@ impl Setup<'_> {
         e.cost_estimate().budget().reset_unlimited();
 
         let admin = Address::generate(&e);
-        let operator = Address::generate(&e);
         let fee_destination = Address::generate(&e);
 
         let token_a = create_token_contract(&e, &admin);
@@ -66,7 +64,7 @@ impl Setup<'_> {
         let token_a_admin_client = get_token_admin_client(&e, &token_a.address.clone());
         let token_b_admin_client = get_token_admin_client(&e, &token_b.address.clone());
 
-        // init swap router with all it's complexity
+        // init pool router with all it's complexity
         let pool_hash = install_liq_pool_hash(&e);
         let token_hash = install_token_wasm(&e);
         let router = deploy_pool_router_contract(e.clone());
@@ -74,18 +72,19 @@ impl Setup<'_> {
         router.set_pool_hash(&admin, &pool_hash);
         router.set_token_hash(&admin, &token_hash);
 
+        // init buffer, but set the buffer fee collector after initialization below
         let buffer = deploy_buffer_contract(e.clone());
+        buffer.set_router(&e, &router.address);
 
+        // create pool & deposit initial liquidity
         let oracles = OraclePair {
-            base_oracle:  e.register(MockPriceOracleWASM, ()),
-            quote_oracle:  e.register(MockPriceOracleWASM, ()),
+            base_oracle: e.register(MockPriceOracleWASM, ()),
+            quote_oracle: e.register(MockPriceOracleWASM, ()),
         };
-
-        // create swap pool & deposit initial liquidity
         let (_, pool_address) = router.init_pool(
             &admin,
             &oracles,
-            &Asset::Other(Symbol::new(&e, "SOL")),
+            &asset,
             &Vec::from_array(&e, [token_a.address.clone(), token_b.address.clone()]),
             &String::from_str(&e, "Pool Share Token"),
             &String::from_str(&e, "Pool Share Token"),
@@ -95,20 +94,21 @@ impl Setup<'_> {
         token_b_admin_client.mint(&admin, &1_000_000_000_0000000);
         swap_pool.deposit(&admin, &1_000_000_000_0000000);
 
-        let contract = create_contract(
-            &e,
-            &router.address,
-            &operator,
-            &fee_destination,
-            config.max_provider_fee
-        );
+        // init the Fee Collector
+        let fee_collector = create_contract(&e);
+        fee_collector.init_admin(account);
+        fee_collector.set_router(&admin, &router.address);
+        fee_collector.set_buffer(&admin, &buffer.address);
+        fee_collector.set_fee_destination(&admin, &fee_destination);
+
+        // finish initializing Buffer
+        buffer.set_fee_collector(&e, &fee_collector.address);
 
         Self {
             env: e,
             admin,
-            operator,
             fee_destination,
-            contract,
+            fee_collector,
             router,
             buffer,
             token_a,
@@ -136,28 +136,22 @@ pub(crate) fn get_token_admin_client<'a>(
     SorobanTokenAdminClient::new(e, address)
 }
 
-pub fn create_contract<'a>(
-    e: &Env,
-    router: &Address,
-    operator: &Address,
-    fee_destination: &Address,
-    swap_fee: u32
-) -> ProviderSwapFeeCollectorClient<'a> {
+pub fn create_contract<'a>(e: &Env) -> ProviderSwapFeeCollectorClient<'a> {
     let contract = ProviderSwapFeeCollectorClient::new(
         e,
-        &e.register(crate::ProviderSwapFeeCollector, (router, operator, fee_destination, swap_fee))
+        &e.register(crate::ProviderSwapFeeCollector, ())
     );
     contract
 }
 
-pub mod swap_router {
+pub mod pool_router {
     soroban_sdk::contractimport!(
         file = "../../target/wasm32v1-none/release/soroban_pool_router_contract.wasm"
     );
 }
 
-fn deploy_pool_router_contract<'a>(e: Env) -> swap_router::Client<'a> {
-    swap_router::Client::new(&e, &e.register(swap_router::WASM, ()))
+fn deploy_pool_router_contract<'a>(e: Env) -> pool_router::Client<'a> {
+    pool_router::Client::new(&e, &e.register(pool_router::WASM, ()))
 }
 
 pub mod buffer {

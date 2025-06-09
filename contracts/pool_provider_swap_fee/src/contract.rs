@@ -1,10 +1,12 @@
 use crate::errors::Error;
 use crate::events::{ Events, ProviderFeeEvents };
 use crate::helpers;
-use crate::interface::ProviderSwapFeeInterface;
+use crate::interface::{ AdminInterface, ProviderSwapFeeInterface };
 use crate::storage::{
     get_buffer,
+    get_buffer_fraction,
     get_fee_destination,
+    get_lp_revenue_fraction,
     get_max_swap_fee_fraction,
     get_operator,
     get_router,
@@ -35,70 +37,256 @@ use utils::token::transfer_token;
 pub struct ProviderSwapFeeCollector;
 
 #[contractimpl]
-impl ProviderSwapFeeCollector {
-    // __constructor
-    // Initializes the ProviderSwapFeeCollector contract.
+impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
+    // swap
+    // Executes a token swap with fee deduction.
     //
     // Arguments:
     //   - e: The Soroban environment.
-    //   - router: The address of the swap router contract.
-    //   - operator: The address authorized to claim funds.
-    //   - fee_destination: The address where fees are sent.
-    //   - buffer: The address of the insurance fund contract.
-    //   - max_swap_fee_fraction: The maximum fee in basis points (bps).
-    //   - buffer_fraction: Portion of revenue for insurance in basis points (bps).
-    pub fn __constructor(
+    //   - user: The user initiating the swap (must be authorized).
+    //   - swap: The swap args.
+    //   - token_in: The input token address.
+    //   - in_amount: The amount of token_in provided by the user.
+    //   - out_min: The minimum acceptable output token amount (after fee deduction).
+    //   - fee_fraction: The provider fee fraction in basis points (bps).
+    //
+    // Returns:
+    //   - A u128 value representing the net output tokens transferred to the user.
+    fn swap(
         e: Env,
-        router: Address,
-        operator: Address,
-        fee_destination: Address,
-        buffer: Address,
-        max_swap_fee_fraction: u32,
-        buffer_fraction: u32
-    ) {
-        set_router(&e, &router);
-        set_operator(&e, &operator);
-        set_fee_destination(&e, &fee_destination);
-        set_buffer(&e, &buffer);
-        set_max_swap_fee_fraction(&e, &max_swap_fee_fraction);
-        set_buffer_fraction(&e, &buffer_fraction);
-    }
+        user: Address,
+        swap: (Vec<Address>, BytesN<32>, Address),
+        token_in: Address,
+        in_amount: u128,
+        out_min: u128,
+        fee_fraction: u32
+    ) -> u128 {
+        user.require_auth();
 
-    pub fn update_buffer_fraction(e: Env, operator: Address, buffer_fraction: u32) {
-        operator.require_auth();
-        if operator != get_operator(&e) {
-            panic_with_error!(&e, Error::Unauthorized);
+        if fee_fraction > get_max_swap_fee_fraction(&e) {
+            panic_with_error!(&e, Error::FeeFractionTooHigh);
         }
 
-        // if buffer_fraction < MIN_BUFFER_FRACTION {
-        //     panic_with_error!(&e, Error::FeeFractionTooHigh);
-        // }
+        let (_, _, token_out) = swap;
+
+        transfer_token(&e, &token_in, &user, &e.current_contract_address(), &(in_amount as i128));
+
+        let router = get_router(&e);
+        e.authorize_as_current_contract(
+            vec![
+                &e,
+                InvokerContractAuthEntry::Contract(SubContractInvocation {
+                    context: ContractContext {
+                        contract: token_in.clone(),
+                        fn_name: Symbol::new(&e, "transfer"),
+                        args: (
+                            e.current_contract_address(),
+                            router.clone(),
+                            in_amount as i128,
+                        ).into_val(&e),
+                    },
+                    sub_invocations: vec![&e],
+                })
+            ]
+        );
+        let amount_out: u128 = e.invoke_contract(
+            &router,
+            &Symbol::new(&e, "swap"),
+            Vec::from_array(&e, [
+                e.current_contract_address().to_val(),
+                swap.into_val(&e),
+                token_in.clone().to_val(),
+                in_amount.into_val(&e),
+                out_min.into_val(&e),
+            ])
+        );
+        let fee_amount = (amount_out * (fee_fraction as u128)) / (FEE_DENOMINATOR as u128);
+        let amount_out_w_fee = amount_out - fee_amount;
+        if amount_out_w_fee < out_min {
+            panic_with_error!(&e, Error::OutMinNotSatisfied);
+        }
+        transfer_token(
+            &e,
+            &token_out,
+            &e.current_contract_address(),
+            &user,
+            &(amount_out_w_fee as i128)
+        );
+        Events::new(&e).charge_provider_fee(token_out.clone(), fee_amount);
+
+        //
+        let lp_revenue_fraction = get_lp_revenue_fraction(&e);
+        let lp_fee_amount =
+            (fee_amount * (lp_revenue_fraction as u128)) / (FEE_DENOMINATOR as u128);
+
+        // Deposit portion of swap fee to the Buffer
+        let protocol_fee_amount = fee_amount.safe_sub(&e, lp_fee_amount);
+        let remaining_fee = deposit_fee_to_buffer(&e, token_out, protocol_fee_amount);
+
+        // Update total incentives data and refresh/initialize user incentive
+        let incentives = get_incentives_manager(&e);
+        let total_shares = get_total_shares(&e);
+        let token_a_fee = if out_idx == 0 { lp_fee_amount } else { 0 };
+        let token_b_fee = if out_idx == 0 { 0 } else { lp_fee_amount };
+        incentives.manager().update_incentives_data(total_shares, token_a_fee, token_b_fee);
+
+        amount_out_w_fee
+    }
+
+    // swap_strict_receive
+    // Executes a swap ensuring a specific output amount by adjusting the input and fee.
+    //
+    // Arguments:
+    //   - e: The Soroban environment.
+    //   - user: The user initiating the swap (must be authorized).
+    //   - swap: A vector defining the swap path.
+    //   - token_in: The input token address.
+    //   - out_amount: The exact target output amount.
+    //   - in_max: The maximum amount of token_in the user is willing to spend.
+    //   - fee_fraction: The provider fee fraction in basis points (bps).
+    //
+    // Returns:
+    //   - A u128 value representing the total input amount (including fees) required.
+    fn swap_strict_receive(
+        e: Env,
+        user: Address,
+        swap: (Vec<Address>, BytesN<32>, Address),
+        token_in: Address,
+        out_amount: u128,
+        in_max: u128,
+        fee_fraction: u32
+    ) -> u128 {
+        user.require_auth();
+
+        if fee_fraction > get_max_swap_fee_fraction(&e) {
+            panic_with_error!(&e, Error::FeeFractionTooHigh);
+        }
+
+        let (_, _, token_out) = swap;
+
+        transfer_token(&e, &token_in, &user, &e.current_contract_address(), &(in_max as i128));
+        let router = get_router(&e);
+        e.authorize_as_current_contract(
+            vec![
+                &e,
+                InvokerContractAuthEntry::Contract(SubContractInvocation {
+                    context: ContractContext {
+                        contract: token_in.clone(),
+                        fn_name: Symbol::new(&e, "transfer"),
+                        args: (
+                            e.current_contract_address(),
+                            router.clone(),
+                            in_max as i128,
+                        ).into_val(&e),
+                    },
+                    sub_invocations: vec![&e],
+                })
+            ]
+        );
+        let amount_in: u128 = e.invoke_contract(
+            &router,
+            &Symbol::new(&e, "swap_strict_receive"),
+            Vec::from_array(&e, [
+                e.current_contract_address().to_val(),
+                swap.into_val(&e),
+                token_in.clone().to_val(),
+                out_amount.into_val(&e),
+                in_max.into_val(&e),
+            ])
+        );
+        transfer_token(&e, &token_out, &e.current_contract_address(), &user, &(out_amount as i128));
+        let fee_amount = (amount_in * (fee_fraction as u128)) / (FEE_DENOMINATOR as u128);
+        let amount_in_with_fee = amount_in + fee_amount;
+        if amount_in_with_fee > in_max {
+            panic_with_error!(&e, Error::InMaxNotSatisfied);
+        }
+        let surplus = in_max - amount_in_with_fee;
+        if surplus > 0 {
+            transfer_token(&e, &token_in, &e.current_contract_address(), &user, &(surplus as i128));
+        }
+        Events::new(&e).charge_provider_fee(token_in, fee_amount);
+
+        // Deposit portion of swap fee to the Buffer
+        deposit_fee_to_buffer(&e, token_out, fee_amount);
+
+        amount_in_with_fee
+    }
+}
+
+// The `AdminInterface` trait provides the interface for administrative actions.
+#[contractimpl]
+impl AdminInterface for ProviderSwapFeeCollector {
+    // Initializes the admin user.
+    //
+    // # Arguments
+    //
+    // * `account` - The address of the admin user.
+    fn init_admin(e: Env, account: Address) {
+        let access_control = AccessControl::new(&e);
+        if access_control.get_role_safe(&Role::Admin).is_some() {
+            panic_with_error!(&e, AccessControlError::AdminAlreadySet);
+        }
+        access_control.set_role_address(&Role::Admin, &account);
+    }
+
+    // Sets the router address.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `router` - The address of the router contract.
+    pub fn set_router(e: Env, admin: Address, router: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, &Role::Admin);
+
+        set_router(&e, &router);
+    }
+
+    // Sets the buffer address.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `buffer` - The address of the Buffer contract.
+    pub fn set_buffer(e: Env, admin: Address, buffer: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, &Role::Admin);
+
+        set_buffer(&e, &buffer);
+    }
+
+    // Sets the fee destination address.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `fee_destination` - The address of the fee destination.
+    fn set_fee_destination(e: Env, admin: Address, fee_destination: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, &Role::Admin);
+
+        set_fee_destination(&e, &fee_destination);
+    }
+
+    // Set the buffer fraction
+    fn set_buffer_fraction(e: Env, admin: Address, buffer_fraction: u32) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, &Role::Admin);
 
         set_buffer_fraction(&e, &buffer_fraction);
     }
 
-    // get_max_swap_fee_fraction
-    // Returns the maximum swap fee in basis points.
-    //
-    // Arguments:
-    //   - e: The Soroban environment.
-    //
-    // Returns:
-    //   - A u32 value representing the maximum fee in basis points.
-    pub fn get_max_swap_fee_fraction(e: Env) -> u32 {
-        get_max_swap_fee_fraction(&e)
-    }
+    // Set the max swap fee fraction
+    fn set_max_swap_fee_fraction(e: Env, admin: Address, max_swap_fee_fraction: u32) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, &Role::Admin);
 
-    // get_buffer_fraction
-    // Returns the maximum swap fee in basis points.
-    //
-    // Arguments:
-    //   - e: The Soroban environment.
-    //
-    // Returns:
-    //   - A u32 value representing the maximum fee in basis points.
-    pub fn get_buffer_fraction(e: Env) -> u32 {
-        get_buffer_fraction(&e)
+        set_max_swap_fee_fraction(&e, &max_swap_fee_fraction);
     }
 
     // get_router
@@ -108,9 +296,21 @@ impl ProviderSwapFeeCollector {
     //   - e: The Soroban environment.
     //
     // Returns:
-    //   - An Address representing the swap router.
-    pub fn get_router(e: Env) -> Address {
+    //   - An Address representing the router.
+    fn get_router(e: Env) -> Address {
         get_router(&e)
+    }
+
+    // get_buffer
+    // Returns the address of the buffer contract used for fee deposits.
+    //
+    // Arguments:
+    //   - e: The Soroban environment.
+    //
+    // Returns:
+    //   - An Address representing the buffer.
+    fn get_buffer(e: Env) -> Address {
+        get_buffer(&e)
     }
 
     // get_fee_destination
@@ -121,20 +321,32 @@ impl ProviderSwapFeeCollector {
     //
     // Returns:
     //   - An Address representing the fee destination.
-    pub fn get_fee_destination(e: Env) -> Address {
+    fn get_fee_destination(e: Env) -> Address {
         get_fee_destination(&e)
     }
 
-    // get_buffer
-    // Returns the address where fees are sent.
+    // get_max_swap_fee_fraction
+    // Returns the maximum swap fee in basis points.
     //
     // Arguments:
     //   - e: The Soroban environment.
     //
     // Returns:
-    //   - An Address representing the fee destination.
-    pub fn get_buffer(e: Env) -> Address {
-        get_buffer(&e)
+    //   - A u32 value representing the maximum fee in basis points.
+    fn get_max_swap_fee_fraction(e: Env) -> u32 {
+        get_max_swap_fee_fraction(&e)
+    }
+
+    // get_buffer_fraction
+    // Returns the buffer revenue fee in basis points.
+    //
+    // Arguments:
+    //   - e: The Soroban environment.
+    //
+    // Returns:
+    //   - A u32 value representing the portion of revenue for the buffer in basis points.
+    fn get_buffer_fraction(e: Env) -> u32 {
+        get_buffer_fraction(&e)
     }
 
     // claim_fees
@@ -142,16 +354,16 @@ impl ProviderSwapFeeCollector {
     //
     // Arguments:
     //   - e: The Soroban environment.
-    //   - operator: The address calling for fee claiming (must match the stored operator).
+    //   - admin: The address calling for fee claiming (must match the stored operator).
     //   - token: The token contract address for which fees are claimed.
     //
     // Returns:
     //   - A u128 value representing the claimed token amount.
-    pub fn claim_fees(e: Env, operator: Address, token: Address) -> u128 {
-        operator.require_auth();
-        if operator != get_operator(&e) {
-            panic_with_error!(&e, Error::Unauthorized);
-        }
+    fn claim_fees(e: Env, admin: Address, token: Address) -> u128 {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, &Role::Admin);
+
         let amount = token_client.balance(&e.current_contract_address());
         transfer_token(
             &e,
@@ -169,29 +381,26 @@ impl ProviderSwapFeeCollector {
     //
     // Arguments:
     //   - e: The Soroban environment.
-    //   - operator: The address calling for the fee claim and swap (must match the stored operator).
-    //   - swaps_chain: A vector describing the swap path; each element is a tuple of (intermediate token addresses, function hash, output token address).
+    //   - admin: The address calling for the fee claim and swap (must match the stored operator).
+    //   - swap: A vector describing the swap path; each element is a tuple of (intermediate token addresses, function hash, output token address).
     //   - token: The token for which fees are claimed.
     //   - out_min: The minimum acceptable output amount from the swap.
     //   - to: The destination address for the swapped tokens.
     //
     // Returns:
     //   - A u128 value representing the output token amount received after the swap.
-    pub fn claim_fees_and_swap(
+    fn claim_fees_and_swap(
         e: Env,
-        operator: Address,
+        admin: Address,
         swap: (Vec<Address>, BytesN<32>, Address),
         token: Address,
         out_min: u128
     ) -> u128 {
-        operator.require_auth();
-        if operator != get_operator(&e) {
-            panic_with_error!(&e, Error::Unauthorized);
-        }
-        let (_, _, token_out) = match swap.last() {
-            Some(v) => v,
-            None => panic_with_error!(&e, Error::PathIsEmpty),
-        };
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, &Role::Admin);
+
+        let (_, _, token_out) = swap;
         let router = get_router(&e);
         let token_client = SorobanTokenClient::new(&e, &token);
         let amount = token_client.balance(&e.current_contract_address()) as u128;
@@ -235,244 +444,39 @@ impl ProviderSwapFeeCollector {
     }
 }
 
-#[contractimpl]
-impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
-    // swap
-    // Executes a token swap with fee deduction.
-    //
-    // Arguments:
-    //   - e: The Soroban environment.
-    //   - user: The user initiating the swap (must be authorized).
-    //   - swap: The swap args.
-    //   - token_in: The input token address.
-    //   - in_amount: The amount of token_in provided by the user.
-    //   - out_min: The minimum acceptable output token amount (after fee deduction).
-    //   - fee_fraction: The provider fee fraction in basis points (bps).
-    //
-    // Returns:
-    //   - A u128 value representing the net output tokens transferred to the user.
-    fn swap(
-        e: Env,
-        user: Address,
-        swap: (Vec<Address>, BytesN<32>, Address),
-        token_in: Address,
-        in_amount: u128,
-        out_min: u128,
-        fee_fraction: u32
-    ) -> u128 {
-        user.require_auth();
+fn deposit_fee_to_buffer(e: &Env, token: Address, fee: u128) -> u128 {
+    let buffer_fraction = get_buffer_fraction(e);
+    let fee_amount_for_buffer = (fee * (buffer_fraction as u128)) / 10_000_u128;
+    let buffer = get_buffer(e);
 
-        if fee_fraction > get_max_swap_fee_fraction(&e) {
-            panic_with_error!(&e, Error::FeeFractionTooHigh);
-        }
-
-        transfer_token(&e, &token_in, &user, &e.current_contract_address(), &(in_amount as i128));
-
-        let router = get_router(&e);
-        e.authorize_as_current_contract(
-            vec![
-                &e,
-                InvokerContractAuthEntry::Contract(SubContractInvocation {
-                    context: ContractContext {
-                        contract: token_in.clone(),
-                        fn_name: Symbol::new(&e, "transfer"),
-                        args: (
-                            e.current_contract_address(),
-                            router.clone(),
-                            in_amount as i128,
-                        ).into_val(&e),
-                    },
-                    sub_invocations: vec![&e],
-                })
-            ]
-        );
-        let amount_out: u128 = e.invoke_contract(
-            &router,
-            &Symbol::new(&e, "swap"),
-            Vec::from_array(&e, [
-                e.current_contract_address().to_val(),
-                swap.into_val(&e),
-                token_in.clone().to_val(),
-                in_amount.into_val(&e),
-                out_min.into_val(&e),
-            ])
-        );
-        let fee_amount = (amount_out * (fee_fraction as u128)) / (FEE_DENOMINATOR as u128);
-        let amount_out_w_fee = amount_out - fee_amount;
-        if amount_out_w_fee < out_min {
-            panic_with_error!(&e, Error::OutMinNotSatisfied);
-        }
-        transfer_token(
+    e.authorize_as_current_contract(
+        vec![
             &e,
-            &swap.2,
-            &e.current_contract_address(),
-            &user,
-            &(amount_out_w_fee as i128)
-        );
-        Events::new(&e).charge_provider_fee(swap.2, fee_amount);
+            InvokerContractAuthEntry::Contract(SubContractInvocation {
+                context: ContractContext {
+                    contract: token.clone(),
+                    fn_name: Symbol::new(e, "transfer"),
+                    args: (
+                        e.current_contract_address(),
+                        buffer.clone(),
+                        fee_amount_for_buffer as i128,
+                    ).into_val(e),
+                },
+                sub_invocations: vec![&e],
+            })
+        ]
+    );
+    e.invoke_contract(
+        &get_buffer(e),
+        &Symbol::new(e, "deposit"),
+        Vec::from_array(e, [
+            e.current_contract_address().to_val(),
+            token.clone().to_val(),
+            fee_amount_for_buffer.into_val(e),
+        ])
+    );
 
-        // Send portion of fee to the Buffer
-        let fee_amount_for_buffer = fee_amount * get_buffer_fraction(&e);
-        let buffer = get_buffer(&e);
+    Events::new(e).settle_revenue(token, fee_amount_for_buffer as u128);
 
-        let token_client = SorobanTokenClient::new(&e, &token);
-
-        e.authorize_as_current_contract(
-            vec![
-                &e,
-                InvokerContractAuthEntry::Contract(SubContractInvocation {
-                    context: ContractContext {
-                        contract: token.clone(),
-                        fn_name: Symbol::new(&e, "transfer"),
-                        args: (
-                            e.current_contract_address(),
-                            buffer.clone(),
-                            fee_amount_for_buffer as i128,
-                        ).into_val(&e),
-                    },
-                    sub_invocations: vec![&e],
-                })
-            ]
-        );
-
-        let settled_amount: u128 = e.invoke_contract(
-            &get_buffer(&e),
-            &Symbol::new(&e, "deposit"),
-            Vec::from_array(&e, [
-                e.current_contract_address().to_val(),
-                &token,
-                fee_amount_for_buffer.into_val(&e),
-            ])
-        );
-
-        Events::new(&e).settle_revenue(token.clone(), settled_amount as u128);
-
-        // // Update total incentives data and refresh/initialize user incentive
-        // let incentives = get_incentives_manager(&e);
-        // let total_shares = get_total_shares(&e);
-        // let user_shares = get_user_balance_shares(&e, &user);
-        // let token_a_fees_collected = 0;
-        // let token_b_fees_collected = 0;
-        // incentives
-        //     .manager()
-        //     .checkpoint_user(
-        //         &user,
-        //         total_shares,
-        //         user_shares,
-        //         token_a_fees_collected,
-        //         token_b_fees_collected
-        //     );
-
-        amount_out_w_fee
-    }
-
-    // swap_strict_receive
-    // Executes a swap ensuring a specific output amount by adjusting the input and fee.
-    //
-    // Arguments:
-    //   - e: The Soroban environment.
-    //   - user: The user initiating the swap (must be authorized).
-    //   - swap: A vector defining the swap path.
-    //   - token_in: The input token address.
-    //   - out_amount: The exact target output amount.
-    //   - in_max: The maximum amount of token_in the user is willing to spend.
-    //   - fee_fraction: The provider fee fraction in basis points (bps).
-    //
-    // Returns:
-    //   - A u128 value representing the total input amount (including fees) required.
-    fn swap_strict_receive(
-        e: Env,
-        user: Address,
-        swap: (Vec<Address>, BytesN<32>, Address),
-        token_in: Address,
-        out_amount: u128,
-        in_max: u128,
-        fee_fraction: u32
-    ) -> u128 {
-        user.require_auth();
-
-        if fee_fraction > get_max_swap_fee_fraction(&e) {
-            panic_with_error!(&e, Error::FeeFractionTooHigh);
-        }
-
-        transfer_token(&e, &token_in, &user, &e.current_contract_address(), &(in_max as i128));
-        let router = get_router(&e);
-        e.authorize_as_current_contract(
-            vec![
-                &e,
-                InvokerContractAuthEntry::Contract(SubContractInvocation {
-                    context: ContractContext {
-                        contract: token_in.clone(),
-                        fn_name: Symbol::new(&e, "transfer"),
-                        args: (
-                            e.current_contract_address(),
-                            router.clone(),
-                            in_max as i128,
-                        ).into_val(&e),
-                    },
-                    sub_invocations: vec![&e],
-                })
-            ]
-        );
-        let amount_in: u128 = e.invoke_contract(
-            &router,
-            &Symbol::new(&e, "swap_strict_receive"),
-            Vec::from_array(&e, [
-                e.current_contract_address().to_val(),
-                swap.into_val(&e),
-                token_in.clone().to_val(),
-                out_amount.into_val(&e),
-                in_max.into_val(&e),
-            ])
-        );
-        transfer_token(&e, &swap.2, &e.current_contract_address(), &user, &(out_amount as i128));
-        let fee_amount = (amount_in * (fee_fraction as u128)) / (FEE_DENOMINATOR as u128);
-        let amount_in_with_fee = amount_in + fee_amount;
-        if amount_in_with_fee > in_max {
-            panic_with_error!(&e, Error::InMaxNotSatisfied);
-        }
-        let surplus = in_max - amount_in_with_fee;
-        if surplus > 0 {
-            transfer_token(&e, &token_in, &e.current_contract_address(), &user, &(surplus as i128));
-        }
-        Events::new(&e).charge_provider_fee(token_in, fee_amount);
-
-        // Send portion of fee to the Buffer
-        let fee_amount_for_buffer = fee_amount * get_buffer_fraction(&e);
-        let buffer = get_buffer(&e);
-
-        let token_client = SorobanTokenClient::new(&e, &token);
-
-        e.authorize_as_current_contract(
-            vec![
-                &e,
-                InvokerContractAuthEntry::Contract(SubContractInvocation {
-                    context: ContractContext {
-                        contract: token.clone(),
-                        fn_name: Symbol::new(&e, "transfer"),
-                        args: (
-                            e.current_contract_address(),
-                            buffer.clone(),
-                            fee_amount_for_buffer as i128,
-                        ).into_val(&e),
-                    },
-                    sub_invocations: vec![&e],
-                })
-            ]
-        );
-
-        let settled_amount: u128 = e.invoke_contract(
-            &get_buffer(&e),
-            &Symbol::new(&e, "deposit"),
-            Vec::from_array(&e, [
-                e.current_contract_address().to_val(),
-                &token,
-                fee_amount_for_buffer.into_val(&e),
-            ])
-        );
-
-        Events::new(&e).settle_revenue(token.clone(), settled_amount as u128);
-
-        amount_in_with_fee
-    }
+    fee_amount.safe_sub(&e, fee_amount_for_buffer)
 }

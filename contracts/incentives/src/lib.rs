@@ -1,6 +1,6 @@
 #![no_std]
 
-use soroban_sdk::{ Address, Env };
+use soroban_sdk::{Address, Env};
 
 pub mod errors;
 pub mod events;
@@ -14,8 +14,6 @@ pub use utils;
 #[derive(Clone)]
 pub struct IncentivesConfig {
     page_size: u64,
-    token_a: Address,
-    token_b: Address,
 }
 
 #[derive(Clone)]
@@ -26,10 +24,10 @@ pub struct Incentives {
 
 impl Incentives {
     #[inline(always)]
-    pub fn new(env: &Env, page_size: u64, token_a: Address, token_b: Address) -> Incentives {
+    pub fn new(env: &Env, page_size: u64) -> Incentives {
         Incentives {
             env: env.clone(),
-            config: IncentivesConfig { page_size, token_a, token_b },
+            config: IncentivesConfig { page_size },
         }
     }
 

@@ -3,11 +3,10 @@ extern crate std;
 use crate::InsuranceFundClient;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::{
-    StellarAssetClient as SorobanTokenAdminClient,
-    TokenClient as SorobanTokenClient,
+    StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
-use soroban_sdk::{ Address, BytesN, Env, String, Symbol, Vec };
-use utils::storage::{ OraclePair };
+use soroban_sdk::{Address, BytesN, Env, String, Symbol, Vec};
+use utils::storage::OraclePair;
 
 pub(crate) struct TestConfig {
     pub(crate) min_time_between_payouts: u64,
@@ -84,7 +83,7 @@ impl Setup<'_> {
             &Vec::from_array(&e, [token_a.address.clone(), token_b.address.clone()]),
             &String::from_str(&e, "Pool Share Token"),
             &String::from_str(&e, "Pool Share Token"),
-            &30
+            &30,
         );
         let swap_pool = pool::Client::new(&e, &pool_address);
         token_b_admin_client.mint(&admin, &1_000_000_000_0000000);
@@ -98,7 +97,7 @@ impl Setup<'_> {
             &admin,
             &router.address,
             &fee_collector.address,
-            config.min_time_between_payouts
+            config.min_time_between_payouts,
         );
 
         Self {
@@ -117,7 +116,11 @@ impl Setup<'_> {
 }
 
 pub(crate) fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanTokenClient<'a> {
-    SorobanTokenClient::new(e, &e.register_stellar_asset_contract_v2(admin.clone()).address())
+    SorobanTokenClient::new(
+        e,
+        &e.register_stellar_asset_contract_v2(admin.clone())
+            .address(),
+    )
 }
 
 pub mod pool {
@@ -128,7 +131,7 @@ pub mod pool {
 
 pub(crate) fn get_token_admin_client<'a>(
     e: &Env,
-    address: &Address
+    address: &Address,
 ) -> SorobanTokenAdminClient<'a> {
     SorobanTokenAdminClient::new(e, address)
 }
@@ -138,11 +141,14 @@ pub fn create_contract<'a>(
     admin: &Address,
     router: &Address,
     fee_collector: &Address,
-    min_time_between_payouts: u64
+    min_time_between_payouts: u64,
 ) -> InsuranceFundClient<'a> {
     let contract = InsuranceFundClient::new(
         e,
-        &e.register(crate::InsuranceFund, (admin, router, fee_collector, min_time_between_payouts))
+        &e.register(
+            crate::InsuranceFund,
+            (admin, router, fee_collector, min_time_between_payouts),
+        ),
     );
     contract
 }

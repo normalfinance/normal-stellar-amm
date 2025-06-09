@@ -1,6 +1,12 @@
-use utils::{ constant::QUOTE_PRECISION, helpers::{log10, log10_iter} };
+use utils::{
+    constant::QUOTE_PRECISION,
+    helpers::{log10, log10_iter},
+};
 
-use crate::{ stake::{ calculate_if_shares_lost, calculate_rebase_info, Stake }, testutils::Setup };
+use crate::{
+    stake::{calculate_if_shares_lost, calculate_rebase_info, Stake},
+    testutils::Setup,
+};
 
 #[test]
 pub fn basic_stake_if_test() {
@@ -45,7 +51,7 @@ pub fn basic_stake_if_test() {
     let (expo_diff, rebase_div) = calculate_rebase_info(
         &setup.env,
         60_078 * QUOTE_PRECISION,
-        600 * QUOTE_PRECISION + 19234
+        600 * QUOTE_PRECISION + 19234,
     );
     assert_eq!(rebase_div, 10);
     assert_eq!(expo_diff, 1);
@@ -53,17 +59,14 @@ pub fn basic_stake_if_test() {
     let (expo_diff, rebase_div) = calculate_rebase_info(
         &setup.env,
         60_078 * QUOTE_PRECISION,
-        601 * QUOTE_PRECISION + 19234
+        601 * QUOTE_PRECISION + 19234,
     );
     assert_eq!(rebase_div, 1);
     assert_eq!(expo_diff, 0);
 
     // $800M goes to 1e-6 of dollar
-    let (expo_diff, rebase_div) = calculate_rebase_info(
-        &setup.env,
-        800_000_078 * QUOTE_PRECISION,
-        1_u128
-    );
+    let (expo_diff, rebase_div) =
+        calculate_rebase_info(&setup.env, 800_000_078 * QUOTE_PRECISION, 1_u128);
 
     assert_eq!(rebase_div, 10000000000000);
     assert_eq!(expo_diff, 13);
@@ -104,10 +107,9 @@ pub fn if_shares_lost_test() {
     let setup = Setup::default();
 
     let _amount = QUOTE_PRECISION as u64; // $1
-    let mut insurance_fund = {
-        unstaking_period: 0,
-        total_shares: 1000 * QUOTE_PRECISION,
-    };
+
+    let unstaking_period = 0;
+    let mut total_shares = 1000 * QUOTE_PRECISION;
 
     let mut if_stake = Stake::new(0);
     if_stake.update_if_shares(&setup.env, 100 * QUOTE_PRECISION);
@@ -121,12 +123,12 @@ pub fn if_shares_lost_test() {
     assert_eq!(lost_shares, 2);
 
     let if_balance = if_balance + 100 * QUOTE_PRECISION;
-    insurance_fund.total_shares += 100 * QUOTE_PRECISION;
+    total_shares += 100 * QUOTE_PRECISION;
     let lost_shares = calculate_if_shares_lost(&setup.env, &if_stake, if_balance);
     assert_eq!(lost_shares, 2); // giving up $5 of gains
 
     let if_balance = if_balance - 100 * QUOTE_PRECISION;
-    insurance_fund.total_shares -= 100 * QUOTE_PRECISION;
+    total_shares -= 100 * QUOTE_PRECISION;
     let lost_shares = calculate_if_shares_lost(&setup.env, &if_stake, if_balance);
     assert_eq!(lost_shares, 2); // giving up $5 of gains
 
@@ -143,7 +145,7 @@ pub fn if_shares_lost_test() {
 
     // take back gain and total_if_shares alter w/o user alter
     let if_balance = 2100 * QUOTE_PRECISION;
-    insurance_fund.total_shares *= 2;
+    total_shares *= 2;
     let lost_shares = calculate_if_shares_lost(&setup.env, &if_stake, if_balance);
     assert_eq!(lost_shares, 5_000_001); // giving up $5 of gains
 
@@ -154,8 +156,8 @@ pub fn if_shares_lost_test() {
     let lost_shares = calculate_if_shares_lost(&setup.env, &if_stake, if_balance);
     assert_eq!(lost_shares, 90_909_092); // giving up $5 of gains
     assert_eq!(
-        (9090908 * if_balance) / (insurance_fund.total_shares - lost_shares) <
-            if_stake.last_withdraw_request_value,
+        (9090908 * if_balance) / (total_shares - lost_shares)
+            < if_stake.last_withdraw_request_value,
         true
     );
 }

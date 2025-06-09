@@ -1,8 +1,5 @@
-use soroban_sdk::{ Address, BytesN, Env, Map, Symbol, Vec };
-use utils::{
-    oracle::{ OracleGuardRails },
-    storage::{ InitializeAllParams, InitializeParams, PoolInfo, PoolStatus, PoolTier },
-};
+use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Vec};
+use utils::storage::{InitializeAllParams, InitializeParams, PoolInfo, PoolStatus, PoolTier};
 
 pub trait PoolCrunch {
     // Initialize pool completely to reduce calculations cost
@@ -41,7 +38,7 @@ pub trait PoolTrait {
         in_idx: u32,
         out_idx: u32,
         in_amount: u128,
-        out_min: u128
+        out_min: u128,
     ) -> u128;
 
     // Estimate amount of coins to retrieve using swap function
@@ -58,7 +55,7 @@ pub trait PoolTrait {
         in_idx: u32,
         out_idx: u32,
         out_amount: u128,
-        in_max: u128
+        in_max: u128,
     ) -> u128;
 
     // Estimate amount of coins to retrieve using swap_strict_receive function
@@ -66,7 +63,7 @@ pub trait PoolTrait {
         e: Env,
         in_idx: u32,
         out_idx: u32,
-        out_amount: u128
+        out_amount: u128,
     ) -> (u128, i128);
 
     // Transfers share_amount of pool share tokens to this contract,
@@ -93,9 +90,10 @@ pub trait AdminInterfaceTrait {
     fn set_privileged_addrs(
         e: Env,
         admin: Address,
+        rewards_admin: Address,
         operations_admin: Address,
         pause_admin: Address,
-        emergency_pause_admins: Vec<Address>
+        emergency_pause_admins: Vec<Address>,
     );
 
     // Get map of privileged roles
@@ -112,20 +110,17 @@ pub trait AdminInterfaceTrait {
         e: Env,
         admin: Address,
         liquidity_max_imbalance: u64,
-        quote_max_insurance: u64
+        quote_max_insurance: u64,
     );
-
-    // Set when the pool will expire
-    fn set_expiry_ts(e: Env, admin: Address, expiry_ts: u64);
 
     // Rebalance pool reserves
     fn rebalance(e: Env, admin: Address);
 
     //
-    fn get_pay_from_insurance(e: Env);
+    fn get_pay_from_insurance(e: Env, sender: Address, insurance_vault_amount: u128) -> i128;
 
     //
-    fn pay_insurance_claim(e: Env, sender: Address, token: Address, amount: u128);
+    fn pay_insurance_claim(e: Env, sender: Address, amount: u128);
 
     // Stop pool instantly
     fn kill_deposit(e: Env, admin: Address);
@@ -155,7 +150,7 @@ pub trait UpgradeableContract {
         e: Env,
         admin: Address,
         new_wasm_hash: BytesN<32>,
-        new_token_wasm_hash: BytesN<32>
+        new_token_wasm_hash: BytesN<32>,
     );
     fn apply_upgrade(e: Env, admin: Address) -> (BytesN<32>, BytesN<32>);
     fn revert_upgrade(e: Env, admin: Address);
@@ -207,7 +202,7 @@ pub trait IncentivesTrait {
         e: Env,
         token_contract: Address,
         user: Address,
-        user_shares: u128
+        user_shares: u128,
     );
 
     // Get total amount of accumulated reward for the pool
@@ -221,5 +216,5 @@ pub trait IncentivesTrait {
 
     // Claim LP fees and reward as a user.
     // returns amount of tokens rewarded to the user
-    fn claim(e: Env, user: Address) -> u128;
+    fn claim(e: Env, user: Address) -> (u128, u128, u128);
 }

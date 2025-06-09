@@ -1,4 +1,4 @@
-use crate::helpers::{ log10, log10_iter };
+use crate::helpers::{log10, log10_iter};
 
 #[test]
 pub fn log_test() {

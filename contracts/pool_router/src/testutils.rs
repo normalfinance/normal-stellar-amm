@@ -5,7 +5,7 @@ use crate::PoolRouterClient;
 use sep_40_oracle::testutils::MockPriceOracleWASM;
 use sep_40_oracle::Asset;
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{ Address, BytesN, Env, Symbol, Vec };
+use soroban_sdk::{Address, BytesN, Env, Symbol, Vec};
 use utils::storage::OraclePair;
 
 pub(crate) mod test_token {
@@ -14,7 +14,11 @@ pub(crate) mod test_token {
 }
 
 pub fn create_token_contract<'a>(e: &Env, admin: &Address) -> test_token::Client<'a> {
-    test_token::Client::new(e, &e.register_stellar_asset_contract_v2(admin.clone()).address())
+    test_token::Client::new(
+        e,
+        &e.register_stellar_asset_contract_v2(admin.clone())
+            .address(),
+    )
 }
 
 pub fn create_pool_router_contract<'a>(e: &Env) -> PoolRouterClient<'a> {
@@ -94,7 +98,7 @@ impl Default for Setup<'_> {
         let payment_for_creation_address = Address::generate(&env);
 
         let reward_token = create_token_contract(&env, &reward_admin);
-       
+
         let pool_hash = install_liq_pool_hash(&env);
         let token_hash = install_token_wasm(&env);
         let router = create_pool_router_contract(&env);
@@ -108,7 +112,7 @@ impl Default for Setup<'_> {
             &rewards_admin,
             &operations_admin,
             &pause_admin,
-            &Vec::from_array(&env, [emergency_pause_admin.clone()])
+            &Vec::from_array(&env, [emergency_pause_admin.clone()]),
         );
         router.set_pool_hash(&admin, &pool_hash);
         router.set_token_hash(&admin, &token_hash);
@@ -118,7 +122,7 @@ impl Default for Setup<'_> {
         router.commit_transfer_ownership(
             &admin,
             &Symbol::new(&env, "EmergencyAdmin"),
-            &emergency_admin
+            &emergency_admin,
         );
         router.apply_transfer_ownership(&admin, &Symbol::new(&env, "EmergencyAdmin"));
 

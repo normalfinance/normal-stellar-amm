@@ -5,5 +5,5 @@ use soroban_sdk::contracterror;
 #[repr(u32)]
 pub enum RewardsError {
     PastTimeNotAllowed = 701,
-    SameRewardsConfig = 702,
+    SameIncentivesConfig = 702,
 }

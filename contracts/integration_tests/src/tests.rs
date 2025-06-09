@@ -1,10 +1,12 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::testutils::{ create_token_contract, deploy_provider_swap_fee_contract, get_token_admin_client, Setup };
+use crate::testutils::{
+    create_token_contract, deploy_provider_swap_fee_contract, get_token_admin_client, Setup,
+};
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::TokenClient;
-use soroban_sdk::{ vec, Address, Vec };
+use soroban_sdk::{vec, Address, Vec};
 
 #[test]
 fn test_integration() {
@@ -24,11 +26,7 @@ fn test_integration() {
     let xlm_admin = get_token_admin_client(&setup.env, &xlm.address);
 
     // deploy pools
-    let (pool, pool_hash) = setup.deploy_pool(
-        &nbtc.address,
-        &xlm.address,
-        30
-    );
+    let (pool, pool_hash) = setup.deploy_pool(&nbtc.address, &xlm.address, 30);
     xlm_admin.mint(&setup.admin, &344_000_0000000);
     pool.deposit(&setup.admin, &100_000_0000000);
 
@@ -53,7 +51,8 @@ fn test_integration() {
     );
 
     // deploy provider swap fee contract
-    let swap_fee = deploy_provider_swap_fee_contract(&setup.env, &setup.operator, &setup.admin, &setup.admin);
+    let swap_fee =
+        deploy_provider_swap_fee_contract(&setup.env, &setup.operator, &setup.admin, &setup.admin);
 
     // now swap with additional provider fee
     xlm_admin.mint(&user, &10_0000000);

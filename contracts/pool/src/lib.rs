@@ -3,10 +3,10 @@
 mod contract;
 pub mod errors;
 mod events;
+mod incentives;
 mod oracle;
 mod pool;
 mod pool_interface;
-mod rewards;
 mod storage;
 mod test;
 mod test_permissions;

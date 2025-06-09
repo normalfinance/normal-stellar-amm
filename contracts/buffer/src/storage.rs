@@ -1,26 +1,25 @@
-use soroban_sdk::{ contracttype, panic_with_error, Address, Env, Map };
-use soroban_sdk::token::{ TokenClient as SorobanTokenClient };
-use utils::bump::{ bump_instance, bump_persistent, bump_temporary };
+use paste::paste;
+use soroban_sdk::token::TokenClient as SorobanTokenClient;
+use soroban_sdk::{contracttype, panic_with_error, Address, Env, Map};
+use utils::bump::{bump_instance, bump_persistent, bump_temporary};
 use utils::errors::storage_errors::StorageError;
 use utils::{
     generate_instance_storage_getter_and_setter_with_default,
-    generate_instance_storage_getter_with_default,
-    generate_instance_storage_setter,
+    generate_instance_storage_getter_with_default, generate_instance_storage_setter,
 };
-use paste::paste;
 
 use crate::reserve::Reserve;
 
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
-    Router, // The address of the Router contract (only one who can call `request_payout()`).
+    Router,       // The address of the Router contract (only one who can call `request_payout()`).
     FeeCollector, // The address of the Fee Collector contract (only one who can call `deposit()`).
     MinTimeBetweenPayouts, // The minimum time between payouts to prevent repeated or too-frequent payouts (rate limiting).
 
-    Reserve(Address), // Map of Buffer reserve state for each token.
+    Reserve(Address),    // Map of Buffer reserve state for each token.
     LastPayoutTimestamp, // The last time a payout was executed.
-    MinReserveRatio, // The minimum reserve the Buffer must maintain
+    MinReserveRatio,     // The minimum reserve the Buffer must maintain
 
     IsKilledDeposit,
     IsKilledRequestPayout,
@@ -74,7 +73,7 @@ pub(crate) fn get_reserve(e: &Env, token: Address) -> Reserve {
             bump_persistent(e, &key);
             value
         }
-        None => Reserve::new(),
+        None => Reserve::new(e.ledger().timestamp()),
     }
 }
 

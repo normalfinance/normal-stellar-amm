@@ -1,6 +1,9 @@
 use sep_40_oracle::Asset;
-use soroban_sdk::{ Address, BytesN, Env, Map, String, Symbol, Val, Vec, U256 };
-use utils::{ oracle::OracleGuardRails, storage::{ PoolInfo, OraclePair, PoolTier } };
+use soroban_sdk::{Address, BytesN, Env, Map, String, Symbol, Val, Vec, U256};
+use utils::{
+    oracle::OracleGuardRails,
+    storage::{OraclePair, PoolInfo, PoolTier},
+};
 
 pub trait PoolInterfaceTrait {
     // Get symbolic explanation of pool type.
@@ -29,7 +32,7 @@ pub trait PoolInterfaceTrait {
         user: Address,
         tokens: Vec<Address>,
         pool_index: BytesN<32>,
-        token_b_amount: u128
+        token_b_amount: u128,
     ) -> (u128, u128);
 
     // Perform an exchange between two coins.
@@ -46,7 +49,7 @@ pub trait PoolInterfaceTrait {
         token_out: Address,
         pool_index: BytesN<32>,
         in_amount: u128,
-        out_min: u128
+        out_min: u128,
     ) -> u128;
 
     // Estimate amount of coins to retrieve using swap function
@@ -56,7 +59,7 @@ pub trait PoolInterfaceTrait {
         token_in: Address,
         token_out: Address,
         pool_index: BytesN<32>,
-        in_amount: u128
+        in_amount: u128,
     ) -> (u128, i128);
 
     // Withdraw coins from the pool.
@@ -67,11 +70,11 @@ pub trait PoolInterfaceTrait {
         user: Address,
         tokens: Vec<Address>,
         pool_index: BytesN<32>,
-        share_amount: u128
+        share_amount: u128,
     ) -> u128;
 }
 
-pub trait RewardsInterfaceTrait {
+pub trait IncentivesInterfaceTrait {
     // Retrieves the global rewards configuration and returns it as a `Map`.
     //
     // This function fetches the global rewards configuration from the contract's state.
@@ -117,7 +120,7 @@ pub trait RewardsInterfaceTrait {
         user: Address,
         reward_tps: u128,
         expired_at: u64,
-        tokens_votes: Vec<(Vec<Address>, u32)>
+        tokens_votes: Vec<(Vec<Address>, u32)>,
     );
 
     // Fills the aggregated liquidity information for a given set of tokens.
@@ -156,11 +159,12 @@ pub trait RewardsInterfaceTrait {
         e: Env,
         user: Address,
         tokens: Vec<Address>,
-        pool_index: BytesN<32>
+        pool_index: BytesN<32>,
     ) -> Map<Symbol, i128>;
 
     // Get amount of reward tokens available for the user to claim.
-    fn get_user_reward(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
+    fn get_user_reward(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>)
+        -> u128;
 
     // Get total amount of accumulated reward for the pool
     fn get_total_accumulated_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
@@ -181,7 +185,7 @@ pub trait RewardsInterfaceTrait {
         user: Address,
         from: Address,
         tokens: Vec<Address>,
-        pool_index: BytesN<32>
+        pool_index: BytesN<32>,
     ) -> u128;
 
     // Claim reward as a user.
@@ -235,6 +239,6 @@ pub trait PoolsManagementTrait {
     fn get_pools_for_tokens_range(
         e: Env,
         start: u128,
-        end: u128
+        end: u128,
     ) -> Vec<(Vec<Address>, Map<BytesN<32>, Address>)>;
 }

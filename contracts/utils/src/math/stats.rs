@@ -9,7 +9,7 @@ pub fn calculate_weighted_average(
     data1: u128,
     data2: u128,
     weight1: u64,
-    weight2: u64
+    weight2: u64,
 ) -> u128 {
     let denominator = weight1.safe_add(e, weight2) as u128;
     let prev_twap_99 = data1.safe_mul(e, weight1 as u128);
@@ -35,7 +35,9 @@ pub fn calculate_weighted_average(
         0
     };
 
-    let twap = prev_twap_99.safe_add(e, latest_price_01).safe_div(e, denominator);
+    let twap = prev_twap_99
+        .safe_add(e, latest_price_01)
+        .safe_div(e, denominator);
 
     if twap == 0 && bias < 0 {
         return twap;
@@ -50,7 +52,7 @@ pub fn calculate_new_twap(
     current_ts: u64,
     last_twap: u128,
     last_ts: u64,
-    period: u64
+    period: u64,
 ) -> u128 {
     let since_last = max(0_u64, current_ts.safe_sub(e, last_ts));
     let from_start = max(1_u64, period.safe_sub(e, since_last));

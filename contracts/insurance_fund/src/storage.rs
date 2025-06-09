@@ -1,13 +1,12 @@
-use soroban_sdk::{ contracttype, panic_with_error, Address, Env };
-use soroban_sdk::token::{ TokenClient as SorobanTokenClient };
-use utils::bump::{ bump_instance, bump_persistent, bump_temporary };
+use paste::paste;
+use soroban_sdk::token::TokenClient as SorobanTokenClient;
+use soroban_sdk::{contracttype, panic_with_error, Address, Env};
+use utils::bump::{bump_instance, bump_persistent, bump_temporary};
 use utils::errors::storage_errors::StorageError;
 use utils::{
     generate_instance_storage_getter_and_setter_with_default,
-    generate_instance_storage_getter_with_default,
-    generate_instance_storage_setter,
+    generate_instance_storage_getter_with_default, generate_instance_storage_setter,
 };
-use paste::paste;
 
 #[derive(Clone)]
 #[contracttype]

@@ -1,6 +1,6 @@
 #![no_std]
 
-use soroban_sdk::{ Address, Env, Symbol };
+use soroban_sdk::{Address, Env, Symbol};
 
 #[derive(Clone)]
 pub struct Events(Env);
@@ -33,10 +33,10 @@ pub trait PoolEvents {
         token_out: Address,
         in_amount: u128,
         out_amount: u128,
-        fee_amount: u128
+        fee_amount: u128,
     );
 
-    fn rebalance(&self, delta_a: i128, new_reserve_a: u128);
+    fn rebalance(&self, delta_a: i128, ts: u64);
 
     fn kill_deposit(&self);
 
@@ -74,7 +74,7 @@ impl PoolEvents for Events {
         let e = self.env();
         e.events().publish(
             (Symbol::new(e, "deposit_liquidity"), token),
-            (share_amount as i128, amount as i128)
+            (share_amount as i128, amount as i128),
         );
     }
 
@@ -93,7 +93,7 @@ impl PoolEvents for Events {
         let e = self.env();
         e.events().publish(
             (Symbol::new(e, "withdraw_liquidity"), token),
-            (share_amount as i128, amount as i128)
+            (share_amount as i128, amount as i128),
         );
     }
 
@@ -104,7 +104,7 @@ impl PoolEvents for Events {
         token_out: Address,
         in_amount: u128,
         out_amount: u128,
-        fee_amount: u128
+        fee_amount: u128,
     ) {
         // topics
         // [
@@ -123,11 +123,11 @@ impl PoolEvents for Events {
         let e = self.env();
         e.events().publish(
             (Symbol::new(e, "trade"), token_in, token_out, user),
-            (in_amount as i128, out_amount as i128, fee_amount as i128)
+            (in_amount as i128, out_amount as i128, fee_amount as i128),
         );
     }
 
-    fn rebalance(&self, delta_a: i128, new_reserve_a: u128) {
+    fn rebalance(&self, delta_a: i128, ts: u64) {
         // topics
         // [
         //   "rebalance": Symbol, // event identifier
@@ -139,7 +139,8 @@ impl PoolEvents for Events {
         //   pool_price: i128,      // amount of tokens withdrawn from the pool for assetA
         // ]
         let e = self.env();
-        e.events().publish((Symbol::new(e, "rebalance"),), (delta_a, new_reserve_a as i128));
+        e.events()
+            .publish((Symbol::new(e, "rebalance"),), (delta_a, ts));
     }
 
     fn kill_deposit(&self) {

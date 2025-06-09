@@ -1,9 +1,9 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::testutils::{ Setup, TestConfig };
-use soroban_sdk::testutils::{ Address as _, AuthorizedFunction, AuthorizedInvocation, Events };
-use soroban_sdk::{ vec, Address, Error, IntoVal, Symbol, Val, Vec };
+use crate::testutils::{Setup, TestConfig};
+use soroban_sdk::testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation, Events};
+use soroban_sdk::{vec, Address, Error, IntoVal, Symbol, Val, Vec};
 use utils::test_utils::jump;
 
 // from drift
@@ -38,7 +38,7 @@ use utils::test_utils::jump;
 //         &mut spot_market,
 //         0
 //     ).unwrap();
-    
+
 //     assert_eq!(if_stake.unchecked_if_shares(), amount as u128);
 //     if_balance += amount;
 
@@ -112,13 +112,18 @@ fn test_deposit() {
     let user = setup.users[0];
     let amount_to_deposit = 100_0000000_u128;
 
-    setup.token_a_admin_client.mint(&user, &(amount_to_deposit as i128));
+    setup
+        .token_a_admin_client
+        .mint(&user, &(amount_to_deposit as i128));
 
     setup.contract.deposit(&user, &amount_to_deposit);
 
     // Token was transferred from user to Insurance Fund
     assert_eq!(setup.token_a.balance(&user), 0);
-    assert_eq!(setup.token_a.balance(&setup.contract.address), amount_to_deposit as i128);
+    assert_eq!(
+        setup.token_a.balance(&setup.contract.address),
+        amount_to_deposit as i128
+    );
 
     // Insurance Fund issued shares
     assert_eq!(setup.contract.get_, 0);
@@ -145,7 +150,9 @@ fn test_deposit_during_withdraw() {
     let setup = Setup::default();
     let user = Address::generate(&setup.env);
 
-    setup.contract.deposit(&user, &setup.token_a.address, &100_0000000_u128);
+    setup
+        .contract
+        .deposit(&user, &setup.token_a.address, &100_0000000_u128);
 }
 
 #[test]
@@ -154,7 +161,9 @@ fn test_request_withdraw_during_unstaking_period() {
     let setup = Setup::default();
     let user = Address::generate(&setup.env);
 
-    setup.contract.deposit(&user, &setup.token_a.address, &100_0000000_u128);
+    setup
+        .contract
+        .deposit(&user, &setup.token_a.address, &100_0000000_u128);
 }
 
 // paused ops
@@ -165,7 +174,7 @@ fn test_deposit_killed() {
         &(TestConfig {
             mint_to_user: i128::MAX,
             ..TestConfig::default()
-        })
+        }),
     );
     let e = setup.env;
     let insurance_fund = setup.contract;
@@ -179,11 +188,14 @@ fn test_deposit_killed() {
     insurance_fund.kill_deposit(&admin);
     assert_eq!(
         vec![&e, e.events().all().last().unwrap()],
-        vec![&e, (
-            insurance_fund.address.clone(),
-            (Symbol::new(&e, "kill_deposit"),).into_val(&e),
-            Val::VOID.into_val(&e),
-        )]
+        vec![
+            &e,
+            (
+                insurance_fund.address.clone(),
+                (Symbol::new(&e, "kill_deposit"),).into_val(&e),
+                Val::VOID.into_val(&e),
+            )
+        ]
     );
     assert_eq!(insurance_fund.get_is_killed_deposit(), true);
     assert_eq!(insurance_fund.get_is_killed_request_payout(), false);
@@ -192,18 +204,23 @@ fn test_deposit_killed() {
     let desired_amount = 1_0000000;
 
     assert_eq!(
-        insurance_fund.try_deposit(&user1, &desired_amount).unwrap_err(),
+        insurance_fund
+            .try_deposit(&user1, &desired_amount)
+            .unwrap_err(),
         Ok(Error::from_contract_error(205))
     );
 
     insurance_fund.unkill_deposit(&admin);
     assert_eq!(
         vec![&e, e.events().all().last().unwrap()],
-        vec![&e, (
-            insurance_fund.address.clone(),
-            (Symbol::new(&e, "unkill_deposit"),).into_val(&e),
-            Val::VOID.into_val(&e),
-        )]
+        vec![
+            &e,
+            (
+                insurance_fund.address.clone(),
+                (Symbol::new(&e, "unkill_deposit"),).into_val(&e),
+                Val::VOID.into_val(&e),
+            )
+        ]
     );
     assert_eq!(insurance_fund.get_is_killed_deposit(), false);
     assert_eq!(insurance_fund.get_is_killed_request_payout(), false);
@@ -217,7 +234,7 @@ fn test_request_payout_killed() {
         &(TestConfig {
             mint_to_user: i128::MAX,
             ..TestConfig::default()
-        })
+        }),
     );
     let e = setup.env;
     let insurance_fund = setup.contract;
@@ -231,11 +248,14 @@ fn test_request_payout_killed() {
     insurance_fund.kill_request_payout(&admin);
     assert_eq!(
         vec![&e, e.events().all().last().unwrap()],
-        vec![&e, (
-            insurance_fund.address.clone(),
-            (Symbol::new(&e, "kill_request_payout"),).into_val(&e),
-            Val::VOID.into_val(&e),
-        )]
+        vec![
+            &e,
+            (
+                insurance_fund.address.clone(),
+                (Symbol::new(&e, "kill_request_payout"),).into_val(&e),
+                Val::VOID.into_val(&e),
+            )
+        ]
     );
     assert_eq!(insurance_fund.get_is_killed_deposit(), false);
     assert_eq!(insurance_fund.get_is_killed_request_payout(), true);
@@ -244,18 +264,23 @@ fn test_request_payout_killed() {
     let desired_amount = 1_0000000;
 
     assert_eq!(
-        insurance_fund.try_request_payout(&user1, &desired_amount).unwrap_err(),
+        insurance_fund
+            .try_request_payout(&user1, &desired_amount)
+            .unwrap_err(),
         Ok(Error::from_contract_error(209))
     );
 
     insurance_fund.unkill_request_payout(&admin);
     assert_eq!(
         vec![&e, e.events().all().last().unwrap()],
-        vec![&e, (
-            insurance_fund.address.clone(),
-            (Symbol::new(&e, "unkill_request_payout"),).into_val(&e),
-            Val::VOID.into_val(&e),
-        )]
+        vec![
+            &e,
+            (
+                insurance_fund.address.clone(),
+                (Symbol::new(&e, "unkill_request_payout"),).into_val(&e),
+                Val::VOID.into_val(&e),
+            )
+        ]
     );
     assert_eq!(insurance_fund.get_is_killed_deposit(), false);
     assert_eq!(insurance_fund.get_is_killed_request_payout(), false);
@@ -271,11 +296,14 @@ fn test_kill_deposit_event() {
     insurance_fund.kill_deposit(&setup.admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            insurance_fund.address.clone(),
-            (Symbol::new(&setup.env, "kill_deposit"),).into_val(&setup.env),
-            ().into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                insurance_fund.address.clone(),
+                (Symbol::new(&setup.env, "kill_deposit"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            )
+        ]
     );
 }
 
@@ -287,11 +315,14 @@ fn test_kill_request_payout_event() {
     insurance_fund.kill_request_payout(&setup.admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            insurance_fund.address.clone(),
-            (Symbol::new(&setup.env, "kill_request_payout"),).into_val(&setup.env),
-            ().into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                insurance_fund.address.clone(),
+                (Symbol::new(&setup.env, "kill_request_payout"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            )
+        ]
     );
 }
 
@@ -303,11 +334,14 @@ fn test_unkill_deposit_event() {
     insurance_fund.unkill_deposit(&setup.admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            insurance_fund.address.clone(),
-            (Symbol::new(&setup.env, "unkill_deposit"),).into_val(&setup.env),
-            ().into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                insurance_fund.address.clone(),
+                (Symbol::new(&setup.env, "unkill_deposit"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            )
+        ]
     );
 }
 
@@ -319,10 +353,13 @@ fn test_unkill_request_payout_event() {
     insurance_fund.unkill_request_payout(&setup.admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            insurance_fund.address.clone(),
-            (Symbol::new(&setup.env, "unkill_request_payout"),).into_val(&setup.env),
-            ().into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                insurance_fund.address.clone(),
+                (Symbol::new(&setup.env, "unkill_request_payout"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            )
+        ]
     );
 }

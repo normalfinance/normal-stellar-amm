@@ -1,19 +1,19 @@
 //! Implementation of the Soroban token interface.
-use crate::allowance::{ read_allowance, spend_allowance, write_allowance };
-use crate::balance::{ read_balance, receive_balance, spend_balance };
+use crate::allowance::{read_allowance, spend_allowance, write_allowance};
+use crate::balance::{read_balance, receive_balance, spend_balance};
 use crate::errors::TokenError;
 use crate::interface::UpgradeableContract;
-use crate::metadata::{ read_decimal, read_name, read_symbol, write_metadata };
-use crate::pool::{ checkpoint_user_incentives, checkpoint_user_working_balance };
-use access_control::access::{ AccessControl, AccessControlTrait };
+use crate::metadata::{read_decimal, read_name, read_symbol, write_metadata};
+use crate::pool::{checkpoint_user_incentives, checkpoint_user_working_balance};
+use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::errors::AccessControlError;
 use access_control::events::Events as AccessControlEvents;
 use access_control::interface::TransferableContract;
 use access_control::management::SingleAddressManagementTrait;
-use access_control::role::{ Role, SymbolRepresentation };
+use access_control::role::{Role, SymbolRepresentation};
 use access_control::transfer::TransferOwnershipTrait;
-use soroban_sdk::token::{ self, Interface as _ };
-use soroban_sdk::{ contract, contractimpl, panic_with_error, Address, BytesN, Env, String, Symbol };
+use soroban_sdk::token::{self, Interface as _};
+use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env, String, Symbol};
 use soroban_token_sdk::metadata::TokenMetadata;
 use soroban_token_sdk::TokenUtils;
 use utils::bump::bump_instance;
@@ -39,11 +39,14 @@ impl Token {
             panic_with_error!(&e, TokenError::DecimalTooLarge);
         }
 
-        write_metadata(&e, TokenMetadata {
-            decimal,
-            name,
-            symbol,
-        })
+        write_metadata(
+            &e,
+            TokenMetadata {
+                decimal,
+                name,
+                symbol,
+            },
+        )
     }
 
     pub fn mint(e: Env, to: Address, amount: i128) {
@@ -73,7 +76,9 @@ impl token::Interface for Token {
         bump_instance(&e);
 
         write_allowance(&e, from.clone(), spender.clone(), amount, expiration_ledger);
-        TokenUtils::new(&e).events().approve(from, spender, amount, expiration_ledger);
+        TokenUtils::new(&e)
+            .events()
+            .approve(from, spender, amount, expiration_ledger);
     }
 
     fn balance(e: Env, id: Address) -> i128 {
@@ -174,7 +179,8 @@ impl UpgradeableContract for Token {
     fn upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32>) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-        e.deployer().update_current_contract_wasm(new_wasm_hash.clone());
+        e.deployer()
+            .update_current_contract_wasm(new_wasm_hash.clone());
     }
 }
 
@@ -250,11 +256,10 @@ impl TransferableContract for Token {
         let access_control = AccessControl::new(&e);
         let role = Role::from_symbol(&e, role_name);
         match access_control.get_transfer_ownership_deadline(&role) {
-            0 =>
-                match access_control.get_role_safe(&role) {
-                    Some(address) => address,
-                    None => panic_with_error!(&e, AccessControlError::RoleNotFound),
-                }
+            0 => match access_control.get_role_safe(&role) {
+                Some(address) => address,
+                None => panic_with_error!(&e, AccessControlError::RoleNotFound),
+            },
             _ => access_control.get_future_address(&role),
         }
     }

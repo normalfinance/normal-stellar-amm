@@ -1,22 +1,16 @@
 use crate::errors::RewardsError;
 use crate::storage::{
-    LPTokenStorageTrait,
-    PoolIncentiveData,
-    PoolIncentivesStorageTrait,
-    PoolRewardConfig,
-    RewardInvDataStorageTrait,
-    RewardTokenStorageTrait,
-    Storage,
-    UserIncentiveData,
-    UserIncentivesStorageTrait,
-    WorkingBalancesStorageTrait,
+    LPTokenStorageTrait, PoolIncentiveConfig, PoolIncentiveData, PoolIncentivesStorageTrait,
+    RewardInvDataStorageTrait, RewardTokenStorageTrait, Storage, UserIncentiveData,
+    UserIncentivesStorageTrait, WorkingBalancesStorageTrait,
 };
 use crate::IncentivesConfig;
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
-use soroban_sdk::{ panic_with_error, token::TokenClient as Client, Address, Env, Vec };
+use soroban_sdk::{panic_with_error, token::TokenClient as Client, Address, Env, Vec};
 use utils::bump::bump_instance;
 use utils::constant::REWARD_PRECISION;
+use utils::math::safe_math::SafeMath;
 use utils::token::transfer_token;
 
 // `Manager` orchestrates the reward logic, pulling data and methods from `Storage`.
@@ -44,29 +38,20 @@ impl Manager {
         &self,
         user: &Address,
         share_balance: u128,
-        total_share: u128
+        total_share: u128,
     ) -> u128 {
-        // b_u = 2.5 * min(0.4 * b_u + 0.6 * S * w_i / W, b_u)
-        // let lock_balance = self.get_user_boost_balance(&user);
-        // let total_locked = self.get_total_locked();
-
-        let mut adjusted_balance = share_balance;
-        // if total_locked > 0 {
-        //     adjusted_balance +=
-        //         3 * lock_balance.fixed_mul_floor(&self.env, &total_share, &total_locked) / 2;
-        // }
         let max_effective_balance = (share_balance * 5) / 2;
 
         // min(adjusted_balance, max_effective_balance)
-        if adjusted_balance > max_effective_balance {
+        if share_balance > max_effective_balance {
             max_effective_balance
         } else {
-            adjusted_balance
+            share_balance
         }
     }
 
     // ------------------------------------
-    // Reward configuration
+    // Incentive configuration
     // ------------------------------------
 
     // Sets the reward configuration for the pool.
@@ -84,7 +69,7 @@ impl Manager {
         &mut self,
         total_shares: u128,
         mut reward_expired_at: u64,
-        reward_tps: u128
+        reward_tps: u128,
     ) {
         let now = self.env.ledger().timestamp();
         let old_config = self.storage.get_pool_incentive_config();
@@ -109,10 +94,13 @@ impl Manager {
         let working_supply = self.get_working_supply(total_shares);
 
         // Bring pool data up-to-date
-        self.update_incentives_data(working_supply);
+        self.update_incentives_data(working_supply, 0, 0);
         self.snapshot_incentives_data(working_supply);
 
-        let config = PoolRewardConfig { reward_tps, reward_expired_at };
+        let config = PoolIncentiveConfig {
+            reward_tps,
+            reward_expired_at,
+        };
 
         bump_instance(&self.env);
         self.storage.set_pool_incentive_config(&config);
@@ -133,39 +121,39 @@ impl Manager {
     // * The updated `PoolIncentiveData` instance.
     fn update_incentives_data(
         &mut self,
-        user: &Address,
         working_supply: u128,
-        lp_supply: u128,
-        fee_growth_a: u128
+        token_a_fee: u128,
+        token_b_fee: u128,
     ) -> PoolIncentiveData {
         let config = self.storage.get_pool_incentive_config();
         let mut data = self.storage.get_pool_incentive_data();
         let now = self.env.ledger().timestamp();
 
-        // LP fees
-        let lp_token_client = SorobanTokenClient::new(&self.env, &self.storage.get_lp_token());
-        let total_lp_supply = 0;
-
-        let fee_growth_a = fees_a / total_lp_supply;
-        let fee_growth_b = fees_b / total_lp_supply;
+        let fee_growth_a = token_a_fee.checked_div(working_supply).unwrap_or(0);
+        let fee_growth_b = token_b_fee.checked_div(working_supply).unwrap_or(0);
 
         if now <= config.reward_expired_at {
             // config not expired yet, yield rewards
             let generated_tokens = ((now - data.rewards_last_time) as u128) * config.reward_tps;
-            self.create_new_incentives_data(generated_tokens, working_supply, PoolIncentiveData {
-                block: data.block + 1,
-                accumulated_rewards: data.accumulated_rewards + generated_tokens,
-                claimed_rewards: data.claimed_rewards,
-                rewards_last_time: now,
-                fee_growth_a_per_lp: data.fee_growth_a_per_lp + fee_growth_a,
-                fee_growth_b_per_lp: data.fee_growth_b_per_lp + fee_growth_b,
-            })
+            self.create_new_incentives_data(
+                generated_tokens,
+                working_supply,
+                PoolIncentiveData {
+                    block: data.block + 1,
+                    accumulated_rewards: data.accumulated_rewards + generated_tokens,
+                    claimed_rewards: data.claimed_rewards,
+                    rewards_last_time: now,
+                    fee_growth_a_per_lp: data.fee_growth_a_per_lp + fee_growth_a,
+                    fee_growth_b_per_lp: data.fee_growth_b_per_lp + fee_growth_b,
+                },
+            )
         } else {
             // Already expired
             if data.rewards_last_time < config.reward_expired_at {
                 // last snapshot was before config expiration - yield up to expiration
-                let generated_tokens =
-                    ((config.reward_expired_at - data.rewards_last_time) as u128) * config.tps;
+                let generated_tokens = ((config.reward_expired_at - data.rewards_last_time)
+                    as u128)
+                    * config.reward_tps;
                 data = self.create_new_incentives_data(
                     generated_tokens,
                     working_supply,
@@ -176,7 +164,18 @@ impl Manager {
                         rewards_last_time: config.reward_expired_at,
                         fee_growth_a_per_lp: data.fee_growth_a_per_lp + fee_growth_a,
                         fee_growth_b_per_lp: data.fee_growth_b_per_lp + fee_growth_b,
-                    }
+                    },
+                );
+            } else {
+                // Only update lp fee growth
+                self.create_new_incentives_data(
+                    0,
+                    working_supply,
+                    PoolIncentiveData {
+                        fee_growth_a_per_lp: data.fee_growth_a_per_lp + fee_growth_a,
+                        fee_growth_b_per_lp: data.fee_growth_b_per_lp + fee_growth_b,
+                        ..data
+                    },
                 );
             }
 
@@ -201,16 +200,22 @@ impl Manager {
         let data = self.storage.get_pool_incentive_data();
         let now = self.env.ledger().timestamp();
 
-        if data.last_time == now {
+        if data.rewards_last_time == now {
             // snapshot already made
             data
         } else {
-            self.create_new_incentives_data(0, working_supply, PoolIncentiveData {
-                block: data.block + 1,
-                accumulated: data.accumulated,
-                claimed: data.claimed,
-                last_time: now,
-            })
+            self.create_new_incentives_data(
+                0,
+                working_supply,
+                PoolIncentiveData {
+                    block: data.block + 1,
+                    accumulated_rewards: data.accumulated_rewards,
+                    claimed_rewards: data.claimed_rewards,
+                    rewards_last_time: now,
+                    fee_growth_a_per_lp: data.fee_growth_a_per_lp,
+                    fee_growth_b_per_lp: data.fee_growth_b_per_lp,
+                },
+            )
         }
     }
 
@@ -229,31 +234,43 @@ impl Manager {
         &mut self,
         pool_data: &PoolIncentiveData,
         user: &Address,
-        user_balance_shares: u128
+        user_balance_shares: u128,
     ) -> UserIncentiveData {
         if let Some(user_data) = self.storage.get_user_incentive_data(user) {
-            // If no new accumulation, just return
-            if user_data.pool_accumulated_rewards == pool_data.accumulated_rewards {
+            // If no new accumulation or fee growth, just return
+            if user_data.pool_accumulated_rewards == pool_data.accumulated_rewards
+                || (user_data.fee_checkpoint_a == pool_data.fee_growth_a_per_lp
+                    && user_data.fee_checkpoint_a == pool_data.fee_growth_a_per_lp)
+            {
                 return user_data;
             }
 
-            // let fee = self.calculate_user_fee(
-            //     // user_data.last_block + 1,
-            //     // pool_data.block,
-            //     user_balance_shares
-            // );
+            let fee_checkpoint_a = pool_data.fee_growth_a_per_lp - user_data.fee_checkpoint_a;
+            let fee_checkpoint_b = pool_data.fee_growth_b_per_lp - user_data.fee_checkpoint_b;
 
             if user_balance_shares == 0 {
                 // No new reward
-                return self.create_new_user_data(user, pool_data, user_data.rewards_to_claim, fee, fee);
+                return self.create_new_user_data(
+                    user,
+                    pool_data,
+                    user_data.rewards_to_claim,
+                    fee_checkpoint_a,
+                    fee_checkpoint_b,
+                );
             }
 
             let reward = self.calculate_user_reward(
                 user_data.last_block + 1,
                 pool_data.block,
-                user_balance_shares
+                user_balance_shares,
             );
-            self.create_new_user_data(user, pool_data, user_data.rewards_to_claim + reward, fee, fee)
+            self.create_new_user_data(
+                user,
+                pool_data,
+                user_data.rewards_to_claim + reward,
+                fee_checkpoint_a,
+                fee_checkpoint_b,
+            )
         } else {
             self.create_new_user_data(user, pool_data, 0, 0, 0)
         }
@@ -274,17 +291,11 @@ impl Manager {
         &mut self,
         start_block: u64,
         end_block: u64,
-        user_share: u128
+        user_share: u128,
     ) -> u128 {
         let result = self.calculate_reward(start_block, end_block);
         // scale by user_share / REWARD_PRECISION
         (result * user_share) / REWARD_PRECISION
-    }
-
-    fn calculate_user_fee(&mut self) -> u128 {
-        let result = self.calculate_fee();
-        // scale by REWARD_PRECISION
-        (result * 1) / REWARD_PRECISION
     }
 
     // ------------------------------------
@@ -306,21 +317,27 @@ impl Manager {
         &mut self,
         user: &Address,
         total_shares: u128,
-        user_balance_shares: u128
+        user_balance_shares: u128,
     ) -> u128 {
         // update pool data & calculate reward
-        self.checkpoint_user(user, total_shares, user_balance_shares).rewards_to_claim
+        self.checkpoint_user(user, total_shares, user_balance_shares, 0, 0)
+            .rewards_to_claim
     }
 
     pub fn get_fee_amounts_to_claim(
         &mut self,
         user: &Address,
-        total_shares: u128,
-        user_balance_shares: u128
-    ) -> (u128, u128, u128) {
+        total_lp_tokens: u128,
+        user_balance_shares: u128,
+    ) -> (u128, u128) {
         // update pool data & calculate reward
-        let checkpoint = self.checkpoint_user(user, total_shares, user_balance_shares);
-        (checkpoint.fee_checkpoint_a, checkpoint.fee_checkpoint_b)
+        let checkpoint = self.checkpoint_user(user, total_lp_tokens, user_balance_shares, 0, 0);
+        let pool_data = self.storage.get_pool_incentive_data();
+        let owed_a =
+            user_balance_shares * (pool_data.fee_growth_a_per_lp - checkpoint.fee_checkpoint_a);
+        let owed_b =
+            user_balance_shares * (pool_data.fee_growth_a_per_lp - checkpoint.fee_checkpoint_b);
+        (owed_a, owed_b)
     }
 
     // Actually claims the user's LP fees and reward and transfers tokens.
@@ -328,16 +345,18 @@ impl Manager {
         &mut self,
         user: &Address,
         total_shares: u128,
-        user_balance_shares: u128
+        user_balance_shares: u128,
+        token_a: &Address,
+        token_b: &Address,
     ) -> (u128, u128, u128) {
         // update pool data & calculate reward
         let UserIncentiveData {
             last_block,
-            pool_accumulated,
-            to_claim: reward_amount,
-            checkpoint_a: token_a_fee_amount,
-            checkpoint_b: token_b_fee_amount,
-        } = self.checkpoint_user(user, total_shares, user_balance_shares);
+            pool_accumulated_rewards,
+            rewards_to_claim: reward_amount,
+            fee_checkpoint_a,
+            fee_checkpoint_b,
+        } = self.checkpoint_user(user, total_shares, user_balance_shares, 0, 0);
 
         // Increase total claimed in the pool
         let mut pool_data = self.storage.get_pool_incentive_data();
@@ -345,61 +364,61 @@ impl Manager {
         self.storage.set_pool_incentive_data(&pool_data);
 
         // Transfer tokens
-        let reward_token = self.storage.get_reward_token();
-        transfer_token(
-            &e,
-            &reward_token,
-            &self.env.current_contract_address(),
-            user,
-            &(reward_amount as i128)
-        );
+        if reward_amount > 0 {
+            let reward_token = self.storage.get_reward_token();
+            transfer_token(
+                &self.env,
+                &reward_token,
+                &self.env.current_contract_address(),
+                user,
+                &(reward_amount as i128),
+            );
+        }
 
-        Client::new(&self.env, &self.config.token_a).transfer(
-            &self.env.current_contract_address(),
-            user,
-            &(token_a_fee_amount as i128)
-        );
+        let owed_a = user_balance_shares * (pool_data.fee_growth_a_per_lp - fee_checkpoint_a);
+        if owed_a > 0 {
+            Client::new(&self.env, token_a).transfer(
+                &self.env.current_contract_address(),
+                user,
+                &(owed_a as i128),
+            );
+        }
 
-        Client::new(&self.env, &self.config.token_b).transfer(
-            &self.env.current_contract_address(),
-            user,
-            &(token_b_fee_amount as i128)
-        );
+        let owed_b = user_balance_shares * (pool_data.fee_growth_a_per_lp - fee_checkpoint_b);
+        if owed_b > 0 {
+            Client::new(&self.env, token_b).transfer(
+                &self.env.current_contract_address(),
+                user,
+                &(owed_b as i128),
+            );
+        }
 
         // Reset user incentives
         let new_data = UserIncentiveData {
             last_block,
-            pool_accumulated,
-            to_claim: 0,
-            checkpoint_a: 0,
-            checkpoint_b: 0,
+            pool_accumulated_rewards,
+            rewards_to_claim: 0,
+            fee_checkpoint_a: pool_data.fee_growth_a_per_lp,
+            fee_checkpoint_b: pool_data.fee_growth_b_per_lp,
         };
         self.storage.set_user_incentive_data(user, &new_data);
 
-        (reward_amount, token_a_fee_amount, token_b_fee_amount)
+        (reward_amount, owed_a, owed_b)
     }
 
     // Forces an update of the user's incentive data based on the new working balance.
     pub fn checkpoint_user(
         &mut self,
         user: &Address,
-        total_shares: u128,
+        total_lp_tokens: u128,
         user_balance_shares: u128,
-        total_token_a_fees: u128,
-        total_token_b_fees: u128
+        token_a_fees: u128,
+        token_b_fees: u128,
     ) -> UserIncentiveData {
-        let (working_balance, new_working_supply) = self.update_working_balance(
-            user,
-            total_shares,
-            user_balance_shares
-        );
+        let (working_balance, new_working_supply) =
+            self.update_working_balance(user, total_lp_tokens, user_balance_shares);
 
-        let pool_data = self.update_incentives_data(
-            new_working_supply,
-            0,
-            total_token_a_fees,
-            total_token_b_fees
-        );
+        let pool_data = self.update_incentives_data(new_working_supply, token_a_fees, token_b_fees);
         let user_data = self.update_user_incentives(&pool_data, user, working_balance);
 
         // Bump storage for the user's data
@@ -433,16 +452,13 @@ impl Manager {
         &mut self,
         user: &Address,
         total_shares: u128,
-        user_balance_shares: u128
+        user_balance_shares: u128,
     ) -> (u128, u128) {
         let prev_working_balance = self.get_working_balance(user, user_balance_shares);
         let prev_working_supply = self.get_working_supply(total_shares);
 
-        let working_balance = self.calculate_effective_balance(
-            user,
-            user_balance_shares,
-            total_shares
-        );
+        let working_balance =
+            self.calculate_effective_balance(user, user_balance_shares, total_shares);
 
         let new_working_supply = prev_working_supply + working_balance - prev_working_balance;
         self.storage.set_working_supply(new_working_supply);
@@ -487,15 +503,8 @@ impl Manager {
     // * `page_number` - The number of the page.
     // * `aggregated_page` - The aggregated page data.
     fn set_reward_inv_data(&mut self, pow: u32, page_number: u64, aggregated_page: Vec<u128>) {
-        self.storage.set_reward_inv_data(pow, page_number, aggregated_page);
-    }
-
-    // ------------------------------------
-    // Reward calculation by blocks
-    // ------------------------------------
-
-    fn calculate_fee(&mut self) -> u128 {
-        0
+        self.storage
+            .set_reward_inv_data(pow, page_number, aggregated_page);
     }
 
     // ------------------------------------
@@ -613,7 +622,7 @@ impl Manager {
         &mut self,
         generated_tokens: u128,
         working_supply: u128,
-        new_data: PoolIncentiveData
+        new_data: PoolIncentiveData,
     ) -> PoolIncentiveData {
         // Persist the new pool data
         self.storage.set_pool_incentive_data(&new_data);
@@ -628,15 +637,15 @@ impl Manager {
         user: &Address,
         pool_data: &PoolIncentiveData,
         rewards_to_claim: u128,
-        checkpoint_a: u128,
-        checkpoint_b: u128
+        fee_checkpoint_a: u128,
+        fee_checkpoint_b: u128,
     ) -> UserIncentiveData {
         let new_data = UserIncentiveData {
             last_block: pool_data.block,
-            pool_accumulated: pool_data.accumulated_rewards,
+            pool_accumulated_rewards: pool_data.accumulated_rewards,
             rewards_to_claim,
-            checkpoint_a,
-            checkpoint_b,
+            fee_checkpoint_a,
+            fee_checkpoint_b,
         };
         self.storage.set_user_incentive_data(user, &new_data);
         new_data
@@ -648,20 +657,20 @@ impl Manager {
 
     pub fn get_total_accumulated_reward(&mut self, total_shares: u128) -> u128 {
         let working_supply = self.get_working_supply(total_shares);
-        let data = self.update_incentives_data(working_supply);
+        let data = self.update_incentives_data(working_supply, 0, 0);
         data.accumulated_rewards
     }
 
     pub fn get_total_claimed_reward(&mut self, total_shares: u128) -> u128 {
         let working_supply = self.get_working_supply(total_shares);
-        let data = self.update_incentives_data(working_supply);
+        let data = self.update_incentives_data(working_supply, 0, 0);
         data.claimed_rewards
     }
 
     pub fn get_total_configured_reward(&mut self, total_shares: u128) -> u128 {
         let config = self.storage.get_pool_incentive_config();
         let working_supply = self.get_working_supply(total_shares);
-        let data = self.update_incentives_data(working_supply);
+        let data = self.update_incentives_data(working_supply, 0, 0);
         let rewarded_amount = data.accumulated_rewards;
 
         let now = self.env.ledger().timestamp();

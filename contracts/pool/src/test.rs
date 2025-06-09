@@ -2,57 +2,34 @@
 extern crate std;
 
 use rand::rngs::StdRng;
-use rand::{ Rng, SeedableRng };
-use utils::constant::{ PERCENTAGE_PRECISION_U64, PRICE_PRECISION, PRICE_PRECISION_I128 };
-use utils::oracle::{
-    OracleGuardRails,
-    PriceDivergenceGuardRails,
-    ValidityGuardRails,
-};
+use rand::{Rng, SeedableRng};
+use utils::constant::{PERCENTAGE_PRECISION_U64, PRICE_PRECISION, PRICE_PRECISION_I128};
+use utils::oracle::{OracleGuardRails, PriceDivergenceGuardRails, ValidityGuardRails};
 
 use crate::testutils::{
-    create_pool_contract,
-    create_token_contract,
-    get_token_admin_client,
-    install_token_wasm,
-    Setup,
+    create_pool_contract, create_token_contract, get_token_admin_client, install_token_wasm, Setup,
     TestConfig,
 };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
-use sep_40_oracle::testutils::{ Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM };
+use sep_40_oracle::testutils::{Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM};
 use sep_40_oracle::Asset;
 use soroban_fixed_point_math::FixedPoint;
-use soroban_sdk::{ String };
+use soroban_sdk::String;
 use utils::storage::{
-    InitializeAllParams,
-    InitializeParams,
-    OraclePair,
-    PoolTier,
-    PrivilegedAddresses,
-    RewardConfig,
+    InitializeAllParams, InitializeParams, OraclePair, PoolTier, PrivilegedAddresses, RewardConfig,
     TokenInitInfo,
 };
 // use sep_40_oracle::Asset;
 use core::cmp::min;
-use soroban_sdk::testutils::{ AuthorizedFunction, AuthorizedInvocation, Events };
+use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Events};
 use soroban_sdk::token::{
-    StellarAssetClient as SorobanTokenAdminClient,
-    TokenClient as SorobanTokenClient,
+    StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
 use soroban_sdk::{
-    symbol_short,
-    testutils::Address as _,
-    vec,
-    Address,
-    Env,
-    Error,
-    IntoVal,
-    Symbol,
-    Val,
-    Vec,
+    symbol_short, testutils::Address as _, vec, Address, Env, Error, IntoVal, Symbol, Val, Vec,
 };
 use token_share::Client as ShareTokenClient;
-use utils::test_utils::{ assert_approx_eq_abs, install_dummy_wasm, jump };
+use utils::test_utils::{assert_approx_eq_abs, install_dummy_wasm, jump};
 
 #[test]
 fn test() {
@@ -61,7 +38,7 @@ fn test() {
             mint_to_user: i128::MAX,
             users_count: 2,
             ..TestConfig::default()
-        })
+        }),
     );
     let e = setup.env;
     let admin = setup.admin;
@@ -77,7 +54,8 @@ fn test() {
     let total_reward_1 = reward_1_tps * 60;
     let amount_to_deposit = 100_0000000; // 100.00
 
-    let target_price = setup.quote_oracle_price
+    let target_price = setup
+        .quote_oracle_price
         .fixed_div_floor(setup.base_oracle_price, PRICE_PRECISION_I128)
         .unwrap();
     let expected_mint_amount = (amount_to_deposit as i128)
@@ -85,40 +63,46 @@ fn test() {
         .unwrap();
 
     liq_pool.deposit(&admin, &amount_to_deposit);
-    assert_eq!(e.auths()[0], (
-        admin.clone(),
-        AuthorizedInvocation {
-            function: AuthorizedFunction::Contract((
-                liq_pool.address.clone(),
-                Symbol::new(&e, "deposit"),
-                Vec::from_array(&e, [admin.to_val(), amount_to_deposit.into_val(&e)]),
-            )),
-            sub_invocations: std::vec![
-                AuthorizedInvocation {
-                    function: AuthorizedFunction::Contract((
-                        token2.address.clone(),
-                        Symbol::new(&e, "transfer"),
-                        Vec::from_array(&e, [
-                            admin.to_val(),
-                            liq_pool.address.to_val(),
-                            (amount_to_deposit as i128).into_val(&e),
-                        ]),
-                    )),
-                    sub_invocations: std::vec![],
-                } // AuthorizedInvocation {
-                //     function: AuthorizedFunction::Contract((
-                //         token1.address.clone(),
-                //         Symbol::new(&e, "mint"),
-                //         Vec::from_array(&e, [
-                //             liq_pool.address.to_val(),
-                //             (expected_mint_amount as i128).into_val(&e),
-                //         ]),
-                //     )),
-                //     sub_invocations: std::vec![],
-                // }
-            ],
-        },
-    ));
+    assert_eq!(
+        e.auths()[0],
+        (
+            admin.clone(),
+            AuthorizedInvocation {
+                function: AuthorizedFunction::Contract((
+                    liq_pool.address.clone(),
+                    Symbol::new(&e, "deposit"),
+                    Vec::from_array(&e, [admin.to_val(), amount_to_deposit.into_val(&e)]),
+                )),
+                sub_invocations: std::vec![
+                    AuthorizedInvocation {
+                        function: AuthorizedFunction::Contract((
+                            token2.address.clone(),
+                            Symbol::new(&e, "transfer"),
+                            Vec::from_array(
+                                &e,
+                                [
+                                    admin.to_val(),
+                                    liq_pool.address.to_val(),
+                                    (amount_to_deposit as i128).into_val(&e),
+                                ]
+                            ),
+                        )),
+                        sub_invocations: std::vec![],
+                    } // AuthorizedInvocation {
+                      //     function: AuthorizedFunction::Contract((
+                      //         token1.address.clone(),
+                      //         Symbol::new(&e, "mint"),
+                      //         Vec::from_array(&e, [
+                      //             liq_pool.address.to_val(),
+                      //             (expected_mint_amount as i128).into_val(&e),
+                      //         ]),
+                      //     )),
+                      //     sub_invocations: std::vec![],
+                      // }
+                ],
+            },
+        )
+    );
 
     assert_eq!(token_reward.balance(&admin), 0);
     // 30 seconds passed, half of the reward is available for the user
@@ -132,10 +116,18 @@ fn test() {
 
     // more rewards added with different configs
     let total_reward_2 = reward_2_tps * 100;
-    liq_pool.set_rewards_config(&admin, &e.ledger().timestamp().saturating_add(100), &reward_2_tps);
+    liq_pool.set_rewards_config(
+        &admin,
+        &e.ledger().timestamp().saturating_add(100),
+        &reward_2_tps,
+    );
     jump(&e, 105);
     let total_reward_3 = reward_3_tps * 50;
-    liq_pool.set_rewards_config(&admin, &e.ledger().timestamp().saturating_add(50), &reward_3_tps);
+    liq_pool.set_rewards_config(
+        &admin,
+        &e.ledger().timestamp().saturating_add(50),
+        &reward_3_tps,
+    );
     jump(&e, 500);
     // two rewards available for the user
     assert_eq!(liq_pool.claim(&admin), total_reward_2 + total_reward_3);
@@ -146,10 +138,16 @@ fn test() {
 
     // nBTC
     assert_eq!(token1.balance(&admin), 0);
-    assert_eq!(token1.balance(&liq_pool.address), expected_mint_amount as i128);
+    assert_eq!(
+        token1.balance(&liq_pool.address),
+        expected_mint_amount as i128
+    );
 
     // USDC
-    assert_eq!(token2.balance(&admin), i128::MAX - (amount_to_deposit as i128));
+    assert_eq!(
+        token2.balance(&admin),
+        i128::MAX - (amount_to_deposit as i128)
+    );
     assert_eq!(token2.balance(&liq_pool.address), amount_to_deposit as i128);
 
     // LP token
@@ -164,10 +162,10 @@ fn test() {
 
     // selling quote for base (1 > 0)
     // expected = (1*4) / (100+1) - ((1*4)/(100+1) * (30 / 10_000))
-    assert_eq!(liq_pool.estimate_swap(&1, &0, &swap_in_amount), (
-        expected_swap_result,
-        expected_mint_amount,
-    ));
+    assert_eq!(
+        liq_pool.estimate_swap(&1, &0, &swap_in_amount),
+        (expected_swap_result, expected_mint_amount,)
+    );
     assert_eq!(
         liq_pool.swap(&user1, &1, &0, &swap_in_amount, &expected_swap_result),
         expected_swap_result
@@ -217,9 +215,8 @@ fn test() {
     // Pool should have the initial mint amount, less the swap output, plus the newly minted tokens to balance price
     assert_eq!(
         token1.balance(&liq_pool.address),
-        (expected_mint_amount as i128) -
-            (expected_swap_result as i128) +
-            (expected_new_mint as i128)
+        (expected_mint_amount as i128) - (expected_swap_result as i128)
+            + (expected_new_mint as i128)
     );
 
     // assert_eq!(
@@ -236,27 +233,36 @@ fn test() {
     );
 
     liq_pool.withdraw(&admin, &(expected_share_amount as u128));
-    assert_eq!(e.auths()[0], (
-        admin.clone(),
-        AuthorizedInvocation {
-            function: AuthorizedFunction::Contract((
-                liq_pool.address.clone(),
-                Symbol::new(&e, "withdraw"),
-                Vec::from_array(&e, [
-                    admin.clone().into_val(&e),
-                    (expected_share_amount as u128).into_val(&e),
-                ]),
-            )),
-            sub_invocations: std::vec![AuthorizedInvocation {
+    assert_eq!(
+        e.auths()[0],
+        (
+            admin.clone(),
+            AuthorizedInvocation {
                 function: AuthorizedFunction::Contract((
-                    token_share.address.clone(),
-                    Symbol::new(&e, "burn"),
-                    Vec::from_array(&e, [admin.to_val(), (amount_to_deposit as i128).into_val(&e)]),
+                    liq_pool.address.clone(),
+                    Symbol::new(&e, "withdraw"),
+                    Vec::from_array(
+                        &e,
+                        [
+                            admin.clone().into_val(&e),
+                            (expected_share_amount as u128).into_val(&e),
+                        ]
+                    ),
                 )),
-                sub_invocations: std::vec![],
-            }],
-        },
-    ));
+                sub_invocations: std::vec![AuthorizedInvocation {
+                    function: AuthorizedFunction::Contract((
+                        token_share.address.clone(),
+                        Symbol::new(&e, "burn"),
+                        Vec::from_array(
+                            &e,
+                            [admin.to_val(), (amount_to_deposit as i128).into_val(&e)]
+                        ),
+                    )),
+                    sub_invocations: std::vec![],
+                }],
+            },
+        )
+    );
     // TODO: how do we assert the pool burned token1
 
     jump(&e, 600);
@@ -280,7 +286,7 @@ fn test_strict_receive() {
         &(TestConfig {
             mint_to_user: i128::MAX,
             ..TestConfig::default()
-        })
+        }),
     );
     let user1 = setup.users[0].clone();
     let desired_amount = 100_0000000;
@@ -290,16 +296,20 @@ fn test_strict_receive() {
     //
     let expected_mint_amount = 0_i128; // TOOD:
 
-    assert_eq!(setup.liq_pool.estimate_swap(&1, &0, &swap_in_amount), (
-        expected_swap_result,
-        expected_mint_amount,
-    ));
-    assert_eq!(setup.liq_pool.estimate_swap_strict_receive(&1, &0, &expected_swap_result), (
-        swap_in_amount,
-        0_i128,
-    ));
     assert_eq!(
-        setup.liq_pool.swap_strict_receive(&user1, &1, &0, &expected_swap_result, &swap_in_amount),
+        setup.liq_pool.estimate_swap(&1, &0, &swap_in_amount),
+        (expected_swap_result, expected_mint_amount,)
+    );
+    assert_eq!(
+        setup
+            .liq_pool
+            .estimate_swap_strict_receive(&1, &0, &expected_swap_result),
+        (swap_in_amount, 0_i128,)
+    );
+    assert_eq!(
+        setup
+            .liq_pool
+            .swap_strict_receive(&user1, &1, &0, &expected_swap_result, &swap_in_amount),
         swap_in_amount
     );
 }
@@ -310,27 +320,41 @@ fn test_strict_receive_over_max() {
         &(TestConfig {
             mint_to_user: i128::MAX,
             ..TestConfig::default()
-        })
+        }),
     );
     let user1 = setup.users[0].clone();
     let desired_amount = 100_0000000;
     setup.liq_pool.deposit(&user1, &desired_amount);
 
-    assert!(setup.liq_pool.try_estimate_swap_strict_receive(&1, &0, &100_0000000).is_err());
+    assert!(setup
+        .liq_pool
+        .try_estimate_swap_strict_receive(&1, &0, &100_0000000)
+        .is_err());
+    assert!(setup
+        .liq_pool
+        .try_swap_strict_receive(&user1, &1, &0, &100_0000000, &100_0000000)
+        .is_err());
+    assert!(setup
+        .liq_pool
+        .try_estimate_swap_strict_receive(&1, &0, &4935643)
+        .is_err()); // 99_7000000
     assert!(
-        setup.liq_pool.try_swap_strict_receive(&user1, &1, &0, &100_0000000, &100_0000000).is_err()
-    );
-    assert!(setup.liq_pool.try_estimate_swap_strict_receive(&1, &0, &4935643).is_err()); // 99_7000000
-    assert!(
-        setup.liq_pool.try_swap_strict_receive(&user1, &1, &0, &4935643, &100_0000000).is_err() // 99_7000000
+        setup
+            .liq_pool
+            .try_swap_strict_receive(&user1, &1, &0, &4935643, &100_0000000)
+            .is_err() // 99_7000000
     );
     // maximum we're able to buy is `reserve * (1 - fee) - delta`
     assert_eq!(
-        setup.liq_pool.estimate_swap_strict_receive(&1, &0, &99_6999999),
+        setup
+            .liq_pool
+            .estimate_swap_strict_receive(&1, &0, &99_6999999),
         (99999999900_0000001, 0)
     );
     assert_eq!(
-        setup.liq_pool.swap_strict_receive(&user1, &1, &0, &99_6999999, &99999999900_0000001),
+        setup
+            .liq_pool
+            .swap_strict_receive(&user1, &1, &0, &99_6999999, &99999999900_0000001),
         99999999900_0000001
     );
 }
@@ -341,7 +365,7 @@ fn test_events() {
         &(TestConfig {
             mint_to_user: i128::MAX,
             ..TestConfig::default()
-        })
+        }),
     );
     let e = setup.env;
     let liq_pool = setup.liq_pool;
@@ -353,37 +377,51 @@ fn test_events() {
     liq_pool.deposit(&user1, &amount_to_deposit);
     assert_eq!(
         vec![&e, e.events().all().last().unwrap()],
-        vec![&e, (
-            liq_pool.address.clone(),
-            (Symbol::new(&e, "deposit_liquidity"), token2.address.clone()).into_val(&e),
-            (amount_to_deposit as i128, amount_to_deposit as i128).into_val(&e),
-        )]
+        vec![
+            &e,
+            (
+                liq_pool.address.clone(),
+                (Symbol::new(&e, "deposit_liquidity"), token2.address.clone()).into_val(&e),
+                (amount_to_deposit as i128, amount_to_deposit as i128).into_val(&e),
+            )
+        ]
     );
 
     assert_eq!(liq_pool.swap(&user1, &1, &0, &1, &0), 2);
     assert_eq!(
         vec![&e, e.events().all().last().unwrap()],
-        vec![&e, (
-            liq_pool.address.clone(),
+        vec![
+            &e,
             (
-                Symbol::new(&e, "trade"),
-                token2.address.clone(),
-                token1.address.clone(),
-                user1.clone(),
-            ).into_val(&e),
-            (1_i128, 39485148_i128, 2_i128).into_val(&e),
-        )]
+                liq_pool.address.clone(),
+                (
+                    Symbol::new(&e, "trade"),
+                    token2.address.clone(),
+                    token1.address.clone(),
+                    user1.clone(),
+                )
+                    .into_val(&e),
+                (1_i128, 39485148_i128, 2_i128).into_val(&e),
+            )
+        ]
     );
 
     let amount_out = liq_pool.withdraw(&user1, &amount_to_deposit);
     assert_eq!(amount_out, 1000000100);
     assert_eq!(
         vec![&e, e.events().all().last().unwrap()],
-        vec![&e, (
-            liq_pool.address.clone(),
-            (Symbol::new(&e, "withdraw_liquidity"), token2.address.clone()).into_val(&e),
-            (amount_to_deposit as i128, amount_out as i128).into_val(&e),
-        )]
+        vec![
+            &e,
+            (
+                liq_pool.address.clone(),
+                (
+                    Symbol::new(&e, "withdraw_liquidity"),
+                    token2.address.clone()
+                )
+                    .into_val(&e),
+                (amount_to_deposit as i128, amount_out as i128).into_val(&e),
+            )
+        ]
     );
 }
 
@@ -452,10 +490,10 @@ fn test_custom_fee() {
     // 0.00495049505
     // fee = 0.0396039604 * (10 / 10_000)
     for fee_config in [
-        (0, 396039_u128, 0_i128), // 0%
-        (10, 395643_u128, 0_i128), // 0.1% 0.03956435644
-        (30, 394851_u128, 0_i128), // 0.3% 0.03948514852
-        (100, 392079_u128, 0_i128), // 1% 0.0392079208
+        (0, 396039_u128, 0_i128),    // 0%
+        (10, 395643_u128, 0_i128),   // 0.1% 0.03956435644
+        (30, 394851_u128, 0_i128),   // 0.3% 0.03948514852
+        (100, 392079_u128, 0_i128),  // 1% 0.0392079208
         (1000, 356435_u128, 0_i128), // 10% 0.03564356436
         (3000, 356435_u128, 0_i128), // 30% 0.03564356436
         (5000, 198019_u128, 0_i128), // 50%  0.0198019802
@@ -470,30 +508,36 @@ fn test_custom_fee() {
             &install_token_wasm(&setup.env),
             &String::from_str(&setup.env, "Pool Share Token"),
             &String::from_str(&setup.env, "Pool Share Token"),
-            &Vec::from_array(&setup.env, [
-                setup.token1.address.clone(),
-                setup.token2.address.clone(),
-            ]),
+            &Vec::from_array(
+                &setup.env,
+                [setup.token1.address.clone(), setup.token2.address.clone()],
+            ),
             &setup.token_reward.address,
-            fee_config.0 // ten percent
+            fee_config.0, // ten percent
         );
         pool.deposit(&setup.users[0], &100_0000000);
         assert_eq!(pool.estimate_swap(&1, &0, &1_0000000), (fee_config.1, 0));
-        assert_eq!(pool.swap(&setup.users[0], &1, &0, &1_0000000, &0), fee_config.1);
+        assert_eq!(
+            pool.swap(&setup.users[0], &1, &0, &1_0000000, &0),
+            fee_config.1
+        );
 
         // FIXME:
         // full withdraw & deposit to reset pool reserves
         pool.withdraw(
             &setup.users[0],
-            &(
-                SorobanTokenClient::new(&setup.env, &pool.share_id()).balance(
-                    &setup.users[0]
-                ) as u128
-            )
+            &(SorobanTokenClient::new(&setup.env, &pool.share_id()).balance(&setup.users[0])
+                as u128),
         );
         pool.deposit(&setup.users[0], &100_0000000);
-        assert_eq!(pool.estimate_swap(&1, &0, &1_0000000), (fee_config.1, fee_config.2)); // re-check swap result didn't change
-        assert_eq!(pool.estimate_swap_strict_receive(&1, &0, &fee_config.1), (1_0000000, 0));
+        assert_eq!(
+            pool.estimate_swap(&1, &0, &1_0000000),
+            (fee_config.1, fee_config.2)
+        ); // re-check swap result didn't change
+        assert_eq!(
+            pool.estimate_swap_strict_receive(&1, &0, &fee_config.1),
+            (1_0000000, 0)
+        );
         assert_eq!(
             pool.swap_strict_receive(&setup.users[0], &1, &0, &fee_config.1, &1_0000000),
             1_0000000
@@ -517,7 +561,10 @@ fn test_simple_ongoing_reward() {
     jump(&env, 10);
 
     assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
-    assert_eq!(liq_pool.get_total_accumulated_reward(), TestConfig::default().reward_tps * 10);
+    assert_eq!(
+        liq_pool.get_total_accumulated_reward(),
+        TestConfig::default().reward_tps * 10
+    );
     assert_eq!(liq_pool.get_total_claimed_reward(), 0);
 
     liq_pool.deposit(&users[0], &100);
@@ -527,15 +574,24 @@ fn test_simple_ongoing_reward() {
     jump(&env, 30);
 
     assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
-    assert_eq!(liq_pool.get_total_accumulated_reward(), TestConfig::default().reward_tps * 40);
+    assert_eq!(
+        liq_pool.get_total_accumulated_reward(),
+        TestConfig::default().reward_tps * 40
+    );
     assert_eq!(liq_pool.get_total_claimed_reward(), 0);
 
     assert_eq!(liq_pool.claim(&users[0]), total_reward_1 / 2);
     assert_eq!(token_reward.balance(&users[0]) as u128, total_reward_1 / 2);
 
     assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
-    assert_eq!(liq_pool.get_total_accumulated_reward(), TestConfig::default().reward_tps * 40);
-    assert_eq!(liq_pool.get_total_claimed_reward(), TestConfig::default().reward_tps * 30);
+    assert_eq!(
+        liq_pool.get_total_accumulated_reward(),
+        TestConfig::default().reward_tps * 40
+    );
+    assert_eq!(
+        liq_pool.get_total_claimed_reward(),
+        TestConfig::default().reward_tps * 30
+    );
 
     // 40 seconds passed, reward config ended
     //  5/6 of the reward is available for the user since he has missed first 10 seconds
@@ -543,14 +599,23 @@ fn test_simple_ongoing_reward() {
 
     assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
     assert_eq!(liq_pool.get_total_accumulated_reward(), total_reward_1);
-    assert_eq!(liq_pool.get_total_claimed_reward(), TestConfig::default().reward_tps * 30);
+    assert_eq!(
+        liq_pool.get_total_claimed_reward(),
+        TestConfig::default().reward_tps * 30
+    );
 
     assert_eq!(liq_pool.claim(&users[0]), (total_reward_1 * 2) / 6);
-    assert_eq!(token_reward.balance(&users[0]) as u128, (total_reward_1 * 5) / 6);
+    assert_eq!(
+        token_reward.balance(&users[0]) as u128,
+        (total_reward_1 * 5) / 6
+    );
 
     assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
     assert_eq!(liq_pool.get_total_accumulated_reward(), total_reward_1);
-    assert_eq!(liq_pool.get_total_claimed_reward(), TestConfig::default().reward_tps * 50);
+    assert_eq!(
+        liq_pool.get_total_claimed_reward(),
+        TestConfig::default().reward_tps * 50
+    );
 }
 
 #[test]
@@ -593,13 +658,17 @@ fn test_simple_reward() {
     liq_pool.set_rewards_config(
         &users[0],
         &env.ledger().timestamp().saturating_add(60),
-        &reward_1_tps
+        &reward_1_tps,
     );
 
     // 90 seconds. rewards ended.
     jump(&env, 70);
     // calling set rewards config to checkpoint. should be removed
-    liq_pool.set_rewards_config(&users[0], &env.ledger().timestamp().saturating_add(60), &0_u128);
+    liq_pool.set_rewards_config(
+        &users[0],
+        &env.ledger().timestamp().saturating_add(60),
+        &0_u128,
+    );
 
     // 100 seconds. user claim reward
     jump(&env, 10);
@@ -628,7 +697,10 @@ fn test_two_users_rewards() {
     jump(&env, 100);
     assert_eq!(liq_pool.claim(&users[0]), total_reward_1 / 4);
     assert_eq!(liq_pool.claim(&users[1]), total_reward_1 / 4);
-    assert_eq!(token_reward.balance(&users[0]) as u128, (total_reward_1 / 4) * 3);
+    assert_eq!(
+        token_reward.balance(&users[0]) as u128,
+        (total_reward_1 / 4) * 3
+    );
     assert_eq!(token_reward.balance(&users[1]) as u128, total_reward_1 / 4);
 }
 
@@ -651,7 +723,7 @@ fn test_lazy_user_rewards() {
     assert_approx_eq_abs(
         user1_claim,
         (total_reward_1 * 59) / 60 + ((total_reward_1 / 1100) * 100) / 60,
-        1000
+        1000,
     );
     assert_approx_eq_abs(user2_claim, ((total_reward_1 / 1100) * 1000) / 60, 1000);
     assert_approx_eq_abs(token_reward.balance(&users[0]) as u128, user1_claim, 1000);
@@ -666,7 +738,7 @@ fn test_rewards_disable_before_expiration() {
             users_count: 3,
             reward_tps: 0,
             ..TestConfig::default()
-        })
+        }),
     );
     let env = setup.env;
     let liq_pool = setup.liq_pool;
@@ -695,7 +767,10 @@ fn test_rewards_disable_before_expiration() {
 
     // user decides to claim in far future
     jump(&env, 1000);
-    assert_eq!(liq_pool.claim(&users[1]), (tps * 20) / 10 + (tps * 10) / 20 + (tps * 50) / 10);
+    assert_eq!(
+        liq_pool.claim(&users[1]),
+        (tps * 20) / 10 + (tps * 10) / 20 + (tps * 50) / 10
+    );
     assert_eq!(liq_pool.claim(&users[2]), (tps * 10) / 2);
 }
 
@@ -705,7 +780,7 @@ fn test_rewards_disable_after_expiration() {
         &(TestConfig {
             reward_tps: 0,
             ..TestConfig::default()
-        })
+        }),
     );
     let env = setup.env;
     let liq_pool = setup.liq_pool;
@@ -734,7 +809,7 @@ fn test_rewards_set_new_after_expiration() {
         &(TestConfig {
             reward_tps: 0,
             ..TestConfig::default()
-        })
+        }),
     );
     let env = setup.env;
     let liq_pool = setup.liq_pool;
@@ -749,13 +824,24 @@ fn test_rewards_set_new_after_expiration() {
     let tps_1 = 1_0000000;
     let tps_2 = 10000;
     // admin configures first rewards distribution, then it ends and admin sets new one which also expires
-    liq_pool.set_rewards_config(&admin, &env.ledger().timestamp().saturating_add(100), &tps_1);
+    liq_pool.set_rewards_config(
+        &admin,
+        &env.ledger().timestamp().saturating_add(100),
+        &tps_1,
+    );
     jump(&env, 150);
-    liq_pool.set_rewards_config(&admin, &env.ledger().timestamp().saturating_add(100), &tps_2);
+    liq_pool.set_rewards_config(
+        &admin,
+        &env.ledger().timestamp().saturating_add(100),
+        &tps_2,
+    );
 
     // user decides to claim in far future
     jump(&env, 1000);
-    assert_eq!(liq_pool.claim(&users[1]), (tps_1 * 100) / 10 + (tps_2 * 100) / 10);
+    assert_eq!(
+        liq_pool.claim(&users[1]),
+        (tps_1 * 100) / 10 + (tps_2 * 100) / 10
+    );
 }
 
 #[test]
@@ -796,7 +882,7 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
         &(TestConfig {
             users_count: 100,
             ..TestConfig::default()
-        })
+        }),
     );
     let env = setup.env;
     let liq_pool = setup.liq_pool;
@@ -820,11 +906,10 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
     let reward_1_tps = 10_5000000_u128;
     liq_pool.set_rewards_config(
         &admin,
-        &env
-            .ledger()
+        &env.ledger()
             .timestamp()
             .saturating_add((iterations_to_simulate * 2 + 110).into()),
-        &reward_1_tps
+        &reward_1_tps,
     );
     jump(&env, 10);
 
@@ -859,7 +944,7 @@ fn test_swaps_many_users(iterations_to_simulate: u32) {
         &(TestConfig {
             users_count: 100,
             ..TestConfig::default()
-        })
+        }),
     );
     let env = setup.env;
     let liq_pool = setup.liq_pool;
@@ -898,30 +983,29 @@ fn test_swaps_many_users(iterations_to_simulate: u32) {
 
     // Test pool price peg
     let pool_price = liq_pool.get_price(&true, &false);
-    let expected_price = setup.quote_oracle_price
+    let expected_price = setup
+        .quote_oracle_price
         .fixed_div_floor(setup.base_oracle_price, PRICE_PRECISION_I128)
         .unwrap();
     assert_approx_eq_abs(pool_price, expected_price as u128, 10_000); // allow small rounding tolerance
 
     for i in 1..iterations_to_simulate as usize {
         // Simulate oracle price with volatility
-        let token_a_vol = rng.gen_range(
-            -(max_token_a_volatility as i128)..max_token_a_volatility as i128
-        );
+        let token_a_vol =
+            rng.gen_range(-(max_token_a_volatility as i128)..max_token_a_volatility as i128);
         let new_token_a_price = setup.base_oracle_price + token_a_vol;
         setup.base_oracle_client.set_price(
             &Vec::from_array(&env, [new_token_a_price]),
-            &env.ledger().timestamp()
+            &env.ledger().timestamp(),
         );
 
         // Update the quote asset price
-        let token_b_vol = rng.gen_range(
-            -(max_token_b_volatility as i128)..max_token_b_volatility as i128
-        );
+        let token_b_vol =
+            rng.gen_range(-(max_token_b_volatility as i128)..max_token_b_volatility as i128);
         let new_token_b_price = setup.quote_oracle_price + token_b_vol;
         setup.quote_oracle_client.set_price(
             &Vec::from_array(&env, [new_token_b_price]),
-            &env.ledger().timestamp()
+            &env.ledger().timestamp(),
         );
 
         let user_index = (i as usize) % users.len();
@@ -1070,7 +1154,7 @@ fn test_config_rewards_not_admin() {
     liq_pool.set_rewards_config(
         &users[1],
         &env.ledger().timestamp().saturating_add(60),
-        &10_5000000_u128
+        &10_5000000_u128,
     );
 }
 
@@ -1085,7 +1169,7 @@ fn test_config_rewards_router() {
     liq_pool.set_rewards_config(
         &router,
         &env.ledger().timestamp().saturating_add(60),
-        &10_5000000_u128
+        &10_5000000_u128,
     );
 }
 
@@ -1126,7 +1210,7 @@ fn test_zero_swap() {
         &(TestConfig {
             mint_to_user: i128::MAX,
             ..TestConfig::default()
-        })
+        }),
     );
     // let e = setup.env;
     let liq_pool = setup.liq_pool;
@@ -1144,7 +1228,7 @@ fn test_large_numbers() {
         &(TestConfig {
             mint_to_user: i128::MAX,
             ..TestConfig::default()
-        })
+        }),
     );
     let e = setup.env;
     let liq_pool = setup.liq_pool;
@@ -1155,7 +1239,8 @@ fn test_large_numbers() {
     let user1 = users[0].clone();
     let amount_to_deposit = u128::MAX / 1_000_000;
     let desired_amount = amount_to_deposit;
-    let target_price = setup.quote_oracle_price
+    let target_price = setup
+        .quote_oracle_price
         .fixed_div_floor(setup.base_oracle_price, PRICE_PRECISION_I128)
         .unwrap();
     let expected_mint_amount = amount_to_deposit
@@ -1169,8 +1254,14 @@ fn test_large_numbers() {
     assert_eq!(token_share.balance(&user1), expected_share_amount);
     assert_eq!(token_share.balance(&liq_pool.address), 0);
     assert_eq!(token1.balance(&user1), 0);
-    assert_eq!(token1.balance(&liq_pool.address), expected_mint_amount as i128);
-    assert_eq!(token2.balance(&user1), i128::MAX - (amount_to_deposit as i128));
+    assert_eq!(
+        token1.balance(&liq_pool.address),
+        expected_mint_amount as i128
+    );
+    assert_eq!(
+        token2.balance(&user1),
+        i128::MAX - (amount_to_deposit as i128)
+    );
     assert_eq!(token2.balance(&liq_pool.address), amount_to_deposit as i128);
 
     let swap_in = amount_to_deposit / 1_000;
@@ -1188,8 +1279,14 @@ fn test_large_numbers() {
         token1.balance(&liq_pool.address),
         (expected_mint_amount as i128) - (estimate_swap_result as i128) + 0
     ); // next mint amount
-    assert_eq!(token2.balance(&user1), i128::MAX - (amount_to_deposit as i128) - (swap_in as i128));
-    assert_eq!(token2.balance(&liq_pool.address), (amount_to_deposit as i128) + (swap_in as i128));
+    assert_eq!(
+        token2.balance(&user1),
+        i128::MAX - (amount_to_deposit as i128) - (swap_in as i128)
+    );
+    assert_eq!(
+        token2.balance(&liq_pool.address),
+        (amount_to_deposit as i128) + (swap_in as i128)
+    );
 
     // let withdraw_amounts = [amount_to_deposit + swap_in, amount_to_deposit - estimate_swap_result];
     liq_pool.withdraw(&user1, &(expected_share_amount as u128));
@@ -1208,7 +1305,7 @@ fn test_swap_killed() {
         &(TestConfig {
             mint_to_user: i128::MAX,
             ..TestConfig::default()
-        })
+        }),
     );
     let e = setup.env;
     let liq_pool = setup.liq_pool;
@@ -1224,11 +1321,14 @@ fn test_swap_killed() {
     liq_pool.kill_swap(&admin);
     assert_eq!(
         vec![&e, e.events().all().last().unwrap()],
-        vec![&e, (
-            liq_pool.address.clone(),
-            (Symbol::new(&e, "kill_swap"),).into_val(&e),
-            Val::VOID.into_val(&e),
-        )]
+        vec![
+            &e,
+            (
+                liq_pool.address.clone(),
+                (Symbol::new(&e, "kill_swap"),).into_val(&e),
+                Val::VOID.into_val(&e),
+            )
+        ]
     );
     assert_eq!(liq_pool.get_is_killed_deposit(), false);
     assert_eq!(liq_pool.get_is_killed_withdraw(), false);
@@ -1248,11 +1348,14 @@ fn test_swap_killed() {
     liq_pool.unkill_swap(&admin);
     assert_eq!(
         vec![&e, e.events().all().last().unwrap()],
-        vec![&e, (
-            liq_pool.address.clone(),
-            (Symbol::new(&e, "unkill_swap"),).into_val(&e),
-            Val::VOID.into_val(&e),
-        )]
+        vec![
+            &e,
+            (
+                liq_pool.address.clone(),
+                (Symbol::new(&e, "unkill_swap"),).into_val(&e),
+                Val::VOID.into_val(&e),
+            )
+        ]
     );
     assert_eq!(liq_pool.get_is_killed_deposit(), false);
     assert_eq!(liq_pool.get_is_killed_withdraw(), false);
@@ -1268,7 +1371,7 @@ fn test_deposit_killed() {
         &(TestConfig {
             mint_to_user: i128::MAX,
             ..TestConfig::default()
-        })
+        }),
     );
     let e = setup.env;
     let liq_pool = setup.liq_pool;
@@ -1284,11 +1387,14 @@ fn test_deposit_killed() {
     liq_pool.kill_deposit(&admin);
     assert_eq!(
         vec![&e, e.events().all().last().unwrap()],
-        vec![&e, (
-            liq_pool.address.clone(),
-            (Symbol::new(&e, "kill_deposit"),).into_val(&e),
-            Val::VOID.into_val(&e),
-        )]
+        vec![
+            &e,
+            (
+                liq_pool.address.clone(),
+                (Symbol::new(&e, "kill_deposit"),).into_val(&e),
+                Val::VOID.into_val(&e),
+            )
+        ]
     );
     assert_eq!(liq_pool.get_is_killed_deposit(), true);
     assert_eq!(liq_pool.get_is_killed_withdraw(), false);
@@ -1306,11 +1412,14 @@ fn test_deposit_killed() {
     liq_pool.unkill_deposit(&admin);
     assert_eq!(
         vec![&e, e.events().all().last().unwrap()],
-        vec![&e, (
-            liq_pool.address.clone(),
-            (Symbol::new(&e, "unkill_deposit"),).into_val(&e),
-            Val::VOID.into_val(&e),
-        )]
+        vec![
+            &e,
+            (
+                liq_pool.address.clone(),
+                (Symbol::new(&e, "unkill_deposit"),).into_val(&e),
+                Val::VOID.into_val(&e),
+            )
+        ]
     );
     assert_eq!(liq_pool.get_is_killed_deposit(), false);
     assert_eq!(liq_pool.get_is_killed_withdraw(), false);
@@ -1326,7 +1435,7 @@ fn test_withdraw_killed() {
         &(TestConfig {
             mint_to_user: i128::MAX,
             ..TestConfig::default()
-        })
+        }),
     );
     let e = setup.env;
     let liq_pool = setup.liq_pool;
@@ -1342,11 +1451,14 @@ fn test_withdraw_killed() {
     liq_pool.kill_withdraw(&admin);
     assert_eq!(
         vec![&e, e.events().all().last().unwrap()],
-        vec![&e, (
-            liq_pool.address.clone(),
-            (Symbol::new(&e, "kill_withdraw"),).into_val(&e),
-            Val::VOID.into_val(&e),
-        )]
+        vec![
+            &e,
+            (
+                liq_pool.address.clone(),
+                (Symbol::new(&e, "kill_withdraw"),).into_val(&e),
+                Val::VOID.into_val(&e),
+            )
+        ]
     );
     assert_eq!(liq_pool.get_is_killed_deposit(), false);
     assert_eq!(liq_pool.get_is_killed_withdraw(), true);
@@ -1364,11 +1476,14 @@ fn test_withdraw_killed() {
     liq_pool.unkill_withdraw(&admin);
     assert_eq!(
         vec![&e, e.events().all().last().unwrap()],
-        vec![&e, (
-            liq_pool.address.clone(),
-            (Symbol::new(&e, "unkill_withdraw"),).into_val(&e),
-            Val::VOID.into_val(&e),
-        )]
+        vec![
+            &e,
+            (
+                liq_pool.address.clone(),
+                (Symbol::new(&e, "unkill_withdraw"),).into_val(&e),
+                Val::VOID.into_val(&e),
+            )
+        ]
     );
     assert_eq!(liq_pool.get_is_killed_deposit(), false);
     assert_eq!(liq_pool.get_is_killed_withdraw(), false);
@@ -1393,11 +1508,14 @@ fn test_claim_killed() {
     liq_pool.kill_claim(&users[0]);
     assert_eq!(
         vec![&env, env.events().all().last().unwrap()],
-        vec![&env, (
-            liq_pool.address.clone(),
-            (Symbol::new(&env, "kill_claim"),).into_val(&env),
-            Val::VOID.into_val(&env),
-        )]
+        vec![
+            &env,
+            (
+                liq_pool.address.clone(),
+                (Symbol::new(&env, "kill_claim"),).into_val(&env),
+                Val::VOID.into_val(&env),
+            )
+        ]
     );
     assert_eq!(liq_pool.get_is_killed_deposit(), false);
     assert_eq!(liq_pool.get_is_killed_withdraw(), false);
@@ -1415,7 +1533,7 @@ fn test_claim_killed() {
     liq_pool.set_rewards_config(
         &users[0],
         &env.ledger().timestamp().saturating_add(60),
-        &reward_1_tps
+        &reward_1_tps,
     );
 
     // 90 seconds. rewards ended.
@@ -1424,15 +1542,21 @@ fn test_claim_killed() {
     // 100 seconds. user claim reward
     jump(&env, 10);
 
-    assert_eq!(liq_pool.try_claim(&users[1]).unwrap_err(), Ok(Error::from_contract_error(207)));
+    assert_eq!(
+        liq_pool.try_claim(&users[1]).unwrap_err(),
+        Ok(Error::from_contract_error(207))
+    );
     liq_pool.unkill_claim(&users[0]);
     assert_eq!(
         vec![&env, env.events().all().last().unwrap()],
-        vec![&env, (
-            liq_pool.address.clone(),
-            (Symbol::new(&env, "unkill_claim"),).into_val(&env),
-            Val::VOID.into_val(&env),
-        )]
+        vec![
+            &env,
+            (
+                liq_pool.address.clone(),
+                (Symbol::new(&env, "unkill_claim"),).into_val(&env),
+                Val::VOID.into_val(&env),
+            )
+        ]
     );
     assert_eq!(liq_pool.get_is_killed_deposit(), false);
     assert_eq!(liq_pool.get_is_killed_withdraw(), false);
@@ -1472,7 +1596,7 @@ fn test_withdraw_rewards() {
 
     let oracles = OraclePair {
         base_oracle: e.register(MockPriceOracleWASM, ()),
-        quote_oracle:e.register(MockPriceOracleWASM, ()),
+        quote_oracle: e.register(MockPriceOracleWASM, ()),
     };
 
     let base_oracle_client = MockPriceOracleClient::new(&e, &oracles.base_oracle.address);
@@ -1484,7 +1608,7 @@ fn test_withdraw_rewards() {
         &MockAsset::Stellar(usdc.clone()),
         &Vec::from_array(&e, [asset_mock.clone()]),
         &7,
-        &(5 * 60 * 60)
+        &(5 * 60 * 60),
     );
     base_oracle_client.set_price(&Vec::from_array(&e, [2_0000000]), &e.ledger().timestamp());
 
@@ -1494,7 +1618,7 @@ fn test_withdraw_rewards() {
         &MockAsset::Stellar(usdc),
         &Vec::from_array(&e, [quote_asset_mock.clone()]),
         &7,
-        &(5 * 60 * 60)
+        &(5 * 60 * 60),
     );
     quote_oracle_client.set_price(&Vec::from_array(&e, [1_0000000]), &e.ledger().timestamp());
 
@@ -1503,9 +1627,9 @@ fn test_withdraw_rewards() {
             oracle_twap_percent_divergence: PERCENTAGE_PRECISION_U64 / 2,
         },
         validity: ValidityGuardRails {
-            slots_before_stale_for_pool: 10, // ~5 seconds
+            slots_before_stale_for_pool: 10,      // ~5 seconds
             confidence_interval_max_size: 20_000, // 2% of price
-            too_volatile_ratio: 5, // 5x or 80% down
+            too_volatile_ratio: 5,                // 5x or 80% down
         },
     };
 
@@ -1522,33 +1646,54 @@ fn test_withdraw_rewards() {
         &String::from_str(&e, "Pool Share Token"),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         &token_reward_admin_client.address,
-        30
+        30,
     );
     let token_share = ShareTokenClient::new(&e, &liq_pool.share_id());
 
     token2_admin_client.mint(&user1, &100_0000000);
     liq_pool.deposit(&user1, &100_0000000);
-    assert_eq!(liq_pool.get_reserves(), Vec::from_array(&e, [50_0000000, 100_0000000]));
+    assert_eq!(
+        liq_pool.get_reserves(),
+        Vec::from_array(&e, [50_0000000, 100_0000000])
+    );
 
     liq_pool.set_rewards_config(
         &admin,
         &e.ledger().timestamp().saturating_add(100),
-        &1_000_0000000
+        &1_000_0000000,
     );
     token_reward_admin_client.mint(&liq_pool.address, &(1_000_0000000 * 100));
     jump(&e, 100);
 
     token2_admin_client.mint(&user2, &1_000_0000000);
     liq_pool.deposit(&user2, &1_000_0000000);
-    assert_eq!(liq_pool.get_reserves(), Vec::from_array(&e, [1_100_0000000, 1_100_0000000])); // FIXME:
+    assert_eq!(
+        liq_pool.get_reserves(),
+        Vec::from_array(&e, [1_100_0000000, 1_100_0000000])
+    ); // FIXME:
 
-    assert_eq!(liq_pool.get_reserves(), Vec::from_array(&e, [1_100_0000000, 1_100_0000000])); // FIXME:
-    assert_eq!(token1.balance(&liq_pool.address), 1_100_0000000 + 1_000_0000000 * 100);
+    assert_eq!(
+        liq_pool.get_reserves(),
+        Vec::from_array(&e, [1_100_0000000, 1_100_0000000])
+    ); // FIXME:
+    assert_eq!(
+        token1.balance(&liq_pool.address),
+        1_100_0000000 + 1_000_0000000 * 100
+    );
     assert_eq!(token2.balance(&liq_pool.address), 1_100_0000000);
 
-    assert_eq!(liq_pool.withdraw(&user2, &(token_share.balance(&user2) as u128)), 1_000_0000000);
-    assert_eq!(liq_pool.get_reserves(), Vec::from_array(&e, [100_0000000, 100_0000000])); // FIXME:
-    assert_eq!(token1.balance(&liq_pool.address), 100_0000000 + 1_000_0000000 * 100);
+    assert_eq!(
+        liq_pool.withdraw(&user2, &(token_share.balance(&user2) as u128)),
+        1_000_0000000
+    );
+    assert_eq!(
+        liq_pool.get_reserves(),
+        Vec::from_array(&e, [100_0000000, 100_0000000])
+    ); // FIXME:
+    assert_eq!(
+        token1.balance(&liq_pool.address),
+        100_0000000 + 1_000_0000000 * 100
+    );
     assert_eq!(token2.balance(&liq_pool.address), 100_0000000);
     assert_eq!(token1.balance(&user2), 1_000_0000000);
     assert_eq!(token2.balance(&user2), 1_000_0000000);
@@ -2030,11 +2175,14 @@ fn test_kill_deposit_event() {
     pool.kill_deposit(&setup.admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            pool.address.clone(),
-            (Symbol::new(&setup.env, "kill_deposit"),).into_val(&setup.env),
-            ().into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                pool.address.clone(),
+                (Symbol::new(&setup.env, "kill_deposit"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            )
+        ]
     );
 }
 
@@ -2046,11 +2194,14 @@ fn test_kill_swap_event() {
     pool.kill_swap(&setup.admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            pool.address.clone(),
-            (Symbol::new(&setup.env, "kill_swap"),).into_val(&setup.env),
-            ().into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                pool.address.clone(),
+                (Symbol::new(&setup.env, "kill_swap"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            )
+        ]
     );
 }
 
@@ -2062,11 +2213,14 @@ fn test_kill_claim_event() {
     pool.kill_claim(&setup.admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            pool.address.clone(),
-            (Symbol::new(&setup.env, "kill_claim"),).into_val(&setup.env),
-            ().into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                pool.address.clone(),
+                (Symbol::new(&setup.env, "kill_claim"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            )
+        ]
     );
 }
 
@@ -2078,11 +2232,14 @@ fn test_unkill_deposit_event() {
     pool.unkill_deposit(&setup.admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            pool.address.clone(),
-            (Symbol::new(&setup.env, "unkill_deposit"),).into_val(&setup.env),
-            ().into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                pool.address.clone(),
+                (Symbol::new(&setup.env, "unkill_deposit"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            )
+        ]
     );
 }
 
@@ -2094,11 +2251,14 @@ fn test_unkill_swap_event() {
     pool.unkill_swap(&setup.admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            pool.address.clone(),
-            (Symbol::new(&setup.env, "unkill_swap"),).into_val(&setup.env),
-            ().into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                pool.address.clone(),
+                (Symbol::new(&setup.env, "unkill_swap"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            )
+        ]
     );
 }
 
@@ -2110,11 +2270,14 @@ fn test_unkill_claim_event() {
     pool.unkill_claim(&setup.admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            pool.address.clone(),
-            (Symbol::new(&setup.env, "unkill_claim"),).into_val(&setup.env),
-            ().into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                pool.address.clone(),
+                (Symbol::new(&setup.env, "unkill_claim"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            )
+        ]
     );
 }
 
@@ -2128,21 +2291,25 @@ fn test_set_privileged_addresses_event() {
         &setup.rewards_admin.clone(),
         &setup.operations_admin.clone(),
         &setup.pause_admin.clone(),
-        &Vec::from_array(&setup.env, [setup.emergency_pause_admin.clone()])
+        &Vec::from_array(&setup.env, [setup.emergency_pause_admin.clone()]),
     );
 
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            pool.address.clone(),
-            (Symbol::new(&setup.env, "set_privileged_addrs"),).into_val(&setup.env),
+        vec![
+            &setup.env,
             (
-                setup.rewards_admin,
-                setup.operations_admin,
-                setup.pause_admin,
-                Vec::from_array(&setup.env, [setup.emergency_pause_admin]),
-            ).into_val(&setup.env),
-        )]
+                pool.address.clone(),
+                (Symbol::new(&setup.env, "set_privileged_addrs"),).into_val(&setup.env),
+                (
+                    setup.rewards_admin,
+                    setup.operations_admin,
+                    setup.pause_admin,
+                    Vec::from_array(&setup.env, [setup.emergency_pause_admin]),
+                )
+                    .into_val(&setup.env),
+            )
+        ]
     );
 }
 
@@ -2154,18 +2321,23 @@ fn test_set_rewards_config() {
     pool.set_rewards_config(
         &setup.admin.clone(),
         &setup.env.ledger().timestamp().saturating_add(100),
-        &1_0000000
+        &1_0000000,
     );
 
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            pool.address.clone(),
-            (Symbol::new(&setup.env, "set_rewards_config"),).into_val(&setup.env),
-            (setup.env.ledger().timestamp().saturating_add(100), 1_0000000_u128).into_val(
-                &setup.env
-            ),
-        )]
+        vec![
+            &setup.env,
+            (
+                pool.address.clone(),
+                (Symbol::new(&setup.env, "set_rewards_config"),).into_val(&setup.env),
+                (
+                    setup.env.ledger().timestamp().saturating_add(100),
+                    1_0000000_u128
+                )
+                    .into_val(&setup.env),
+            )
+        ]
     );
 }
 
@@ -2178,25 +2350,35 @@ fn test_transfer_ownership_events() {
     pool.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &new_admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            pool.address.clone(),
-            (Symbol::new(&setup.env, "commit_transfer_ownership"), symbol_short!("Admin")).into_val(
-                &setup.env
-            ),
-            (new_admin.clone(),).into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                pool.address.clone(),
+                (
+                    Symbol::new(&setup.env, "commit_transfer_ownership"),
+                    symbol_short!("Admin")
+                )
+                    .into_val(&setup.env),
+                (new_admin.clone(),).into_val(&setup.env),
+            )
+        ]
     );
 
     pool.revert_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            pool.address.clone(),
-            (Symbol::new(&setup.env, "revert_transfer_ownership"), symbol_short!("Admin")).into_val(
-                &setup.env
-            ),
-            ().into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                pool.address.clone(),
+                (
+                    Symbol::new(&setup.env, "revert_transfer_ownership"),
+                    symbol_short!("Admin")
+                )
+                    .into_val(&setup.env),
+                ().into_val(&setup.env),
+            )
+        ]
     );
 
     pool.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &new_admin);
@@ -2204,13 +2386,18 @@ fn test_transfer_ownership_events() {
     pool.apply_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            pool.address.clone(),
-            (Symbol::new(&setup.env, "apply_transfer_ownership"), symbol_short!("Admin")).into_val(
-                &setup.env
-            ),
-            (new_admin.clone(),).into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                pool.address.clone(),
+                (
+                    Symbol::new(&setup.env, "apply_transfer_ownership"),
+                    symbol_short!("Admin")
+                )
+                    .into_val(&setup.env),
+                (new_admin.clone(),).into_val(&setup.env),
+            )
+        ]
     );
 }
 
@@ -2224,21 +2411,27 @@ fn test_upgrade_events() {
     contract.commit_upgrade(&setup.admin, &new_wasm_hash, &token_new_wasm_hash);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            contract.address.clone(),
-            (Symbol::new(&setup.env, "commit_upgrade"),).into_val(&setup.env),
-            (new_wasm_hash.clone(), token_new_wasm_hash.clone()).into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "commit_upgrade"),).into_val(&setup.env),
+                (new_wasm_hash.clone(), token_new_wasm_hash.clone()).into_val(&setup.env),
+            )
+        ]
     );
 
     contract.revert_upgrade(&setup.admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            contract.address.clone(),
-            (Symbol::new(&setup.env, "revert_upgrade"),).into_val(&setup.env),
-            ().into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "revert_upgrade"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            )
+        ]
     );
 
     contract.commit_upgrade(&setup.admin, &new_wasm_hash, &token_new_wasm_hash);
@@ -2246,11 +2439,14 @@ fn test_upgrade_events() {
     contract.apply_upgrade(&setup.admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            contract.address.clone(),
-            (Symbol::new(&setup.env, "apply_upgrade"),).into_val(&setup.env),
-            (new_wasm_hash.clone(), token_new_wasm_hash.clone()).into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "apply_upgrade"),).into_val(&setup.env),
+                (new_wasm_hash.clone(), token_new_wasm_hash.clone()).into_val(&setup.env),
+            )
+        ]
     );
 }
 
@@ -2262,20 +2458,26 @@ fn test_emergency_mode_events() {
     contract.set_emergency_mode(&setup.emergency_admin, &true);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            contract.address.clone(),
-            (Symbol::new(&setup.env, "enable_emergency_mode"),).into_val(&setup.env),
-            ().into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "enable_emergency_mode"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            )
+        ]
     );
     contract.set_emergency_mode(&setup.emergency_admin, &false);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            contract.address.clone(),
-            (Symbol::new(&setup.env, "disable_emergency_mode"),).into_val(&setup.env),
-            ().into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "disable_emergency_mode"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            )
+        ]
     );
 }
 
@@ -2306,7 +2508,10 @@ fn test_regular_upgrade_token() {
     let contract = setup.liq_pool;
     let token = ShareTokenClient::new(&setup.env, &contract.share_id());
 
-    let token_wasm = setup.env.deployer().upload_contract_wasm(token_share::token::WASM);
+    let token_wasm = setup
+        .env
+        .deployer()
+        .upload_contract_wasm(token_share::token::WASM);
     let new_wasm = install_dummy_wasm(&setup.env);
 
     // dummy wasm has version 130, everything else has greater version
@@ -2317,7 +2522,10 @@ fn test_regular_upgrade_token() {
     contract.commit_upgrade(&setup.admin, &new_wasm, &token_wasm);
     assert!(contract.try_apply_upgrade(&setup.admin).is_err());
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
-    assert_eq!(contract.apply_upgrade(&setup.admin), (new_wasm.clone(), token_wasm.clone()));
+    assert_eq!(
+        contract.apply_upgrade(&setup.admin),
+        (new_wasm.clone(), token_wasm.clone())
+    );
 
     assert_eq!(contract.version(), 130);
     assert_ne!(token.version(), 130);
@@ -2340,7 +2548,10 @@ fn test_regular_upgrade_pool() {
     contract.commit_upgrade(&setup.admin, &new_wasm, &new_token_wasm);
     assert!(contract.try_apply_upgrade(&setup.admin).is_err());
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
-    assert_eq!(contract.apply_upgrade(&setup.admin), (new_wasm.clone(), new_token_wasm.clone()));
+    assert_eq!(
+        contract.apply_upgrade(&setup.admin),
+        (new_wasm.clone(), new_token_wasm.clone())
+    );
 
     assert_eq!(contract.version(), 130);
     assert_eq!(token.version(), 130);

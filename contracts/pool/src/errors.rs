@@ -17,7 +17,6 @@ pub enum PoolError {
     InvalidOracle = 210,
     InvalidExpiryTimestamp = 211,
     // pool specific validation errors
-
     LiquidityDeficitBelowThreshold = 212,
 }
 

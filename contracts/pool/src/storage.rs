@@ -1,15 +1,12 @@
+use crate::pool::Pool;
 use paste::paste;
-use soroban_sdk::{ contracttype, panic_with_error, Address, BytesN, Env };
+use soroban_sdk::{contracttype, panic_with_error, Address, BytesN, Env};
 pub use utils::bump::bump_instance;
 use utils::errors::storage_errors::StorageError;
 use utils::{
     generate_instance_storage_getter_and_setter_with_default,
-    generate_instance_storage_getter_with_default,
-    generate_instance_storage_setter,
+    generate_instance_storage_getter_with_default, generate_instance_storage_setter,
 };
-
-use crate::oracle::HistoricalOracleData;
-use crate::pool::Pool;
 
 #[derive(Clone)]
 #[contracttype]

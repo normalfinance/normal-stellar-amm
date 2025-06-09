@@ -1,38 +1,38 @@
-use soroban_sdk::{ contracttype, Address, BytesN, String, Symbol, Vec };
+use soroban_sdk::{contracttype, Address, BytesN, String, Symbol, Vec};
 
 #[contracttype]
 #[derive(Default, Clone)]
 pub enum PoolStatus {
-    /// warm up period for initialization, fills are paused
+    // warm up period for initialization, fills are paused
     #[default]
     Initialized,
-    /// all operations allowed
+    // all operations allowed
     Active,
-    ///
+    //
     Frozen,
-    /// fills only able to reduce liability
+    // fills only able to reduce liability
     ReduceOnly,
-    /// market has determined settlement price and positions are expired must be settled
+    // market has determined settlement price and positions are expired must be settled
     Settlement,
-    /// market has no remaining participants
+    // market has no remaining participants
     Delisted,
 }
 
 #[contracttype]
 #[derive(Clone, Copy, PartialEq, Debug, Eq, PartialOrd, Ord, Default)]
 pub enum PoolTier {
-    /// max insurance capped at A level
+    // max insurance capped at A level
     A,
-    /// max insurance capped at B level
+    // max insurance capped at B level
     B,
-    /// max insurance capped at C level
+    // max insurance capped at C level
     C,
-    /// no insurance
+    // no insurance
     Speculative,
-    /// no insurance, another tranches below
+    // no insurance, another tranches below
     #[default]
     HighlySpeculative,
-    /// no insurance, only single position allowed
+    // no insurance, only single position allowed
     Isolated,
 }
 
@@ -46,7 +46,7 @@ impl PoolTier {
 #[contracttype]
 #[derive(Clone)]
 pub struct TokenInitInfo {
-    /// The hash of the liquidity pool token contract.
+    // The hash of the liquidity pool token contract.
     pub token_wasm_hash: BytesN<32>,
     pub name: String,
     pub symbol: String,
@@ -72,25 +72,30 @@ pub struct OraclePair {
 #[contracttype]
 #[derive(Clone)]
 pub struct RewardConfig {
-    /// The address of the reward token.
+    // The address of the reward token.
     pub reward_token: Address,
 }
 
 #[contracttype]
 #[derive(Clone)]
 pub struct InitializeParams {
-    /// The address of the admin user.
+    // The address of the admin user.
     pub admin: Address,
     pub privileged_addrs: PrivilegedAddresses,
-    /// The address of the router.
+    // The address of the Router.
     pub router: Address,
+    // The address of the Oracle Registry.
     pub oracle_registry: Address,
-    pub oracles: OraclePair,
+    // The
+    pub base_asset_id: AssetId,
+    //
+    pub quote_asset_id: AssetId,
+    //
     pub asset: Address,
     pub lp_token_info: TokenInitInfo,
-    /// A vector of token addresses.
+    // A vector of token addresses.
     pub tokens: Vec<Address>,
-    /// The fee fraction for the pool.
+    // The fee fraction for the pool.
     pub fee_fraction: u32,
     pub tier: PoolTier,
     pub quote_max_insurance: u64,
@@ -108,21 +113,21 @@ pub struct InitializeAllParams {
 #[contracttype]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AddressAndAmount {
-    /// Address of the asset
+    // Address of the asset
     pub address: Address,
-    /// The total amount of those tokens in the pool
+    // The total amount of those tokens in the pool
     pub amount: u128,
 }
 
-/// This struct is used to return a query result with the total amount of LP tokens and assets in a specific pool.
+// This struct is used to return a query result with the total amount of LP tokens and assets in a specific pool.
 #[contracttype]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PoolResponse {
-    /// The asset A in the pool together with asset amounts
+    // The asset A in the pool together with asset amounts
     pub asset_a: AddressAndAmount,
-    /// The asset B in the pool together with asset amounts
+    // The asset B in the pool together with asset amounts
     pub asset_b: AddressAndAmount,
-    /// The total amount of LP tokens currently issued
+    // The total amount of LP tokens currently issued
     pub asset_lp_share: AddressAndAmount,
 }
 
@@ -133,8 +138,6 @@ pub struct PoolInfo {
     pub pool_response: PoolResponse,
     pub total_fee_bps: u32,
 }
-
-// Oracle Registry
 
 //     ______     _______        __       ______   ___       _______
 //    /    " \   /"      \      /""\     /" _  "\ |"  |     /"     "|
@@ -155,7 +158,7 @@ pub struct PoolInfo {
 #[contracttype]
 pub struct AssetId {
     pub symbol: Symbol, // e.g. "BTC", "ETH"
-    pub chain: Symbol, // optional: e.g. "Ethereum", "Solana"
+    pub chain: Symbol,  // optional: e.g. "Ethereum", "Solana"
 }
 
 #[derive(Clone, Debug)]

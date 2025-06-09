@@ -2,9 +2,9 @@
 
 use crate::testutils::Setup;
 use access_control::constants::ADMIN_ACTIONS_DELAY;
+use pool_tokens::Client as ShareTokenClient;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{symbol_short, Address, Symbol, Vec};
-use pool_tokens::Client as ShareTokenClient;
 use utils::test_utils::{install_dummy_wasm, jump};
 
 // test admin transfer ownership
@@ -18,7 +18,9 @@ fn test_admin_transfer_ownership_too_early() {
 
     pool.commit_transfer_ownership(&admin_original, &symbol_short!("Admin"), &admin_new);
     // check admin not changed yet by calling protected method
-    assert!(pool.try_revert_transfer_ownership(&admin_new, &symbol_short!("Admin")).is_err());
+    assert!(pool
+        .try_revert_transfer_ownership(&admin_new, &symbol_short!("Admin"))
+        .is_err());
     jump(&setup.env, ADMIN_ACTIONS_DELAY - 1);
     pool.apply_transfer_ownership(&admin_original, &symbol_short!("Admin"));
 }
@@ -56,7 +58,9 @@ fn test_admin_transfer_ownership_reverted() {
 
     pool.commit_transfer_ownership(&admin_original, &symbol_short!("Admin"), &admin_new);
     // check admin not changed yet by calling protected method
-    assert!(pool.try_revert_transfer_ownership(&admin_new, &symbol_short!("Admin")).is_err());
+    assert!(pool
+        .try_revert_transfer_ownership(&admin_new, &symbol_short!("Admin"))
+        .is_err());
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     pool.revert_transfer_ownership(&admin_original, &symbol_short!("Admin"));
     pool.apply_transfer_ownership(&admin_original, &symbol_short!("Admin"));
@@ -71,7 +75,9 @@ fn test_admin_transfer_ownership() {
 
     pool.commit_transfer_ownership(&admin_original, &symbol_short!("Admin"), &admin_new);
     // check admin not changed yet by calling protected method
-    assert!(pool.try_revert_transfer_ownership(&admin_new, &symbol_short!("Admin")).is_err());
+    assert!(pool
+        .try_revert_transfer_ownership(&admin_new, &symbol_short!("Admin"))
+        .is_err());
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     pool.apply_transfer_ownership(&admin_original, &symbol_short!("Admin"));
 
@@ -89,12 +95,16 @@ fn test_emergency_admin_transfer_ownership_too_early() {
     pool.commit_transfer_ownership(
         &setup.admin,
         &Symbol::new(&setup.env, "EmergencyAdmin"),
-        &emergency_admin_new
+        &emergency_admin_new,
     );
 
     // check emergency admin not changed yet by calling protected method
-    assert!(pool.try_set_emergency_mode(&emergency_admin_new, &false).is_err());
-    assert!(pool.try_set_emergency_mode(&setup.emergency_admin, &false).is_ok());
+    assert!(pool
+        .try_set_emergency_mode(&emergency_admin_new, &false)
+        .is_err());
+    assert!(pool
+        .try_set_emergency_mode(&setup.emergency_admin, &false)
+        .is_ok());
 
     jump(&setup.env, ADMIN_ACTIONS_DELAY - 1);
     pool.apply_transfer_ownership(&setup.admin, &Symbol::new(&setup.env, "EmergencyAdmin"));
@@ -110,12 +120,12 @@ fn test_emergency_admin_transfer_ownership_twice() {
     pool.commit_transfer_ownership(
         &setup.admin,
         &Symbol::new(&setup.env, "EmergencyAdmin"),
-        &emergency_admin_new
+        &emergency_admin_new,
     );
     pool.commit_transfer_ownership(
         &setup.admin,
         &Symbol::new(&setup.env, "EmergencyAdmin"),
-        &emergency_admin_new
+        &emergency_admin_new,
     );
 }
 
@@ -139,12 +149,16 @@ fn test_emergency_admin_transfer_ownership_reverted() {
     pool.commit_transfer_ownership(
         &setup.admin,
         &Symbol::new(&setup.env, "EmergencyAdmin"),
-        &emergency_admin_new
+        &emergency_admin_new,
     );
 
     // check emergency admin not changed yet by calling protected method
-    assert!(pool.try_set_emergency_mode(&emergency_admin_new, &false).is_err());
-    assert!(pool.try_set_emergency_mode(&setup.emergency_admin, &false).is_ok());
+    assert!(pool
+        .try_set_emergency_mode(&emergency_admin_new, &false)
+        .is_err());
+    assert!(pool
+        .try_set_emergency_mode(&setup.emergency_admin, &false)
+        .is_ok());
 
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     pool.revert_transfer_ownership(&setup.admin, &Symbol::new(&setup.env, "EmergencyAdmin"));
@@ -160,19 +174,27 @@ fn test_emergency_admin_transfer_ownership() {
     pool.commit_transfer_ownership(
         &setup.admin,
         &Symbol::new(&setup.env, "EmergencyAdmin"),
-        &emergency_admin_new
+        &emergency_admin_new,
     );
 
     // check emergency admin not changed yet by calling protected method
-    assert!(pool.try_set_emergency_mode(&emergency_admin_new, &false).is_err());
-    assert!(pool.try_set_emergency_mode(&setup.emergency_admin, &false).is_ok());
+    assert!(pool
+        .try_set_emergency_mode(&emergency_admin_new, &false)
+        .is_err());
+    assert!(pool
+        .try_set_emergency_mode(&setup.emergency_admin, &false)
+        .is_ok());
 
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     pool.apply_transfer_ownership(&setup.admin, &Symbol::new(&setup.env, "EmergencyAdmin"));
 
     // check emergency admin has changed
-    assert!(pool.try_set_emergency_mode(&emergency_admin_new, &false).is_ok());
-    assert!(pool.try_set_emergency_mode(&setup.emergency_admin, &false).is_err());
+    assert!(pool
+        .try_set_emergency_mode(&emergency_admin_new, &false)
+        .is_ok());
+    assert!(pool
+        .try_set_emergency_mode(&setup.emergency_admin, &false)
+        .is_err());
 }
 
 #[test]
@@ -186,15 +208,22 @@ fn test_transfer_ownership_separate_deadlines() {
         pool.get_future_address(&Symbol::new(&setup.env, "EmergencyAdmin")),
         setup.emergency_admin
     );
-    assert_eq!(pool.get_future_address(&symbol_short!("Admin")), setup.admin);
+    assert_eq!(
+        pool.get_future_address(&symbol_short!("Admin")),
+        setup.admin
+    );
 
-    assert!(pool.try_set_emergency_mode(&emergency_admin_new, &false).is_err());
-    assert!(pool.try_set_emergency_mode(&setup.emergency_admin, &false).is_ok());
+    assert!(pool
+        .try_set_emergency_mode(&emergency_admin_new, &false)
+        .is_err());
+    assert!(pool
+        .try_set_emergency_mode(&setup.emergency_admin, &false)
+        .is_ok());
 
     pool.commit_transfer_ownership(
         &setup.admin,
         &Symbol::new(&setup.env, "EmergencyAdmin"),
-        &emergency_admin_new
+        &emergency_admin_new,
     );
     jump(&setup.env, 10);
     pool.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &admin_new);
@@ -207,7 +236,9 @@ fn test_transfer_ownership_separate_deadlines() {
 
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1 - 10);
     pool.apply_transfer_ownership(&setup.admin, &Symbol::new(&setup.env, "EmergencyAdmin"));
-    assert!(pool.try_apply_transfer_ownership(&setup.admin, &symbol_short!("Admin")).is_err());
+    assert!(pool
+        .try_apply_transfer_ownership(&setup.admin, &symbol_short!("Admin"))
+        .is_err());
 
     assert_eq!(
         pool.get_future_address(&Symbol::new(&setup.env, "EmergencyAdmin")),
@@ -222,8 +253,12 @@ fn test_transfer_ownership_separate_deadlines() {
     // check ownership transfer is complete. new admin is capable to call protected methods
     //      and new emergency admin can change toggle emergency mode
     pool.commit_transfer_ownership(&admin_new, &Symbol::new(&setup.env, "Admin"), &setup.admin);
-    assert!(pool.try_set_emergency_mode(&emergency_admin_new, &false).is_ok());
-    assert!(pool.try_set_emergency_mode(&setup.emergency_admin, &false).is_err());
+    assert!(pool
+        .try_set_emergency_mode(&emergency_admin_new, &false)
+        .is_ok());
+    assert!(pool
+        .try_set_emergency_mode(&setup.emergency_admin, &false)
+        .is_err());
 }
 
 // upgrade pool & token
@@ -243,7 +278,11 @@ fn test_commit_upgrade() {
         (setup.pause_admin, false),
         (setup.emergency_pause_admin, false),
     ] {
-        assert_eq!(pool.try_commit_upgrade(&addr, &new_wasm, &new_token_wasm).is_ok(), is_ok);
+        assert_eq!(
+            pool.try_commit_upgrade(&addr, &new_wasm, &new_token_wasm)
+                .is_ok(),
+            is_ok
+        );
     }
 }
 
@@ -255,7 +294,7 @@ fn test_apply_upgrade_third_party_user() {
     pool.commit_upgrade(
         &setup.admin,
         &install_dummy_wasm(&setup.env),
-        &install_dummy_wasm(&setup.env)
+        &install_dummy_wasm(&setup.env),
     );
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     assert!(pool.try_apply_upgrade(&user).is_err());
@@ -268,7 +307,7 @@ fn test_apply_upgrade_emergency_admin() {
     pool.commit_upgrade(
         &setup.admin,
         &install_dummy_wasm(&setup.env),
-        &install_dummy_wasm(&setup.env)
+        &install_dummy_wasm(&setup.env),
     );
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     assert!(pool.try_apply_upgrade(&setup.emergency_admin).is_err());
@@ -314,7 +353,9 @@ fn test_set_emergency_mode_emergency_admin() {
 fn test_set_emergency_mode_admin() {
     let setup = Setup::default();
     let pool = setup.liq_pool;
-    assert!(pool.try_set_emergency_mode(&setup.emergency_admin, &false).is_ok());
+    assert!(pool
+        .try_set_emergency_mode(&setup.emergency_admin, &false)
+        .is_ok());
 }
 
 // kill switches
@@ -434,14 +475,13 @@ fn test_set_privileged_addresses() {
         (setup.emergency_pause_admin.clone(), false),
     ] {
         assert_eq!(
-            pool
-                .try_set_privileged_addrs(
-                    &addr,
-                    &setup.operations_admin.clone(),
-                    &setup.pause_admin.clone(),
-                    &Vec::from_array(&setup.env, [setup.emergency_pause_admin.clone()])
-                )
-                .is_ok(),
+            pool.try_set_privileged_addrs(
+                &addr,
+                &setup.operations_admin.clone(),
+                &setup.pause_admin.clone(),
+                &Vec::from_array(&setup.env, [setup.emergency_pause_admin.clone()])
+            )
+            .is_ok(),
             is_ok
         );
     }

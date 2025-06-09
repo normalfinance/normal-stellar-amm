@@ -1,4 +1,4 @@
-use soroban_sdk::{ Address, Env, Symbol };
+use soroban_sdk::{Address, Env, Symbol};
 
 #[derive(Clone)]
 pub(crate) struct Events(Env);
@@ -18,8 +18,7 @@ impl Events {
 pub(crate) trait OracleRegistryEvents {
     fn update_oracle(
         &self,
-        user: Address
-        // TODO:
+        user: Address, // TODO:
     );
 }
 

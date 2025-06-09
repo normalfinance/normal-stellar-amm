@@ -1,5 +1,5 @@
-use soroban_sdk::{ Address, Env, Vec };
-use soroban_sdk::token::{ Client as SorobanTokenClient, TokenClient };
+use soroban_sdk::token::{Client as SorobanTokenClient, TokenClient};
+use soroban_sdk::{Address, Env, Vec};
 
 pub fn validate_tokens_contracts(e: &Env, tokens: &Vec<Address>) {
     // call token contract to check if token exists & it's alive
@@ -18,7 +18,7 @@ pub fn transfer_token_from(
     spender: &Address,
     from: &Address,
     to: &Address,
-    amount: &i128
+    amount: &i128,
 ) {
     SorobanTokenClient::new(e, token).transfer_from(spender, from, to, amount);
 }

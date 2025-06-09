@@ -1,14 +1,16 @@
-use soroban_sdk::{ Address, Env };
-use utils::{ oracle::{ OracleGuardRails, OraclePriceData }, storage::AssetId };
+use soroban_sdk::{Address, Env};
+use utils::{oracle::OraclePriceData, storage::AssetId};
+
+use crate::storage_types::OracleGuardRails;
 
 pub trait OracleRegistryTrait {
-    //
+    // Get the oracle price
     fn get_price(
         e: Env,
-        user: Address,
+        sender: Address,
         asset_id: AssetId,
         cached: bool,
-        sanitize_clamp_denominator: Option<i64>
+        sanitize_clamp_denominator: Option<i64>,
     ) -> OraclePriceData;
 }
 
@@ -19,6 +21,9 @@ pub trait AdminInterface {
     // Set oracle guardrails
     fn set_oracle_guardrails(e: Env, admin: Address, oracle_guard_rails: OracleGuardRails);
 
+    // Set pric override limit
+    fn set_price_override_limit(e: Env, admin: Address, limit: u128);
+
     // Create a new oracle
     fn register_oracle(
         e: Env,
@@ -26,7 +31,7 @@ pub trait AdminInterface {
         asset_id: AssetId,
         oracle: Address,
         asset: Address,
-        decimals: u32
+        decimals: u32,
     );
 
     // Set oracle address
@@ -40,7 +45,7 @@ pub trait AdminInterface {
         e: Env,
         admin: Address,
         asset_id: AssetId,
-        sanitize_clamp_denominator: Option<i64>
+        sanitize_clamp_denominator: Option<i64>,
     );
 
     // Admin failsafe to manually set the oracle price
@@ -49,7 +54,7 @@ pub trait AdminInterface {
         admin: Address,
         asset_id: AssetId,
         oracle_price_twap: u128,
-        price: u128
+        price: u128,
     );
 
     // Pause price updates

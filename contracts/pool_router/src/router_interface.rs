@@ -1,4 +1,4 @@
-use soroban_sdk::{ Address, BytesN, Env, Map, Symbol, Vec };
+use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Vec};
 
 pub trait AdminInterface {
     // Initialize admin user. Will panic if called twice
@@ -11,7 +11,7 @@ pub trait AdminInterface {
         rewards_admin: Address,
         operations_admin: Address,
         pause_admin: Address,
-        emergency_pause_admins: Vec<Address>
+        emergency_pause_admins: Vec<Address>,
     );
 
     // Get map of privileged roles

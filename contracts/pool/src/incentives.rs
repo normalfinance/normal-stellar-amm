@@ -1,4 +1,4 @@
-use rewards::Rewards;
+use incentives::Incentives;
 use soroban_sdk::Env;
 
 // page size of 100 is optimal since 8 bytes key + 16 bytes value * 100 = 2400 bytes per page
@@ -9,6 +9,6 @@ pub(crate) const PAGE_SIZE: u64 = 100;
 #[cfg(test)]
 pub(crate) const PAGE_SIZE: u64 = 5;
 
-pub(crate) fn get_rewards_manager(e: &Env) -> Rewards {
-    Rewards::new(e, PAGE_SIZE)
+pub(crate) fn get_incentives_manager(e: &Env) -> Incentives {
+    Incentives::new(e, PAGE_SIZE)
 }

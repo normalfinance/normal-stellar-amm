@@ -1,16 +1,15 @@
 #![no_std]
 
 use soroban_sdk::token::{
-    StellarAssetClient as SorobanTokenAdminClient,
-    TokenClient as SorobanTokenClient,
+    StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
-use soroban_sdk::{ contracttype, panic_with_error, Address, Env };
+use soroban_sdk::{contracttype, panic_with_error, Address, Env};
 use utils::bump::bump_instance;
 
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
-    TokenLP, // Token address
+    TokenLP,       // Token address
     TotalLPTokens, // Total token supply
 
     TokenSynthetic,
@@ -22,7 +21,7 @@ pub mod token {
         file = "../../target/wasm32v1-none/release/soroban_token_contract.wasm"
     );
 }
-pub use token::{ self as token_contract, Client };
+pub use token::{self as token_contract, Client};
 use utils::errors::storage_errors::StorageError;
 
 //  ___         _______
@@ -52,7 +51,10 @@ pub fn get_user_balance_lp(e: &Env, user: &Address) -> u128 {
 
 pub fn get_total_lp_tokens(e: &Env) -> u128 {
     bump_instance(e);
-    e.storage().instance().get(&DataKey::TotalLPTokens).unwrap_or(0)
+    e.storage()
+        .instance()
+        .get(&DataKey::TotalLPTokens)
+        .unwrap_or(0)
 }
 
 pub fn put_total_lp_tokens(e: &Env, value: u128) {
@@ -62,7 +64,7 @@ pub fn put_total_lp_tokens(e: &Env, value: u128) {
 
 pub fn burn_lp_tokens(e: &Env, from: &Address, amount: u128) {
     let total_lp = get_total_lp_tokens(e);
-    put_total_lps(e, total_lp - amount);
+    put_total_lp_tokens(e, total_lp - amount);
 
     let lp_contract = get_token_lp(e);
     SorobanTokenClient::new(e, &lp_contract).burn(from, &(amount as i128));
@@ -73,7 +75,7 @@ pub fn mint_lp_tokens(e: &Env, to: &Address, amount: i128) {
     put_total_lp_tokens(e, total_lp + (amount as u128));
 
     let lp_contract_id = get_token_lp(e);
-    SorobanTokenAdminClient::new(e, &share_contract_id).mint(to, &amount);
+    SorobanTokenAdminClient::new(e, &lp_contract_id).mint(to, &amount);
 }
 
 //   ________  ___  ___  _____  ___  ___________  __    __    _______  ___________  __     ______
@@ -94,7 +96,9 @@ pub fn get_token_synthetic(e: &Env) -> Address {
 
 pub fn put_token_synthetic(e: &Env, contract: Address) {
     bump_instance(e);
-    e.storage().instance().set(&DataKey::TokenSynthetic, &contract)
+    e.storage()
+        .instance()
+        .set(&DataKey::TokenSynthetic, &contract)
 }
 
 pub fn get_user_balance_synthetic(e: &Env, user: &Address) -> u128 {
@@ -103,16 +107,21 @@ pub fn get_user_balance_synthetic(e: &Env, user: &Address) -> u128 {
 
 pub fn get_total_synthetic_tokens(e: &Env) -> u128 {
     bump_instance(e);
-    e.storage().instance().get(&DataKey::TotalSyntheticTokens).unwrap_or(0)
+    e.storage()
+        .instance()
+        .get(&DataKey::TotalSyntheticTokens)
+        .unwrap_or(0)
 }
 
 pub fn put_total_synthetic_tokens(e: &Env, value: u128) {
     bump_instance(e);
-    e.storage().instance().set(&DataKey::TotalSyntheticTokens, &value)
+    e.storage()
+        .instance()
+        .set(&DataKey::TotalSyntheticTokens, &value)
 }
 
 pub fn burn_synthetic_tokens(e: &Env, from: &Address, amount: u128) {
-    let total_share = get_total_shares(e);
+    let total_share = get_total_synthetic_tokens(e);
     put_total_synthetic_tokens(e, total_share - amount);
 
     let synthetic_contract = get_token_synthetic(e);
@@ -120,7 +129,7 @@ pub fn burn_synthetic_tokens(e: &Env, from: &Address, amount: u128) {
 }
 
 pub fn mint_synthetic_tokens(e: &Env, to: &Address, amount: i128) {
-    let total_share = get_total_shares(e);
+    let total_share = get_total_synthetic_tokens(e);
     put_total_synthetic_tokens(e, total_share + (amount as u128));
 
     let synthetic_contract_id = get_token_synthetic(e);

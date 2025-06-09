@@ -10,4 +10,4 @@ mod test;
 mod test_permissions;
 mod testutils;
 
-pub use crate::contract::{ Buffer, BufferClient };
+pub use crate::contract::{Buffer, BufferClient};

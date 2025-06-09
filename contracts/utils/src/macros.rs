@@ -62,7 +62,7 @@ macro_rules! generate_instance_storage_getter_and_setter_with_default {
     };
 }
 
-/// A macro that validates a condition, logs a message, and panics with a specific error if the condition is false
+// A macro that validates a condition, logs a message, and panics with a specific error if the condition is false
 #[macro_export]
 macro_rules! validate {
     ($env:expr, $condition:expr, $error:expr, $message:expr) => {
@@ -108,26 +108,22 @@ macro_rules! validate {
 
 #[macro_export]
 macro_rules! safe_increment {
-    ($env:expr, $struct:expr, $value:expr) => {
-        {
+    ($env:expr, $struct:expr, $value:expr) => {{
         $struct = $struct.checked_add($value).unwrap_or_else(|| {
             #[cfg(debug_assertions)]
             panic_with_error!($env, MathError::MathError);
             $struct
         });
-        }
-    };
+    }};
 }
 
 #[macro_export]
 macro_rules! safe_decrement {
-    ($env:expr, $struct:expr, $value:expr) => {
-        {
+    ($env:expr, $struct:expr, $value:expr) => {{
         $struct = $struct.checked_sub($value).unwrap_or_else(|| {
             #[cfg(debug_assertions)]
             panic_with_error!($env, MathError::MathError);
             $struct
         });
-        }
-    };
+    }};
 }

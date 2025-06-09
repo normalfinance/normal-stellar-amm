@@ -1,4 +1,4 @@
-use soroban_sdk::{ log, panic_with_error, Env };
+use soroban_sdk::{log, panic_with_error, Env};
 
 use crate::errors::math_errors::MathError;
 
@@ -71,7 +71,7 @@ checked_impl!(i64);
 checked_impl!(i32);
 #[cfg(test)]
 mod test {
-    use crate::math::safe_math::{ MathError, SafeMath };
+    use crate::math::safe_math::{MathError, SafeMath};
     use soroban_sdk::Env;
 
     #[test]

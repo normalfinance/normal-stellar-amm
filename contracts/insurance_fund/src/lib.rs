@@ -4,11 +4,11 @@ mod contract;
 pub mod errors;
 mod events;
 mod interface;
-mod storage;
 mod stake;
+mod storage;
 mod test;
 mod test_math;
 mod test_permissions;
 mod testutils;
 
-pub use crate::contract::{ InsuranceFund, InsuranceFundClient };
+pub use crate::contract::{InsuranceFund, InsuranceFundClient};

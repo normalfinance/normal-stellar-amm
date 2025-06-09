@@ -10,5 +10,5 @@ pub enum OracleError {
     OracleTooUncertain = 603,
     OracleStaleForMargin = 604,
     OracleInsufficientDataPoints = 605,
-    OracleStaleForAMM = 606,
+    OracleStaleForPool = 606,
 }

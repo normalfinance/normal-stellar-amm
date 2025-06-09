@@ -3,12 +3,11 @@ extern crate std;
 use crate::BufferClient;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::{
-    StellarAssetClient as SorobanTokenAdminClient,
-    TokenClient as SorobanTokenClient,
+    StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
-use soroban_sdk::{ Address, BytesN, Env, String, Symbol, Vec };
-use utils::storage::{ OraclePair };
+use soroban_sdk::{Address, BytesN, Env, String, Symbol, Vec};
 use std::vec;
+use utils::storage::OraclePair;
 
 pub(crate) struct TestConfig {
     pub(crate) users_count: u32,
@@ -27,8 +26,8 @@ impl Default for TestConfig {
 pub(crate) struct Setup<'a> {
     pub(crate) env: Env,
     pub(crate) admin: Address,
-    pub(crate) contract: BufferClient<'a>,
-    pub(crate) router: swap_router::Client<'a>,
+    pub(crate) buffer: BufferClient<'a>,
+    pub(crate) router: pool_router::Client<'a>,
     pub(crate) fee_collector: fee_collector::Client<'a>,
     pub(crate) operator: Address,
     pub(crate) users: vec::Vec<Address>,
@@ -89,28 +88,37 @@ impl Setup<'_> {
             &Vec::from_array(&e, [token_a.address.clone(), token_b.address.clone()]),
             &String::from_str(&e, "Pool Share Token"),
             &String::from_str(&e, "Pool Share Token"),
-            &30
+            &30,
         );
         let swap_pool = pool::Client::new(&e, &pool_address);
         token_b_admin_client.mint(&admin, &1_000_000_000_0000000);
         swap_pool.deposit(&admin, &1_000_000_000_0000000);
 
         // init fee collector
-        let fee_collector = deploy_fee_collector_contract(e.clone());
+        let fee_destination = Address::generate(&e);
+        let fee_collector = deploy_fee_collector_contract(
+            e.clone(),
+            &router.address,
+            &operator,
+            &fee_destination,
+            "",
+            30,
+            50,
+        );
 
-        let contract = create_contract(
+        let buffer = create_contract(
             &e,
             &admin,
             &router.address,
             &fee_collector.address,
-            config.min_time_between_payouts
+            config.min_time_between_payouts,
         );
 
         Self {
             env: e,
             admin,
             operator,
-            contract,
+            buffer,
             router,
             fee_collector,
             users,
@@ -131,7 +139,11 @@ impl Setup<'_> {
 }
 
 pub(crate) fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanTokenClient<'a> {
-    SorobanTokenClient::new(e, &e.register_stellar_asset_contract_v2(admin.clone()).address())
+    SorobanTokenClient::new(
+        e,
+        &e.register_stellar_asset_contract_v2(admin.clone())
+            .address(),
+    )
 }
 
 pub mod pool {
@@ -142,33 +154,24 @@ pub mod pool {
 
 pub(crate) fn get_token_admin_client<'a>(
     e: &Env,
-    address: &Address
+    address: &Address,
 ) -> SorobanTokenAdminClient<'a> {
     SorobanTokenAdminClient::new(e, address)
 }
 
-pub fn create_contract<'a>(
-    e: &Env,
-    admin: &Address,
-    router: &Address,
-    fee_collector: &Address,
-    min_time_between_payouts: u64
-) -> BufferClient<'a> {
-    let contract = BufferClient::new(
-        e,
-        &e.register(crate::Buffer, (admin, router, fee_collector, min_time_between_payouts))
-    );
+pub fn create_contract<'a>(e: &Env) -> BufferClient<'a> {
+    let contract = BufferClient::new(e, &e.register(crate::Buffer, ()));
     contract
 }
 
-pub mod swap_router {
+pub mod pool_router {
     soroban_sdk::contractimport!(
         file = "../../target/wasm32v1-none/release/soroban_pool_router_contract.wasm"
     );
 }
 
-fn deploy_pool_router_contract<'a>(e: Env) -> swap_router::Client<'a> {
-    swap_router::Client::new(&e, &e.register(swap_router::WASM, ()))
+fn deploy_pool_router_contract<'a>(e: Env) -> pool_router::Client<'a> {
+    pool_router::Client::new(&e, &e.register(pool_router::WASM, ()))
 }
 
 pub mod fee_collector {

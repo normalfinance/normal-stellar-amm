@@ -1,12 +1,12 @@
-use crate::errors::{ InsuranceFundError };
+use crate::errors::InsuranceFundError;
+use crate::storage::{get_shares_base, get_total_shares, set_shares_base, set_total_shares};
 use soroban_fixed_point_math::SorobanFixedPoint;
-use crate::storage::{ get_shares_base, get_total_shares, set_total_shares, set_shares_base };
-use soroban_sdk::{ contracttype, log, panic_with_error, Address, Env };
-use utils::bump::{ bump_instance, bump_persistent, bump_temporary };
+use soroban_sdk::{contracttype, log, panic_with_error, Address, Env};
+use utils::bump::{bump_instance, bump_persistent, bump_temporary};
+use utils::errors::math_errors::MathError;
 use utils::helpers::log10_iter;
 use utils::math::safe_math::SafeMath;
-use utils::{ safe_decrement, safe_increment, validate };
-use utils::errors::math_errors::MathError;
+use utils::{safe_decrement, safe_increment, validate};
 
 #[contracttype]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -22,7 +22,7 @@ pub enum StakeAction {
 pub struct Stake {
     pub if_shares: u128,
     pub last_withdraw_request_shares: u128, // get zero as 0 when not in escrow
-    pub if_base: u128, // exponent for if_shares decimal places (for rebase)
+    pub if_base: u128,                      // exponent for if_shares decimal places (for rebase)
     pub last_valid_ts: u64,
     pub last_withdraw_request_value: u128,
     pub last_withdraw_request_ts: u64,
@@ -102,11 +102,8 @@ pub fn apply_rebase_to_insurance_fund(e: &Env, insurance_vault_amount: u128) {
     let shares_base = get_shares_base(e);
 
     if insurance_vault_amount != 0 && insurance_vault_amount < total_shares {
-        let (expo_diff, rebase_divisor) = calculate_rebase_info(
-            e,
-            total_shares,
-            insurance_vault_amount
-        );
+        let (expo_diff, rebase_divisor) =
+            calculate_rebase_info(e, total_shares, insurance_vault_amount);
 
         set_total_shares(e, &total_shares.safe_div(e, rebase_divisor));
         set_shares_base(e, &shares_base.safe_add(e, expo_diff as u128));
@@ -134,21 +131,29 @@ pub fn apply_rebase_to_stake(e: &Env, stake: &mut Stake) {
 
         let rebase_divisor = (10_u128).pow(expo_diff);
 
-        log!(e, "rebasing insurance fund stake: base: {} -> {} ", stake.if_base, shares_base);
+        log!(
+            e,
+            "rebasing insurance fund stake: base: {} -> {} ",
+            stake.if_base,
+            shares_base
+        );
 
         stake.if_base = shares_base;
 
         let old_if_shares = stake.unchecked_if_shares();
         let new_if_shares = old_if_shares.safe_div(e, rebase_divisor);
 
-        log!(e, "rebasing insurance fund stake: shares -> {} ", new_if_shares);
+        log!(
+            e,
+            "rebasing insurance fund stake: shares -> {} ",
+            new_if_shares
+        );
 
         stake.update_if_shares(e, new_if_shares);
 
-        stake.last_withdraw_request_shares = stake.last_withdraw_request_shares.safe_div(
-            e,
-            rebase_divisor
-        );
+        stake.last_withdraw_request_shares = stake
+            .last_withdraw_request_shares
+            .safe_div(e, rebase_divisor);
     }
 }
 
@@ -156,7 +161,7 @@ pub fn vault_amount_to_if_shares(
     e: &Env,
     amount: u128,
     total_if_shares: u128,
-    insurance_vault_amount: u128
+    insurance_vault_amount: u128,
 ) -> u128 {
     // relative to the entire pool + total amount minted
     let n_shares = if insurance_vault_amount > 0 {
@@ -182,7 +187,7 @@ pub fn if_shares_to_vault_amount(
     e: &Env,
     n_shares: u128,
     total_if_shares: u128,
-    insurance_vault_amount: u128
+    insurance_vault_amount: u128,
 ) -> u128 {
     validate!(
         e,
@@ -206,9 +211,11 @@ pub fn if_shares_to_vault_amount(
 pub fn calculate_rebase_info(
     e: &Env,
     total_if_shares: u128,
-    insurance_vault_amount: u128
+    insurance_vault_amount: u128,
 ) -> (u32, u128) {
-    let rebase_divisor_full = total_if_shares.safe_div(e, 10).safe_div(e, insurance_vault_amount);
+    let rebase_divisor_full = total_if_shares
+        .safe_div(e, 10)
+        .safe_div(e, insurance_vault_amount);
 
     let expo_diff = log10_iter(rebase_divisor_full) as u32;
     let rebase_divisor = (10_u128).pow(expo_diff);
@@ -228,7 +235,7 @@ pub fn calculate_if_shares_lost(e: &Env, stake: &Stake, insurance_vault_amount: 
             e,
             stake.last_withdraw_request_value,
             total_shares.safe_sub(e, n_shares),
-            insurance_vault_amount.safe_sub(e, stake.last_withdraw_request_value)
+            insurance_vault_amount.safe_sub(e, stake.last_withdraw_request_value),
         );
 
         // "Issue calculating delta if_shares after canceling request {} < {}", new_n_shares, n_shares

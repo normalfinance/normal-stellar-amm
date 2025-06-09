@@ -1,41 +1,23 @@
 use crate::errors::PoolRouterError;
-use crate::events::{ Events, PoolRouterEvents };
-use crate::rewards::get_rewards_manager;
+use crate::events::{Events, PoolRouterEvents};
+use crate::incentives::get_rewards_manager;
 use crate::storage::{
-    add_pool,
-    add_tokens_set,
-    get_constant_product_pool_hash,
-    get_pool_next_counter,
-    get_token_hash,
-    PoolType,
+    add_pool, add_tokens_set, get_constant_product_pool_hash, get_pool_next_counter,
+    get_token_hash, PoolType,
 };
 use access_control::access::AccessControl;
-use access_control::management::{ MultipleAddressesManagementTrait, SingleAddressManagementTrait };
+use access_control::management::{MultipleAddressesManagementTrait, SingleAddressManagementTrait};
 use access_control::role::Role;
-use rewards::storage::{ BoostFeedStorageTrait, BoostTokenStorageTrait, RewardTokenStorageTrait };
+use rewards::storage::{BoostFeedStorageTrait, BoostTokenStorageTrait, RewardTokenStorageTrait};
 use sep_40_oracle::Asset;
 use soroban_sdk::token::Client as SorobanTokenClient;
-use soroban_sdk::{ panic_with_error, String };
+use soroban_sdk::{panic_with_error, String};
 use soroban_sdk::{
-    symbol_short,
-    xdr::ToXdr,
-    Address,
-    Bytes,
-    BytesN,
-    Env,
-    IntoVal,
-    Symbol,
-    Val,
-    Vec,
+    symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Symbol, Val, Vec,
 };
 use utils::oracle::OracleGuardRails;
 use utils::storage::{
-    InitializeAllParams,
-    InitializeParams,
-    OraclePair,
-    PoolTier,
-    PrivilegedAddresses,
-    TokenInitInfo,
+    InitializeAllParams, InitializeParams, OraclePair, PoolTier, PrivilegedAddresses, TokenInitInfo,
 };
 
 pub fn get_pool_salt(e: &Env, fee_fraction: &u32) -> BytesN<32> {
@@ -70,7 +52,7 @@ pub fn deploy_pool(
     lp_token_name: &String,
     lp_token_symbol: &String,
     fee_fraction: u32,
-    tier: &PoolTier
+    tier: &PoolTier,
 ) -> (BytesN<32>, Address) {
     let tokens_salt = get_tokens_salt(e, tokens);
     let pool_wasm_hash = get_constant_product_pool_hash(e);
@@ -78,13 +60,11 @@ pub fn deploy_pool(
 
     let pool_contract_id = e
         .deployer()
-        .with_current_contract(
-            merge_salt(
-                e,
-                merge_salt(e, tokens_salt.clone(), subpool_salt.clone()),
-                get_pool_counter_salt(e)
-            )
-        )
+        .with_current_contract(merge_salt(
+            e,
+            merge_salt(e, tokens_salt.clone(), subpool_salt.clone()),
+            get_pool_counter_salt(e),
+        ))
         .deploy_v2(pool_wasm_hash, ());
     init_pool(
         e,
@@ -95,7 +75,7 @@ pub fn deploy_pool(
         lp_token_name,
         lp_token_symbol,
         fee_fraction,
-        tier
+        tier,
     );
 
     add_tokens_set(e, tokens);
@@ -104,7 +84,7 @@ pub fn deploy_pool(
         tokens_salt,
         subpool_salt.clone(),
         PoolType::ConstantProduct,
-        pool_contract_id.clone()
+        pool_contract_id.clone(),
     );
 
     Events::new(e).add_pool(
@@ -112,7 +92,7 @@ pub fn deploy_pool(
         pool_contract_id.clone(),
         symbol_short!("constant"),
         subpool_salt.clone(),
-        Vec::<Val>::from_array(e, [fee_fraction.into_val(e)])
+        Vec::<Val>::from_array(e, [fee_fraction.into_val(e)]),
     );
 
     (subpool_salt, pool_contract_id)
@@ -127,7 +107,7 @@ fn init_pool(
     lp_token_name: &String,
     lp_token_symbol: &String,
     fee_fraction: u32,
-    tier: &PoolTier
+    tier: &PoolTier,
 ) {
     let token_wasm_hash = get_token_hash(e);
     let rewards = get_rewards_manager(e);
@@ -139,11 +119,15 @@ fn init_pool(
     let emergency_admin = access_control
         .get_role_safe(&Role::EmergencyAdmin)
         .unwrap_or(admin.clone());
-    let rewards_admin = access_control.get_role_safe(&Role::RewardsAdmin).unwrap_or(admin.clone());
+    let rewards_admin = access_control
+        .get_role_safe(&Role::RewardsAdmin)
+        .unwrap_or(admin.clone());
     let operations_admin = access_control
         .get_role_safe(&Role::OperationsAdmin)
         .unwrap_or(admin.clone());
-    let pause_admin = access_control.get_role_safe(&Role::PauseAdmin).unwrap_or(admin.clone());
+    let pause_admin = access_control
+        .get_role_safe(&Role::PauseAdmin)
+        .unwrap_or(admin.clone());
     let emergency_pause_admins = access_control.get_role_addresses(&Role::EmergencyPauseAdmin);
 
     let params = InitializeAllParams {
@@ -168,15 +152,13 @@ fn init_pool(
             fee_fraction,
             tier: tier.clone(),
         },
-        reward_config: RewardConfig {
-            reward_token,
-        },
+        reward_config: RewardConfig { reward_token },
     };
 
     e.invoke_contract::<()>(
         pool_contract_id,
         &Symbol::new(e, "initialize_all"),
-        Vec::from_array(e, [params.into_val(e)])
+        Vec::from_array(e, [params.into_val(e)]),
     );
 }
 

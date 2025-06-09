@@ -14,10 +14,11 @@ fn test_strict_send() {
         setup.token_b.address.clone(),
     ]);
     let (pool_index, _pool_address) = setup.router.get_pools(&tokens).iter().last().unwrap();
+    let buffer_balance_before = setup.token_b.balance(&setup.buffer.address);
 
     let user = Address::generate(&setup.env);
     setup.token_a_admin_client.mint(&user, &1_0000000);
-    let result = setup.contract.swap(
+    let result = setup.fee_collector.swap(
         &user,
         &(tokens, pool_index, setup.token_b.address.clone()),
         &setup.token_a.address,
@@ -27,6 +28,9 @@ fn test_strict_send() {
     );
     assert_eq!(result, 9870300); // (10000000 - .3%) - 1%
     assert_eq!(setup.token_b.balance(&user), 9870300);
+
+    // test buffer deposit
+    assert_eq!(setup.token_b.balance(&setup.buffer.address), buffer_balance_before + 100); // FIXME:
 }
 
 #[test]
@@ -38,10 +42,11 @@ fn test_strict_receive() {
         setup.token_b.address.clone(),
     ]);
     let (pool_index, _pool_address) = setup.router.get_pools(&tokens).iter().last().unwrap();
+    let buffer_balance_before = setup.token_b.balance(&setup.buffer.address);
 
     let user = Address::generate(&setup.env);
     setup.token_a_admin_client.mint(&user, &1_2000000);
-    let result = setup.contract.swap_strict_receive(
+    let result = setup.fee_collector.swap_strict_receive(
         &user,
         &(tokens, pool_index, setup.token_b.address.clone()),
         &setup.token_a.address,
@@ -51,6 +56,9 @@ fn test_strict_receive() {
     );
     assert_eq!(result, 10130392); // ~ (10000000 + .3%) + 1%
     assert_eq!(setup.token_b.balance(&user), 1_0000000);
+
+    // test buffer deposit
+    assert_eq!(setup.token_b.balance(&setup.buffer.address), buffer_balance_before + 100); // FIXME:
 }
 
 #[test]
@@ -66,7 +74,7 @@ fn test_strict_send_fee_over_max() {
 
     let user = Address::generate(&setup.env);
     setup.token_a_admin_client.mint(&user, &1_0000000);
-    setup.contract.swap(
+    setup.fee_collector.swap(
         &user,
         &(tokens, pool_index, setup.token_b.address.clone()),
         &setup.token_a.address,
@@ -89,7 +97,7 @@ fn test_strict_receive_fee_over_max() {
 
     let user = Address::generate(&setup.env);
     setup.token_a_admin_client.mint(&user, &1_2000000);
-    setup.contract.swap_strict_receive(
+    setup.fee_collector.swap_strict_receive(
         &user,
         &(tokens, pool_index, setup.token_b.address.clone()),
         &setup.token_a.address,
@@ -113,7 +121,7 @@ fn test_strict_send_bad_slippage() {
     setup.token_a_admin_client.mint(&user, &1_0000000);
     let swap_path = (tokens, pool_index, setup.token_b.address.clone());
     assert!(
-        setup.contract
+        setup.fee_collector
             .try_swap(
                 &user,
                 &swap_path,
@@ -125,7 +133,7 @@ fn test_strict_send_bad_slippage() {
             .is_err()
     );
     assert!(
-        setup.contract
+        setup.fee_collector
             .try_swap(&user, &swap_path, &setup.token_a.address, &1_0000000, &9870300, &100)
             .is_ok()
     );
@@ -145,7 +153,7 @@ fn test_strict_receive_bad_slippage() {
     setup.token_a_admin_client.mint(&user, &1_2000000);
     let swap_path = (tokens, pool_index, setup.token_b.address.clone());
     assert!(
-        setup.contract
+        setup.fee_collector
             .try_swap_strict_receive(
                 &user,
                 &swap_path,
@@ -157,7 +165,7 @@ fn test_strict_receive_bad_slippage() {
             .is_err()
     );
     assert!(
-        setup.contract
+        setup.fee_collector
             .try_swap_strict_receive(
                 &user,
                 &swap_path,
@@ -179,10 +187,11 @@ fn test_strict_send_no_fee() {
         setup.token_b.address.clone(),
     ]);
     let (pool_index, _pool_address) = setup.router.get_pools(&tokens).iter().last().unwrap();
+    let buffer_balance_before = setup.token_b.balance(&setup.buffer.address);
 
     let user = Address::generate(&setup.env);
     setup.token_a_admin_client.mint(&user, &1_0000000);
-    let result = setup.contract.swap(
+    let result = setup.fee_collector.swap(
         &user,
         &(tokens, pool_index, setup.token_b.address.clone()),
         &setup.token_a.address,
@@ -191,6 +200,8 @@ fn test_strict_send_no_fee() {
         &0
     );
     assert_eq!(result, 9969999); // (10000000 - .3%)
+
+    assert_eq!(setup.token_b.balance(&setup.buffer.address), buffer_balance_before);
 }
 
 #[test]
@@ -202,10 +213,11 @@ fn test_strict_receive_no_fee() {
         setup.token_b.address.clone(),
     ]);
     let (pool_index, _pool_address) = setup.router.get_pools(&tokens).iter().last().unwrap();
+    let buffer_balance_before = setup.token_b.balance(&setup.buffer.address);
 
     let user = Address::generate(&setup.env);
     setup.token_a_admin_client.mint(&user, &1_2000000);
-    let result = setup.contract.swap_strict_receive(
+    let result = setup.fee_collector.swap_strict_receive(
         &user,
         &(tokens, pool_index, setup.token_b.address.clone()),
         &setup.token_a.address,
@@ -214,6 +226,8 @@ fn test_strict_receive_no_fee() {
         &0
     );
     assert_eq!(result, 10030092); // ~ (10000000 + .3%)
+
+    assert_eq!(setup.token_b.balance(&setup.buffer.address), buffer_balance_before);
 }
 
 #[test]
@@ -228,7 +242,7 @@ fn test_claim_fee() {
 
     let user = Address::generate(&setup.env);
     setup.token_a_admin_client.mint(&user, &1_0000000);
-    setup.contract.swap(
+    setup.fee_collector.swap(
         &user,
         &(tokens, pool_index, setup.token_b.address.clone()),
         &setup.token_a.address,
@@ -236,8 +250,8 @@ fn test_claim_fee() {
         &0,
         &100
     );
-    assert_eq!(setup.contract.claim_fees(&setup.operator, &setup.token_b.address), 99699); // ~ (10000000 - .3%) * 1%
-    assert_eq!(setup.contract.claim_fees(&setup.operator, &setup.token_a.address), 0);
+    assert_eq!(setup.fee_collector.claim_fees(&setup.operator, &setup.token_b.address), 99699); // ~ (10000000 - .3%) * 1%
+    assert_eq!(setup.fee_collector.claim_fees(&setup.operator, &setup.token_a.address), 0);
     assert_eq!(setup.token_a.balance(&setup.fee_destination), 0);
     assert_eq!(setup.token_b.balance(&setup.fee_destination), 99699);
 }
@@ -254,16 +268,16 @@ fn test_claim_fee_and_swap() {
 
     let user = Address::generate(&setup.env);
     setup.token_a_admin_client.mint(&user, &1_0000000);
-    setup.contract.swap(
+    setup.fee_collector.swap(
         &user,
-        (tokens.clone(), pool_index.clone(), setup.token_b.address.clone()),
+        &(tokens.clone(), pool_index.clone(), setup.token_b.address.clone()),
         &setup.token_a.address,
         &1_0000000,
         &0,
         &100
     );
     assert_eq!(
-        setup.contract.claim_fees_and_swap(
+        setup.fee_collector.claim_fees_and_swap(
             &setup.operator,
             &Vec::from_array(&setup.env, [(tokens, pool_index, setup.token_a.address.clone())]),
             &setup.token_b.address,
@@ -271,44 +285,7 @@ fn test_claim_fee_and_swap() {
         ),
         99399
     ); // ~ (10000000 - .3%) * 1%
-    assert_eq!(setup.contract.claim_fees(&setup.operator, &setup.token_a.address), 0);
+    assert_eq!(setup.fee_collector.claim_fees(&setup.operator, &setup.token_a.address), 0);
     assert_eq!(setup.token_a.balance(&setup.fee_destination), 99399);
     assert_eq!(setup.token_b.balance(&setup.fee_destination), 0);
-}
-
-#[test]
-fn test_settle_fee_to_insurance_fund() {
-    let setup = Setup::default();
-
-    let tokens = Vec::from_array(&setup.env, [
-        setup.token_a.address.clone(),
-        setup.token_b.address.clone(),
-    ]);
-    let (pool_index, _pool_address) = setup.router.get_pools(&tokens).iter().last().unwrap();
-
-    let user = Address::generate(&setup.env);
-    setup.token_a_admin_client.mint(&user, &1_0000000);
-    setup.contract.swap(
-        &user,
-        &(tokens, pool_index, setup.token_b.address.clone()),
-        &setup.token_a.address,
-        &1_0000000,
-        &0,
-        &100
-    );
-    assert_eq!(
-        setup.contract.settle_fees_to_insurance_fund(&setup.operator, &setup.token_b.address),
-        99699
-    ); // ~ (10000000 - .3%) * 1%
-    assert_eq!(
-        setup.contract.settle_fees_to_insurance_fund(&setup.operator, &setup.token_a.address),
-        0
-    );
-    assert_eq!(setup.token_a.balance(&setup.fee_destination), 0);
-    assert_eq!(setup.token_b.balance(&setup.fee_destination), 99699);
-
-    assert_eq!(setup.contract.claim_fees(&setup.operator, &setup.token_b.address), 99699); // ~ (10000000 - .3%) * 1%
-    assert_eq!(setup.contract.claim_fees(&setup.operator, &setup.token_a.address), 0);
-    assert_eq!(setup.token_a.balance(&setup.fee_destination), 0);
-    assert_eq!(setup.token_b.balance(&setup.fee_destination), 99699);
 }

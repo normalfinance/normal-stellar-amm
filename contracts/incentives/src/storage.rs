@@ -1,5 +1,8 @@
-use soroban_sdk::{ contracttype, panic_with_error, Address, Env, Map, Vec };
-use utils::{ bump::{ bump_instance, bump_persistent }, errors::storage_errors::StorageError };
+use soroban_sdk::{contracttype, panic_with_error, Address, Env, Map, Vec};
+use utils::{
+    bump::{bump_instance, bump_persistent},
+    errors::storage_errors::StorageError,
+};
 
 // ------------------------------------
 // Data Structures
@@ -22,7 +25,7 @@ pub struct PoolIncentiveData {
     pub accumulated_rewards: u128,
     pub claimed_rewards: u128,
     pub rewards_last_time: u64,
-    // lp fees
+    // lp fees - Tracks how much of each token has been collected as fees per unit of LP token, cumulatively.
     pub fee_growth_a_per_lp: u128,
     pub fee_growth_b_per_lp: u128,
 }
@@ -98,11 +101,18 @@ pub trait WorkingBalancesStorageTrait {
 
 impl WorkingBalancesStorageTrait for Storage {
     fn get_working_balance(&self, user: &Address) -> u128 {
-        self.env.storage().persistent().get(&DataKey::WorkingBalance(user.clone())).unwrap()
+        self.env
+            .storage()
+            .persistent()
+            .get(&DataKey::WorkingBalance(user.clone()))
+            .unwrap()
     }
 
     fn has_working_balance(&self, user: &Address) -> bool {
-        self.env.storage().persistent().has(&DataKey::WorkingBalance(user.clone()))
+        self.env
+            .storage()
+            .persistent()
+            .has(&DataKey::WorkingBalance(user.clone()))
     }
 
     fn set_working_balance(&self, user: &Address, value: u128) {
@@ -112,12 +122,19 @@ impl WorkingBalancesStorageTrait for Storage {
     }
 
     fn get_working_supply(&self) -> u128 {
-        self.env.storage().instance().get(&DataKey::WorkingSupply).unwrap()
+        self.env
+            .storage()
+            .instance()
+            .get(&DataKey::WorkingSupply)
+            .unwrap()
     }
 
     fn set_working_supply(&self, value: u128) {
         bump_instance(&self.env);
-        self.env.storage().instance().set(&DataKey::WorkingSupply, &value);
+        self.env
+            .storage()
+            .instance()
+            .set(&DataKey::WorkingSupply, &value);
     }
 
     fn has_working_supply(&self) -> bool {
@@ -139,37 +156,51 @@ pub trait PoolIncentivesStorageTrait {
 
 impl PoolIncentivesStorageTrait for Storage {
     fn get_pool_incentive_config(&self) -> PoolIncentiveConfig {
-        match self.env.storage().instance().get(&DataKey::PoolIncentiveConfig) {
+        match self
+            .env
+            .storage()
+            .instance()
+            .get(&DataKey::PoolIncentiveConfig)
+        {
             Some(v) => v,
-            None =>
-                PoolIncentiveConfig {
-                    reward_tps: 0,
-                    reward_expired_at: 0,
-                },
+            None => PoolIncentiveConfig {
+                reward_tps: 0,
+                reward_expired_at: 0,
+            },
         }
     }
 
     fn set_pool_incentive_config(&self, config: &PoolIncentiveConfig) {
-        self.env.storage().instance().set(&DataKey::PoolIncentiveConfig, config);
+        self.env
+            .storage()
+            .instance()
+            .set(&DataKey::PoolIncentiveConfig, config);
     }
 
     fn get_pool_incentive_data(&self) -> PoolIncentiveData {
-        match self.env.storage().instance().get(&DataKey::PoolIncentiveData) {
+        match self
+            .env
+            .storage()
+            .instance()
+            .get(&DataKey::PoolIncentiveData)
+        {
             Some(v) => v,
-            None =>
-                PoolIncentiveData {
-                    block: 0,
-                    accumulated_rewards: 0,
-                    claimed_rewards: 0,
-                    rewards_last_time: 0,
-                    fee_growth_a_per_lp: 0,
-                    fee_growth_b_per_lp: 0,
-                },
+            None => PoolIncentiveData {
+                block: 0,
+                accumulated_rewards: 0,
+                claimed_rewards: 0,
+                rewards_last_time: 0,
+                fee_growth_a_per_lp: 0,
+                fee_growth_b_per_lp: 0,
+            },
         }
     }
 
     fn set_pool_incentive_data(&self, data: &PoolIncentiveData) {
-        self.env.storage().instance().set(&DataKey::PoolIncentiveData, data);
+        self.env
+            .storage()
+            .instance()
+            .set(&DataKey::PoolIncentiveData, data);
     }
 }
 
@@ -185,14 +216,22 @@ pub trait UserIncentivesStorageTrait {
 
 impl UserIncentivesStorageTrait for Storage {
     fn get_user_incentive_data(&self, user: &Address) -> Option<UserIncentiveData> {
-        match self.env.storage().persistent().get(&DataKey::UserIncentiveData(user.clone())) {
+        match self
+            .env
+            .storage()
+            .persistent()
+            .get(&DataKey::UserIncentiveData(user.clone()))
+        {
             Some(data) => data,
             None => None,
         }
     }
 
     fn set_user_incentive_data(&self, user: &Address, config: &UserIncentiveData) {
-        self.env.storage().persistent().set(&DataKey::UserIncentiveData(user.clone()), config);
+        self.env
+            .storage()
+            .persistent()
+            .set(&DataKey::UserIncentiveData(user.clone()), config);
     }
 
     fn bump_user_incentive_data(&self, user: &Address) {
@@ -254,7 +293,10 @@ impl LPTokenStorageTrait for Storage {
     }
 
     fn put_lp_token(&self, contract: Address) {
-        self.env.storage().instance().set(&DataKey::LPToken, &contract);
+        self.env
+            .storage()
+            .instance()
+            .set(&DataKey::LPToken, &contract);
     }
 
     fn has_lp_token(&self) -> bool {
@@ -281,7 +323,10 @@ impl RewardTokenStorageTrait for Storage {
     }
 
     fn put_reward_token(&self, contract: Address) {
-        self.env.storage().instance().set(&DataKey::RewardToken, &contract);
+        self.env
+            .storage()
+            .instance()
+            .set(&DataKey::RewardToken, &contract);
     }
 
     fn has_reward_token(&self) -> bool {
