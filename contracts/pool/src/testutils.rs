@@ -22,7 +22,7 @@ use utils::storage::{
 };
 
 use std::vec;
-use token_share::token_contract::{ Client as ShareTokenClient, WASM };
+use pool_tokens::token_contract::{ Client as PoolTokenClient, WASM };
 use utils::test_utils::jump;
 
 pub(crate) struct TestConfig {
@@ -56,15 +56,14 @@ pub(crate) struct Setup<'a> {
     pub(crate) base_oracle_client: MockPriceOracleClient<'a>,
     pub(crate) quote_oracle_price: i128,
     pub(crate) quote_oracle_client: MockPriceOracleClient<'a>,
-    pub(crate) oracle_guard_rails: OracleGuardRails,
     pub(crate) users: vec::Vec<Address>,
-    pub(crate) token1: SorobanTokenClient<'a>,
+    pub(crate) token1: PoolTokenClient<'a>,
     pub(crate) token1_admin_client: SorobanTokenAdminClient<'a>,
     pub(crate) token2: SorobanTokenClient<'a>,
     pub(crate) token2_admin_client: SorobanTokenAdminClient<'a>,
     pub(crate) token_reward: SorobanTokenClient<'a>,
     pub(crate) token_reward_admin_client: SorobanTokenAdminClient<'a>,
-    pub(crate) token_share: ShareTokenClient<'a>,
+    pub(crate) token_lp: PoolTokenClient<'a>,
     pub(crate) liq_pool: PoolClient<'a>,
 
     pub(crate) admin: Address,
@@ -168,17 +167,6 @@ impl Setup<'_> {
             &e.ledger().timestamp()
         );
 
-        let oracle_guard_rails = OracleGuardRails {
-            price_divergence: PriceDivergenceGuardRails {
-                oracle_twap_percent_divergence: PERCENTAGE_PRECISION_U64 / 2,
-            },
-            validity: ValidityGuardRails {
-                slots_before_stale_for_pool: 10, // ~5 seconds
-                confidence_interval_max_size: 20_000, // 2% of price
-                too_volatile_ratio: 5, // 5x or 80% down
-            },
-        };
-
         let liq_pool = create_pool_contract(
             &e,
             &admin,
@@ -225,7 +213,6 @@ impl Setup<'_> {
             base_oracle_client,
             quote_oracle_price,
             quote_oracle_client,
-            oracle_guard_rails,
             users,
             token1,
             token1_admin_client,

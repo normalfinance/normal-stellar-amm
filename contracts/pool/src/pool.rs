@@ -19,13 +19,13 @@ use utils::oracle::OracleGuardRails;
 use utils::oracle::OracleValidity;
 use utils::storage::PoolStatus;
 use utils::storage::PoolTier;
+use utils::token::get_token_balance;
 
 #[contracttype]
 #[derive(Clone)]
 pub struct Pool {
     pub asset: Address,
 
-    pub token_a: Address,
     pub token_b: Address,
 
     pub tier: PoolTier,

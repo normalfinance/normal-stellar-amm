@@ -71,16 +71,16 @@ use soroban_sdk::{
     Vec,
     U256,
 };
-use token_share::{
+use pool_tokens::{
     burn_shares,
-    get_token_share,
+    get_token_lp,
+    get_token_synthetic,
     get_total_shares,
     get_user_balance_shares,
     mint_shares,
-    put_token_share,
+    put_token_lp,
     Client as LPTokenClient,
 };
-use token_synthetic::put_token_synthetic;
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
 use utils::constant::{
@@ -198,20 +198,19 @@ impl PoolTrait for Pool {
             panic_with_error!(&e, PoolValidationError::FeeOutOfBounds);
         }
 
-        put_token_share(&e, share_contract);
+        put_token_lp(&e, share_contract);
         put_token_synthetic(&e, token_a.clone());
         put_reserve_a(&e, 0);
         put_reserve_b(&e, 0);
 
         let pool = PoolType {
-            token_a,
+            asset: params.asset,
             token_b,
             tier: params.tier,
             status: PoolStatus::Initialized,
             fee_fraction: params.fee_fraction,
             base_oracle: params.oracles.base_oracle,
             quote_oracle: params.oracles.quote_oracle,
-            asset: params.asset,
             expiry_ts: 0,
             expiry_price: 0,
             insurance_claim: InsuranceClaim {
@@ -231,7 +230,7 @@ impl PoolTrait for Pool {
     //
     // The pool's share token as an Address.
     fn share_id(e: Env) -> Address {
-        get_token_share(&e)
+        get_token_lp(&e)
     }
 
     // Returns the total shares of the pool.
@@ -250,7 +249,8 @@ impl PoolTrait for Pool {
     // A vector of token addresses.
     fn get_tokens(e: Env) -> Vec<Address> {
         let pool = get_pool(&e);
-        Vec::from_array(&e, [pool.token_a, pool.token_b])
+        let token_synthetic = get_token_synthetic(&e);
+        Vec::from_array(&e, [token_synthetic, pool.token_b])
     }
 
     // Deposits tokens into the pool.
@@ -763,7 +763,7 @@ impl PoolTrait for Pool {
         let pool = get_pool(&e);
         let pool_response = PoolResponse {
             asset_a: AddressAndAmount {
-                address: pool.token_a,
+                address: get_token_synthetic(&e),
                 amount: get_reserve_a(&e),
             },
             asset_b: AddressAndAmount {
@@ -771,7 +771,7 @@ impl PoolTrait for Pool {
                 amount: get_reserve_b(&e),
             },
             asset_lp_share: AddressAndAmount {
-                address: get_token_share(&e),
+                address: get_token_lp(&e),
                 amount: get_total_shares(&e),
             },
         };
@@ -1213,8 +1213,8 @@ impl UpgradeableContract for Pool {
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
         let new_wasm_hash = apply_upgrade(&e);
         let token_new_wasm_hash = get_token_future_wasm(&e);
-        token_share::Client
-            ::new(&e, &get_token_share(&e))
+        pool_tokens::Client
+            ::new(&e, &get_token_lp(&e))
             .upgrade(&e.current_contract_address(), &token_new_wasm_hash);
 
         UpgradeEvents::new(&e).apply_upgrade(
@@ -1270,7 +1270,7 @@ impl UpgradeableLPTokenTrait for Pool {
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
 
         e.invoke_contract::<()>(
-            &get_token_share(&e),
+            &get_token_lp(&e),
             &symbol_short!("upgrade"),
             Vec::from_array(&e, [new_token_wasm.to_val()])
         );
@@ -1450,7 +1450,7 @@ impl RewardsTrait for Pool {
     fn checkpoint_reward(e: Env, token_contract: Address, user: Address, user_shares: u128) {
         // checkpoint reward with provided values to avoid re-entrancy issue
         token_contract.require_auth();
-        if token_contract != get_token_share(&e) {
+        if token_contract != get_token_lp(&e) {
             panic_with_error!(&e, AccessControlError::Unauthorized);
         }
         let rewards = get_rewards_manager(&e);
@@ -1466,7 +1466,7 @@ impl RewardsTrait for Pool {
     ) {
         // checkpoint working balance with provided values to avoid re-entrancy issue
         token_contract.require_auth();
-        if token_contract != get_token_share(&e) {
+        if token_contract != get_token_lp(&e) {
             panic_with_error!(&e, AccessControlError::Unauthorized);
         }
         let rewards = get_rewards_manager(&e);

@@ -1,5 +1,5 @@
 use sep_40_oracle::{ Asset };
-use soroban_sdk::{ contracttype, panic_with_error, Address, Env, Symbol };
+use soroban_sdk::{ contracttype, panic_with_error, Address, Env, IntoVal, Symbol };
 use soroban_fixed_point_math::FixedPoint;
 use utils::{
     constant::{ PRICE_PRECISION, PRICE_PRECISION_I128, PRICE_PRECISION_I64, PRICE_PRECISION_U64 },
@@ -31,8 +31,7 @@ use crate::{
 // # Returns
 //
 // The price of the pool as a u128.
-pub fn get_target_oracle_price(e: &Env, pool: &Pool) -> u128 {
-    let now = e.ledger().timestamp();
+pub fn get_target_oracle_price(e: &Env, pool: &Pool, now: u64) -> u128 {
     let base_oracle_price_data = get_base_oracle_price(e, pool, now);
     let quote_oracle_price_data = get_quote_oracle_price(e, pool, now);
 
@@ -56,7 +55,7 @@ pub fn get_target_oracle_price(e: &Env, pool: &Pool) -> u128 {
 // The price of the token as a u128.
 pub fn get_base_oracle_price(e: &Env, pool: &Pool, now: u64) -> OraclePriceData {
     let oracle_price_data: OraclePriceData = e.invoke_contract(
-        &&get_oracle_registry(&e),
+        &get_oracle_registry(&e),
         &Symbol::new(&e, "get_price"),
         Vec::from_array(&e, [
             e.current_contract_address().to_val(),
@@ -78,7 +77,7 @@ pub fn get_base_oracle_price(e: &Env, pool: &Pool, now: u64) -> OraclePriceData 
 // The price of the token as a u128.
 pub fn get_quote_oracle_price(e: &Env, pool: &Pool, now: u64) -> OraclePriceData {
     let oracle_price_data: OraclePriceData = e.invoke_contract(
-        &&get_oracle_registry(&e),
+        &get_oracle_registry(&e),
         &Symbol::new(&e, "get_price"),
         Vec::from_array(&e, [
             e.current_contract_address().to_val(),

@@ -1,15 +1,21 @@
 use crate::errors::RewardsError;
 use crate::storage::{
-    PoolRewardConfig, PoolRewardData,
-    PoolRewardsStorageTrait, RewardInvDataStorageTrait, RewardTokenStorageTrait, Storage,
-    UserRewardData, UserRewardsStorageTrait, WorkingBalancesStorageTrait,
+    PoolRewardConfig,
+    PoolRewardData,
+    PoolRewardsStorageTrait,
+    RewardInvDataStorageTrait,
+    RewardTokenStorageTrait,
+    Storage,
+    UserRewardData,
+    UserRewardsStorageTrait,
+    WorkingBalancesStorageTrait,
 };
 use crate::RewardsConfig;
 use soroban_fixed_point_math::SorobanFixedPoint;
-use soroban_sdk::token::TokenClient as SorobanTokenClient;
-use soroban_sdk::{panic_with_error, token::TokenClient as Client, Address, Env, Vec};
+use soroban_sdk::{ panic_with_error, Address, Env, Vec };
 use utils::bump::bump_instance;
 use utils::constant::REWARD_PRECISION;
+use utils::token::transfer_token;
 
 // `Manager` orchestrates the reward logic, pulling data and methods from `Storage`.
 // It relies on Storage sub-traits to handle actual storage I/O.
@@ -36,18 +42,18 @@ impl Manager {
         &self,
         user: &Address,
         share_balance: u128,
-        total_share: u128,
+        total_share: u128
     ) -> u128 {
         // b_u = 2.5 * min(0.4 * b_u + 0.6 * S * w_i / W, b_u)
         // let lock_balance = self.get_user_boost_balance(&user);
-        let total_locked = self.get_total_locked();
+        // let total_locked = self.get_total_locked();
 
         let mut adjusted_balance = share_balance;
-        if total_locked > 0 {
-            adjusted_balance +=
-                3 * lock_balance.fixed_mul_floor(&self.env, &total_share, &total_locked) / 2;
-        }
-        let max_effective_balance = share_balance * 5 / 2;
+        // if total_locked > 0 {
+        //     adjusted_balance +=
+        //         3 * lock_balance.fixed_mul_floor(&self.env, &total_share, &total_locked) / 2;
+        // }
+        let max_effective_balance = (share_balance * 5) / 2;
 
         // min(adjusted_balance, max_effective_balance)
         if adjusted_balance > max_effective_balance {
@@ -125,22 +131,18 @@ impl Manager {
 
         if now <= config.expired_at {
             // config not expired yet, yield rewards
-            let generated_tokens = (now - data.last_time) as u128 * config.tps;
-            self.create_new_rewards_data(
-                generated_tokens,
-                working_supply,
-                PoolRewardData {
-                    block: data.block + 1,
-                    accumulated: data.accumulated + generated_tokens,
-                    claimed: data.claimed,
-                    last_time: now,
-                },
-            )
+            let generated_tokens = ((now - data.last_time) as u128) * config.tps;
+            self.create_new_rewards_data(generated_tokens, working_supply, PoolRewardData {
+                block: data.block + 1,
+                accumulated: data.accumulated + generated_tokens,
+                claimed: data.claimed,
+                last_time: now,
+            })
         } else {
             // Already expired
             if data.last_time < config.expired_at {
                 // last snapshot was before config expiration - yield up to expiration
-                let generated_tokens = (config.expired_at - data.last_time) as u128 * config.tps;
+                let generated_tokens = ((config.expired_at - data.last_time) as u128) * config.tps;
                 data = self.create_new_rewards_data(
                     generated_tokens,
                     working_supply,
@@ -149,7 +151,7 @@ impl Manager {
                         accumulated: data.accumulated + generated_tokens,
                         claimed: data.claimed,
                         last_time: config.expired_at,
-                    },
+                    }
                 );
             }
 
@@ -178,16 +180,12 @@ impl Manager {
             // snapshot already made
             data
         } else {
-            self.create_new_rewards_data(
-                0,
-                working_supply,
-                PoolRewardData {
-                    block: data.block + 1,
-                    accumulated: data.accumulated,
-                    claimed: data.claimed,
-                    last_time: now,
-                },
-            )
+            self.create_new_rewards_data(0, working_supply, PoolRewardData {
+                block: data.block + 1,
+                accumulated: data.accumulated,
+                claimed: data.claimed,
+                last_time: now,
+            })
         }
     }
 
@@ -206,7 +204,7 @@ impl Manager {
         &mut self,
         pool_data: &PoolRewardData,
         user: &Address,
-        user_balance_shares: u128,
+        user_balance_shares: u128
     ) -> UserRewardData {
         if let Some(user_data) = self.storage.get_user_reward_data(user) {
             // If no new accumulation, just return
@@ -222,7 +220,7 @@ impl Manager {
             let reward = self.calculate_user_reward(
                 user_data.last_block + 1,
                 pool_data.block,
-                user_balance_shares,
+                user_balance_shares
             );
             self.create_new_user_data(user, pool_data, user_data.to_claim + reward)
         } else {
@@ -245,11 +243,11 @@ impl Manager {
         &mut self,
         start_block: u64,
         end_block: u64,
-        user_share: u128,
+        user_share: u128
     ) -> u128 {
         let result = self.calculate_reward(start_block, end_block);
         // scale by user_share / REWARD_PRECISION
-        result * user_share / REWARD_PRECISION
+        (result * user_share) / REWARD_PRECISION
     }
 
     // ------------------------------------
@@ -271,11 +269,10 @@ impl Manager {
         &mut self,
         user: &Address,
         total_shares: u128,
-        user_balance_shares: u128,
+        user_balance_shares: u128
     ) -> u128 {
         // update pool data & calculate reward
-        self.checkpoint_user(user, total_shares, user_balance_shares)
-            .to_claim
+        self.checkpoint_user(user, total_shares, user_balance_shares).to_claim
     }
 
     // Actually claims the user's reward and transfers tokens.
@@ -283,7 +280,7 @@ impl Manager {
         &mut self,
         user: &Address,
         total_shares: u128,
-        user_balance_shares: u128,
+        user_balance_shares: u128
     ) -> u128 {
         // update pool data & calculate reward
         let UserRewardData {
@@ -323,10 +320,13 @@ impl Manager {
         &mut self,
         user: &Address,
         total_shares: u128,
-        user_balance_shares: u128,
+        user_balance_shares: u128
     ) -> UserRewardData {
-        let (working_balance, new_working_supply) =
-            self.update_working_balance(user, total_shares, user_balance_shares);
+        let (working_balance, new_working_supply) = self.update_working_balance(
+            user,
+            total_shares,
+            user_balance_shares
+        );
 
         let pool_data = self.update_rewards_data(new_working_supply);
         let user_data = self.update_user_reward(&pool_data, user, working_balance);
@@ -362,13 +362,16 @@ impl Manager {
         &mut self,
         user: &Address,
         total_shares: u128,
-        user_balance_shares: u128,
+        user_balance_shares: u128
     ) -> (u128, u128) {
         let prev_working_balance = self.get_working_balance(user, user_balance_shares);
         let prev_working_supply = self.get_working_supply(total_shares);
 
-        let working_balance =
-            self.calculate_effective_balance(user, user_balance_shares, total_shares);
+        let working_balance = self.calculate_effective_balance(
+            user,
+            user_balance_shares,
+            total_shares
+        );
 
         let new_working_supply = prev_working_supply + working_balance - prev_working_balance;
         self.storage.set_working_supply(new_working_supply);
@@ -413,8 +416,7 @@ impl Manager {
     // * `page_number` - The number of the page.
     // * `aggregated_page` - The aggregated page data.
     fn set_reward_inv_data(&mut self, pow: u32, page_number: u64, aggregated_page: Vec<u128>) {
-        self.storage
-            .set_reward_inv_data(pow, page_number, aggregated_page);
+        self.storage.set_reward_inv_data(pow, page_number, aggregated_page);
     }
 
     // ------------------------------------
@@ -455,7 +457,7 @@ impl Manager {
 
             let cell_size = self.config.page_size.pow(pow);
             let page_size = cell_size * self.config.page_size;
-            let cell_idx = block % page_size / cell_size;
+            let cell_idx = (block % page_size) / cell_size;
             let page_number = block / page_size;
             let next_block = block + cell_size;
 
@@ -490,7 +492,7 @@ impl Manager {
 
             let cell_size = self.config.page_size.pow(pow);
             let page_size = cell_size * self.config.page_size;
-            let cell_idx = (block % page_size / cell_size) as u32;
+            let cell_idx = ((block % page_size) / cell_size) as u32;
             let page_number = block / page_size;
 
             let mut aggregated_page = self.get_reward_inv_data(pow, page_number);
@@ -515,7 +517,7 @@ impl Manager {
     // * `total_shares` - The total shares in the pool.
     fn update_reward_inv(&mut self, accumulated: u128, working_supply: u128) {
         let reward_per_share = if working_supply > 0 {
-            REWARD_PRECISION * accumulated / working_supply
+            (REWARD_PRECISION * accumulated) / working_supply
         } else {
             0
         };
@@ -532,7 +534,7 @@ impl Manager {
         &mut self,
         generated_tokens: u128,
         working_supply: u128,
-        new_data: PoolRewardData,
+        new_data: PoolRewardData
     ) -> PoolRewardData {
         // Persist the new pool data
         self.storage.set_pool_reward_data(&new_data);
@@ -546,7 +548,7 @@ impl Manager {
         &self,
         user: &Address,
         pool_data: &PoolRewardData,
-        to_claim: u128,
+        to_claim: u128
     ) -> UserRewardData {
         let new_data = UserRewardData {
             last_block: pool_data.block,
@@ -584,7 +586,7 @@ impl Manager {
             // no rewards configured in future
             rewarded_amount
         } else {
-            let outstanding_reward = (config.expired_at - now) as u128 * config.tps;
+            let outstanding_reward = ((config.expired_at - now) as u128) * config.tps;
             rewarded_amount + outstanding_reward
         }
     }
