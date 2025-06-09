@@ -3,7 +3,7 @@
 mod contract;
 pub mod errors;
 mod events;
-mod buffer_interface;
+mod interface;
 mod reserve;
 mod storage;
 mod test;

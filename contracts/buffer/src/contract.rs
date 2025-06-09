@@ -1,6 +1,6 @@
 use crate::errors::{ BufferError };
 use crate::events::{ Events, BufferEvents };
-use crate::buffer_interface::{ AdminInterface, BufferTrait };
+use crate::interface::{ AdminInterface, BufferTrait };
 use crate::reserve::Reserve;
 use crate::storage::{
     get_buffer_reserve_amount,
@@ -53,26 +53,6 @@ use utils::token::{ transfer_token, validate_tokens_contracts };
 
 #[contract]
 pub struct Buffer;
-
-impl Buffer {
-    pub fn __constructor(
-        e: Env,
-        admin: Address,
-        router: Address,
-        fee_collector: Address,
-        min_time_between_payouts: u64
-    ) {
-        let access_control = AccessControl::new(&e);
-        if access_control.get_role_safe(&Role::Admin).is_some() {
-            panic_with_error!(&e, AccessControlError::AdminAlreadySet);
-        }
-        access_control.set_role_address(&Role::Admin, &admin);
-
-        set_router(&e, &router);
-        set_fee_collector(&e, &fee_collector);
-        set_min_time_between_payouts(&e, &min_time_between_payouts);
-    }
-}
 
 // The `BufferTrait` trait provides the interface for interacting with the buffer.
 #[contractimpl]
@@ -155,6 +135,19 @@ impl BufferTrait for Buffer {
 // The `AdminInterface` trait provides the interface for administrative actions.
 #[contractimpl]
 impl AdminInterface for Buffer {
+    // Initializes the admin user.
+    //
+    // # Arguments
+    //
+    // * `account` - The address of the admin user.
+    fn init_admin(e: Env, account: Address) {
+        let access_control = AccessControl::new(&e);
+        if access_control.get_role_safe(&Role::Admin).is_some() {
+            panic_with_error!(&e, AccessControlError::AdminAlreadySet);
+        }
+        access_control.set_role_address(&Role::Admin, &account);
+    }
+
     // Sets the router address.
     //
     // # Arguments

@@ -3,7 +3,7 @@ use soroban_sdk::{ Address, Env };
 use crate::reserve::Reserve;
 
 pub trait BufferTrait {
-    // Deposit swap fees into Buffer
+    // Deposit swap fees into the Buffer
     fn deposit(e: Env, sender: Address, token: Address, amount: u128);
 
     // Resolve pool liquidity deficit using reserves
@@ -20,17 +20,20 @@ pub trait BufferTrait {
 }
 
 pub trait AdminInterface {
+    // Initialize admin user. Will panic if called twice
+    fn init_admin(e: Env, account: Address);
+
     // Set the Router
     fn set_router(e: Env, admin: Address, router: Address);
 
     // Set the Fee Collector
     fn set_fee_collector(e: Env, admin: Address, fee_collector: Address);
 
-    // Set reserve max balance
-    fn set_reserve_max_balance(e: Env, admin: Address, token: Address, max_balance: u128);
-
     // Set min time between payouts
     fn set_min_time_between_payouts(e: Env, admin: Address, min_time: u64);
+
+    // Set reserve max balance
+    fn set_reserve_max_balance(e: Env, admin: Address, token: Address, max_balance: u128);
 
     // Withdraw surplus reserves
     fn withdraw_surplus(e: Env, admin: Address, token: Address, amount: u128);

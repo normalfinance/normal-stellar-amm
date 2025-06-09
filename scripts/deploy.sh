@@ -149,10 +149,24 @@ stellar contract invoke \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     -- \
-    --admin $ADMIN_ADDRESS \
-    --router $ROUTER_ADDR \
-    --fee_collector $FEE_COLLECTOR_ADDR \
-    --min_time_between_payouts 30
+    init_admin \
+    --admin $ADMIN_ADDRESS
+
+stellar contract invoke \
+    --id $BUFFER_ADDR \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    -- \
+    set_router \
+    --router $ROUTER_ADDR
+
+stellar contract invoke \
+    --id $BUFFER_ADDR \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    -- \
+    set_fee_collector \
+    --fee_collector $FEE_COLLECTOR_ADDR
 
 #   __    _____  ___    ________  ____  ____   _______        __      _____  ___    ______    _______
 #  |" \  (\"   \|"  \  /"       )("  _||_ " | /"      \      /""\    (\"   \|"  \  /" _  "\  /"     "|
