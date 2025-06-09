@@ -3,7 +3,7 @@
 mod contract;
 pub mod errors;
 mod events;
-mod fund_interface;
+mod interface;
 mod storage;
 mod stake;
 mod test;

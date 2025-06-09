@@ -2,7 +2,7 @@ use crate::errors::{ InsuranceFundError };
 use crate::events::Events as FundEvents;
 use crate::events::InsuranceFundEvents;
 
-use crate::fund_interface::{ AdminInterface, InsuranceFundTrait };
+use crate::interface::{ AdminInterface, InsuranceFundTrait };
 use crate::stake::{
     apply_rebase_to_insurance_fund,
     apply_rebase_to_stake,
