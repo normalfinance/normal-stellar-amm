@@ -9,7 +9,16 @@ pub trait BufferTrait {
     // Resolve pool liquidity deficit using reserves
     fn request_payout(e: Env, sender: Address, oken: Address, amount: u128);
 
-    // Getter for a buffer reserve.
+    // Get the Router
+    fn get_router(e: Env) -> Address;
+
+    // Get the Fee Collector
+    fn get_fee_collector(e: Env) -> Address;
+
+    // Get the minimum time between payouts
+    fn get_min_time_between_payouts(e: Env) -> u64;
+
+    // Getter for a Buffer reserve.
     fn get_reserve(e: Env, token: Address) -> Reserve;
 
     // Get the minimum reserve ratio

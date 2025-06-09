@@ -114,19 +114,32 @@ impl BufferTrait for Buffer {
         Events::new(&e).request_payout(token, sender, amount);
     }
 
-    // Returns the pool's reserves.
-    //
-    // # Returns
-    //
-    // A vector of the pool's reserves.
+    // Returns the Router address.
+    fn get_router(e: Env) -> Address {
+        get_router(&e)
+    }
+
+    // Returns the Fee Collector address.
+    fn get_fee_collector(e: Env) -> Address {
+        get_fee_collector(&e)
+    }
+
+    // Returns the minimum time between payouts.
+    fn get_min_time_between_payouts(e: Env) -> u64 {
+        get_min_time_between_payouts(&e)
+    }
+
+    // Returns the Buffer's reserve for a token.
     fn get_reserve(e: Env, token: Address) -> Reserve {
         get_reserve(&e, &token)
     }
 
+    // Returns the minimum reserve ratio.
     fn get_min_reserve_ratio(e: Env) -> u128 {
         get_min_reserve_ratio(&e)
     }
 
+    // Returns the last payout timestampe.
     fn get_last_payout_timestamp(e: Env) -> u64 {
         get_last_payout_timestamp(&e)
     }
