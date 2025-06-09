@@ -39,8 +39,7 @@ Normal is a synthetic asset protocol enabling investors to trade any crypto asse
 
 - **access_control** - Handles permissioned access to contracts using role-based authentication
 - **incentives** - Handles how liquidity provider fees and pool rewards are calculated and claimed
-- **token_share** - Handles LP token utilities
-- **token_synthetic** - Handles synthetic token utilities
+- **pool_tokens** - Handles LP token utilities
 - **upgrade** - Handles contract upgrades
 - **utils** - Handles shared types, utils, constants, errors, macros, and more
 

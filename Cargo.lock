@@ -837,6 +837,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "pool_tokens"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+ "utils",
+]
+
+[[package]]
 name = "powerfmt"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1224,12 +1232,11 @@ dependencies = [
  "access_control",
  "incentives",
  "paste",
+ "pool_tokens",
  "rand",
  "sep-40-oracle",
  "soroban-fixed-point-math",
  "soroban-sdk",
- "token_share",
- "token_synthetic",
  "upgrade",
  "utils",
 ]
@@ -1252,9 +1259,9 @@ dependencies = [
  "access_control",
  "incentives",
  "paste",
+ "pool_tokens",
  "sep-40-oracle",
  "soroban-sdk",
- "token_share",
  "upgrade",
  "utils",
 ]
@@ -1492,22 +1499,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26197e33420244aeb70c3e8c78376ca46571bc4e701e4791c2cd9f57dcb3a43f"
 dependencies = [
  "time-core",
-]
-
-[[package]]
-name = "token_share"
-version = "0.1.0"
-dependencies = [
- "soroban-sdk",
- "utils",
-]
-
-[[package]]
-name = "token_synthetic"
-version = "0.1.0"
-dependencies = [
- "soroban-sdk",
- "utils",
 ]
 
 [[package]]
