@@ -176,6 +176,20 @@ impl AdminInterface for Buffer {
         set_fee_collector(&e, &fee_collector);
     }
 
+    // Sets the minimum time between payouts.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `min_time` - The new minimum time between payouts.
+    fn set_min_time_between_payouts(e: Env, admin: Address, min_time: u64) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, &Role::Admin);
+
+        set_min_time_between_payouts(&e, &min_time);
+    }
+
     // Sets the max reserve balance.
     //
     // # Arguments
@@ -190,20 +204,6 @@ impl AdminInterface for Buffer {
 
         let mut reserve = get_reserve(&e, &token);
         put_reserve(&e, &token, &reserve.update_max_balance(max_balance));
-    }
-
-    // Sets the minimum time between payouts.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `min_time` - The new minimum time between payouts.
-    fn set_min_time_between_payouts(e: Env, admin: Address, min_time: u64) {
-        admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.assert_address_has_role(&admin, &Role::Admin);
-
-        set_min_time_between_payouts(&e, &min_time);
     }
 
     // Withdraws surplus reservess.

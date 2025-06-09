@@ -14,11 +14,12 @@ use crate::reserve::Reserve;
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
-    Router, // The address of the Router contract (who can request_payout).
-    FeeCollector, // The address of the Fee Collector contract (who can deposit).
-    Reserve(Address), //
-    LastPayoutTimestamp, // The last time a payout was executed.
+    Router, // The address of the Router contract (only one who can call `request_payout()`).
+    FeeCollector, // The address of the Fee Collector contract (only one who can call `deposit()`).
     MinTimeBetweenPayouts, // The minimum time between payouts to prevent repeated or too-frequent payouts (rate limiting).
+
+    Reserve(Address), // Map of Buffer reserve state for each token.
+    LastPayoutTimestamp, // The last time a payout was executed.
     MinReserveRatio, // The minimum reserve the Buffer must maintain
 
     IsKilledDeposit,
