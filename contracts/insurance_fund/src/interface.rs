@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{ Address, Env };
 
 pub trait InsuranceFundTrait {
     fn deposit(e: Env, user: Address, amount: u128);
@@ -11,6 +11,9 @@ pub trait InsuranceFundTrait {
 }
 
 pub trait AdminInterface {
+    //
+    fn initialize(e: Env, admin: Address, token: Address);
+
     // Set unstaking period
     fn set_unstaking_period(e: Env, admin: Address, unstaking_period: u64);
 

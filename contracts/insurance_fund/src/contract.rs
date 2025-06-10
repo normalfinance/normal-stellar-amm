@@ -68,26 +68,6 @@ use utils::validate;
 #[contract]
 pub struct InsuranceFund;
 
-impl InsuranceFund {
-    pub fn __constructor(
-        e: Env,
-        admin: Address,
-        token: Address,
-        unstaking_period: u64,
-        max_shares: u128
-    ) {
-        let access_control = AccessControl::new(&e);
-        if access_control.get_role_safe(&Role::Admin).is_some() {
-            panic_with_error!(&e, AccessControlError::AdminAlreadySet);
-        }
-        access_control.set_role_address(&Role::Admin, &admin);
-
-        set_unstaking_period(&e, &unstaking_period);
-        set_max_shares(&e, &max_shares);
-        put_token(&e, &token)
-    }
-}
-
 // The `InsuranceFundTrait` trait provides the interface for interacting with a liquidity pool.
 #[contractimpl]
 impl InsuranceFundTrait for InsuranceFund {
@@ -499,6 +479,21 @@ impl UpgradeableContract for InsuranceFund {
 // The `AdminInterface` trait provides the interface for administrative actions.
 #[contractimpl]
 impl AdminInterface for InsuranceFund {
+    // Initializes the admin user.
+    //
+    // # Arguments
+    //
+    // * `account` - The address of the admin user.
+    fn initialize(e: Env, admin: Address, token: Address) {
+        let access_control = AccessControl::new(&e);
+        if access_control.get_role_safe(&Role::Admin).is_some() {
+            panic_with_error!(&e, AccessControlError::AdminAlreadySet);
+        }
+        access_control.set_role_address(&Role::Admin, &account);
+
+        put_token(&e, &token);
+    }
+
     // Sets the unstaking period.
     //
     // # Arguments
