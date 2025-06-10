@@ -1056,7 +1056,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "soroban-pool-contract"
+name = "pool"
 version = "0.1.0"
 dependencies = [
  "access_control",

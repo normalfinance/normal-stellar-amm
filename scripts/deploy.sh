@@ -20,12 +20,12 @@ echo "Contracts compiled."
 echo "Optimize contracts..."
 
 soroban contract optimize --wasm soroban_token_contract.wasm
-soroban contract optimize --wasm soroban_pool_contract.wasm
-soroban contract optimize --wasm soroban_pool_router_contract.wasm
-soroban contract optimize --wasm soroban_buffer_contract.wasm
-soroban contract optimize --wasm soroban_insurance_fund_contract.wasm
-soroban contract optimize --wasm soroban_oracle_registry_contract.wasm
-soroban contract optimize --wasm soroban_pool_swap_fee_contract.wasm
+soroban contract optimize --wasm pool.wasm
+soroban contract optimize --wasm pool_router.wasm
+soroban contract optimize --wasm buffer.wasm
+soroban contract optimize --wasm insurance_fund.wasm
+soroban contract optimize --wasm oracle_registry.wasm
+soroban contract optimize --wasm pool_swap_fee.wasm
 
 echo "Contracts optimized."
 
@@ -36,7 +36,7 @@ echo "Deploy the soroban_token_contract and capture its contract ID hash..."
 
 XLM="CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
 
-echo "Install the soroban_token and soroban_pool_contract contracts..."
+echo "Install the soroban_token and pool contracts..."
 
 TOKEN_WASM_HASH=$(soroban contract upload \
     --wasm soroban_token_contract.optimized.wasm \
@@ -45,7 +45,7 @@ TOKEN_WASM_HASH=$(soroban contract upload \
 
 # Continue with the rest of the deployments
 POOL_WASM_HASH=$(soroban contract upload \
-    --wasm soroban_pool_contract.optimized.wasm \
+    --wasm pool.optimized.wasm \
     --source $IDENTITY_STRING \
     --network $NETWORK)
 
@@ -62,7 +62,7 @@ echo "Token and pool contracts deployed."
 echo "Initialize pool router..."
 
 POOL_ROUTER_ADDR=$(soroban contract deploy \
-    --wasm soroban_pool_router_contract.optimized.wasm \
+    --wasm pool_router.optimized.wasm \
     --source $IDENTITY_STRING \
     --network $NETWORK)
 
@@ -126,7 +126,7 @@ echo "Tokens and pool router deployed."
 echo "Initialize oracle registry..."
 
 ORACLE_REGISTRY_ADDR=$(soroban contract deploy \
-    --wasm soroban_oracle_registry_contract.optimized.wasm \
+    --wasm oracle_registry.optimized.wasm \
     --source $IDENTITY_STRING \
     --network $NETWORK)
 
@@ -176,7 +176,7 @@ stellar contract invoke \
 echo "Initialize buffer..."
 
 BUFFER_ADDR=$(soroban contract deploy \
-    --wasm soroban_buffer_contract.optimized.wasm \
+    --wasm buffer.optimized.wasm \
     --source $IDENTITY_STRING \
     --network $NETWORK)
 
@@ -208,7 +208,7 @@ stellar contract invoke \
 echo "Initialize insurance fund..."
 
 INSURANCE_FUND_ADDR=$(soroban contract deploy \
-    --wasm soroban_insurance_fund_contract.optimized.wasm \
+    --wasm insurance_fund.optimized.wasm \
     --source $IDENTITY_STRING \
     --network $NETWORK)
 
@@ -250,7 +250,7 @@ stellar contract invoke \
 echo "Initialize fee collector..."
 
 FEE_COLLECTOR_ADDR=$(soroban contract deploy \
-    --wasm soroban_pool_swap_fee_contract.optimized.wasm \
+    --wasm pool_swap_fee.optimized.wasm \
     --source $IDENTITY_STRING \
     --network $NETWORK)
 
