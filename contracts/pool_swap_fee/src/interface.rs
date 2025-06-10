@@ -1,6 +1,6 @@
 use soroban_sdk::{ Address, BytesN, Env, Vec };
 
-pub trait ProviderSwapFeeInterface {
+pub trait PoolSwapFeeInterface {
     // swap
     // Executes a multi-hop token swap with fee deduction.
     //

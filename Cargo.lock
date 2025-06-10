@@ -1242,7 +1242,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "soroban-pool-provider-swap-fee-contract"
+name = "soroban-pool-router-contract"
 version = "0.1.0"
 dependencies = [
  "access_control",
@@ -1256,7 +1256,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "soroban-pool-router-contract"
+name = "soroban-pool-swap-fee-contract"
 version = "0.1.0"
 dependencies = [
  "access_control",

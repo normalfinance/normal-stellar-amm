@@ -1,6 +1,6 @@
 use crate::errors::Error;
 use crate::events::{ Events, ProviderFeeEvents };
-use crate::interface::{ AdminInterface, ProviderSwapFeeInterface };
+use crate::interface::{ AdminInterface, PoolSwapFeeInterface };
 use crate::incentives::get_incentives_manager;
 use access_control::access::{ AccessControl, AccessControlTrait };
 use access_control::emergency::{ get_emergency_mode, set_emergency_mode };
@@ -51,10 +51,10 @@ use utils::constant::{ FEE_DENOMINATOR, PRICE_PRECISION };
 use utils::token::transfer_token;
 
 #[contract]
-pub struct ProviderSwapFeeCollector;
+pub struct PoolSwapFeeCollector;
 
 #[contractimpl]
-impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
+impl PoolSwapFeeInterface for PoolSwapFeeCollector {
     // swap
     // Executes a token swap with fee deduction.
     //
@@ -303,7 +303,7 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
 
 // The `AdminInterface` trait provides the interface for administrative actions.
 #[contractimpl]
-impl AdminInterface for ProviderSwapFeeCollector {
+impl AdminInterface for PoolSwapFeeCollector {
     // Initializes the admin user.
     //
     // # Arguments
@@ -535,7 +535,7 @@ impl AdminInterface for ProviderSwapFeeCollector {
 
 // The `UpgradeableContract` trait provides the interface for upgrading the contract.
 #[contractimpl]
-impl UpgradeableContract for ProviderSwapFeeCollector {
+impl UpgradeableContract for PoolSwapFeeCollector {
     // Returns the version of the contract.
     //
     // # Returns
@@ -613,7 +613,7 @@ impl UpgradeableContract for ProviderSwapFeeCollector {
 
 // The `TransferableContract` trait provides the interface for transferring ownership of the contract.
 #[contractimpl]
-impl TransferableContract for ProviderSwapFeeCollector {
+impl TransferableContract for PoolSwapFeeCollector {
     // Commits an ownership transfer.
     //
     // # Arguments

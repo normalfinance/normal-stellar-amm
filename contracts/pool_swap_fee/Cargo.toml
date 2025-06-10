@@ -1,5 +1,5 @@
 [package]
-name = "soroban-pool-provider-swap-fee-contract"
+name = "soroban-pool-swap-fee-contract"
 version.workspace = true
 edition = "2021"
 publish = false

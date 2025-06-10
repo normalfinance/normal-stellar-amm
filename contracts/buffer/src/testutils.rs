@@ -176,7 +176,7 @@ fn deploy_pool_router_contract<'a>(e: Env) -> pool_router::Client<'a> {
 
 pub mod fee_collector {
     soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/soroban_pool_provider_swap_fee_contract.wasm"
+        file = "../../target/wasm32v1-none/release/soroban_pool_swap_fee_contract.wasm"
     );
 }
 

@@ -25,7 +25,7 @@ soroban contract optimize --wasm soroban_pool_router_contract.wasm
 soroban contract optimize --wasm soroban_buffer_contract.wasm
 soroban contract optimize --wasm soroban_insurance_fund_contract.wasm
 soroban contract optimize --wasm soroban_oracle_registry_contract.wasm
-soroban contract optimize --wasm soroban_pool_provider_swap_fee_contract.wasm
+soroban contract optimize --wasm soroban_pool_swap_fee_contract.wasm
 
 echo "Contracts optimized."
 
@@ -250,7 +250,7 @@ stellar contract invoke \
 echo "Initialize fee collector..."
 
 FEE_COLLECTOR_ADDR=$(soroban contract deploy \
-    --wasm soroban_pool_provider_swap_fee_contract.optimized.wasm \
+    --wasm soroban_pool_swap_fee_contract.optimized.wasm \
     --source $IDENTITY_STRING \
     --network $NETWORK)
 

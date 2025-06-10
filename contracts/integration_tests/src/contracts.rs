@@ -2,7 +2,7 @@ pub(crate) mod constant_product_pool {
     soroban_sdk::contractimport!(file = "../../wasm/soroban_pool_contract.wasm");
 }
 pub(crate) mod swap_fee {
-    soroban_sdk::contractimport!(file = "../../wasm/soroban_pool_provider_swap_fee_contract.wasm");
+    soroban_sdk::contractimport!(file = "../../wasm/soroban_pool_swap_fee_contract.wasm");
 }
 pub(crate) mod router {
     soroban_sdk::contractimport!(file = "../../wasm/soroban_pool_router_contract.wasm");

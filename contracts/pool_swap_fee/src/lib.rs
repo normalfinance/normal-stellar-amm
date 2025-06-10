@@ -9,4 +9,4 @@ mod storage;
 mod test;
 mod testutils;
 
-pub use crate::contract::{ProviderSwapFeeCollector, ProviderSwapFeeCollectorClient};
+pub use crate::contract::{PoolSwapFeeCollector, PoolSwapFeeCollectorClient};

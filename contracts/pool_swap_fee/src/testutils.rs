@@ -1,6 +1,6 @@
 #![cfg(test)]
 extern crate std;
-use crate::ProviderSwapFeeCollectorClient;
+use crate::PoolSwapFeeCollectorClient;
 use sep_40_oracle::testutils::MockPriceOracleWASM;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::{
@@ -25,7 +25,7 @@ impl Default for TestConfig {
 pub(crate) struct Setup<'a> {
     pub(crate) env: Env,
     pub(crate) admin: Address,
-    pub(crate) fee_collector: ProviderSwapFeeCollectorClient<'a>,
+    pub(crate) fee_collector: PoolSwapFeeCollectorClient<'a>,
     pub(crate) router: pool_router::Client<'a>,
     pub(crate) buffer: buffer::Client<'a>,
     pub(crate) fee_destination: Address,
@@ -135,10 +135,10 @@ pub(crate) fn get_token_admin_client<'a>(
     SorobanTokenAdminClient::new(e, address)
 }
 
-pub fn create_contract<'a>(e: &Env) -> ProviderSwapFeeCollectorClient<'a> {
-    let contract = ProviderSwapFeeCollectorClient::new(
+pub fn create_contract<'a>(e: &Env) -> PoolSwapFeeCollectorClient<'a> {
+    let contract = PoolSwapFeeCollectorClient::new(
         e,
-        &e.register(crate::ProviderSwapFeeCollector, ())
+        &e.register(crate::PoolSwapFeeCollector, ())
     );
     contract
 }
