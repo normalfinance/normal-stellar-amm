@@ -18,6 +18,7 @@ pub enum PoolError {
     InvalidExpiryTimestamp = 211,
     // pool specific validation errors
     LiquidityDeficitBelowThreshold = 212,
+    PoolActionPaused = 213,
 }
 
 #[contracterror]

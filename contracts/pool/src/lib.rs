@@ -4,7 +4,6 @@ mod contract;
 pub mod errors;
 mod events;
 mod incentives;
-mod oracle;
 mod pool;
 mod pool_interface;
 mod storage;

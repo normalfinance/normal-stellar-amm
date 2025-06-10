@@ -1,22 +1,29 @@
 use crate::pool::Pool;
 use paste::paste;
-use soroban_sdk::{contracttype, panic_with_error, Address, BytesN, Env};
+use soroban_sdk::{ contracttype, panic_with_error, Address, BytesN, Env };
 pub use utils::bump::bump_instance;
 use utils::errors::storage_errors::StorageError;
 use utils::{
     generate_instance_storage_getter_and_setter_with_default,
-    generate_instance_storage_getter_with_default, generate_instance_storage_setter,
+    generate_instance_storage_getter_with_default,
+    generate_instance_storage_setter,
 };
 
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
-    ReserveA,
-    ReserveB,
-    // struct containing infrequently updated pool data
-    Pool,
-    Router,
-    OracleRegistry,
+    ReserveA, // total token_a amount in the pool (x in the constant product formula)
+    ReserveB, // total token_b amount in the pool (y in the constant product formula)
+
+    Pool, // struct containing infrequently updated pool data
+    Router, // the Pool Router contract address
+    OracleRegistry, // the Oracle Registry contract address (for getting oracle prices)
+
+    Volume24h, // estimated total of volume in market
+    LastTradeTs, // the blockchain unix timestamp at the time of the last trade
+    LastUpdateTs, // the last blockchain slot the amm was updated
+    LastOracleValid, // tracks whether the oracle was considered valid at the last AMM update
+
     IsKilledSwap,
     IsKilledDeposit,
     IsKilledWithdraw,
@@ -48,6 +55,26 @@ generate_instance_storage_getter_and_setter_with_default!(
     DataKey::IsKilledClaim,
     bool,
     false
+);
+
+generate_instance_storage_getter_and_setter_with_default!(volume_24h, DataKey::Volume24h, u128, 0);
+generate_instance_storage_getter_and_setter_with_default!(
+    last_trade_ts,
+    DataKey::LastTradeTs,
+    u64,
+    0
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    last_oracle_valid,
+    DataKey::LastOracleValid,
+    bool,
+    false
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    last_update_ts,
+    DataKey::LastUpdateTs,
+    u64,
+    0
 );
 
 pub(crate) fn set_pool(e: &Env, pool: &Pool) {

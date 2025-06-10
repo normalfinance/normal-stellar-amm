@@ -1,7 +1,7 @@
 use soroban_sdk::{contracttype, Address, BytesN, String, Symbol, Vec};
 
 #[contracttype]
-#[derive(Default, Clone)]
+#[derive(Default, Clone, PartialEq)]
 pub enum PoolStatus {
     // warm up period for initialization, fills are paused
     #[default]
@@ -98,7 +98,7 @@ pub struct InitializeParams {
     // The fee fraction for the pool.
     pub fee_fraction: u32,
     pub tier: PoolTier,
-    pub quote_max_insurance: u64,
+    pub quote_max_insurance: u128,
 }
 
 #[contracttype]
