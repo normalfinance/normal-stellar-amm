@@ -4,6 +4,7 @@ use soroban_sdk::contracterror;
 #[derive(Copy, Clone)]
 #[repr(u32)]
 pub enum TokenError {
+    #[doc = "TokenError"]
     AlreadyInitialized = 601,
     InsufficientBalance = 602,
     InsufficientAllowance = 603,
