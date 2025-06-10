@@ -1,12 +1,8 @@
-use utils::{
-    constant::QUOTE_PRECISION,
-    helpers::{log10, log10_iter},
-};
+#![cfg(test)]
 
-use crate::{
-    stake::{calculate_if_shares_lost, calculate_rebase_info, Stake},
-    testutils::Setup,
-};
+use utils::{ constant::QUOTE_PRECISION, helpers::{ log10, log10_iter } };
+
+use crate::{ stake::{ calculate_if_shares_lost, calculate_rebase_info, Stake }, testutils::Setup };
 
 #[test]
 pub fn basic_stake_if_test() {
@@ -51,7 +47,7 @@ pub fn basic_stake_if_test() {
     let (expo_diff, rebase_div) = calculate_rebase_info(
         &setup.env,
         60_078 * QUOTE_PRECISION,
-        600 * QUOTE_PRECISION + 19234,
+        600 * QUOTE_PRECISION + 19234
     );
     assert_eq!(rebase_div, 10);
     assert_eq!(expo_diff, 1);
@@ -59,14 +55,17 @@ pub fn basic_stake_if_test() {
     let (expo_diff, rebase_div) = calculate_rebase_info(
         &setup.env,
         60_078 * QUOTE_PRECISION,
-        601 * QUOTE_PRECISION + 19234,
+        601 * QUOTE_PRECISION + 19234
     );
     assert_eq!(rebase_div, 1);
     assert_eq!(expo_diff, 0);
 
     // $800M goes to 1e-6 of dollar
-    let (expo_diff, rebase_div) =
-        calculate_rebase_info(&setup.env, 800_000_078 * QUOTE_PRECISION, 1_u128);
+    let (expo_diff, rebase_div) = calculate_rebase_info(
+        &setup.env,
+        800_000_078 * QUOTE_PRECISION,
+        1_u128
+    );
 
     assert_eq!(rebase_div, 10000000000000);
     assert_eq!(expo_diff, 13);
@@ -156,8 +155,8 @@ pub fn if_shares_lost_test() {
     let lost_shares = calculate_if_shares_lost(&setup.env, &if_stake, if_balance);
     assert_eq!(lost_shares, 90_909_092); // giving up $5 of gains
     assert_eq!(
-        (9090908 * if_balance) / (total_shares - lost_shares)
-            < if_stake.last_withdraw_request_value,
+        (9090908 * if_balance) / (total_shares - lost_shares) <
+            if_stake.last_withdraw_request_value,
         true
     );
 }

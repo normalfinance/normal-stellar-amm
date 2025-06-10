@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 tasks:
   clean:
     cmd: cargo clean
@@ -18,9 +18,7 @@ tasks:
   test:
     deps:
       - build
-    cmds:
-      - task -d ../pool_router build || exit 1
-      - cargo test
+    cmd: cargo test
 
   test_slow:
     cmds:

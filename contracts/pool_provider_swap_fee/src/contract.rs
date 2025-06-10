@@ -1,19 +1,33 @@
 use crate::errors::Error;
 use crate::events::{ Events, ProviderFeeEvents };
-use crate::helpers;
 use crate::interface::{ AdminInterface, ProviderSwapFeeInterface };
+use crate::incentives::get_incentives_manager;
+use access_control::access::{ AccessControl, AccessControlTrait };
+use access_control::emergency::{ get_emergency_mode, set_emergency_mode };
+use access_control::errors::AccessControlError;
+use access_control::events::Events as AccessControlEvents;
+use access_control::interface::TransferableContract;
+use access_control::management::{ MultipleAddressesManagementTrait, SingleAddressManagementTrait };
+use access_control::role::Role;
+use access_control::role::SymbolRepresentation;
+use access_control::transfer::TransferOwnershipTrait;
+use access_control::utils::{
+    require_pause_admin_or_owner,
+    require_pause_or_emergency_pause_admin_or_owner,
+};
+use pool_tokens::{get_total_lp_tokens, get_user_balance_lp};
+use utils::math::safe_math::SafeMath;
 use crate::storage::{
     get_buffer,
     get_buffer_fraction,
     get_fee_destination,
     get_lp_revenue_fraction,
     get_max_swap_fee_fraction,
-    get_operator,
     get_router,
     set_buffer,
+    set_buffer_fraction,
     set_fee_destination,
     set_max_swap_fee_fraction,
-    set_operator,
     set_router,
 };
 use soroban_sdk::auth::{ ContractContext, InvokerContractAuthEntry, SubContractInvocation };
@@ -30,6 +44,9 @@ use soroban_sdk::{
     Symbol,
     Vec,
 };
+use upgrade::events::Events as UpgradeEvents;
+use upgrade::interface::UpgradeableContract;
+use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
 use utils::constant::{ FEE_DENOMINATOR, PRICE_PRECISION };
 use utils::token::transfer_token;
 
@@ -67,7 +84,7 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
             panic_with_error!(&e, Error::FeeFractionTooHigh);
         }
 
-        let (_, _, token_out) = swap;
+        let (_, _, token_out) = swap.clone();
 
         transfer_token(&e, &token_in, &user, &e.current_contract_address(), &(in_amount as i128));
 
@@ -121,14 +138,52 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
 
         // Deposit portion of swap fee to the Buffer
         let protocol_fee_amount = fee_amount.safe_sub(&e, lp_fee_amount);
-        let remaining_fee = deposit_fee_to_buffer(&e, token_out, protocol_fee_amount);
+
+        let buffer_fraction = get_buffer_fraction(&e);
+        let fee_amount_for_buffer = (protocol_fee_amount * (buffer_fraction as u128)) / 10_000_u128;
+        let buffer = get_buffer(&e);
+
+        e.authorize_as_current_contract(
+            vec![
+                &e,
+                InvokerContractAuthEntry::Contract(SubContractInvocation {
+                    context: ContractContext {
+                        contract: token_out.clone(),
+                        fn_name: Symbol::new(&e, "transfer"),
+                        args: (
+                            e.current_contract_address(),
+                            buffer.clone(),
+                            fee_amount_for_buffer as i128,
+                        ).into_val(&e),
+                    },
+                    sub_invocations: vec![&e],
+                })
+            ]
+        );
+        let _: u128 = e.invoke_contract(
+            &get_buffer(&e),
+            &Symbol::new(&e, "deposit"),
+            Vec::from_array(&e, [
+                e.current_contract_address().to_val(),
+                token_out.clone().to_val(),
+                fee_amount_for_buffer.into_val(&e),
+            ])
+        );
+
+        Events::new(&e).settle_revenue(token_out, fee_amount_for_buffer as u128);
+
+        let remaining_fee = protocol_fee_amount.safe_sub(&e, fee_amount_for_buffer);
 
         // Update total incentives data and refresh/initialize user incentive
+        let out_idx = 0;
         let incentives = get_incentives_manager(&e);
-        let total_shares = get_total_shares(&e);
+        let total_shares = get_total_lp_tokens(&e);
+        let user_shares = get_user_balance_lp(&e, &user);
         let token_a_fee = if out_idx == 0 { lp_fee_amount } else { 0 };
         let token_b_fee = if out_idx == 0 { 0 } else { lp_fee_amount };
-        incentives.manager().update_incentives_data(total_shares, token_a_fee, token_b_fee);
+        incentives
+            .manager()
+            .checkpoint_user(&user, total_shares, user_shares, token_a_fee, token_b_fee);
 
         amount_out_w_fee
     }
@@ -162,7 +217,7 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
             panic_with_error!(&e, Error::FeeFractionTooHigh);
         }
 
-        let (_, _, token_out) = swap;
+        let (_, _, token_out) = swap.clone();
 
         transfer_token(&e, &token_in, &user, &e.current_contract_address(), &(in_max as i128));
         let router = get_router(&e);
@@ -207,7 +262,40 @@ impl ProviderSwapFeeInterface for ProviderSwapFeeCollector {
         Events::new(&e).charge_provider_fee(token_in, fee_amount);
 
         // Deposit portion of swap fee to the Buffer
-        deposit_fee_to_buffer(&e, token_out, fee_amount);
+        let buffer_fraction = get_buffer_fraction(&e);
+        let fee_amount_for_buffer = (fee_amount * (buffer_fraction as u128)) / 10_000_u128;
+        let buffer = get_buffer(&e);
+
+        e.authorize_as_current_contract(
+            vec![
+                &e,
+                InvokerContractAuthEntry::Contract(SubContractInvocation {
+                    context: ContractContext {
+                        contract: token_out.clone(),
+                        fn_name: Symbol::new(&e, "transfer"),
+                        args: (
+                            e.current_contract_address(),
+                            buffer.clone(),
+                            fee_amount_for_buffer as i128,
+                        ).into_val(&e),
+                    },
+                    sub_invocations: vec![&e],
+                })
+            ]
+        );
+        let _: u128 = e.invoke_contract(
+            &get_buffer(&e),
+            &Symbol::new(&e, "deposit"),
+            Vec::from_array(&e, [
+                e.current_contract_address().to_val(),
+                token_out.clone().to_val(),
+                fee_amount_for_buffer.into_val(&e),
+            ])
+        );
+
+        Events::new(&e).settle_revenue(token_out, fee_amount_for_buffer as u128);
+
+        fee_amount.safe_sub(&e, fee_amount_for_buffer);
 
         amount_in_with_fee
     }
@@ -235,7 +323,7 @@ impl AdminInterface for ProviderSwapFeeCollector {
     //
     // * `admin` - The address of the admin.
     // * `router` - The address of the router contract.
-    pub fn set_router(e: Env, admin: Address, router: Address) {
+    fn set_router(e: Env, admin: Address, router: Address) {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
         access_control.assert_address_has_role(&admin, &Role::Admin);
@@ -249,7 +337,7 @@ impl AdminInterface for ProviderSwapFeeCollector {
     //
     // * `admin` - The address of the admin.
     // * `buffer` - The address of the Buffer contract.
-    pub fn set_buffer(e: Env, admin: Address, buffer: Address) {
+    fn set_buffer(e: Env, admin: Address, buffer: Address) {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
         access_control.assert_address_has_role(&admin, &Role::Admin);
@@ -364,6 +452,7 @@ impl AdminInterface for ProviderSwapFeeCollector {
         let access_control = AccessControl::new(&e);
         access_control.assert_address_has_role(&admin, &Role::Admin);
 
+        let token_client = SorobanTokenClient::new(&e, &token);
         let amount = token_client.balance(&e.current_contract_address());
         transfer_token(
             &e,
@@ -400,7 +489,7 @@ impl AdminInterface for ProviderSwapFeeCollector {
         let access_control = AccessControl::new(&e);
         access_control.assert_address_has_role(&admin, &Role::Admin);
 
-        let (_, _, token_out) = swap;
+        let (_, _, token_out) = swap.clone();
         let router = get_router(&e);
         let token_client = SorobanTokenClient::new(&e, &token);
         let amount = token_client.balance(&e.current_contract_address()) as u128;
@@ -426,7 +515,7 @@ impl AdminInterface for ProviderSwapFeeCollector {
             &Symbol::new(&e, "swap"),
             Vec::from_array(&e, [
                 e.current_contract_address().to_val(),
-                swaps_chain.to_val(),
+                swap.into_val(&e),
                 token.clone().to_val(),
                 amount.into_val(&e),
                 out_min.into_val(&e),
@@ -444,39 +533,162 @@ impl AdminInterface for ProviderSwapFeeCollector {
     }
 }
 
-fn deposit_fee_to_buffer(e: &Env, token: Address, fee: u128) -> u128 {
-    let buffer_fraction = get_buffer_fraction(e);
-    let fee_amount_for_buffer = (fee * (buffer_fraction as u128)) / 10_000_u128;
-    let buffer = get_buffer(e);
+// The `UpgradeableContract` trait provides the interface for upgrading the contract.
+#[contractimpl]
+impl UpgradeableContract for ProviderSwapFeeCollector {
+    // Returns the version of the contract.
+    //
+    // # Returns
+    //
+    // The version of the contract as a u32.
+    fn version() -> u32 {
+        150
+    }
 
-    e.authorize_as_current_contract(
-        vec![
-            &e,
-            InvokerContractAuthEntry::Contract(SubContractInvocation {
-                context: ContractContext {
-                    contract: token.clone(),
-                    fn_name: Symbol::new(e, "transfer"),
-                    args: (
-                        e.current_contract_address(),
-                        buffer.clone(),
-                        fee_amount_for_buffer as i128,
-                    ).into_val(e),
-                },
-                sub_invocations: vec![&e],
-            })
-        ]
-    );
-    e.invoke_contract(
-        &get_buffer(e),
-        &Symbol::new(e, "deposit"),
-        Vec::from_array(e, [
-            e.current_contract_address().to_val(),
-            token.clone().to_val(),
-            fee_amount_for_buffer.into_val(e),
-        ])
-    );
+    // Commits a new wasm hash for a future upgrade.
+    // The upgrade will be available through `apply_upgrade` after the standard upgrade delay
+    // unless the system is in emergency mode.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `new_wasm_hash` - The new wasm hash to commit.
+    fn commit_upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32>) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        commit_upgrade(&e, &new_wasm_hash);
+        UpgradeEvents::new(&e).commit_upgrade(Vec::from_array(&e, [new_wasm_hash.clone()]));
+    }
 
-    Events::new(e).settle_revenue(token, fee_amount_for_buffer as u128);
+    // Applies the committed upgrade.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn apply_upgrade(e: Env, admin: Address) -> BytesN<32> {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        let new_wasm_hash = apply_upgrade(&e);
+        UpgradeEvents::new(&e).apply_upgrade(Vec::from_array(&e, [new_wasm_hash.clone()]));
+        new_wasm_hash
+    }
 
-    fee_amount.safe_sub(&e, fee_amount_for_buffer)
+    // Reverts the committed upgrade.
+    // This can be used to cancel a previously committed upgrade.
+    // The upgrade will be canceled only if it has not been applied yet.
+    // If the upgrade has already been applied, it cannot be reverted.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn revert_upgrade(e: Env, admin: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        revert_upgrade(&e);
+        UpgradeEvents::new(&e).revert_upgrade();
+    }
+
+    // Sets the emergency mode.
+    // When the emergency mode is set to true, the contract will allow instant upgrades without the delay.
+    // This is useful in case of critical issues that need to be fixed immediately.
+    // When the emergency mode is set to false, the contract will require the standard upgrade delay.
+    // The emergency mode can only be set by the emergency admin.
+    //
+    // # Arguments
+    //
+    // * `emergency_admin` - The address of the emergency admin.
+    // * `value` - The value to set the emergency mode to.
+    fn set_emergency_mode(e: Env, emergency_admin: Address, value: bool) {
+        emergency_admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&emergency_admin, &Role::EmergencyAdmin);
+        set_emergency_mode(&e, &value);
+        AccessControlEvents::new(&e).set_emergency_mode(value);
+    }
+
+    // Returns the emergency mode flag value.
+    fn get_emergency_mode(e: Env) -> bool {
+        get_emergency_mode(&e)
+    }
+}
+
+// The `TransferableContract` trait provides the interface for transferring ownership of the contract.
+#[contractimpl]
+impl TransferableContract for ProviderSwapFeeCollector {
+    // Commits an ownership transfer.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `role_name` - The name of the role to transfer ownership of. The role must be one of the following:
+    //     * `Admin`
+    //     * `EmergencyAdmin`
+    // * `new_address` - New address for the role
+    fn commit_transfer_ownership(e: Env, admin: Address, role_name: Symbol, new_address: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, &Role::Admin);
+
+        let role = Role::from_symbol(&e, role_name);
+        access_control.commit_transfer_ownership(&role, &new_address);
+        AccessControlEvents::new(&e).commit_transfer_ownership(role, new_address);
+    }
+
+    // Applies the committed ownership transfer.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `role_name` - The name of the role to transfer ownership of. The role must be one of the following:
+    //     * `Admin`
+    //     * `EmergencyAdmin`
+    fn apply_transfer_ownership(e: Env, admin: Address, role_name: Symbol) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, &Role::Admin);
+
+        let role = Role::from_symbol(&e, role_name);
+        let new_address = access_control.apply_transfer_ownership(&role);
+        AccessControlEvents::new(&e).apply_transfer_ownership(role, new_address);
+    }
+
+    // Reverts the committed ownership transfer.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `role_name` - The name of the role to transfer ownership of. The role must be one of the following:
+    //     * `Admin`
+    //     * `EmergencyAdmin`
+    fn revert_transfer_ownership(e: Env, admin: Address, role_name: Symbol) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, &Role::Admin);
+
+        let role = Role::from_symbol(&e, role_name);
+        access_control.revert_transfer_ownership(&role);
+        AccessControlEvents::new(&e).revert_transfer_ownership(role);
+    }
+
+    // Returns the future address for the role.
+    // The future address is the address that the ownership of the role will be transferred to.
+    // The future address is set using the `commit_transfer_ownership` function.
+    // The address will be defaulted to the current address if the transfer is not committed.
+    //
+    // # Arguments
+    //
+    // * `role_name` - The name of the role to get the future address for. The role must be one of the following:
+    //    * `Admin`
+    //    * `EmergencyAdmin`
+    fn get_future_address(e: Env, role_name: Symbol) -> Address {
+        let access_control = AccessControl::new(&e);
+        let role = Role::from_symbol(&e, role_name);
+        match access_control.get_transfer_ownership_deadline(&role) {
+            0 =>
+                match access_control.get_role_safe(&role) {
+                    Some(address) => address,
+                    None => panic_with_error!(&e, AccessControlError::RoleNotFound),
+                }
+            _ => access_control.get_future_address(&role),
+        }
+    }
 }

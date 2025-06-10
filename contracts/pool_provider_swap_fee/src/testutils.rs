@@ -2,7 +2,6 @@
 extern crate std;
 use crate::ProviderSwapFeeCollectorClient;
 use sep_40_oracle::testutils::MockPriceOracleWASM;
-use sep_40_oracle::Asset;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient,

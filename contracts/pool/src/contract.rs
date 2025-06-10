@@ -1023,7 +1023,7 @@ impl AdminInterfaceTrait for Pool {
         insurance_withdraw
     }
 
-    fn pay_insurance_claim(e: Env, sender: Address, amount: u128) {
+    fn pay_insurance_claim(e: Env, sender: Address, amount: u128) -> u128 {
         sender.require_auth();
 
         let pool = get_pool(&e);
@@ -1040,6 +1040,8 @@ impl AdminInterfaceTrait for Pool {
         // Update the reserves
         let reserve_b = get_reserve_b(&e);
         put_reserve_b(&e, reserve_b + amount);
+
+        amount
     }
 
     // Stops the pool deposits instantly.

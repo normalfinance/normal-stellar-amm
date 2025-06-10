@@ -66,8 +66,8 @@ pub(crate) fn get_fee_collector(e: &Env) -> Address {
     }
 }
 
-pub(crate) fn get_reserve(e: &Env, token: Address) -> Reserve {
-    let key = DataKey::Reserve(token);
+pub(crate) fn get_reserve(e: &Env, token: &Address) -> Reserve {
+    let key = DataKey::Reserve(token.clone());
     match e.storage().persistent().get(&key) {
         Some(value) => {
             bump_persistent(e, &key);
@@ -77,8 +77,8 @@ pub(crate) fn get_reserve(e: &Env, token: Address) -> Reserve {
     }
 }
 
-pub(crate) fn put_reserve(e: &Env, token: Address, reserve_info: &Reserve) {
-    let key = DataKey::Reserve(token);
+pub(crate) fn put_reserve(e: &Env, token: &Address, reserve_info: &Reserve) {
+    let key = DataKey::Reserve(token.clone());
     e.storage().persistent().set(&key, reserve_info);
     bump_persistent(e, &key);
 }

@@ -12,7 +12,7 @@ tasks:
   build:
     cmds:
       - soroban contract build --package soroban-insurance-fund-contract
-      - soroban contract optimize --wasm ../../target/wasm32v1-none/release/soroban_insurnace_fund_contract.wasm --wasm-out ../../target/wasm32v1-none/release/soroban_insurnace_fund_contract.wasm
+      - soroban contract optimize --wasm ../../target/wasm32v1-none/release/soroban_insurance_fund_contract.wasm --wasm-out ../../target/wasm32v1-none/release/soroban_insurance_fund_contract.wasm
       - ls -l ../../target/wasm32v1-none/release/*.wasm
 
   test:

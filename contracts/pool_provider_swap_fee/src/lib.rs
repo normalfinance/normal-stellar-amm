@@ -3,7 +3,7 @@
 mod contract;
 mod errors;
 mod events;
-mod helpers;
+mod incentives;
 mod interface;
 mod storage;
 mod test;

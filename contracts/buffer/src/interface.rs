@@ -51,7 +51,7 @@ pub trait AdminInterface {
     fn sync(e: Env, admin: Address, token: Address);
 
     // Skim excess token balances
-    fn skim(e: Env, admin: Address, token: Address) -> u128;
+    fn skim(e: Env, admin: Address, token: Address) -> i128;
 
     // Stop buffer instantly
     fn kill_deposit(e: Env, admin: Address);

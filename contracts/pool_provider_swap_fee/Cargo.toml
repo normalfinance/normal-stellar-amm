@@ -12,8 +12,10 @@ crate-type = ["cdylib"]
 soroban-sdk = { workspace = true }
 paste = { workspace = true }
 utils = { workspace = true }
-sep-40-oracle = { workspace = true }
+access_control = { workspace = true }
 incentives = { workspace = true }
+pool_tokens = { workspace = true }
+upgrade = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
