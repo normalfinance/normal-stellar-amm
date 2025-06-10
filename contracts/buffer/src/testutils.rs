@@ -148,7 +148,7 @@ pub(crate) fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanToke
 
 pub mod pool {
     soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/soroban_pool_contract.wasm"
+        file = "../../target/wasm32v1-none/release/pool.wasm"
     );
 }
 
@@ -166,7 +166,7 @@ pub fn create_contract<'a>(e: &Env) -> BufferClient<'a> {
 
 pub mod pool_router {
     soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/soroban_pool_router_contract.wasm"
+        file = "../../target/wasm32v1-none/release/pool_router.wasm"
     );
 }
 
@@ -176,7 +176,7 @@ fn deploy_pool_router_contract<'a>(e: Env) -> pool_router::Client<'a> {
 
 pub mod fee_collector {
     soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/soroban_pool_swap_fee_contract.wasm"
+        file = "../../target/wasm32v1-none/release/pool_swap_fee.wasm"
     );
 }
 
@@ -193,7 +193,7 @@ fn install_token_wasm(e: &Env) -> BytesN<32> {
 
 fn install_liq_pool_hash(e: &Env) -> BytesN<32> {
     soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/soroban_pool_contract.wasm"
+        file = "../../target/wasm32v1-none/release/pool.wasm"
     );
     e.deployer().upload_contract_wasm(WASM)
 }

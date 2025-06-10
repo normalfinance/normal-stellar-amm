@@ -11,8 +11,8 @@ tasks:
 
   build:
     cmds:
-      - soroban contract build --package soroban-oracle-registry-contract
-      - soroban contract optimize --wasm ../../target/wasm32v1-none/release/soroban_oracle_registry_contract.wasm --wasm-out ../../target/wasm32v1-none/release/soroban_oracle_registry_contract.wasm
+      - soroban contract build --package oracle-registry
+      - soroban contract optimize --wasm ../../target/wasm32v1-none/release/oracle_registry.wasm --wasm-out ../../target/wasm32v1-none/release/oracle_registry.wasm
       - ls -l ../../target/wasm32v1-none/release/*.wasm
 
   test:

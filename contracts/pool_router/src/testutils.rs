@@ -35,7 +35,7 @@ pub fn install_token_wasm(e: &Env) -> BytesN<32> {
 
 pub mod pool {
     soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/soroban_pool_contract.wasm"
+        file = "../../target/wasm32v1-none/release/pool.wasm"
     );
 }
 

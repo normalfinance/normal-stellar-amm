@@ -1,5 +1,5 @@
 [package]
-name = "soroban-pool-router-contract"
+name = "pool-router"
 version.workspace = true
 edition = "2021"
 publish = false

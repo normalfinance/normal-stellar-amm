@@ -1,5 +1,5 @@
 [package]
-name = "soroban-insurance-fund-contract"
+name = "insurance-fund"
 version.workspace = true
 edition = "2021"
 publish = false

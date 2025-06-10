@@ -11,8 +11,8 @@ tasks:
 
   build:
     cmds:
-      - soroban contract build --package soroban-buffer-contract
-      - soroban contract optimize --wasm ../../target/wasm32v1-none/release/soroban_buffer_contract.wasm --wasm-out ../../target/wasm32v1-none/release/soroban_buffer_contract.wasm
+      - soroban contract build --package buffer
+      - soroban contract optimize --wasm ../../target/wasm32v1-none/release/buffer.wasm --wasm-out ../../target/wasm32v1-none/release/buffer.wasm
       - ls -l ../../target/wasm32v1-none/release/*.wasm
 
   test:
