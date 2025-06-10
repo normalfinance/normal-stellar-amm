@@ -1,6 +1,16 @@
 use soroban_sdk::{ Address, Env };
 
+use crate::stake::Stake;
+
 pub trait InsuranceFundTrait {
+    fn get_unstaking_period(e: Env) -> u64;
+
+    fn get_total_shares(e: Env) -> u128;
+
+    fn get_max_shares(e: Env) -> u128;
+
+    fn get_stake(e: Env, user: Address) -> Stake;
+
     fn deposit(e: Env, user: Address, amount: u128);
 
     fn request_withdraw(env: Env, user: Address, amount: u128);

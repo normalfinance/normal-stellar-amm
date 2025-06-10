@@ -3,6 +3,7 @@ use crate::events::Events as FundEvents;
 use crate::events::InsuranceFundEvents;
 
 use crate::interface::{ AdminInterface, InsuranceFundTrait };
+use crate::stake::Stake;
 use crate::stake::{
     apply_rebase_to_insurance_fund,
     apply_rebase_to_stake,
@@ -71,6 +72,23 @@ pub struct InsuranceFund;
 // The `InsuranceFundTrait` trait provides the interface for interacting with a liquidity pool.
 #[contractimpl]
 impl InsuranceFundTrait for InsuranceFund {
+    fn get_unstaking_period(e: Env) -> u64 {
+        get_unstaking_period(&e)
+    }
+
+    fn get_total_shares(e: Env) -> u128 {
+        get_total_shares(&e)
+    }
+
+    fn get_max_shares(e: Env) -> u128 {
+        get_max_shares(&e)
+    }
+
+    fn get_stake(e: Env, user: Address) -> Stake {
+        user.require_auth();
+        get_stake(&e, &user)
+    }
+
     fn deposit(e: Env, user: Address, amount: u128) {
         user.require_auth();
 
