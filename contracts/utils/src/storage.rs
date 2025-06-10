@@ -87,9 +87,9 @@ pub struct InitializeParams {
     // The address of the Oracle Registry.
     pub oracle_registry: Address,
     // The
-    pub base_asset_id: AssetId,
+    pub base_asset_id: Symbol,
     //
-    pub quote_asset_id: AssetId,
+    pub quote_asset_id: Symbol,
     //
     pub asset: Address,
     pub lp_token_info: TokenInitInfo,
@@ -153,13 +153,6 @@ pub struct PoolInfo {
 //  //      /  // ___)_  //  \ ___ |.  |    __/  \\      |.  |    //      /   /   /
 // |:  __   \ (:      "|(:   _(  _|/\  |\  /" \   :)     \:  |   |:  __   \  /   /
 // |__|  \___) \_______) \_______)(__\_|_)(_______/       \__|   |__|  \___)|___/
-
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[contracttype]
-pub struct AssetId {
-    pub symbol: Symbol, // e.g. "BTC", "ETH"
-    pub chain: Symbol,  // optional: e.g. "Ethereum", "Solana"
-}
 
 #[derive(Clone, Debug)]
 #[contracttype]

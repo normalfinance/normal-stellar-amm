@@ -16,6 +16,7 @@ use pool_tokens::{ burn_synthetic_tokens, get_total_synthetic_tokens, mint_synth
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::contracttype;
 use soroban_sdk::Address;
+use soroban_sdk::IntoVal;
 use soroban_sdk::Symbol;
 use soroban_sdk::Vec;
 use soroban_sdk::{ panic_with_error, Env };
@@ -26,7 +27,6 @@ use utils::constant::{ FEE_MULTIPLIER, PRICE_PRECISION };
 use utils::math::safe_math::SafeMath;
 use utils::math::stats::calculate_rolling_sum;
 use utils::oracle::OraclePriceData;
-use utils::storage::AssetId;
 use utils::storage::PoolStatus;
 use utils::storage::PoolTier;
 use utils::token::get_token_balance;
@@ -38,9 +38,9 @@ pub struct Pool {
     pub asset: Address,
     pub token_b: Address,
     // Oracle address for the base (synthetic) asset (i.e. nBTC)
-    pub base_asset_id: AssetId,
+    pub base_asset_id: Symbol,
     // Oracle address for the quote asset (TokenB) - usually XLM or USDC
-    pub quote_asset_id: AssetId,
+    pub quote_asset_id: Symbol,
     pub tier: PoolTier,
     pub status: PoolStatus,
     pub fee_fraction: u32, // 1 = 0.01%
@@ -179,14 +179,14 @@ impl Pool {
     //     Ok(true)
     // }
 
-    pub fn get_oracle_price(&self, e: Env, asset_id: AssetId, now: &u64) -> OraclePriceData {
+    pub fn get_oracle_price(&self, e: Env, asset_id: Symbol, now: u64) -> OraclePriceData {
         let oracle_price_data: OraclePriceData = e.invoke_contract(
             &get_oracle_registry(&e),
             &Symbol::new(&e, "get_price"),
             Vec::from_array(&e, [
                 e.current_contract_address().to_val(),
-                asset_id..clone().to_val(),
-                now,
+                asset_id.to_val(),
+                now.into_val(&e)
             ])
         );
         oracle_price_data

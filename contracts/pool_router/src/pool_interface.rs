@@ -95,17 +95,6 @@ pub trait IncentivesInterfaceTrait {
     // of the tokens respectively.
     fn get_tokens_for_reward(e: Env) -> Map<Vec<Address>, (u32, bool, U256)>;
 
-    // Sums up the liquidity of all pools for given tokens set and returns the total liquidity
-    //
-    // # Arguments
-    //
-    // * `tokens` - A vector of token addresses for which to calculate the total liquidity.
-    //
-    // # Returns
-    //
-    // A `U256` value representing the total liquidity for the given set of tokens.
-    fn get_total_liquidity(e: Env, tokens: Vec<Address>) -> U256;
-
     // Configures the global rewards for the liquidity pool.
     //
     // # Arguments
@@ -122,13 +111,6 @@ pub trait IncentivesInterfaceTrait {
         expired_at: u64,
         tokens_votes: Vec<(Vec<Address>, u32)>,
     );
-
-    // Fills the aggregated liquidity information for a given set of tokens.
-    //
-    // # Arguments
-    //
-    // * `tokens` - A vector of token addresses for which to fill the liquidity.
-    fn fill_liquidity(e: Env, tokens: Vec<Address>);
 
     // Configures the rewards for a specific pool.
     //

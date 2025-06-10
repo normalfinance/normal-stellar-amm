@@ -37,7 +37,7 @@ use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::constant::CONSTANT_PRODUCT_FEE_AVAILABLE;
 use utils::oracle::OracleGuardRails;
-use utils::storage::{AssetId, OraclePair, PoolInfo, PoolTier};
+use utils::storage::{OraclePair, PoolInfo, PoolTier};
 use utils::token::{transfer_token, transfer_token_from, validate_tokens_contracts};
 
 #[contract]
@@ -950,8 +950,8 @@ impl PoolsManagementTrait for PoolRouter {
     fn init_pool(
         e: Env,
         user: Address,
-        base_oracle_registry_id: AssetId,
-        quote_oracle_registry_id: AssetId,
+        base_oracle_registry_id: Symbol,
+        quote_oracle_registry_id: Symbol,
         asset: Address,
         tokens: Vec<Address>,
         lp_token_name: String,

@@ -1,5 +1,5 @@
-use soroban_sdk::{Address, Env};
-use utils::{oracle::OraclePriceData, storage::AssetId};
+use soroban_sdk::{ Address, Env, Symbol };
+use utils::{ oracle::OraclePriceData };
 
 use crate::storage_types::OracleGuardRails;
 
@@ -8,9 +8,9 @@ pub trait OracleRegistryTrait {
     fn get_price(
         e: Env,
         sender: Address,
-        asset_id: AssetId,
+        asset_id: Symbol,
         cached: bool,
-        sanitize_clamp_denominator: Option<i64>,
+        sanitize_clamp_denominator: Option<i64>
     ) -> OraclePriceData;
 }
 
@@ -28,38 +28,38 @@ pub trait AdminInterface {
     fn register_oracle(
         e: Env,
         admin: Address,
-        asset_id: AssetId,
+        asset_id: Symbol,
         oracle: Address,
         asset: Address,
-        decimals: u32,
+        decimals: u32
     );
 
     // Set oracle address
-    fn set_oracle_address(e: Env, admin: Address, asset_id: AssetId, oracle: Address);
+    fn set_oracle_address(e: Env, admin: Address, asset_id: Symbol, oracle: Address);
 
     // Set oracle decimals
-    fn set_oracle_decimals(e: Env, admin: Address, asset_id: AssetId, decimals: u32);
+    fn set_oracle_decimals(e: Env, admin: Address, asset_id: Symbol, decimals: u32);
 
     // Sync the oracle price
     fn sync_oracle_price(
         e: Env,
         admin: Address,
-        asset_id: AssetId,
-        sanitize_clamp_denominator: Option<i64>,
+        asset_id: Symbol,
+        sanitize_clamp_denominator: Option<i64>
     );
 
     // Admin failsafe to manually set the oracle price
     fn set_oracle_price(
         e: Env,
         admin: Address,
-        asset_id: AssetId,
+        asset_id: Symbol,
         oracle_price_twap: u128,
-        price: u128,
+        price: u128
     );
 
     // Pause price updates
-    fn freeze_oracle(e: Env, admin: Address, asset_id: AssetId);
+    fn freeze_oracle(e: Env, admin: Address, asset_id: Symbol);
 
     // Unpause price updates
-    fn unfreeze_oracle(e: Env, admin: Address, asset_id: AssetId);
+    fn unfreeze_oracle(e: Env, admin: Address, asset_id: Symbol);
 }

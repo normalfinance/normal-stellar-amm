@@ -1,28 +1,34 @@
 use crate::errors::OracleRegistryError;
-use crate::events::{Events, OracleRegistryEvents};
-use crate::interface::{AdminInterface, OracleRegistryTrait};
-use crate::oracle::{get_oracle_price, oracle_validity, update_twap};
+use crate::events::{ Events, OracleRegistryEvents };
+use crate::interface::{ AdminInterface, OracleRegistryTrait };
+use crate::oracle::{ get_oracle_price, oracle_validity, update_twap };
 use crate::storage::{
-    get_historical_oracle_data, get_oracle, get_oracle_guard_rails, get_price_override_limit,
-    put_historical_oracle_data, put_oracle, put_oracle_guard_rails, set_price_override_limit,
+    get_historical_oracle_data,
+    get_oracle,
+    get_oracle_guard_rails,
+    get_price_override_limit,
+    put_historical_oracle_data,
+    put_oracle,
+    put_oracle_guard_rails,
+    set_price_override_limit,
 };
-use crate::storage_types::{HistoricalOracleData, OracleGuardRails, OracleValidity};
+use crate::storage_types::{ HistoricalOracleData, OracleGuardRails, OracleValidity };
 
-use access_control::access::{AccessControl, AccessControlTrait};
-use access_control::emergency::{get_emergency_mode, set_emergency_mode};
+use access_control::access::{ AccessControl, AccessControlTrait };
+use access_control::emergency::{ get_emergency_mode, set_emergency_mode };
 use access_control::errors::AccessControlError;
 use access_control::events::Events as AccessControlEvents;
 use access_control::interface::TransferableContract;
-use access_control::management::{MultipleAddressesManagementTrait, SingleAddressManagementTrait};
+use access_control::management::{ MultipleAddressesManagementTrait, SingleAddressManagementTrait };
 use access_control::role::Role;
 use access_control::role::SymbolRepresentation;
 use access_control::transfer::TransferOwnershipTrait;
-use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env, Symbol, Vec};
+use soroban_sdk::{ contract, contractimpl, panic_with_error, Address, BytesN, Env, Symbol, Vec };
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
-use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
+use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
 use utils::oracle::OraclePriceData;
-use utils::storage::{AssetId, OracleInfo};
+use utils::storage::{ OracleInfo };
 
 #[contract]
 pub struct OracleRegistry;
@@ -33,9 +39,9 @@ impl OracleRegistryTrait for OracleRegistry {
     fn get_price(
         e: Env,
         sender: Address,
-        asset_id: AssetId,
+        asset_id: Symbol,
         cached: bool,
-        sanitize_clamp_denominator: Option<i64>,
+        sanitize_clamp_denominator: Option<i64>
     ) -> OraclePriceData {
         sender.require_auth();
 
@@ -52,15 +58,20 @@ impl OracleRegistryTrait for OracleRegistry {
         }
 
         // Fetch a new price
-        let oracle_price_data =
-            get_oracle_price(&e, &oracle_info.oracle_address, &oracle_info.asset, now);
-
-        let oracle_is_valid = oracle_validity(
+        let oracle_price_data = get_oracle_price(
             &e,
-            historical_oracle_data.last_oracle_price_twap,
-            &oracle_price_data,
-            &oracle_guard_rails.validity,
-        ) == OracleValidity::Valid;
+            &oracle_info.oracle_address,
+            &oracle_info.asset,
+            now
+        );
+
+        let oracle_is_valid =
+            oracle_validity(
+                &e,
+                historical_oracle_data.last_oracle_price_twap,
+                &oracle_price_data,
+                &oracle_guard_rails.validity
+            ) == OracleValidity::Valid;
 
         // cannot update twap if oracle is invalid
         if !oracle_is_valid {
@@ -74,7 +85,7 @@ impl OracleRegistryTrait for OracleRegistry {
             &historical_oracle_data,
             &oracle_price_data,
             sanitize_clamp_denominator,
-            now,
+            now
         );
 
         oracle_price_data
@@ -204,10 +215,10 @@ impl AdminInterface for OracleRegistry {
     fn register_oracle(
         e: Env,
         admin: Address,
-        asset_id: AssetId,
+        asset_id: Symbol,
         oracle: Address,
         asset: Address,
-        decimals: u32,
+        decimals: u32
     ) {
         admin.require_auth();
 
@@ -231,7 +242,7 @@ impl AdminInterface for OracleRegistry {
     //
     // * `admin` - The address of the admin.
     // * `oracle_guard_rails` - The address of the rewards admin.
-    fn set_oracle_address(e: Env, admin: Address, asset_id: AssetId, address: Address) {
+    fn set_oracle_address(e: Env, admin: Address, asset_id: Symbol, address: Address) {
         admin.require_auth();
 
         let oracle_info = get_oracle(&e, asset_id.clone());
@@ -243,7 +254,7 @@ impl AdminInterface for OracleRegistry {
                 oracle_address: address,
                 last_updated: e.ledger().timestamp(),
                 ..oracle_info
-            }),
+            })
         );
     }
 
@@ -253,7 +264,7 @@ impl AdminInterface for OracleRegistry {
     //
     // * `admin` - The address of the admin.
     // * `oracle_guard_rails` - The address of the rewards admin.
-    fn set_oracle_decimals(e: Env, admin: Address, asset_id: AssetId, decimals: u32) {
+    fn set_oracle_decimals(e: Env, admin: Address, asset_id: Symbol, decimals: u32) {
         admin.require_auth();
 
         let oracle_info = get_oracle(&e, asset_id.clone());
@@ -265,7 +276,7 @@ impl AdminInterface for OracleRegistry {
                 decimals,
                 last_updated: e.ledger().timestamp(),
                 ..oracle_info
-            }),
+            })
         );
     }
 
@@ -278,8 +289,8 @@ impl AdminInterface for OracleRegistry {
     fn sync_oracle_price(
         e: Env,
         admin: Address,
-        asset_id: AssetId,
-        sanitize_clamp_denominator: Option<i64>,
+        asset_id: Symbol,
+        sanitize_clamp_denominator: Option<i64>
     ) {
         admin.require_auth();
 
@@ -287,8 +298,12 @@ impl AdminInterface for OracleRegistry {
         let oracle_info = get_oracle(&e, asset_id.clone());
 
         // Pull latest price
-        let oracle_price_data =
-            get_oracle_price(&e, &oracle_info.oracle_address, &oracle_info.asset, now);
+        let oracle_price_data = get_oracle_price(
+            &e,
+            &oracle_info.oracle_address,
+            &oracle_info.asset,
+            now
+        );
 
         let historical_oracle_data = get_historical_oracle_data(&e, asset_id.clone());
 
@@ -298,7 +313,7 @@ impl AdminInterface for OracleRegistry {
             &historical_oracle_data,
             &oracle_price_data,
             sanitize_clamp_denominator,
-            now,
+            now
         );
     }
 
@@ -312,9 +327,9 @@ impl AdminInterface for OracleRegistry {
     fn set_oracle_price(
         e: Env,
         admin: Address,
-        asset_id: AssetId,
+        asset_id: Symbol,
         oracle_price_twap: u128,
-        price: u128,
+        price: u128
     ) {
         admin.require_auth();
 
@@ -343,7 +358,7 @@ impl AdminInterface for OracleRegistry {
     //
     // * `admin` - The address of the admin.
     // * `asset_id` - The oracle to freeze.
-    fn freeze_oracle(e: Env, admin: Address, asset_id: AssetId) {
+    fn freeze_oracle(e: Env, admin: Address, asset_id: Symbol) {
         admin.require_auth();
 
         let oracle_info = get_oracle(&e, asset_id.clone());
@@ -355,7 +370,7 @@ impl AdminInterface for OracleRegistry {
                 frozen: true,
                 last_updated: e.ledger().timestamp(),
                 ..oracle_info
-            }),
+            })
         );
     }
 
@@ -365,7 +380,7 @@ impl AdminInterface for OracleRegistry {
     //
     // * `admin` - The address of the admin.
     // * `asset_id` - The oracle to unfreeze.
-    fn unfreeze_oracle(e: Env, admin: Address, asset_id: AssetId) {
+    fn unfreeze_oracle(e: Env, admin: Address, asset_id: Symbol) {
         admin.require_auth();
 
         let oracle_info = get_oracle(&e, asset_id.clone());
@@ -377,7 +392,7 @@ impl AdminInterface for OracleRegistry {
                 frozen: false,
                 last_updated: e.ledger().timestamp(),
                 ..oracle_info
-            }),
+            })
         );
     }
 }
@@ -454,10 +469,11 @@ impl TransferableContract for OracleRegistry {
         let access_control = AccessControl::new(&e);
         let role = Role::from_symbol(&e, role_name);
         match access_control.get_transfer_ownership_deadline(&role) {
-            0 => match access_control.get_role_safe(&role) {
-                Some(address) => address,
-                None => panic_with_error!(&e, AccessControlError::RoleNotFound),
-            },
+            0 =>
+                match access_control.get_role_safe(&role) {
+                    Some(address) => address,
+                    None => panic_with_error!(&e, AccessControlError::RoleNotFound),
+                }
             _ => access_control.get_future_address(&role),
         }
     }

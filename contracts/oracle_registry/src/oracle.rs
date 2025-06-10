@@ -1,6 +1,6 @@
 use sep_40_oracle::{Asset, PriceFeedClient};
 use soroban_fixed_point_math::FixedPoint;
-use soroban_sdk::{log, panic_with_error, Address, Env};
+use soroban_sdk::{log, panic_with_error, Address, Env, Symbol};
 use utils::{
     constant::{
         FIVE_MINUTE, PERCENTAGE_PRECISION_U64, PRICE_PRECISION, PRICE_PRECISION_I64,
@@ -8,7 +8,6 @@ use utils::{
     },
     math::{pool::sanitize_new_price, safe_math::SafeMath, stats::calculate_new_twap},
     oracle::OraclePriceData,
-    storage::AssetId,
 };
 
 use crate::{
@@ -69,7 +68,7 @@ pub fn get_oracle_price(e: &Env, oracle: &Address, asset: &Address, now: u64) ->
 // The liquidity imbalance of the pool as an i128.
 pub fn update_twap(
     e: &Env,
-    asset_id: AssetId,
+    asset_id: Symbol,
     historical_oracle_data: &HistoricalOracleData,
     oracle_price_data: &OraclePriceData,
     sanitize_clamp_denominator: Option<i64>,

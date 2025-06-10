@@ -296,8 +296,8 @@ impl PoolTrait for Pool {
         put_reserve_b(&e, reserve_b + token_b_amount);
 
         // Rebalance the pool
-        let base_oracle_price_data = pool.get_oracle_price(e.clone(), pool.base_asset_id.clone(), &now);
-        let quote_oracle_price_data = pool.get_oracle_price(e.clone(), pool.quote_asset_id.clone(), &now);
+        let base_oracle_price_data = pool.get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
+        let quote_oracle_price_data = pool.get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
 
         pool.rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
 
@@ -372,8 +372,8 @@ impl PoolTrait for Pool {
         let now = e.ledger().timestamp();
         let pool = get_pool(&e);
 
-        let base_oracle_price_data = pool.get_oracle_price(e.clone(), pool.base_asset_id.clone(), &now);
-        let quote_oracle_price_data = pool.get_oracle_price(e.clone(), pool.quote_asset_id.clone(), &now);
+        let base_oracle_price_data = pool.get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
+        let quote_oracle_price_data = pool.get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
 
         pool.rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
 
@@ -552,8 +552,8 @@ impl PoolTrait for Pool {
         let now = e.ledger().timestamp();
         let pool = get_pool(&e);
 
-        let base_oracle_price_data = pool.get_oracle_price(e.clone(), pool.base_asset_id.clone(), &now);
-        let quote_oracle_price_data = pool.get_oracle_price(e.clone(), pool.quote_asset_id.clone(), &now);
+        let base_oracle_price_data = pool.get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
+        let quote_oracle_price_data = pool.get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
 
         pool.rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
 
@@ -729,8 +729,8 @@ impl PoolTrait for Pool {
         // Rebalance the pool
         let pool = get_pool(&e);
 
-        let base_oracle_price_data = pool.get_oracle_price(e.clone(), pool.base_asset_id.clone(), &now);
-        let quote_oracle_price_data = pool.get_oracle_price(e.clone(), pool.quote_asset_id.clone(), &now);
+        let base_oracle_price_data = pool.get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
+        let quote_oracle_price_data = pool.get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
 
         pool.rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
 
@@ -923,8 +923,8 @@ impl AdminInterfaceTrait for Pool {
         let now = e.ledger().timestamp();
         let pool = get_pool(&e);
 
-        let base_oracle_price_data = pool.get_oracle_price(e.clone(), pool.base_asset_id.clone(), &now);
-        let quote_oracle_price_data = pool.get_oracle_price(e.clone(), pool.quote_asset_id.clone(), &now);
+        let base_oracle_price_data = pool.get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
+        let quote_oracle_price_data = pool.get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
 
         pool.rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
     }
@@ -942,8 +942,8 @@ impl AdminInterfaceTrait for Pool {
             "Pool is in settlement mode"
         );
 
-        let base_oracle_price_data = pool.get_oracle_price(e.clone(), pool.base_asset_id.clone(), &now);
-        let quote_oracle_price_data = pool.get_oracle_price(e.clone(), pool.quote_asset_id.clone(), &now);
+        let base_oracle_price_data = pool.get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
+        let quote_oracle_price_data = pool.get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
 
         // controller::orders::validate_market_within_price_band(perp_market, state, oracle_price);
 
