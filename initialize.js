@@ -59,8 +59,8 @@ function removeFiles(pattern) {
  * Removes old contract builds, and re-builds smart contracts.
  */
 function buildAll() {
-  removeFiles(`${dirname}/target/wasm32-unknown-unknown/release/*.wasm`);
-  removeFiles(`${dirname}/target/wasm32-unknown-unknown/release/*.d`);
+  removeFiles(`${dirname}/target/wasm32v1-none/release/*.wasm`);
+  removeFiles(`${dirname}/target/wasm32v1-none/release/*.d`);
   exe(`stellar contract build`);
 }
 
@@ -107,7 +107,7 @@ function deployAll() {
 
   // search for all compiled Wasm files
   const wasmFiles = glob(
-    `${dirname}/target/wasm32-unknown-unknown/release/*.wasm`
+    `${dirname}/target/wasm32v1-none/release/*.wasm`
   );
 
   // run the `deploy()` function for each compiled Wasm file found
