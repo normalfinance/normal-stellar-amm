@@ -489,7 +489,7 @@ impl AdminInterface for InsuranceFund {
         if access_control.get_role_safe(&Role::Admin).is_some() {
             panic_with_error!(&e, AccessControlError::AdminAlreadySet);
         }
-        access_control.set_role_address(&Role::Admin, &account);
+        access_control.set_role_address(&Role::Admin, &admin);
 
         put_token(&e, &token);
     }
