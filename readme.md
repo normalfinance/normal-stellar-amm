@@ -34,6 +34,7 @@ Normal is a synthetic asset protocol enabling investors to trade any crypto asse
 - **buffer** - Initial backstop to cover pool liquidity deficits. Receives a portion of all protocol revenue
 - **insurance_fund** - Additional backstop or liquidity deficits. Funded via liquidity provider staking deposits
 - **oracle_registry** - Oracle aggregator, data validator, and
+- **pool_swap_fee** - 
 
 ## Modules
 
