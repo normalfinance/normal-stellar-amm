@@ -5,7 +5,7 @@ pub mod errors;
 mod events;
 mod incentives;
 mod pool;
-mod pool_interface;
+mod interface;
 mod storage;
 mod test;
 mod test_permissions;

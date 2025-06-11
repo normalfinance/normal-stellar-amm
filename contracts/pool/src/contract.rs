@@ -3,7 +3,7 @@ use crate::events::Events as LiquidityPoolEvents;
 use crate::events::PoolEvents;
 use crate::incentives::get_incentives_manager;
 use crate::pool::{ InsuranceClaim, Pool as PoolType };
-use crate::pool_interface::{
+use crate::interface::{
     AdminInterfaceTrait,
     IncentivesTrait,
     PoolCrunch,
