@@ -11,4 +11,7 @@ pub enum BufferError {
     InsufficentFunds = 4,
     WithdrawalOverMinimumReserve = 5,
     AlreadyInitialized = 15,
+
+    BufferDepositKilled = 6,
+    BufferRequestPayoutKilled = 7,
 }

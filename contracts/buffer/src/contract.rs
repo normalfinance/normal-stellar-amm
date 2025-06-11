@@ -66,6 +66,10 @@ impl BufferTrait for Buffer {
             panic_with_error!(&e, BufferError::NotAuthorized);
         }
 
+        if get_is_killed_deposit(&e) {
+            panic_with_error!(e, BufferError::BufferDepositKilled);
+        }
+
         validate_tokens_contracts(&e, &Vec::from_array(&e, [token.clone()]));
 
         // Ensure the deposit doesn't exceed the reserve max balance
@@ -90,6 +94,10 @@ impl BufferTrait for Buffer {
         let router = get_router(&e);
         if sender != router {
             panic_with_error!(&e, BufferError::NotAuthorized);
+        }
+
+        if get_is_killed_request_payout(&e) {
+            panic_with_error!(e, BufferError::BufferRequestPayoutKilled);
         }
 
         // Ensure time since last payout is greater than the minimum time b/t payouts
