@@ -82,11 +82,11 @@ impl Setup<'_> {
         };
         let (_, pool_address) = router.init_pool(
             &admin,
-            &oracles,
+            &("", ""),
             &asset,
             &Vec::from_array(&e, [token_a.address.clone(), token_b.address.clone()]),
-            &String::from_str(&e, "Pool Share Token"),
-            &String::from_str(&e, "Pool Share Token"),
+            &(String::from_str(&e, "Pool Share Token"),
+            String::from_str(&e, "Pool Share Token")),
             &30
         );
         let swap_pool = pool::Client::new(&e, &pool_address);

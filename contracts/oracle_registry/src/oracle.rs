@@ -6,8 +6,7 @@ use utils::{
         FIVE_MINUTE, PERCENTAGE_PRECISION_U64, PRICE_PRECISION, PRICE_PRECISION_I64,
         PRICE_PRECISION_U64,
     },
-    math::{pool::sanitize_new_price, safe_math::SafeMath, stats::calculate_new_twap},
-    oracle::OraclePriceData,
+    math::{pool::sanitize_new_price, safe_math::SafeMath, stats::calculate_new_twap}, storage::OraclePriceData
 };
 
 use crate::{

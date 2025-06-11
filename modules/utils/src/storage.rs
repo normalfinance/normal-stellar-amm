@@ -1,4 +1,11 @@
-use soroban_sdk::{contracttype, Address, BytesN, String, Symbol, Vec};
+use soroban_sdk::{ contracttype, Address, BytesN, String, Symbol, Vec };
+
+#[contracttype]
+#[derive(Default, Clone, Copy, Debug)]
+pub struct OraclePriceData {
+    pub price: u128,
+    pub delay: u64,
+}
 
 #[contracttype]
 #[derive(Default, Clone, PartialEq)]

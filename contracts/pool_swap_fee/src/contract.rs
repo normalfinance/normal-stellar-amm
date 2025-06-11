@@ -15,7 +15,7 @@ use access_control::utils::{
     require_pause_admin_or_owner,
     require_pause_or_emergency_pause_admin_or_owner,
 };
-use pool_tokens::{get_total_lp_tokens, get_user_balance_lp};
+use pool_tokens::{ get_total_lp_tokens, get_user_balance_lp };
 use utils::math::safe_math::SafeMath;
 use crate::storage::{
     get_buffer,
@@ -65,6 +65,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
     //   - token_in: The input token address.
     //   - in_amount: The amount of token_in provided by the user.
     //   - out_min: The minimum acceptable output token amount (after fee deduction).
+
     //   - fee_fraction: The provider fee fraction in basis points (bps).
     //
     // Returns:
@@ -72,19 +73,18 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
     fn swap(
         e: Env,
         user: Address,
-        swap: (Vec<Address>, BytesN<32>, Address),
+        tokens: Vec<Address>,
         token_in: Address,
+        token_out: Address,
+        pool_index: BytesN<32>,
         in_amount: u128,
-        out_min: u128,
-        fee_fraction: u32
+        out_min: u128
     ) -> u128 {
         user.require_auth();
 
-        if fee_fraction > get_max_swap_fee_fraction(&e) {
-            panic_with_error!(&e, Error::FeeFractionTooHigh);
-        }
-
-        let (_, _, token_out) = swap.clone();
+        // if Some(fee_fraction) > get_max_swap_fee_fraction(&e) {
+        //     panic_with_error!(&e, Error::FeeFractionTooHigh);
+        // }
 
         transfer_token(&e, &token_in, &user, &e.current_contract_address(), &(in_amount as i128));
 
@@ -111,13 +111,24 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
             &Symbol::new(&e, "swap"),
             Vec::from_array(&e, [
                 e.current_contract_address().to_val(),
-                swap.into_val(&e),
+                user.clone().to_val(),
                 token_in.clone().to_val(),
                 in_amount.into_val(&e),
                 out_min.into_val(&e),
             ])
         );
-        let fee_amount = (amount_out * (fee_fraction as u128)) / (FEE_DENOMINATOR as u128);
+
+        let pool_fee_fraction: u32 = e.invoke_contract(
+            &router,
+            &Symbol::new(&e, "get_fee_fraction"),
+            Vec::from_array(&e, [
+                e.current_contract_address().to_val(),
+                tokens.clone().to_val(),
+                pool_index.clone().to_val(),
+            ])
+        );
+
+        let fee_amount = (amount_out * (pool_fee_fraction as u128)) / (FEE_DENOMINATOR as u128);
         let amount_out_w_fee = amount_out - fee_amount;
         if amount_out_w_fee < out_min {
             panic_with_error!(&e, Error::OutMinNotSatisfied);
@@ -205,99 +216,97 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
     fn swap_strict_receive(
         e: Env,
         user: Address,
-        swap: (Vec<Address>, BytesN<32>, Address),
         token_in: Address,
         out_amount: u128,
-        in_max: u128,
-        fee_fraction: u32
+        in_max: u128
     ) -> u128 {
         user.require_auth();
 
-        if fee_fraction > get_max_swap_fee_fraction(&e) {
-            panic_with_error!(&e, Error::FeeFractionTooHigh);
-        }
+        0
+        
+        // if fee_fraction > get_max_swap_fee_fraction(&e) {
+        //     panic_with_error!(&e, Error::FeeFractionTooHigh);
+        // }
 
-        let (_, _, token_out) = swap.clone();
+        // transfer_token(&e, &token_in, &user, &e.current_contract_address(), &(in_max as i128));
+        // let router = get_router(&e);
+        // e.authorize_as_current_contract(
+        //     vec![
+        //         &e,
+        //         InvokerContractAuthEntry::Contract(SubContractInvocation {
+        //             context: ContractContext {
+        //                 contract: token_in.clone(),
+        //                 fn_name: Symbol::new(&e, "transfer"),
+        //                 args: (
+        //                     e.current_contract_address(),
+        //                     router.clone(),
+        //                     in_max as i128,
+        //                 ).into_val(&e),
+        //             },
+        //             sub_invocations: vec![&e],
+        //         })
+        //     ]
+        // );
+        // let amount_in: u128 = e.invoke_contract(
+        //     &router,
+        //     &Symbol::new(&e, "swap_strict_receive"),
+        //     Vec::from_array(&e, [
+        //         e.current_contract_address().to_val(),
+        //         swap.into_val(&e),
+        //         token_in.clone().to_val(),
+        //         out_amount.into_val(&e),
+        //         in_max.into_val(&e),
+        //     ])
+        // );
+        // transfer_token(&e, &token_out, &e.current_contract_address(), &user, &(out_amount as i128));
+        // let fee_amount = (amount_in * (fee_fraction as u128)) / (FEE_DENOMINATOR as u128);
+        // let amount_in_with_fee = amount_in + fee_amount;
+        // if amount_in_with_fee > in_max {
+        //     panic_with_error!(&e, Error::InMaxNotSatisfied);
+        // }
+        // let surplus = in_max - amount_in_with_fee;
+        // if surplus > 0 {
+        //     transfer_token(&e, &token_in, &e.current_contract_address(), &user, &(surplus as i128));
+        // }
+        // Events::new(&e).charge_provider_fee(token_in, fee_amount);
 
-        transfer_token(&e, &token_in, &user, &e.current_contract_address(), &(in_max as i128));
-        let router = get_router(&e);
-        e.authorize_as_current_contract(
-            vec![
-                &e,
-                InvokerContractAuthEntry::Contract(SubContractInvocation {
-                    context: ContractContext {
-                        contract: token_in.clone(),
-                        fn_name: Symbol::new(&e, "transfer"),
-                        args: (
-                            e.current_contract_address(),
-                            router.clone(),
-                            in_max as i128,
-                        ).into_val(&e),
-                    },
-                    sub_invocations: vec![&e],
-                })
-            ]
-        );
-        let amount_in: u128 = e.invoke_contract(
-            &router,
-            &Symbol::new(&e, "swap_strict_receive"),
-            Vec::from_array(&e, [
-                e.current_contract_address().to_val(),
-                swap.into_val(&e),
-                token_in.clone().to_val(),
-                out_amount.into_val(&e),
-                in_max.into_val(&e),
-            ])
-        );
-        transfer_token(&e, &token_out, &e.current_contract_address(), &user, &(out_amount as i128));
-        let fee_amount = (amount_in * (fee_fraction as u128)) / (FEE_DENOMINATOR as u128);
-        let amount_in_with_fee = amount_in + fee_amount;
-        if amount_in_with_fee > in_max {
-            panic_with_error!(&e, Error::InMaxNotSatisfied);
-        }
-        let surplus = in_max - amount_in_with_fee;
-        if surplus > 0 {
-            transfer_token(&e, &token_in, &e.current_contract_address(), &user, &(surplus as i128));
-        }
-        Events::new(&e).charge_provider_fee(token_in, fee_amount);
+        // // Deposit portion of swap fee to the Buffer
+        // let buffer_fraction = get_buffer_fraction(&e);
+        // let fee_amount_for_buffer = (fee_amount * (buffer_fraction as u128)) / 10_000_u128;
+        // let buffer = get_buffer(&e);
 
-        // Deposit portion of swap fee to the Buffer
-        let buffer_fraction = get_buffer_fraction(&e);
-        let fee_amount_for_buffer = (fee_amount * (buffer_fraction as u128)) / 10_000_u128;
-        let buffer = get_buffer(&e);
+        // e.authorize_as_current_contract(
+        //     vec![
+        //         &e,
+        //         InvokerContractAuthEntry::Contract(SubContractInvocation {
+        //             context: ContractContext {
+        //                 contract: token_out.clone(),
+        //                 fn_name: Symbol::new(&e, "transfer"),
+        //                 args: (
+        //                     e.current_contract_address(),
+        //                     buffer.clone(),
+        //                     fee_amount_for_buffer as i128,
+        //                 ).into_val(&e),
+        //             },
+        //             sub_invocations: vec![&e],
+        //         })
+        //     ]
+        // );
+        // let _: u128 = e.invoke_contract(
+        //     &get_buffer(&e),
+        //     &Symbol::new(&e, "deposit"),
+        //     Vec::from_array(&e, [
+        //         e.current_contract_address().to_val(),
+        //         token_out.clone().to_val(),
+        //         fee_amount_for_buffer.into_val(&e),
+        //     ])
+        // );
 
-        e.authorize_as_current_contract(
-            vec![
-                &e,
-                InvokerContractAuthEntry::Contract(SubContractInvocation {
-                    context: ContractContext {
-                        contract: token_out.clone(),
-                        fn_name: Symbol::new(&e, "transfer"),
-                        args: (
-                            e.current_contract_address(),
-                            buffer.clone(),
-                            fee_amount_for_buffer as i128,
-                        ).into_val(&e),
-                    },
-                    sub_invocations: vec![&e],
-                })
-            ]
-        );
-        let _: u128 = e.invoke_contract(
-            &get_buffer(&e),
-            &Symbol::new(&e, "deposit"),
-            Vec::from_array(&e, [
-                e.current_contract_address().to_val(),
-                token_out.clone().to_val(),
-                fee_amount_for_buffer.into_val(&e),
-            ])
-        );
+        // Events::new(&e).settle_revenue(token_out, fee_amount_for_buffer as u128);
 
-        Events::new(&e).settle_revenue(token_out, fee_amount_for_buffer as u128);
+        // fee_amount.safe_sub(&e, fee_amount_for_buffer);
 
-        fee_amount.safe_sub(&e, fee_amount_for_buffer);
-
-        amount_in_with_fee
+        // amount_in_with_fee
     }
 }
 

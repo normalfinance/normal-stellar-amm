@@ -166,7 +166,7 @@ impl Setup<'_> {
             &e,
             &admin,
             &router,
-            &oracles,
+            &("", ""),
             &asset,
             &install_token_wasm(&e),
             &String::from_str(&e, "nSOL / XLM Pool Token"),

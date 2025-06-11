@@ -19,6 +19,9 @@ pub enum PoolError {
     // pool specific validation errors
     LiquidityDeficitBelowThreshold = 212,
     PoolActionPaused = 213,
+    MaxIFWithdrawReached = 214,
+    NoIFWithdrawAvailable = 215,
+    DefaultError = 216,
 }
 
 #[contracterror]

@@ -587,8 +587,8 @@ fn test_remove_pool() {
             &setup.oracles,
             &setup.asset,
             &tokens,
-            &String::from_str(&e, "Pool Share Token"),
-            &String::from_str(&e, "Pool Share Token"),
+            &(String::from_str(&e, "Pool Share Token"),
+            String::from_str(&e, "Pool Share Token")),
             &10,
         );
         assert_eq!(

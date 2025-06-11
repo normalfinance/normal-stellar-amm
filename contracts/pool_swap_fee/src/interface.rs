@@ -7,22 +7,21 @@ pub trait PoolSwapFeeInterface {
     // Arguments:
     //   - e: The Soroban environment.
     //   - user: The user initiating the swap (must be authorized).
-    //   - swap: A swap path.
     //   - token_in: The input token address.
     //   - in_amount: The amount of token_in provided by the user.
     //   - out_min: The minimum acceptable output token amount (after fee deduction).
-    //   - fee_fraction: The provider fee fraction in basis points (bps).
     //
     // Returns:
     //   - A u128 value representing the net output tokens transferred to the user.
     fn swap(
         e: Env,
         user: Address,
-        swap: (Vec<Address>, BytesN<32>, Address),
+        tokens: Vec<Address>,
         token_in: Address,
+        token_out: Address,
+        pool_index: BytesN<32>,
         in_amount: u128,
-        out_min: u128,
-        fee_fraction: u32
+        out_min: u128
     ) -> u128;
 
     // swap_strict_receive
@@ -31,22 +30,18 @@ pub trait PoolSwapFeeInterface {
     // Arguments:
     //   - e: The Soroban environment.
     //   - user: The user initiating the swap (must be authorized).
-    //   - swap: A swap path.
     //   - token_in: The input token address.
     //   - out_amount: The exact target output amount.
     //   - in_max: The maximum amount of token_in the user is willing to spend.
-    //   - fee_fraction: The provider fee fraction in basis points (bps).
     //
     // Returns:
     //   - A u128 value representing the total input amount (including fees) required.
     fn swap_strict_receive(
         e: Env,
         user: Address,
-        swap: (Vec<Address>, BytesN<32>, Address),
         token_in: Address,
         out_amount: u128,
-        in_max: u128,
-        fee_fraction: u32
+        in_max: u128
     ) -> u128;
 }
 

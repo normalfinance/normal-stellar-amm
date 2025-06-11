@@ -26,7 +26,7 @@ use utils::constant::TWENTY_FOUR_HOUR;
 use utils::constant::{ FEE_MULTIPLIER, PRICE_PRECISION };
 use utils::math::safe_math::SafeMath;
 use utils::math::stats::calculate_rolling_sum;
-use utils::oracle::OraclePriceData;
+use utils::storage::OraclePriceData;
 use utils::storage::PoolStatus;
 use utils::storage::PoolTier;
 use utils::token::get_token_balance;

@@ -8,6 +8,10 @@ pub(crate) mod router {
     soroban_sdk::contractimport!(file = "../../wasm/pool_router.wasm");
 }
 
+pub(crate) mod oracle_registry {
+    soroban_sdk::contractimport!(file = "../../wasm/oracle_registry.wasm");
+}
+
 pub(crate) mod lp_token {
     soroban_sdk::contractimport!(file = "../../wasm/soroban_token_contract.wasm");
 }

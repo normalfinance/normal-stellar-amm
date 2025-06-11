@@ -1,17 +1,13 @@
 use paste::paste;
-use soroban_sdk::{ contracttype, panic_with_error, Env, Map, Symbol };
+use soroban_sdk::{ contracttype, panic_with_error, Env, Symbol };
 use utils::bump::{ bump_instance, bump_persistent, bump_temporary };
-use utils::constant::{ PRICE_PRECISION, PRICE_PRECISION_I128 };
 use utils::errors::storage_errors::StorageError;
-use utils::oracle::OraclePriceData;
 use utils::storage::{ OracleInfo };
 use utils::{
     generate_instance_storage_getter_and_setter_with_default,
     generate_instance_storage_getter_with_default,
     generate_instance_storage_setter,
 };
-
-use crate::errors::OracleRegistryError;
 use crate::storage_types::{ HistoricalOracleData, OracleGuardRails };
 
 #[derive(Clone)]

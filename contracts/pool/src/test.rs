@@ -471,7 +471,6 @@ fn initialize_already_initialized() {
         },
         fee_fraction: 10_u32,
         tier: PoolTier::A,
-        oracle_guard_rails: setup.oracle_guard_rails,
     };
 
     setup.liq_pool.initialize(&params);
@@ -1638,7 +1637,7 @@ fn test_withdraw_rewards() {
         &e,
         &admin,
         &router,
-        &oracles,
+        &("", ""),
         &oracle_guard_rails,
         &asset,
         &install_token_wasm(&e),
@@ -1981,7 +1980,7 @@ fn test_withdraw_rewards() {
 //         &e,
 //         &admin,
 //         &router,
-//         &oracles,
+//         &("", ""),
 //         &asset,
 //         &install_token_wasm(&e),
 //         &String::from_str(&e, "Pool Share Token"),

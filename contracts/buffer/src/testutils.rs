@@ -3,9 +3,10 @@ extern crate std;
 use crate::BufferClient;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::{
-    StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
+    StellarAssetClient as SorobanTokenAdminClient,
+    TokenClient as SorobanTokenClient,
 };
-use soroban_sdk::{Address, BytesN, Env, String, Symbol, Vec};
+use soroban_sdk::{ Address, BytesN, Env, String, Symbol, Vec };
 use std::vec;
 use utils::storage::OraclePair;
 
@@ -26,6 +27,7 @@ impl Default for TestConfig {
 pub(crate) struct Setup<'a> {
     pub(crate) env: Env,
     pub(crate) admin: Address,
+    pub(crate) emergency_admin: Address,
     pub(crate) buffer: BufferClient<'a>,
     pub(crate) router: pool_router::Client<'a>,
     pub(crate) fee_collector: fee_collector::Client<'a>,
@@ -84,11 +86,10 @@ impl Setup<'_> {
         // create swap pool & deposit initial liquidity
         let (_, pool_address) = router.init_pool(
             &admin,
-            &oracles,
+            &("", ""),
             &Vec::from_array(&e, [token_a.address.clone(), token_b.address.clone()]),
-            &String::from_str(&e, "Pool Share Token"),
-            &String::from_str(&e, "Pool Share Token"),
-            &30,
+            &(String::from_str(&e, "Pool Share Token"), String::from_str(&e, "Pool Share Token")),
+            &30
         );
         let swap_pool = pool::Client::new(&e, &pool_address);
         token_b_admin_client.mint(&admin, &1_000_000_000_0000000);
@@ -96,22 +97,14 @@ impl Setup<'_> {
 
         // init fee collector
         let fee_destination = Address::generate(&e);
-        let fee_collector = deploy_fee_collector_contract(
-            e.clone(),
-            &router.address,
-            &operator,
-            &fee_destination,
-            "",
-            30,
-            50,
-        );
+        let fee_collector = deploy_fee_collector_contract(e.clone());
 
         let buffer = create_contract(
             &e,
             &admin,
             &router.address,
             &fee_collector.address,
-            config.min_time_between_payouts,
+            config.min_time_between_payouts
         );
 
         Self {
@@ -139,22 +132,16 @@ impl Setup<'_> {
 }
 
 pub(crate) fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanTokenClient<'a> {
-    SorobanTokenClient::new(
-        e,
-        &e.register_stellar_asset_contract_v2(admin.clone())
-            .address(),
-    )
+    SorobanTokenClient::new(e, &e.register_stellar_asset_contract_v2(admin.clone()).address())
 }
 
 pub mod pool {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/pool.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/pool.wasm");
 }
 
 pub(crate) fn get_token_admin_client<'a>(
     e: &Env,
-    address: &Address,
+    address: &Address
 ) -> SorobanTokenAdminClient<'a> {
     SorobanTokenAdminClient::new(e, address)
 }
@@ -165,9 +152,7 @@ pub fn create_contract<'a>(e: &Env) -> BufferClient<'a> {
 }
 
 pub mod pool_router {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/pool_router.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/pool_router.wasm");
 }
 
 fn deploy_pool_router_contract<'a>(e: Env) -> pool_router::Client<'a> {
@@ -175,9 +160,7 @@ fn deploy_pool_router_contract<'a>(e: Env) -> pool_router::Client<'a> {
 }
 
 pub mod fee_collector {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/pool_swap_fee.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/pool_swap_fee.wasm");
 }
 
 fn deploy_fee_collector_contract<'a>(e: Env) -> fee_collector::Client<'a> {
@@ -192,8 +175,6 @@ fn install_token_wasm(e: &Env) -> BytesN<32> {
 }
 
 fn install_liq_pool_hash(e: &Env) -> BytesN<32> {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/pool.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/pool.wasm");
     e.deployer().upload_contract_wasm(WASM)
 }

@@ -42,8 +42,8 @@ fn test_total_liquidity() {
             &setup.oracles,
             &setup.asset,
             &tokens,
-            &String::from_str(&e, "Pool Share Token"),
-            &String::from_str(&e, "Pool Share Token"),
+            &(String::from_str(&e, "Pool Share Token"),
+            String::from_str(&e, "Pool Share Token")),
             &pool_fee,
         );
         setup.router.deposit(&user1, &tokens, &pool_hash, &30000);

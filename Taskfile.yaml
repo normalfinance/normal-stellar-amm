@@ -2,7 +2,7 @@ version: "3"
 
 env:
   SUBDIRS:
-    sh: dirname $(find . -mindepth 2 -maxdepth 3 -type f -name Taskfile.yaml)
+    sh: dirname $(find . -mindepth 3 -maxdepth 3 -type f -name Taskfile.yaml)
 
 tasks:
   default:
@@ -18,11 +18,11 @@ tasks:
 
   build:
     cmds:
-      - task -d contracts/oracle_registry build || exit 1
       - task -d contracts/pool_router build || exit 1
+      - task -d contracts/pool_swap_fee build || exit 1
+      - task -d contracts/oracle_registry build || exit 1
       - task -d contracts/buffer build || exit 1
       - task -d contracts/insurance_fund build || exit 1
-      - task -d contracts/pool_swap_fee build || exit 1
       - cp ./target/wasm32v1-none/release/*.wasm ./wasm
 
   test:

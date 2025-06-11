@@ -110,7 +110,7 @@ impl BufferTrait for Buffer {
 
         // Ensure Buffer reserve has sufficient balance,
         let balance = get_buffer_reserve_amount(&e, &token);
-        let mut reserve = get_reserve(&e, &token);
+        let reserve = get_reserve(&e, &token);
         if amount > balance {
             panic_with_error!(&e, BufferError::InsufficentFunds);
         }
@@ -227,7 +227,7 @@ impl AdminInterface for Buffer {
         access_control.assert_address_has_role(&admin, &Role::Admin);
 
         let now = e.ledger().timestamp();
-        let mut reserve = get_reserve(&e, &token);
+        let reserve = get_reserve(&e, &token);
         put_reserve(&e, &token, &reserve.update_max_balance(max_balance, now));
     }
 

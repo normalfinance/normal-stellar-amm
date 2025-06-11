@@ -88,7 +88,6 @@ use utils::constant::{
     INSURANCE_SPECULATIVE_MAX,
 };
 use utils::math::safe_math::SafeMath;
-use utils::oracle::OraclePriceData;
 use utils::storage::{
     AddressAndAmount,
     InitializeAllParams,
@@ -980,7 +979,7 @@ impl AdminInterfaceTrait for Pool {
         validate!(
             &e,
             max_insurance_withdraw > 0,
-            ErrorCode::MaxIFWithdrawReached,
+            PoolError::MaxIFWithdrawReached,
             "max_insurance_withdraw={}/{} as already been reached",
             pool.insurance_claim.quote_settled_insurance,
             pool.insurance_claim.quote_max_insurance
@@ -993,7 +992,7 @@ impl AdminInterfaceTrait for Pool {
         validate!(
             &e,
             insurance_withdraw > 0,
-            ErrorCode::NoIFWithdrawAvailable,
+            PoolError::NoIFWithdrawAvailable,
             "No available funds for insurance_withdraw({}) for liquidity_imbalance={}",
             insurance_withdraw,
             excess_liquidity_imbalance
@@ -1012,7 +1011,7 @@ impl AdminInterfaceTrait for Pool {
             &e,
             pool.insurance_claim.quote_settled_insurance <=
                 pool.insurance_claim.quote_max_insurance,
-            ErrorCode::MaxIFWithdrawReached,
+            PoolError::MaxIFWithdrawReached,
             "quote_settled_insurance breached its max {}/{}",
             pool.insurance_claim.quote_settled_insurance,
             pool.insurance_claim.quote_max_insurance

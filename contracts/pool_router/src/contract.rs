@@ -1,17 +1,8 @@
 use crate::errors::PoolRouterError;
 use crate::events::{ Events, PoolRouterEvents };
 use crate::incentives::get_incentives_manager;
-use crate::pool_interface::{
-    IncentivesInterfaceTrait,
-    PoolInterfaceTrait,
-    PoolsManagementTrait,
-};
-use crate::pool_utils::{
-    assert_tokens_sorted,
-    deploy_pool,
-    get_pool_salt,
-    get_tokens_salt
-};
+use crate::pool_interface::{ IncentivesInterfaceTrait, PoolInterfaceTrait, PoolsManagementTrait };
+use crate::pool_utils::{ assert_tokens_sorted, deploy_pool, get_pool_salt, get_tokens_salt };
 use crate::router_interface::AdminInterface;
 use crate::storage::{
     get_pool,
@@ -173,6 +164,23 @@ impl PoolInterfaceTrait for PoolRouter {
         assert_tokens_sorted(&e, &tokens);
         let pool_id = get_pool(&e, &tokens, pool_index);
         e.invoke_contract(&pool_id, &Symbol::new(&e, "get_reserves"), Vec::new(&e))
+    }
+
+    // Returns the total shares of the pool.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    //
+    // # Returns
+    //
+    // The total shares of the pool as a u128.
+    fn get_fee_fraction(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u32 {
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
+        e.invoke_contract(&pool_id, &Symbol::new(&e, "get_fee_fraction"), Vec::new(&e))
     }
 
     // Deposits tokens into the pool.

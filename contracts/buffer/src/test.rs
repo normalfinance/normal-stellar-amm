@@ -407,7 +407,7 @@ fn test_kill_deposit_event() {
 #[test]
 fn test_kill_request_payout_event() {
     let setup = Setup::default();
-    let buffer = setup.contract;
+    let buffer = setup.buffer;
 
     buffer.kill_request_payout(&setup.admin);
     assert_eq!(
@@ -426,7 +426,7 @@ fn test_kill_request_payout_event() {
 #[test]
 fn test_unkill_deposit_event() {
     let setup = Setup::default();
-    let buffer = setup.contract;
+    let buffer = setup.buffer;
 
     buffer.unkill_deposit(&setup.admin);
     assert_eq!(
