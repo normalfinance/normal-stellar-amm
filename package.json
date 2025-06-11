@@ -8,6 +8,7 @@
     "test": "pnpm run test:integration && pnpm run test:unit",
     "lint": "prettier --check . && eslint .",
     "format": "prettier --write .",
+    "scout": "cargo scout-audit --output-format html --output-path audits/scout/report.html",
     "deploy": "./scripts/deploy.sh stroopy"
   },
   "repository": {
