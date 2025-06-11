@@ -30,6 +30,8 @@ pub struct Token;
 #[contractimpl]
 impl Token {
     pub fn initialize(e: Env, admin: Address, decimal: u32, name: String, symbol: String) {
+        admin.require_auth();
+        
         let access_control = AccessControl::new(&e);
         if access_control.get_role_safe(&Role::Admin).is_some() {
             panic_with_error!(&e, TokenError::AlreadyInitialized);

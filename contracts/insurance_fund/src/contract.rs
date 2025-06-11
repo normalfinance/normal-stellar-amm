@@ -503,6 +503,8 @@ impl AdminInterface for InsuranceFund {
     //
     // * `account` - The address of the admin user.
     fn initialize(e: Env, admin: Address, token: Address) {
+        admin.require_auth();
+        
         let access_control = AccessControl::new(&e);
         if access_control.get_role_safe(&Role::Admin).is_some() {
             panic_with_error!(&e, AccessControlError::AdminAlreadySet);
