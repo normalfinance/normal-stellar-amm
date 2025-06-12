@@ -85,7 +85,6 @@ impl InsuranceFundTrait for InsuranceFund {
     }
 
     fn get_stake(e: Env, user: Address) -> Stake {
-        user.require_auth();
         get_stake(&e, &user)
     }
 
@@ -197,8 +196,6 @@ impl InsuranceFundTrait for InsuranceFund {
 
         let user_if_shares = stake.checked_if_shares(&e);
         validate!(&e, user_if_shares >= n_shares, InsuranceFundError::InsufficientIFShares);
-
-        log!(&e, "n_shares {}", n_shares);
 
         stake.last_withdraw_request_shares = n_shares;
 
@@ -504,7 +501,7 @@ impl AdminInterface for InsuranceFund {
     // * `account` - The address of the admin user.
     fn initialize(e: Env, admin: Address, token: Address) {
         admin.require_auth();
-        
+
         let access_control = AccessControl::new(&e);
         if access_control.get_role_safe(&Role::Admin).is_some() {
             panic_with_error!(&e, AccessControlError::AdminAlreadySet);
@@ -550,6 +547,8 @@ impl AdminInterface for InsuranceFund {
     // * `max_shares` - The max number of shares.ƒ
     fn resolve_liquidity_deficit(e: Env, admin: Address, pool_address: Address) {
         admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, &Role::Admin);
 
         let insurance_vault_amount = get_insurance_vault_amount(&e);
 

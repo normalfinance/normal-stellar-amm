@@ -104,7 +104,9 @@ pub struct InitializeParams {
     pub tokens: Vec<Address>,
     // The fee fraction for the pool.
     pub fee_fraction: u32,
+    //
     pub tier: PoolTier,
+    //
     pub quote_max_insurance: u128,
 }
 

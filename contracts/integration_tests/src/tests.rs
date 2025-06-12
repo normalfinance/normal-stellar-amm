@@ -2,11 +2,14 @@
 extern crate std;
 
 use crate::testutils::{
-    create_token_contract, deploy_provider_swap_fee_contract, get_token_admin_client, Setup,
+    create_token_contract,
+    deploy_provider_swap_fee_contract,
+    get_token_admin_client,
+    Setup,
 };
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::TokenClient;
-use soroban_sdk::{vec, Address, Vec};
+use soroban_sdk::{ vec, Address, Vec };
 
 #[test]
 fn test_integration() {
@@ -51,8 +54,12 @@ fn test_integration() {
     );
 
     // deploy provider swap fee contract
-    let swap_fee =
-        deploy_provider_swap_fee_contract(&setup.env, &setup.operator, &setup.admin, &setup.admin);
+    let swap_fee = deploy_provider_swap_fee_contract(
+        &setup.env,
+        &setup.operator,
+        &setup.admin,
+        &setup.admin
+    );
 
     // now swap with additional provider fee
     xlm_admin.mint(&user, &10_0000000);
@@ -71,4 +78,45 @@ fn test_integration() {
         ),
         2_8864196
     );
+}
+
+//    _______    ______      ______    ___
+//   |   __ "\  /    " \    /    " \  |"  |
+//   (. |__) :)// ____  \  // ____  \ ||  |
+//   |:  ____//  /    ) :)/  /    ) :)|:  |
+//   (|  /   (: (____/ //(: (____/ //  \  |___
+//  /|__/ \   \        /  \        /  ( \_|:  \
+// (_______)   \"_____/    \"_____/    \_______)
+
+//  _______   ____  ____   _______   _______   _______   _______
+// |   _  "\ ("  _||_ " | /"     "| /"     "| /"     "| /"      \
+// (. |_)  :)|   (  ) : |(: ______)(: ______)(: ______)|:        |
+// |:     \/ (:  |  | . ) \/    |   \/    |   \/    |  |_____/   )
+// (|  _  \\  \\ \__/ //  // ___)   // ___)   // ___)_  //      /
+// |: |_)  :) /\\ __ //\ (:  (     (:  (     (:      "||:  __   \
+// (_______/ (__________) \__/      \__/      \_______)|__|  \___)
+
+//   __    _____  ___    ________  ____  ____   _______        __      _____  ___    ______    _______
+//  |" \  (\"   \|"  \  /"       )("  _||_ " | /"      \      /""\    (\"   \|"  \  /" _  "\  /"     "|
+//  ||  | |.\\   \    |(:   \___/ |   (  ) : ||:        |    /    \   |.\\   \    |(: ( \___)(: ______)
+//  |:  | |: \.   \\  | \___  \   (:  |  | . )|_____/   )   /' /\  \  |: \.   \\  | \/ \      \/    |
+//  |.  | |.  \    \. |  __/  \\   \\ \__/ //  //      /   //  __'  \ |.  \    \. | //  \ _   // ___)_
+//  /\  |\|    \    \ | /" \   :)  /\\ __ //\ |:  __   \  /   /  \\  \|    \    \ |(:   _) \ (:      "|
+// (__\_|_)\___|\____\)(_______/  (__________)|__|  \___)(___/    \___)\___|\____\) \_______) \_______)
+
+#[test]
+fn test_resolve_lidquidity_deficit() {
+    let setup = Setup::default();
+    let pool = Address::generate(&setup.env);
+
+    setup.insurance_fund.resolve_liquidity_deficit(&setup.admin, &pool);
+
+    assert_eq!(insurance_fund.get_max_shares(), 10_0000000_u128);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #109)")]
+fn test_resolve_lidquidity_deficit_not_admin() {
+    let setup = Setup::default();
+    setup.insurance_fund.set_max_shares(&setup.users[0], &10_0000000_u128);
 }

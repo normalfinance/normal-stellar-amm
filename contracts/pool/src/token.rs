@@ -19,7 +19,6 @@ pub fn create_contract(
 }
 
 pub fn transfer_a(e: &Env, to: &Address, amount: u128) {
-    let pool = get_pool(e);
     transfer_token(
         e,
         &get_token_synthetic(e),

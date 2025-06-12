@@ -1,8 +1,8 @@
 #![cfg(any(test, feature = "testutils"))]
 
-use sep_40_oracle::testutils::{ MockPriceOracleClient, MockPriceOracleWASM };
+// use sep_40_oracle::testutils::{ MockPriceOracleClient, MockPriceOracleWASM };
 use soroban_sdk::testutils::{ Ledger, LedgerInfo };
-use soroban_sdk::{ vec, Address, BytesN, Env, String, Symbol, Vec, U256 };
+use soroban_sdk::{ Address, BytesN, Env, String, Symbol, Vec, U256 };
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient,
     TokenClient as SorobanTokenClient,
@@ -149,7 +149,7 @@ pub fn setup_oracle_registry<'a>(
     oracle_registry.register_oracle(
         admin,
         &Symbol::new(e, "BTC"),
-        &e.register(MockPriceOracleWASM, ()),
+        &e.register(pool_router::WASM, ()), // MockPriceOracleWASM
         asset,
         &7
     );
@@ -174,8 +174,8 @@ pub fn setup_fee_collector<'a>(
 }
 
 pub fn setup_oracles<'a>(e: &Env, address: &Address) {
-    let base_oracle_client = MockPriceOracleClient::new(e, address);
-    let quote_oracle_client = MockPriceOracleClient::new(e, address);
+    // let base_oracle_client = MockPriceOracleClient::new(e, address);
+    // let quote_oracle_client = MockPriceOracleClient::new(e, address);
 
     // Setup base oracle
     // base_oracle_client.set_data(

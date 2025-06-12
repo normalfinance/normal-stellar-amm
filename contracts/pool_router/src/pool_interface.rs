@@ -1,6 +1,5 @@
-use sep_40_oracle::Asset;
 use soroban_sdk::{ Address, BytesN, Env, Map, String, Symbol, Val, Vec, U256 };
-use utils::{ storage::{ OraclePair, PoolInfo, PoolTier } };
+use utils::{ storage::{ PoolInfo, PoolTier } };
 
 pub trait PoolInterfaceTrait {
     // Get symbolic explanation of pool type.

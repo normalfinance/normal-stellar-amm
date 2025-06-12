@@ -1,10 +1,10 @@
 #![cfg(test)]
 
-use crate::testutils::{install_liq_pool_hash, install_token_wasm, Setup};
+use crate::testutils::{Setup};
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{symbol_short, Address, String, Symbol, Vec};
-use utils::test_utils::{install_dummy_wasm, jump};
+use utils::test_utils::{install_dummy_wasm, install_liq_pool_hash, install_token_wasm, jump};
 
 // test admin transfer ownership
 #[test]
@@ -551,7 +551,7 @@ fn test_distribute_rewards() {
             &e.ledger().timestamp().saturating_add(60),
             &Vec::from_array(&e, [(tokens.clone(), 1_0000000)]),
         );
-        router.fill_liquidity(&tokens);
+        // router.fill_liquidity(&tokens);
         router.config_pool_rewards(&tokens, &pool_hash);
 
         assert_eq!(

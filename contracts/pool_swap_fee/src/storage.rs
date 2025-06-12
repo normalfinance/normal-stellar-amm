@@ -11,8 +11,7 @@ use utils::{
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
-    Router, // Address of the AMM router.
-    Operator, // Address of the operator. Operator is capable to configure fees and claim them.
+    Router, // Address of the Pool Router.
     Buffer, // Address of the Buffer.
     FeeDestination, // Fee destination address
     LPRevenueFraction, // The portion of fees to give back to LPs as yield in basis points (100 = 1%)
@@ -20,7 +19,6 @@ enum DataKey {
 }
 
 generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
-generate_instance_storage_getter_and_setter!(operator, DataKey::Operator, Address);
 generate_instance_storage_getter_and_setter!(buffer, DataKey::Buffer, Address);
 generate_instance_storage_getter_and_setter!(fee_destination, DataKey::FeeDestination, Address);
 generate_instance_storage_getter_and_setter!(lp_revenue_fraction, DataKey::LPRevenueFraction, u32);

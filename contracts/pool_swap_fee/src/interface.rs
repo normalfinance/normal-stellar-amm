@@ -8,6 +8,8 @@ pub trait PoolSwapFeeInterface {
     //   - e: The Soroban environment.
     //   - user: The user initiating the swap (must be authorized).
     //   - token_in: The input token address.
+    //   - token_in: The output token address.
+    //   - pool_index: ...
     //   - in_amount: The amount of token_in provided by the user.
     //   - out_min: The minimum acceptable output token amount (after fee deduction).
     //
@@ -23,31 +25,11 @@ pub trait PoolSwapFeeInterface {
         in_amount: u128,
         out_min: u128
     ) -> u128;
-
-    // swap_strict_receive
-    // Executes a multi-hop swap ensuring a specific output amount by adjusting the input and fee.
-    //
-    // Arguments:
-    //   - e: The Soroban environment.
-    //   - user: The user initiating the swap (must be authorized).
-    //   - token_in: The input token address.
-    //   - out_amount: The exact target output amount.
-    //   - in_max: The maximum amount of token_in the user is willing to spend.
-    //
-    // Returns:
-    //   - A u128 value representing the total input amount (including fees) required.
-    fn swap_strict_receive(
-        e: Env,
-        user: Address,
-        token_in: Address,
-        out_amount: u128,
-        in_max: u128
-    ) -> u128;
 }
 
 pub trait AdminInterface {
     // Initialize admin user. Will panic if called twice
-    fn init_admin(e: Env, account: Address);
+    fn init_admin(e: Env, admin: Address);
 
     // Set the Router
     fn set_router(e: Env, admin: Address, router: Address);
@@ -60,12 +42,6 @@ pub trait AdminInterface {
 
     // Set the buffer fraction
     fn set_buffer_fraction(e: Env, admin: Address, buffer_fraction: u32);
-
-    // Set the max swap fee fraction
-    fn set_max_swap_fee_fraction(e: Env, admin: Address, max_swap_fee_fraction: u32);
-
-    // Get the max swap fee fraction
-    fn get_max_swap_fee_fraction(e: Env) -> u32;
 
     // Get the buffer fraction
     fn get_buffer_fraction(e: Env) -> u32;

@@ -10,4 +10,5 @@ pub mod errors;
 pub mod math;
 
 pub mod test;
+#[cfg(any(test, feature = "testutils"))]
 pub mod test_utils;

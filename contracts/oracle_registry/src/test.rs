@@ -8,6 +8,14 @@ use soroban_sdk::{ Address };
 use utils::constant::PERCENTAGE_PRECISION_U64;
 use utils::storage::OracleInfo;
 
+//  ___      ___       __        __    _____  ___
+// |"  \    /"  |     /""\      |" \  (\"   \|"  \
+//  \   \  //   |    /    \     ||  | |.\\   \    |
+//  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+// |: \.        |  //  __'  \   |.  | |.  \    \. |
+// |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+// |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
+
 #[test]
 fn test_get_price() {
     let setup = Setup::default();
@@ -27,6 +35,14 @@ fn test_get_price_of_unregistered_oracle() {
     let setup = Setup::default();
     setup.oracle_registry.get_price(&setup.user, &setup.unregistered_asset_id, &false, &None);
 }
+
+//       __       ________   ___      ___   __    _____  ___
+//      /""\     |"      "\ |"  \    /"  | |" \  (\"   \|"  \
+//     /    \    (.  ___  :) \   \  //   | ||  | |.\\   \    |
+//    /' /\  \   |: \   ) || /\\  \/.    | |:  | |: \.   \\  |
+//   //  __'  \  (| (___\ |||: \.        | |.  | |.  \    \. |
+//  /   /  \\  \ |:       :)|.  \    /:  | /\  |\|    \    \ |
+// (___/    \___)(________/ |___|\__/|___|(__\_|_)\___|\____\)
 
 #[test]
 fn test_set_oracle_guardrails() {

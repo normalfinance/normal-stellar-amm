@@ -34,7 +34,6 @@ use access_control::role::SymbolRepresentation;
 use access_control::transfer::TransferOwnershipTrait;
 use access_control::utils::{ require_operations_admin_or_owner, require_rewards_admin_or_owner };
 use incentives::storage::{ RewardTokenStorageTrait };
-use sep_40_oracle::Asset;
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
     contract,

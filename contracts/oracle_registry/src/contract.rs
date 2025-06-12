@@ -235,7 +235,7 @@ impl AdminInterface for OracleRegistry {
         let oracle_info = get_oracle(&e, asset_id.clone());
 
         // check oracle returns data - will error if fails price validation
-        get_oracle_price(&e, oracle_address, &oracle_info.asset, now);
+        get_oracle_price(&e, &oracle, &oracle_info.asset, now);
 
         let oracle_info = OracleInfo {
             oracle_address: oracle,
@@ -267,7 +267,7 @@ impl AdminInterface for OracleRegistry {
         let oracle_info = get_oracle(&e, asset_id.clone());
 
         // check oracle returns data - will error if fails price validation
-        get_oracle_price(&e, oracle_address, &oracle_info.asset, now);
+        get_oracle_price(&e, &address, &oracle_info.asset, now);
 
         let updated_oracle_info = OracleInfo {
             oracle_address: address,
@@ -417,7 +417,7 @@ impl AdminInterface for OracleRegistry {
             let updated_oracle_info = OracleInfo {
                 frozen: false,
                 last_updated: e.ledger().timestamp(),
-                ..oracle_info
+                ..oracle_info.clone()
             };
             put_oracle(&e, asset_id, &updated_oracle_info);
             updated_oracle_info;

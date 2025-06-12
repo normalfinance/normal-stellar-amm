@@ -1,21 +1,14 @@
 use sep_40_oracle::{ Asset, PriceFeedClient };
-use soroban_fixed_point_math::FixedPoint;
 use soroban_sdk::{ log, panic_with_error, Address, Env, Symbol };
 use utils::{
-    constant::{
-        FIVE_MINUTE,
-        PERCENTAGE_PRECISION_U64,
-        PRICE_PRECISION,
-        PRICE_PRECISION_I64,
-        PRICE_PRECISION_U64,
-    },
+    constant::{ FIVE_MINUTE, PERCENTAGE_PRECISION_U64, PRICE_PRECISION_U64 },
     math::{ pool::sanitize_new_price, safe_math::SafeMath, stats::calculate_new_twap },
     storage::OraclePriceData,
 };
 
 use crate::{
     errors::OracleRegistryError,
-    storage::{ get_historical_oracle_data, get_oracle_guard_rails, put_historical_oracle_data },
+    storage::{ get_oracle_guard_rails, put_historical_oracle_data },
     storage_types::{
         HistoricalOracleData,
         NormalAction,

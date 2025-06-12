@@ -2,23 +2,37 @@
 extern crate std;
 use crate::PoolClient;
 use access_control::constants::ADMIN_ACTIONS_DELAY;
-use sep_40_oracle::testutils::{Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM};
+use sep_40_oracle::testutils::{ Asset as MockAsset, MockPriceOracleClient };
 use sep_40_oracle::Asset;
 use soroban_sdk::token::{
-    StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
+    StellarAssetClient as SorobanTokenAdminClient,
+    TokenClient as SorobanTokenClient,
 };
 use soroban_sdk::String;
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Symbol, Vec};
-use utils::constant::PERCENTAGE_PRECISION_U64;
-use utils::oracle::{OracleGuardRails, PriceDivergenceGuardRails, ValidityGuardRails};
+use soroban_sdk::{ testutils::Address as _, Address, BytesN, Env, Symbol, Vec };
 use utils::storage::{
-    InitializeAllParams, InitializeParams, OraclePair, PrivilegedAddresses, RewardConfig,
+    InitializeAllParams,
+    InitializeParams,
+    OraclePair,
+    PoolTier,
+    PrivilegedAddresses,
+    RewardConfig,
     TokenInitInfo,
 };
 
-use pool_tokens::token_contract::{Client as PoolTokenClient, WASM};
+use pool_tokens::token_contract::{ Client as PoolTokenClient, WASM };
+use utils::test_utils::pool_router::PoolTier;
 use std::vec;
-use utils::test_utils::jump;
+use utils::test_utils::{
+    create_token_contract,
+    get_mock_lp_token_info,
+    get_mock_oracle_registry_ids,
+    get_token_admin_client,
+    install_token_wasm,
+    jump,
+    oracle_registry,
+    setup_oracle_registry,
+};
 
 pub(crate) struct TestConfig {
     pub(crate) users_count: u32,
@@ -44,14 +58,28 @@ impl Default for TestConfig {
 
 pub(crate) struct Setup<'a> {
     pub(crate) env: Env,
-    pub(crate) router: Address,
-    pub(crate) oracles: OraclePair,
+
+    // addresses
+    pub(crate) admin: Address,
+    pub(crate) users: vec::Vec<Address>,
+    pub(crate) emergency_admin: Address,
+    pub(crate) rewards_admin: Address,
+    pub(crate) operations_admin: Address,
+    pub(crate) pause_admin: Address,
+    pub(crate) emergency_pause_admin: Address,
     pub(crate) asset: Address,
+
+    // contracts
+    pub(crate) liq_pool: PoolClient<'a>,
+    pub(crate) router: Address,
+
+    // state
     pub(crate) base_oracle_price: i128,
     pub(crate) base_oracle_client: MockPriceOracleClient<'a>,
     pub(crate) quote_oracle_price: i128,
     pub(crate) quote_oracle_client: MockPriceOracleClient<'a>,
-    pub(crate) users: vec::Vec<Address>,
+
+    // tokens
     pub(crate) token1: PoolTokenClient<'a>,
     pub(crate) token1_admin_client: SorobanTokenAdminClient<'a>,
     pub(crate) token2: SorobanTokenClient<'a>,
@@ -59,14 +87,6 @@ pub(crate) struct Setup<'a> {
     pub(crate) token_reward: SorobanTokenClient<'a>,
     pub(crate) token_reward_admin_client: SorobanTokenAdminClient<'a>,
     pub(crate) token_lp: PoolTokenClient<'a>,
-    pub(crate) liq_pool: PoolClient<'a>,
-
-    pub(crate) admin: Address,
-    pub(crate) emergency_admin: Address,
-    pub(crate) rewards_admin: Address,
-    pub(crate) operations_admin: Address,
-    pub(crate) pause_admin: Address,
-    pub(crate) emergency_pause_admin: Address,
 }
 
 impl Default for Setup<'_> {
@@ -116,7 +136,16 @@ impl Setup<'_> {
         let token2_admin_client = get_token_admin_client(&e, &token2.address.clone());
         let token_reward_admin_client = get_token_admin_client(&e, &reward_token.address.clone());
 
+        let asset = Address::generate(&e);
+        let oracle_registry = setup_oracle_registry(&e, &admin, &asset);
+
+        let asset_ids = get_mock_oracle_registry_ids(&e);
+        let lp_token_info = get_mock_lp_token_info(&e);
+
         let router = Address::generate(&e);
+
+        // ===
+
         // let xlm = Address::generate(&e);
         let usdc = Address::generate(&e);
 
@@ -128,52 +157,24 @@ impl Setup<'_> {
         let base_oracle_price = 2_0000000; // $2.00
         let quote_oracle_price = 0_5000000; // $0.50
 
-        let oracles = OraclePair {
-            base_oracle: e.register(MockPriceOracleWASM, ()),
-            quote_oracle: e.register(MockPriceOracleWASM, ()),
-        };
-
-        let base_oracle_client = MockPriceOracleClient::new(&e, &oracles.base_oracle.address);
-        let quote_oracle_client = MockPriceOracleClient::new(&e, &oracles.quote_oracle.address);
-
-        // Setup base oracle
-        base_oracle_client.set_data(
-            &admin,
-            &MockAsset::Stellar(usdc.clone()),
-            &Vec::from_array(&e, [asset_mock.clone()]),
-            &7,
-            &(5 * 60 * 60),
-        );
-        base_oracle_client.set_price(
-            &Vec::from_array(&e, [base_oracle_price]),
-            &e.ledger().timestamp(),
-        );
-
-        // Setup quote oracle
-        quote_oracle_client.set_data(
-            &admin,
-            &MockAsset::Stellar(usdc),
-            &Vec::from_array(&e, [quote_asset_mock.clone()]),
-            &7,
-            &(5 * 60 * 60),
-        );
-        quote_oracle_client.set_price(
-            &Vec::from_array(&e, [quote_oracle_price]),
-            &e.ledger().timestamp(),
-        );
+        // ===
 
         let liq_pool = create_pool_contract(
             &e,
             &admin,
             &router,
-            &("", ""),
+            &oracle_registry.address,
+            &asset_ids.0,
+            &asset_ids.1,
             &asset,
             &install_token_wasm(&e),
-            &String::from_str(&e, "nSOL / XLM Pool Token"),
-            &String::from_str(&e, "nSOL-LP"),
+            &lp_token_info.0,
+            &lp_token_info.1,
             &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
             &reward_token.address,
             config.liq_pool_fee,
+            &PoolTier::A,
+            &1_000_000_u128
         );
         token_reward_admin_client.mint(&liq_pool.address, &config.rewards_count);
 
@@ -182,14 +183,14 @@ impl Setup<'_> {
             &rewards_admin.clone(),
             &operations_admin.clone(),
             &pause_admin.clone(),
-            &Vec::from_array(&e, [emergency_pause_admin.clone()]),
+            &Vec::from_array(&e, [emergency_pause_admin.clone()])
         );
 
         let emergency_admin = Address::generate(&e);
         liq_pool.commit_transfer_ownership(
             &admin,
             &Symbol::new(&e, "EmergencyAdmin"),
-            &emergency_admin,
+            &emergency_admin
         );
         jump(&e, ADMIN_ACTIONS_DELAY + 1); // delay is mandatory since emergency admin was set during initialization
         liq_pool.apply_transfer_ownership(&admin, &Symbol::new(&e, "EmergencyAdmin"));
@@ -246,39 +247,28 @@ impl Setup<'_> {
             self.liq_pool.set_rewards_config(
                 &self.users[0],
                 &self.env.ledger().timestamp().saturating_add(60),
-                &reward_tps,
+                &reward_tps
             );
         }
     }
-}
-
-pub(crate) fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanTokenClient<'a> {
-    SorobanTokenClient::new(
-        e,
-        &e.register_stellar_asset_contract_v2(admin.clone())
-            .address(),
-    )
-}
-
-pub(crate) fn get_token_admin_client<'a>(
-    e: &Env,
-    address: &Address,
-) -> SorobanTokenAdminClient<'a> {
-    SorobanTokenAdminClient::new(e, address)
 }
 
 pub fn create_pool_contract<'a>(
     e: &Env,
     admin: &Address,
     router: &Address,
-    oracles: &OraclePair,
-    asset: &Asset,
+    oracle_registry: &Address,
+    base_asset_id: &Symbol,
+    quote_asset_id: &Symbol,
+    asset: &Address,
     token_wasm_hash: &BytesN<32>,
     lp_token_name: &String,
     lp_token_symbol: &String,
     tokens: &Vec<Address>,
     reward_token: &Address,
     fee_fraction: u32,
+    tier: &PoolTier,
+    quote_max_insurance: u128
 ) -> PoolClient<'a> {
     let pool = PoolClient::new(e, &e.register(crate::Pool {}, ()));
     let params = InitializeAllParams {
@@ -292,7 +282,9 @@ pub fn create_pool_contract<'a>(
                 emergency_pause_admins: Vec::from_array(e, [admin.clone()]),
             },
             router: router.clone(),
-            oracles: oracles.clone(),
+            oracle_registry: oracle_registry.clone(),
+            base_asset_id: base_asset_id.clone(),
+            quote_asset_id: quote_asset_id.clone(),
             asset: asset.clone(),
             tokens: tokens.clone(),
             lp_token_info: TokenInitInfo {
@@ -301,6 +293,8 @@ pub fn create_pool_contract<'a>(
                 symbol: lp_token_symbol.clone(),
             },
             fee_fraction,
+            tier: tier.clone(),
+            quote_max_insurance,
         },
         reward_config: RewardConfig {
             reward_token: reward_token.clone(),
@@ -308,10 +302,6 @@ pub fn create_pool_contract<'a>(
     };
     pool.initialize_all(&params);
     pool
-}
-
-pub fn install_token_wasm(e: &Env) -> BytesN<32> {
-    e.deployer().upload_contract_wasm(WASM)
 }
 
 // #[test]
