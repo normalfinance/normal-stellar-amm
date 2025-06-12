@@ -1,5 +1,5 @@
 use soroban_sdk::{ Address, Env, Symbol };
-use utils::storage::OraclePriceData;
+use utils::storage::{ OracleInfo, OraclePriceData };
 
 use crate::storage_types::OracleGuardRails;
 
@@ -16,7 +16,11 @@ pub trait OracleRegistryTrait {
 
 pub trait AdminInterface {
     // Initialize admin user. Will panic if called twice
-    fn init_admin(e: Env, account: Address);
+    fn init_admin(e: Env, admin: Address);
+
+    fn get_oracle_guardrails(e: Env) -> OracleGuardRails;
+
+    fn get_price_override_limit(e: Env) -> u128;
 
     // Set oracle guardrails
     fn set_oracle_guardrails(e: Env, admin: Address, oracle_guard_rails: OracleGuardRails);
@@ -32,13 +36,13 @@ pub trait AdminInterface {
         oracle: Address,
         asset: Address,
         decimals: u32
-    );
+    ) -> OracleInfo;
 
     // Set oracle address
-    fn set_oracle_address(e: Env, admin: Address, asset_id: Symbol, oracle: Address);
+    fn set_oracle_address(e: Env, admin: Address, asset_id: Symbol, oracle: Address) -> OracleInfo;
 
     // Set oracle decimals
-    fn set_oracle_decimals(e: Env, admin: Address, asset_id: Symbol, decimals: u32);
+    fn set_oracle_decimals(e: Env, admin: Address, asset_id: Symbol, decimals: u32) -> OracleInfo;
 
     // Sync the oracle price
     fn sync_oracle_price(
@@ -58,8 +62,8 @@ pub trait AdminInterface {
     );
 
     // Pause price updates
-    fn freeze_oracle(e: Env, admin: Address, asset_id: Symbol);
+    fn freeze_oracle(e: Env, admin: Address, asset_id: Symbol) -> OracleInfo;
 
     // Unpause price updates
-    fn unfreeze_oracle(e: Env, admin: Address, asset_id: Symbol);
+    fn unfreeze_oracle(e: Env, admin: Address, asset_id: Symbol) -> OracleInfo;
 }

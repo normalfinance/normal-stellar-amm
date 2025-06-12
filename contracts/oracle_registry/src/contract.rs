@@ -177,12 +177,14 @@ impl AdminInterface for OracleRegistry {
     // # Arguments
     //
     // * `account` - The address of the admin user.
-    fn init_admin(e: Env, account: Address) {
+    fn init_admin(e: Env, admin: Address) {
+        admin.require_auth();
+
         let access_control = AccessControl::new(&e);
         if access_control.get_role_safe(&Role::Admin).is_some() {
             panic_with_error!(&e, AccessControlError::AdminAlreadySet);
         }
-        access_control.set_role_address(&Role::Admin, &account);
+        access_control.set_role_address(&Role::Admin, &admin);
     }
 
     // Sets the oracle guard rails.
@@ -211,6 +213,14 @@ impl AdminInterface for OracleRegistry {
         set_price_override_limit(&e, &limit);
     }
 
+    fn get_oracle_guardrails(e: Env) -> OracleGuardRails {
+        get_oracle_guard_rails(&e)
+    }
+
+    fn get_price_override_limit(e: Env) -> u128 {
+        get_price_override_limit(&e)
+    }
+
     fn register_oracle(
         e: Env,
         admin: Address,
@@ -218,21 +228,25 @@ impl AdminInterface for OracleRegistry {
         oracle: Address,
         asset: Address,
         decimals: u32
-    ) {
+    ) -> OracleInfo {
         admin.require_auth();
 
-        // if has_oracle(&e, asset_id.clone()) {
-        //     panic_with_error!(&e, OracleRegistryError::OracleExists);
-        // }
+        let now = e.ledger().timestamp();
+        let oracle_info = get_oracle(&e, asset_id.clone());
+
+        // check oracle returns data - will error if fails price validation
+        get_oracle_price(&e, oracle_address, &oracle_info.asset, now);
 
         let oracle_info = OracleInfo {
             oracle_address: oracle,
             asset,
             decimals,
             frozen: false,
-            last_updated: e.ledger().timestamp(),
+            last_updated: now,
         };
         put_oracle(&e, asset_id, &oracle_info);
+
+        oracle_info
     }
 
     // Sets the oracle guard rails.
@@ -241,20 +255,28 @@ impl AdminInterface for OracleRegistry {
     //
     // * `admin` - The address of the admin.
     // * `oracle_guard_rails` - The address of the rewards admin.
-    fn set_oracle_address(e: Env, admin: Address, asset_id: Symbol, address: Address) {
+    fn set_oracle_address(
+        e: Env,
+        admin: Address,
+        asset_id: Symbol,
+        address: Address
+    ) -> OracleInfo {
         admin.require_auth();
 
+        let now = e.ledger().timestamp();
         let oracle_info = get_oracle(&e, asset_id.clone());
 
-        put_oracle(
-            &e,
-            asset_id,
-            &(OracleInfo {
-                oracle_address: address,
-                last_updated: e.ledger().timestamp(),
-                ..oracle_info
-            })
-        );
+        // check oracle returns data - will error if fails price validation
+        get_oracle_price(&e, oracle_address, &oracle_info.asset, now);
+
+        let updated_oracle_info = OracleInfo {
+            oracle_address: address,
+            last_updated: now,
+            ..oracle_info
+        };
+
+        put_oracle(&e, asset_id, &updated_oracle_info);
+        updated_oracle_info
     }
 
     // Sets the oracle guard rails.
@@ -263,20 +285,21 @@ impl AdminInterface for OracleRegistry {
     //
     // * `admin` - The address of the admin.
     // * `oracle_guard_rails` - The address of the rewards admin.
-    fn set_oracle_decimals(e: Env, admin: Address, asset_id: Symbol, decimals: u32) {
+    fn set_oracle_decimals(e: Env, admin: Address, asset_id: Symbol, decimals: u32) -> OracleInfo {
         admin.require_auth();
 
-        let oracle_info = get_oracle(&e, asset_id.clone());
+        if decimals < 0 || decimals > 30 {
+            panic_with_error!(&e, OracleRegistryError::AdminNotSet);
+        }
 
-        put_oracle(
-            &e,
-            asset_id,
-            &(OracleInfo {
-                decimals,
-                last_updated: e.ledger().timestamp(),
-                ..oracle_info
-            })
-        );
+        let oracle_info = get_oracle(&e, asset_id.clone());
+        let updated = OracleInfo {
+            decimals,
+            last_updated: e.ledger().timestamp(),
+            ..oracle_info
+        };
+        put_oracle(&e, asset_id, &updated);
+        updated
     }
 
     // Sets the oracle guard rails.
@@ -303,6 +326,8 @@ impl AdminInterface for OracleRegistry {
             &oracle_info.asset,
             now
         );
+
+        // validate response
 
         let historical_oracle_data = get_historical_oracle_data(&e, asset_id.clone());
 
@@ -351,26 +376,30 @@ impl AdminInterface for OracleRegistry {
         put_historical_oracle_data(&e, asset_id, &new_historical_oracle_data);
     }
 
+    // TODO: unregister oracle
+
     // Sets the oracle status to frozen.
     //
     // # Arguments
     //
     // * `admin` - The address of the admin.
     // * `asset_id` - The oracle to freeze.
-    fn freeze_oracle(e: Env, admin: Address, asset_id: Symbol) {
+    fn freeze_oracle(e: Env, admin: Address, asset_id: Symbol) -> OracleInfo {
         admin.require_auth();
 
         let oracle_info = get_oracle(&e, asset_id.clone());
 
-        put_oracle(
-            &e,
-            asset_id,
-            &(OracleInfo {
+        if !oracle_info.frozen {
+            let updated_oracle_info = OracleInfo {
                 frozen: true,
                 last_updated: e.ledger().timestamp(),
-                ..oracle_info
-            })
-        );
+                ..oracle_info.clone()
+            };
+            put_oracle(&e, asset_id, &updated_oracle_info);
+            return updated_oracle_info;
+        }
+
+        oracle_info
     }
 
     // Sets the oracle status to unfrozen.
@@ -379,20 +408,22 @@ impl AdminInterface for OracleRegistry {
     //
     // * `admin` - The address of the admin.
     // * `asset_id` - The oracle to unfreeze.
-    fn unfreeze_oracle(e: Env, admin: Address, asset_id: Symbol) {
+    fn unfreeze_oracle(e: Env, admin: Address, asset_id: Symbol) -> OracleInfo {
         admin.require_auth();
 
         let oracle_info = get_oracle(&e, asset_id.clone());
 
-        put_oracle(
-            &e,
-            asset_id,
-            &(OracleInfo {
+        if oracle_info.frozen {
+            let updated_oracle_info = OracleInfo {
                 frozen: false,
                 last_updated: e.ledger().timestamp(),
                 ..oracle_info
-            })
-        );
+            };
+            put_oracle(&e, asset_id, &updated_oracle_info);
+            updated_oracle_info;
+        }
+
+        oracle_info
     }
 }
 
