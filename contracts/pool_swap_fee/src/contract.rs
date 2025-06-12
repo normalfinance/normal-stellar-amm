@@ -22,12 +22,10 @@ use crate::storage::{
     get_buffer_fraction,
     get_fee_destination,
     get_lp_revenue_fraction,
-    get_max_swap_fee_fraction,
     get_router,
     set_buffer,
     set_buffer_fraction,
     set_fee_destination,
-    set_max_swap_fee_fraction,
     set_router,
 };
 use soroban_sdk::auth::{ ContractContext, InvokerContractAuthEntry, SubContractInvocation };
@@ -65,8 +63,6 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
     //   - token_in: The input token address.
     //   - in_amount: The amount of token_in provided by the user.
     //   - out_min: The minimum acceptable output token amount (after fee deduction).
-
-    //   - fee_fraction: The provider fee fraction in basis points (bps).
     //
     // Returns:
     //   - A u128 value representing the net output tokens transferred to the user.
@@ -81,10 +77,6 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         out_min: u128
     ) -> u128 {
         user.require_auth();
-
-        // if Some(fee_fraction) > get_max_swap_fee_fraction(&e) {
-        //     panic_with_error!(&e, Error::FeeFractionTooHigh);
-        // }
 
         transfer_token(&e, &token_in, &user, &e.current_contract_address(), &(in_amount as i128));
 
@@ -377,15 +369,6 @@ impl AdminInterface for PoolSwapFeeCollector {
         set_buffer_fraction(&e, &buffer_fraction);
     }
 
-    // Set the max swap fee fraction
-    fn set_max_swap_fee_fraction(e: Env, admin: Address, max_swap_fee_fraction: u32) {
-        admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.assert_address_has_role(&admin, &Role::Admin);
-
-        set_max_swap_fee_fraction(&e, &max_swap_fee_fraction);
-    }
-
     // get_router
     // Returns the address of the router contract used for swaps.
     //
@@ -420,18 +403,6 @@ impl AdminInterface for PoolSwapFeeCollector {
     //   - An Address representing the fee destination.
     fn get_fee_destination(e: Env) -> Address {
         get_fee_destination(&e)
-    }
-
-    // get_max_swap_fee_fraction
-    // Returns the maximum swap fee in basis points.
-    //
-    // Arguments:
-    //   - e: The Soroban environment.
-    //
-    // Returns:
-    //   - A u32 value representing the maximum fee in basis points.
-    fn get_max_swap_fee_fraction(e: Env) -> u32 {
-        get_max_swap_fee_fraction(&e)
     }
 
     // get_buffer_fraction
