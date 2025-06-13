@@ -62,46 +62,13 @@ macro_rules! generate_instance_storage_getter_and_setter_with_default {
     };
 }
 
-// A macro that validates a condition, logs a message, and panics with a specific error if the condition is false
+// A macro that validates a condition and panics with a specific error if the condition is false
 #[macro_export]
 macro_rules! validate {
-    ($env:expr, $condition:expr, $error:expr, $message:expr) => {
-        if !$condition {
-            // Log the validation failure message
-            #[cfg(debug_assertions)]
-            &env.log($message);
-            // Panic with the specified error
-            #[cfg(debug_assertions)]
-            panic_with_error!($env, $error)
-        }
-    };
-    // Version with format string and single data parameter
-    ($env:expr, $condition:expr, $error:expr, $message:expr, $data:expr) => {
-        {
-        if !$condition {{
-            #[cfg(debug_assertions)]
-            $env.log(&format!($message, $data));
-            #[cfg(debug_assertions)]
-            panic_with_error!($env, $error)
-        }}
-        }
-    };
-    // Version with format string and multiple data parameters
-    ($env:expr, $condition:expr, $error:expr, $message:expr, $($data:expr),+ $(,)?) => {
-        {
-        if !$condition {{
-            #[cfg(debug_assertions)]
-            $env.log(&format!($message, $($data),+));
-            #[cfg(debug_assertions)]
-            panic_with_error!($env, $error)
-        }}
-        }
-    };
-    // Variant without logging for cases where logging isn't needed
     ($env:expr, $condition:expr, $error:expr) => {
         if !$condition {
             #[cfg(debug_assertions)]
-            panic_with_error!($env, $error)
+            panic_with_error!($env, $error) // Panic with the specified error
         }
     };
 }

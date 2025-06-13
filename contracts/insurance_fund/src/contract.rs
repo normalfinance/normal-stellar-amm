@@ -113,22 +113,22 @@ impl InsuranceFundTrait for InsuranceFund {
 
         let mut stake = get_stake(&e, &user);
 
+        //  "withdraw request in progress"
         validate!(
             &e,
             stake.last_withdraw_request_shares == 0 && stake.last_withdraw_request_value == 0,
-            InsuranceFundError::IFWithdrawRequestInProgress,
-            "withdraw request in progress"
+            InsuranceFundError::IFWithdrawRequestInProgress
         );
 
         let total_shares = get_total_shares(&e);
 
         let insurance_vault_amount = get_insurance_vault_amount(&e);
 
+        //  "Insurance Fund balance should be non-zero for new stakers to enter"
         validate!(
             &e,
             !(insurance_vault_amount == 0 && total_shares != 0),
-            InsuranceFundError::InvalidIFForNewStakes,
-            "Insurance Fund balance should be non-zero for new stakers to enter"
+            InsuranceFundError::InvalidIFForNewStakes
         );
 
         apply_rebase_to_insurance_fund(&e, insurance_vault_amount);
@@ -143,12 +143,7 @@ impl InsuranceFundTrait for InsuranceFund {
         let n_shares = vault_amount_to_if_shares(&e, amount, total_shares, insurance_vault_amount);
 
         // Ensure amount will not put Insurance Fund over max_shares
-        validate!(
-            e,
-            total_shares + n_shares <= max_shares,
-            InsuranceFundError::TooMuchInsurance,
-            ""
-        );
+        validate!(e, total_shares + n_shares <= max_shares, InsuranceFundError::TooMuchInsurance);
 
         // reset cost basis if no shares
         stake.cost_basis = if if_shares_before == 0 {
@@ -193,11 +188,11 @@ impl InsuranceFundTrait for InsuranceFund {
         let now = e.ledger().timestamp();
         let mut stake = get_stake(&e, &user);
 
+        // "Withdraw request is already in progress"
         validate!(
             &e,
             stake.last_withdraw_request_shares == 0,
-            InsuranceFundError::IFWithdrawRequestInProgress,
-            "Withdraw request is already in progress"
+            InsuranceFundError::IFWithdrawRequestInProgress
         );
 
         let total_shares = get_total_shares(&e);
@@ -205,12 +200,8 @@ impl InsuranceFundTrait for InsuranceFund {
 
         let n_shares = vault_amount_to_if_shares(&e, amount, total_shares, insurance_vault_amount);
 
-        validate!(
-            &e,
-            n_shares > 0,
-            InsuranceFundError::IFWithdrawRequestTooSmall,
-            "Requested lp_shares = 0"
-        );
+        // "Requested lp_shares = 0"
+        validate!(&e, n_shares > 0, InsuranceFundError::IFWithdrawRequestTooSmall);
 
         let user_if_shares = stake.checked_if_shares(&e);
         validate!(&e, user_if_shares >= n_shares, InsuranceFundError::InsufficientIFShares);
@@ -226,21 +217,15 @@ impl InsuranceFundTrait for InsuranceFund {
         let if_shares_before = stake.checked_if_shares(&e);
         let total_if_shares_before = total_shares;
 
+        // "last_withdraw_request_shares exceeds if_shares {} > {}",
         validate!(
             &e,
             stake.last_withdraw_request_shares <= stake.checked_if_shares(&e),
-            InsuranceFundError::InvalidInsuranceUnstakeSize,
-            "last_withdraw_request_shares exceeds if_shares {} > {}",
-            stake.last_withdraw_request_shares,
-            stake.checked_if_shares(&e)
+            InsuranceFundError::InvalidInsuranceUnstakeSize
         );
 
-        validate!(
-            &e,
-            stake.if_base == shares_base,
-            InsuranceFundError::InvalidIFRebase,
-            "if stake base != base"
-        );
+        // "if stake base != base"
+        validate!(&e, stake.if_base == shares_base, InsuranceFundError::InvalidIFRebase);
 
         stake.last_withdraw_request_value = if_shares_to_vault_amount(
             &e,
@@ -249,12 +234,12 @@ impl InsuranceFundTrait for InsuranceFund {
             insurance_vault_amount
         ).min(insurance_vault_amount.saturating_sub(1));
 
+        //  "Requested withdraw value is not below Insurance Fund balance"
         validate!(
             &e,
             stake.last_withdraw_request_value == 0 ||
                 stake.last_withdraw_request_value < insurance_vault_amount,
-            InsuranceFundError::InvalidIFUnstakeSize,
-            "Requested withdraw value is not below Insurance Fund balance"
+            InsuranceFundError::InvalidIFUnstakeSize
         );
 
         let if_shares_after = stake.checked_if_shares(&e);
@@ -282,11 +267,11 @@ impl InsuranceFundTrait for InsuranceFund {
         let now = e.ledger().timestamp();
         let mut stake = get_stake(&e, &user);
 
+        //  "No withdraw request in progress"
         validate!(
             &e,
             stake.last_withdraw_request_shares != 0,
-            InsuranceFundError::NoIFWithdrawRequestInProgress,
-            "No withdraw request in progress"
+            InsuranceFundError::NoIFWithdrawRequestInProgress
         );
 
         let insurance_vault_amount = get_insurance_vault_amount(&e);
@@ -300,18 +285,14 @@ impl InsuranceFundTrait for InsuranceFund {
         let if_shares_before = stake.checked_if_shares(&e);
         let total_if_shares_before = total_shares;
 
-        validate!(
-            &e,
-            stake.if_base == shares_base,
-            InsuranceFundError::InvalidIFRebase,
-            "if stake base != base"
-        );
+        //  "if stake base != base"
+        validate!(&e, stake.if_base == shares_base, InsuranceFundError::InvalidIFRebase);
 
+        //  "No withdraw request in progress"
         validate!(
             &e,
             stake.last_withdraw_request_shares != 0,
-            InsuranceFundError::InvalidIFUnstakeCancel,
-            "No withdraw request in progress"
+            InsuranceFundError::InvalidIFUnstakeCancel
         );
 
         let if_shares_lost = calculate_if_shares_lost(&e, &stake, insurance_vault_amount);
@@ -359,8 +340,7 @@ impl InsuranceFundTrait for InsuranceFund {
         validate!(
             &e,
             time_since_withdraw_request >= unstaking_period,
-            InsuranceFundError::TryingToRemoveLiquidityTooFast,
-            ""
+            InsuranceFundError::TryingToRemoveLiquidityTooFast
         );
 
         let insurance_vault_amount = get_insurance_vault_amount(&e);
@@ -375,14 +355,10 @@ impl InsuranceFundTrait for InsuranceFund {
 
         let n_shares = stake.last_withdraw_request_shares;
 
-        validate!(
-            &e,
-            n_shares > 0,
-            InsuranceFundError::InvalidIFUnstake,
-            "Must submit withdraw request and wait the escrow period"
-        );
+        //  "Must submit withdraw request and wait the escrow period"
+        validate!(&e, n_shares > 0, InsuranceFundError::InvalidIFUnstake);
 
-        validate!(&e, if_shares_before >= n_shares, InsuranceFundError::InsufficientIFShares, "");
+        validate!(&e, if_shares_before >= n_shares, InsuranceFundError::InsufficientIFShares);
 
         let amount = if_shares_to_vault_amount(&e, n_shares, total_shares, insurance_vault_amount);
 
@@ -426,12 +402,8 @@ impl InsuranceFundTrait for InsuranceFund {
         );
 
         let insurance_vault_amount = get_insurance_vault_amount(&e);
-        validate!(
-            &e,
-            insurance_vault_amount > 0,
-            InsuranceFundError::InvalidIFDetected,
-            "insurance_fund_vault.amount must remain > 0"
-        );
+        // "insurance_fund_vault.amount must remain > 0"
+        validate!(&e, insurance_vault_amount > 0, InsuranceFundError::InvalidIFDetected);
     }
 }
 
@@ -564,13 +536,11 @@ impl AdminInterface for InsuranceFund {
         );
 
         if pay_from_insurance > 0 {
+            // "Insurance Fund balance InsufficientCollateral for payment: !{} < {}",
             validate!(
                 &e,
                 pay_from_insurance < insurance_vault_amount,
-                InsuranceFundError::InsufficientCollateral,
-                "Insurance Fund balance InsufficientCollateral for payment: !{} < {}",
-                pay_from_insurance,
-                insurance_vault_amount
+                InsuranceFundError::InsufficientCollateral
             );
 
             e.authorize_as_current_contract(
@@ -601,12 +571,8 @@ impl AdminInterface for InsuranceFund {
             );
 
             let new_insurance_vault_amount = get_insurance_vault_amount(&e);
-            validate!(
-                &e,
-                new_insurance_vault_amount > 0,
-                InsuranceFundError::InvalidIFDetected,
-                "insurance_fund_vault_amount must remain > 0"
-            );
+            // "insurance_fund_vault_amount must remain > 0"
+            validate!(&e, new_insurance_vault_amount > 0, InsuranceFundError::InvalidIFDetected);
         }
     }
 

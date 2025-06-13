@@ -295,8 +295,16 @@ impl PoolTrait for Pool {
         put_reserve_b(&e, reserve_b + token_b_amount);
 
         // Rebalance the pool
-        let base_oracle_price_data = pool.get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
-        let quote_oracle_price_data = pool.get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
+        let base_oracle_price_data = pool.get_oracle_price(
+            e.clone(),
+            pool.base_asset_id.clone(),
+            now
+        );
+        let quote_oracle_price_data = pool.get_oracle_price(
+            e.clone(),
+            pool.quote_asset_id.clone(),
+            now
+        );
 
         pool.rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
 
@@ -371,8 +379,16 @@ impl PoolTrait for Pool {
         let now = e.ledger().timestamp();
         let pool = get_pool(&e);
 
-        let base_oracle_price_data = pool.get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
-        let quote_oracle_price_data = pool.get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
+        let base_oracle_price_data = pool.get_oracle_price(
+            e.clone(),
+            pool.base_asset_id.clone(),
+            now
+        );
+        let quote_oracle_price_data = pool.get_oracle_price(
+            e.clone(),
+            pool.quote_asset_id.clone(),
+            now
+        );
 
         pool.rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
 
@@ -551,8 +567,16 @@ impl PoolTrait for Pool {
         let now = e.ledger().timestamp();
         let pool = get_pool(&e);
 
-        let base_oracle_price_data = pool.get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
-        let quote_oracle_price_data = pool.get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
+        let base_oracle_price_data = pool.get_oracle_price(
+            e.clone(),
+            pool.base_asset_id.clone(),
+            now
+        );
+        let quote_oracle_price_data = pool.get_oracle_price(
+            e.clone(),
+            pool.quote_asset_id.clone(),
+            now
+        );
 
         pool.rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
 
@@ -728,8 +752,16 @@ impl PoolTrait for Pool {
         // Rebalance the pool
         let pool = get_pool(&e);
 
-        let base_oracle_price_data = pool.get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
-        let quote_oracle_price_data = pool.get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
+        let base_oracle_price_data = pool.get_oracle_price(
+            e.clone(),
+            pool.base_asset_id.clone(),
+            now
+        );
+        let quote_oracle_price_data = pool.get_oracle_price(
+            e.clone(),
+            pool.quote_asset_id.clone(),
+            now
+        );
 
         pool.rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
 
@@ -891,21 +923,19 @@ impl AdminInterfaceTrait for Pool {
             PoolTier::Isolated => INSURANCE_SPECULATIVE_MAX,
         };
 
+        // "all maxs must be less than max_insurance for PoolTier ={}",
         validate!(
             &e,
             liquidity_max_imbalance <= max_insurance_for_tier + 1 &&
                 quote_max_insurance <= max_insurance_for_tier,
-            PoolError::DefaultError,
-            "all maxs must be less than max_insurance for PoolTier ={}",
-            max_insurance_for_tier
+            PoolError::DefaultError
         );
 
+        // "quote_max_insurance must be above pool.insurance_claim.quote_settled_insurance={}",
         validate!(
             &e,
             pool.insurance_claim.quote_settled_insurance <= quote_max_insurance,
-            PoolError::DefaultError,
-            "quote_max_insurance must be above pool.insurance_claim.quote_settled_insurance={}",
-            pool.insurance_claim.quote_settled_insurance
+            PoolError::DefaultError
         );
 
         pool.liquidity_max_imbalance = liquidity_max_imbalance;
@@ -922,8 +952,16 @@ impl AdminInterfaceTrait for Pool {
         let now = e.ledger().timestamp();
         let pool = get_pool(&e);
 
-        let base_oracle_price_data = pool.get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
-        let quote_oracle_price_data = pool.get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
+        let base_oracle_price_data = pool.get_oracle_price(
+            e.clone(),
+            pool.base_asset_id.clone(),
+            now
+        );
+        let quote_oracle_price_data = pool.get_oracle_price(
+            e.clone(),
+            pool.quote_asset_id.clone(),
+            now
+        );
 
         pool.rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
     }
@@ -934,15 +972,19 @@ impl AdminInterfaceTrait for Pool {
         let now = e.ledger().timestamp();
         let mut pool = get_pool(&e);
 
-        validate!(
-            &e,
-            !pool.is_in_settlement(now),
-            PoolError::PoolActionPaused,
-            "Pool is in settlement mode"
-        );
+        // "Pool is in settlement mode"
+        validate!(&e, !pool.is_in_settlement(now), PoolError::PoolActionPaused);
 
-        let base_oracle_price_data = pool.get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
-        let quote_oracle_price_data = pool.get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
+        let base_oracle_price_data = pool.get_oracle_price(
+            e.clone(),
+            pool.base_asset_id.clone(),
+            now
+        );
+        let quote_oracle_price_data = pool.get_oracle_price(
+            e.clone(),
+            pool.quote_asset_id.clone(),
+            now
+        );
 
         // controller::orders::validate_market_within_price_band(perp_market, state, oracle_price);
 
@@ -963,40 +1005,23 @@ impl AdminInterfaceTrait for Pool {
         };
 
         // Only worry about liquidity imbalance if it's positive (meaning quote value < base value)
-        validate!(
-            &e,
-            excess_liquidity_imbalance > 0,
-            PoolError::LiquidityDeficitBelowThreshold,
-            "No excess_liquidity_imbalance({}) to settle",
-            excess_liquidity_imbalance
-        );
+        // "No excess_liquidity_imbalance({}) to settle",
+        validate!(&e, excess_liquidity_imbalance > 0, PoolError::LiquidityDeficitBelowThreshold);
 
         let max_insurance_withdraw = pool.insurance_claim.quote_max_insurance.safe_sub(
             &e,
             pool.insurance_claim.quote_settled_insurance
         );
 
-        validate!(
-            &e,
-            max_insurance_withdraw > 0,
-            PoolError::MaxIFWithdrawReached,
-            "max_insurance_withdraw={}/{} as already been reached",
-            pool.insurance_claim.quote_settled_insurance,
-            pool.insurance_claim.quote_max_insurance
-        );
+        // "max_insurance_withdraw={}/{} as already been reached",
+        validate!(&e, max_insurance_withdraw > 0, PoolError::MaxIFWithdrawReached);
 
         let insurance_withdraw = (excess_liquidity_imbalance as u128)
             .min(max_insurance_withdraw)
             .min(insurance_vault_amount.saturating_sub(1));
 
-        validate!(
-            &e,
-            insurance_withdraw > 0,
-            PoolError::NoIFWithdrawAvailable,
-            "No available funds for insurance_withdraw({}) for liquidity_imbalance={}",
-            insurance_withdraw,
-            excess_liquidity_imbalance
-        );
+        // "No available funds for insurance_withdraw({}) for liquidity_imbalance={}",
+        validate!(&e, insurance_withdraw > 0, PoolError::NoIFWithdrawAvailable);
 
         pool.insurance_claim.rev_withdraw_since_last_settle =
             pool.insurance_claim.rev_withdraw_since_last_settle.safe_add(
@@ -1007,14 +1032,12 @@ impl AdminInterfaceTrait for Pool {
         pool.insurance_claim.quote_settled_insurance =
             pool.insurance_claim.quote_settled_insurance.safe_add(&e, insurance_withdraw);
 
+        // "quote_settled_insurance breached its max {}/{}",
         validate!(
             &e,
             pool.insurance_claim.quote_settled_insurance <=
                 pool.insurance_claim.quote_max_insurance,
-            PoolError::MaxIFWithdrawReached,
-            "quote_settled_insurance breached its max {}/{}",
-            pool.insurance_claim.quote_settled_insurance,
-            pool.insurance_claim.quote_max_insurance
+            PoolError::MaxIFWithdrawReached
         );
 
         pool.insurance_claim.last_revenue_withdraw_ts = now;

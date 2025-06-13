@@ -106,8 +106,10 @@ impl Pool {
         base_oracle_price: u128,
         quote_oracle_price: u128
     ) -> i128 {
-        validate!(e, base_oracle_price > 0, PoolError::InvalidOracle, "base_oracle_price <= 0");
-        validate!(e, quote_oracle_price > 0, PoolError::InvalidOracle, "quote_oracle_price <= 0");
+        // "base_oracle_price <= 0"
+        validate!(e, base_oracle_price > 0, PoolError::InvalidOracle);
+        // "quote_oracle_price <= 0"
+        validate!(e, quote_oracle_price > 0, PoolError::InvalidOracle);
 
         let base_token_supply = get_total_synthetic_tokens(&e);
         let reserve_b = get_reserve_b(e);
@@ -186,7 +188,7 @@ impl Pool {
             Vec::from_array(&e, [
                 e.current_contract_address().to_val(),
                 asset_id.to_val(),
-                now.into_val(&e)
+                now.into_val(&e),
             ])
         );
         oracle_price_data

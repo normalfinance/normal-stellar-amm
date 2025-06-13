@@ -45,14 +45,8 @@ impl Stake {
     fn validate_base(&self, e: &Env) {
         let shares_base = get_shares_base(e);
 
-        validate!(
-            e,
-            self.if_base == shares_base,
-            InsuranceFundError::InvalidIFRebase,
-            "if stake bases mismatch. user base: {} market base {}",
-            self.if_base,
-            insurance_fund.shares_base
-        );
+        //  "if stake bases mismatch. user base: {} market base {}",
+        validate!(e, self.if_base == shares_base, InsuranceFundError::InvalidIFRebase);
     }
 
     pub fn checked_if_shares(&self, e: &Env) -> u128 {
@@ -123,12 +117,8 @@ pub fn apply_rebase_to_stake(e: &Env, stake: &mut Stake) {
     let shares_base = get_shares_base(e);
 
     if shares_base != stake.if_base {
-        validate!(
-            e,
-            shares_base > stake.if_base,
-            InsuranceFundError::InvalidIFRebase,
-            "Rebase expo out of bounds"
-        );
+        //  "Rebase expo out of bounds"
+        validate!(e, shares_base > stake.if_base, InsuranceFundError::InvalidIFRebase);
 
         let expo_diff = (shares_base - stake.if_base) as u32;
 
@@ -165,12 +155,8 @@ pub fn vault_amount_to_if_shares(
         // get_proportion_u128(e, amount, total_if_shares, insurance_vault_amount)
     } else {
         // must be case that total_if_shares == 0 for nice result for user
-        validate!(
-            e,
-            total_if_shares == 0,
-            InsuranceFundError::InvalidIFSharesDetected,
-            "assumes total_if_shares == 0"
-        );
+        // "assumes total_if_shares == 0"
+        validate!(e, total_if_shares == 0, InsuranceFundError::InvalidIFSharesDetected);
 
         amount
     };
@@ -184,14 +170,8 @@ pub fn if_shares_to_vault_amount(
     total_if_shares: u128,
     insurance_vault_amount: u128
 ) -> u128 {
-    validate!(
-        e,
-        n_shares <= total_if_shares,
-        InsuranceFundError::InvalidIFSharesDetected,
-        "n_shares({}) > total_if_shares({})",
-        n_shares,
-        total_if_shares
-    );
+    //  "n_shares({}) > total_if_shares({})",
+    validate!(e, n_shares <= total_if_shares, InsuranceFundError::InvalidIFSharesDetected);
 
     let amount = if total_if_shares > 0 {
         insurance_vault_amount.fixed_mul_floor(e, &n_shares, &total_if_shares)
@@ -231,14 +211,8 @@ pub fn calculate_if_shares_lost(e: &Env, stake: &Stake, insurance_vault_amount: 
             insurance_vault_amount.safe_sub(e, stake.last_withdraw_request_value)
         );
 
-        validate!(
-            e,
-            new_n_shares <= n_shares,
-            InsuranceFundError::InvalidIFSharesDetected,
-            "Issue calculating delta if_shares after canceling request {} < {}",
-            new_n_shares,
-            n_shares
-        );
+        //  "Issue calculating delta if_shares after canceling request {} < {}",
+        validate!(e, new_n_shares <= n_shares, InsuranceFundError::InvalidIFSharesDetected);
 
         n_shares.safe_sub(e, new_n_shares)
     } else {

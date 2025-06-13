@@ -56,7 +56,7 @@ use upgrade::interface::UpgradeableContract;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
 use utils::constant::CONSTANT_PRODUCT_FEE_AVAILABLE;
 use utils::storage::{ PoolInfo, PoolTier };
-use utils::token::{ transfer_token, transfer_token_from, validate_token_contracts };
+use utils::token::{ transfer_token, transfer_token_from };
 
 #[contract]
 pub struct PoolRouter;
