@@ -13,10 +13,10 @@ pub trait BufferTrait {
     fn request_payout(e: Env, sender: Address, oken: Address, amount: u128);
 
     // Sync token balances with reserves
-    fn sync(e: Env, admin: Address, token: Address);
+    fn sync(e: Env, sender: Address, token: Address);
 
     // Skim excess token balances
-    fn skim(e: Env, admin: Address, token: Address) -> i128;
+    fn skim(e: Env, sender: Address, token: Address);
 
     //   _______    _______  ___________  ___________  _______   _______    ________
     //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
@@ -39,7 +39,7 @@ pub trait BufferTrait {
     fn get_reserve(e: Env, token: Address) -> Reserve;
 
     // Get the minimum reserve ratio
-    fn get_min_reserve_ratio(e: Env) -> u128;
+    fn get_min_reserve_ratio(e: Env) -> u32;
 
     // Get the last payout timestamp
     fn get_last_payout_timestamp(e: Env) -> u64;
@@ -54,6 +54,9 @@ pub trait AdminInterface {
 
     // Set min time between payouts
     fn set_min_time_between_payouts(e: Env, admin: Address, min_time: u64);
+
+    // Set min reserve ratio
+    fn set_min_reserve_ratio(e: Env, admin: Address, min_ratio: u32);
 
     // Set reserve max balance
     fn set_reserve_max_balance(e: Env, admin: Address, token: Address, max_balance: u128);

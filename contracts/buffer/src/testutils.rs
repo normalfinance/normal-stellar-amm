@@ -1,20 +1,13 @@
 #![cfg(test)]
 extern crate std;
+use crate::BufferClient;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient,
     TokenClient as SorobanTokenClient,
 };
-use soroban_sdk::{ Address, Env, Vec };
-use utils::test_utils::{
-    buffer,
-    create_token_contract,
-    fee_collector,
-    get_token_admin_client,
-    oracle_registry,
-    pool_router,
-    setup_buffer,
-};
+use soroban_sdk::{ Address, Env };
+use utils::test_utils::{ create_token_contract, get_token_admin_client };
 use std::vec;
 
 pub(crate) struct TestConfig {
@@ -38,15 +31,14 @@ pub(crate) struct Setup<'a> {
     pub(crate) admin: Address,
     pub(crate) emergency_admin: Address,
     pub(crate) users: vec::Vec<Address>,
+    pub(crate) router: Address,
 
     // contracts
-    pub(crate) buffer: buffer::Client<'a>,
+    pub(crate) buffer: BufferClient<'a>, // buffer::Client<'a>,
 
     // tokens
     pub(crate) token_a: SorobanTokenClient<'a>,
     pub(crate) token_a_admin_client: SorobanTokenAdminClient<'a>,
-    pub(crate) token_b: SorobanTokenClient<'a>,
-    pub(crate) token_b_admin_client: SorobanTokenAdminClient<'a>,
 }
 
 impl Default for Setup<'_> {
@@ -75,15 +67,15 @@ impl Setup<'_> {
         let fee_destination = Address::generate(&e);
 
         let token_a = create_token_contract(&e, &admin);
-        let token_b = create_token_contract(&e, &admin);
 
         let token_a_admin_client = get_token_admin_client(&e, &token_a.address.clone());
-        let token_b_admin_client = get_token_admin_client(&e, &token_b.address.clone());
 
         let router = Address::generate(&e);
         let fee_collector = Address::generate(&e);
 
-        let buffer = setup_buffer(&e, &admin, &emergency_admin, &router);
+        // let buffer = setup_buffer(&e, &admin, &emergency_admin, &router);
+        let buffer = create_buffer_contract(&e);
+        buffer.initialize(&admin, &emergency_admin, &router);
         buffer.set_fee_collector(&admin, &fee_collector);
 
         Self {
@@ -91,11 +83,10 @@ impl Setup<'_> {
             admin,
             emergency_admin,
             buffer,
+            router,
             users,
             token_a,
             token_a_admin_client,
-            token_b,
-            token_b_admin_client,
         }
     }
 
@@ -106,4 +97,17 @@ impl Setup<'_> {
         }
         users
     }
+}
+
+mod buffer {
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/buffer.wasm");
+}
+
+// pub(crate) fn deploy_buffer_contract<'a>(e: &Env) -> BufferClient<'a> {
+//     BufferClient::new(e, &e.register(&e.register(crate::Buffer {}, ()))
+// }
+
+pub fn create_buffer_contract<'a>(e: &Env) -> BufferClient<'a> {
+    let buffer = BufferClient::new(e, &e.register(crate::Buffer {}, ()));
+    buffer
 }

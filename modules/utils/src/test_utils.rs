@@ -130,20 +130,6 @@ pub fn setup_mock_pool<'a>(
     swap_pool.deposit(&admin, &1_000_000_000_0000000);
 }
 
-pub fn setup_buffer<'a>(
-    e: &Env,
-    admin: &Address,
-    emergency_admin: &Address,
-    router: &Address
-) -> buffer::Client<'a> {
-    let buffer = deploy_buffer_contract(e);
-    // buffer.init_admin(admin);
-    buffer.initialize(admin, emergency_admin, router);
-    // buffer.set_router(admin, router);
-    // manually set fee_collector later once it's initialized...
-
-    buffer
-}
 
 pub fn setup_oracle_registry<'a>(
     e: &Env,
@@ -284,4 +270,19 @@ pub fn install_token_wasm(e: &Env) -> BytesN<32> {
 pub fn install_liq_pool_hash(e: &Env) -> BytesN<32> {
     soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/pool.wasm");
     e.deployer().upload_contract_wasm(WASM)
+}
+
+
+
+pub fn setup_buffer<'a>(
+    e: &Env,
+    admin: &Address,
+    emergency_admin: &Address,
+    router: &Address
+) -> buffer::Client<'a> {
+    let buffer = deploy_buffer_contract(e);
+    buffer.initialize(admin, emergency_admin, router);
+    // manually set fee_collector later once it's initialized...
+
+    buffer
 }

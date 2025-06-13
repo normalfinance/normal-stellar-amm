@@ -360,7 +360,7 @@ fn test_unkill_request_payout() {
     }
 }
 
-// manage privileged addresses
+// admin setters
 
 #[test]
 fn test_set_router() {
@@ -376,3 +376,65 @@ fn test_set_router() {
         assert_eq!(buffer.try_set_router(&addr, &router).is_ok(), is_ok);
     }
 }
+
+#[test]
+fn test_set_fee_collector() {
+    let setup = Setup::default();
+    let buffer = setup.buffer;
+    let fee_collector = Address::generate(&setup.env);
+    let user = Address::generate(&setup.env);
+
+    for (addr, is_ok) in [
+        (user, false),
+        (setup.admin, true),
+    ] {
+        assert_eq!(buffer.try_set_fee_collector(&addr, &fee_collector).is_ok(), is_ok);
+    }
+}
+
+#[test]
+fn test_set_min_time_between_payouts() {
+    let setup = Setup::default();
+    let buffer = setup.buffer;
+    let user = Address::generate(&setup.env);
+
+    for (addr, is_ok) in [
+        (user, false),
+        (setup.admin, true),
+    ] {
+        assert_eq!(buffer.try_set_min_time_between_payouts(&addr, &1_000_000_u64).is_ok(), is_ok);
+    }
+}
+
+#[test]
+fn test_set_min_reserve_ratio() {
+    let setup = Setup::default();
+    let buffer = setup.buffer;
+    let user = Address::generate(&setup.env);
+
+    for (addr, is_ok) in [
+        (user, false),
+        (setup.admin, true),
+    ] {
+        assert_eq!(buffer.try_set_min_reserve_ratio(&addr, &500_u32).is_ok(), is_ok);
+    }
+}
+
+#[test]
+fn test_set_reserve_max_balance() {
+    let setup = Setup::default();
+    let buffer = setup.buffer;
+    let token = Address::generate(&setup.env);
+    let user = Address::generate(&setup.env);
+
+    for (addr, is_ok) in [
+        (user, false),
+        (setup.admin, true),
+    ] {
+        assert_eq!(
+            buffer.try_set_reserve_max_balance(&addr, &token, &1_000_000_u128).is_ok(),
+            is_ok
+        );
+    }
+}
+

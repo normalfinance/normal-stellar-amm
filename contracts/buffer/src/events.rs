@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, Env, Symbol};
+use soroban_sdk::{ Address, Env, Symbol };
 
 #[derive(Clone)]
 pub(crate) struct Events(Env);
@@ -22,6 +22,8 @@ pub(crate) trait BufferEvents {
 
     fn withdraw_surplus(&self, token: Address, user: Address, amount: u128);
 
+    fn skim(&self, token: Address, user: Address, amount: i128);
+
     fn kill_deposit(&self);
 
     fn unkill_deposit(&self);
@@ -39,17 +41,21 @@ impl BufferEvents for Events {
     }
 
     fn request_payout(&self, token: Address, user: Address, amount: u128) {
-        self.env().events().publish(
-            (Symbol::new(self.env(), "request_payout"), token, user),
-            amount,
-        );
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "request_payout"), token, user), amount);
     }
 
     fn withdraw_surplus(&self, token: Address, user: Address, amount: u128) {
-        self.env().events().publish(
-            (Symbol::new(self.env(), "withdraw_surplus"), token, user),
-            amount,
-        );
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "withdraw_surplus"), token, user), amount);
+    }
+
+    fn skim(&self, token: Address, user: Address, amount: i128) {
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "skim"), token, user), amount);
     }
 
     fn kill_deposit(&self) {

@@ -3,22 +3,7 @@ use crate::events::{ BufferEvents, Events };
 use crate::interface::{ AdminInterface, BufferTrait };
 use crate::reserve::Reserve;
 use crate::storage::{
-    get_buffer_reserve_amount,
-    get_fee_collector,
-    get_is_killed_deposit,
-    get_is_killed_request_payout,
-    get_last_payout_timestamp,
-    get_min_reserve_ratio,
-    get_min_time_between_payouts,
-    get_reserve,
-    get_router,
-    put_reserve,
-    set_fee_collector,
-    set_is_killed_deposit,
-    set_is_killed_request_payout,
-    set_last_payout_timestamp,
-    set_min_time_between_payouts,
-    set_router,
+    get_buffer_reserve_amount, get_fee_collector, get_is_killed_deposit, get_is_killed_request_payout, get_last_payout_timestamp, get_min_reserve_ratio, get_min_time_between_payouts, get_reserve, get_router, put_reserve, set_fee_collector, set_is_killed_deposit, set_is_killed_request_payout, set_last_payout_timestamp, set_min_reserve_ratio, set_min_time_between_payouts, set_router
 };
 use access_control::access::{ AccessControl, AccessControlTrait };
 use access_control::emergency::{ get_emergency_mode, set_emergency_mode };
@@ -29,12 +14,21 @@ use access_control::management::SingleAddressManagementTrait;
 use access_control::role::{ Role, SymbolRepresentation };
 use access_control::transfer::TransferOwnershipTrait;
 use access_control::utils::{ require_admin };
-use soroban_sdk::{ contract, contractimpl, panic_with_error, Address, BytesN, Env, Symbol, Vec };
+use soroban_sdk::{
+    contract,
+    contractimpl,
+    panic_with_error,
+    Address,
+    BytesN,
+    Env,
+    Symbol,
+    Vec,
+};
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
 use utils::math::safe_math::SafeMath;
-use utils::token::{ transfer_token, validate_tokens_contracts };
+use utils::token::{ transfer_token, validate_token_contract };
 
 #[contract]
 pub struct Buffer;
@@ -56,16 +50,11 @@ impl BufferTrait for Buffer {
     fn deposit(e: Env, sender: Address, token: Address, amount: u128) {
         sender.require_auth();
 
-        // let router = get_router(&e);
-        // if sender != router {
-        //     panic_with_error!(&e, BufferError::NotAuthorized);
-        // }
-
         if get_is_killed_deposit(&e) {
             panic_with_error!(e, BufferError::BufferDepositKilled);
         }
 
-        validate_tokens_contracts(&e, &Vec::from_array(&e, [token.clone()]));
+        validate_token_contract(&e, &token);
 
         // Ensure the deposit doesn't exceed the reserve max balance
         let reserve = get_reserve(&e, &token);
@@ -86,14 +75,16 @@ impl BufferTrait for Buffer {
     fn request_payout(e: Env, sender: Address, token: Address, amount: u128) {
         sender.require_auth();
 
-        // let router = get_router(&e);
-        // if sender != router {
-        //     panic_with_error!(&e, BufferError::NotAuthorized);
-        // }
+        let router = get_router(&e);
+        if sender != router {
+            panic_with_error!(&e, BufferError::NotAuthorized);
+        }
 
         if get_is_killed_request_payout(&e) {
             panic_with_error!(e, BufferError::BufferRequestPayoutKilled);
         }
+
+        validate_token_contract(&e, &token);
 
         // Ensure time since last payout is greater than the minimum time b/t payouts
         let now = e.ledger().timestamp();
@@ -103,10 +94,9 @@ impl BufferTrait for Buffer {
             panic_with_error!(&e, BufferError::PayoutTooSoon);
         }
 
-        // Ensure Buffer reserve has sufficient balance,
-        let balance = get_buffer_reserve_amount(&e, &token);
+        // Ensure Buffer reserve has sufficient balance
         let reserve = get_reserve(&e, &token);
-        if amount > balance {
+        if amount > reserve.balance {
             panic_with_error!(&e, BufferError::InsufficentFunds);
         }
 
@@ -124,38 +114,37 @@ impl BufferTrait for Buffer {
     //
     // # Arguments
     //
-    // * `user` - The address of the user.
+    // * `sender` - The address of the sender.
     // * `token` - The address of the token to sync.
-    fn sync(e: Env, user: Address, token: Address) {
-        user.require_auth();
+    fn sync(e: Env, sender: Address, token: Address) {
+        sender.require_auth();
+
+        validate_token_contract(&e, &token);
 
         let now = e.ledger().timestamp();
         let reserve = get_reserve(&e, &token);
-        let token_balance = get_buffer_reserve_amount(&e, &token);
-        put_reserve(&e, &token, &reserve.update_balance(token_balance, now));
+        let balance = get_buffer_reserve_amount(&e, &token);
+        put_reserve(&e, &token, &reserve.update_balance(balance, now));
     }
 
     // Skim excess token balances.
     //
     // # Arguments
     //
-    // * `user` - The address of the user.
+    // * `sender` - The address of the sender.
     // * `token` - The address of the token to skim.
-    fn skim(e: Env, user: Address, token: Address) -> i128 {
-        user.require_auth();
+    fn skim(e: Env, sender: Address, token: Address) {
+        sender.require_auth();
 
-        let now = e.ledger().timestamp();
+        validate_token_contract(&e, &token);
+
         let reserve = get_reserve(&e, &token);
-        let token_balance = get_buffer_reserve_amount(&e, &token);
-        let reserve_balance = reserve.balance;
-        put_reserve(&e, &token, &reserve.update_balance(token_balance, now));
-
-        let balance_delta = token_balance.safe_sub(&e, reserve_balance) as i128;
-        if balance_delta > 0 {
-            transfer_token(&e, &token, &e.current_contract_address(), &user, &balance_delta);
+        let balance = get_buffer_reserve_amount(&e, &token);
+        let skimmed = balance.safe_sub(&e, reserve.balance) as i128;
+        if skimmed > 0 {
+            transfer_token(&e, &token, &e.current_contract_address(), &sender, &skimmed);
+            Events::new(&e).skim(token, sender, skimmed);
         }
-
-        balance_delta
     }
 
     // Returns the Router address.
@@ -179,7 +168,7 @@ impl BufferTrait for Buffer {
     }
 
     // Returns the minimum reserve ratio.
-    fn get_min_reserve_ratio(e: Env) -> u128 {
+    fn get_min_reserve_ratio(e: Env) -> u32 {
         get_min_reserve_ratio(&e)
     }
 
@@ -231,6 +220,20 @@ impl AdminInterface for Buffer {
         set_min_time_between_payouts(&e, &min_time);
     }
 
+
+    // Sets the minimum time between payouts.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `min_ratio` - The new minimum time between payouts.
+    fn set_min_reserve_ratio(e: Env, admin: Address, min_ratio: u32) {
+        admin.require_auth();
+        require_admin(&e, &admin);
+
+        set_min_reserve_ratio(&e, &min_ratio);
+    }
+
     // Sets the max reserve balance.
     //
     // # Arguments
@@ -258,7 +261,7 @@ impl AdminInterface for Buffer {
         admin.require_auth();
         require_admin(&e, &admin);
 
-        validate_tokens_contracts(&e, &Vec::from_array(&e, [token.clone()]));
+        validate_token_contract(&e, &token);
 
         // Calculate the minimum reserve that must be left in the Buffer
         let reserve = get_reserve(&e, &token);
