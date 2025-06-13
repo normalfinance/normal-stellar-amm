@@ -130,7 +130,6 @@ pub fn setup_mock_pool<'a>(
     swap_pool.deposit(&admin, &1_000_000_000_0000000);
 }
 
-
 pub fn setup_oracle_registry<'a>(
     e: &Env,
     admin: &Address,
@@ -236,22 +235,6 @@ pub fn deploy_oracle_registry_contract<'a>(e: &Env) -> oracle_registry::Client<'
     oracle_registry::Client::new(e, &e.register(oracle_registry::WASM, ()))
 }
 
-pub mod buffer {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/buffer.wasm");
-}
-
-pub fn deploy_buffer_contract<'a>(e: &Env) -> buffer::Client<'a> {
-    buffer::Client::new(e, &e.register(buffer::WASM, ()))
-}
-
-pub mod insurance_fund {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/insurance_fund.wasm");
-}
-
-pub fn deploy_insurance_fund_contract<'a>(e: &Env) -> insurance_fund::Client<'a> {
-    insurance_fund::Client::new(e, &e.register(insurance_fund::WASM, ()))
-}
-
 //   __    __       __        ________  __    __    _______   ________
 //  /" |  | "\     /""\      /"       )/" |  | "\  /"     "| /"       )
 // (:  (__)  :)   /    \    (:   \___/(:  (__)  :)(: ______)(:   \___/
@@ -270,19 +253,4 @@ pub fn install_token_wasm(e: &Env) -> BytesN<32> {
 pub fn install_liq_pool_hash(e: &Env) -> BytesN<32> {
     soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/pool.wasm");
     e.deployer().upload_contract_wasm(WASM)
-}
-
-
-
-pub fn setup_buffer<'a>(
-    e: &Env,
-    admin: &Address,
-    emergency_admin: &Address,
-    router: &Address
-) -> buffer::Client<'a> {
-    let buffer = deploy_buffer_contract(e);
-    buffer.initialize(admin, emergency_admin, router);
-    // manually set fee_collector later once it's initialized...
-
-    buffer
 }

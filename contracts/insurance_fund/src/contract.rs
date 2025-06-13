@@ -14,6 +14,7 @@ use crate::stake::{
     vault_amount_to_if_shares,
     StakeAction,
 };
+use crate::storage::set_token;
 use crate::storage::{
     get_insurance_vault_amount,
     get_is_killed_deposit,
@@ -24,7 +25,6 @@ use crate::storage::{
     get_token,
     get_total_shares,
     get_unstaking_period,
-    put_token,
     set_is_killed_deposit,
     set_is_killed_request_withdraw,
     set_is_killed_withdraw,
@@ -37,20 +37,16 @@ use access_control::emergency::{ get_emergency_mode, set_emergency_mode };
 use access_control::errors::AccessControlError;
 use access_control::events::Events as AccessControlEvents;
 use access_control::interface::TransferableContract;
-use access_control::management::{ MultipleAddressesManagementTrait, SingleAddressManagementTrait };
-use access_control::role::Role;
-use access_control::role::SymbolRepresentation;
+use access_control::management::SingleAddressManagementTrait;
+use access_control::role::{ Role, SymbolRepresentation };
 use access_control::transfer::TransferOwnershipTrait;
-use access_control::utils::{
-    require_pause_admin_or_owner,
-    require_pause_or_emergency_pause_admin_or_owner,
-};
+use access_control::utils::{ require_admin };
 use soroban_sdk::auth::{ ContractContext, InvokerContractAuthEntry, SubContractInvocation };
 use soroban_sdk::{
     contract,
     contractimpl,
-    log,
     panic_with_error,
+    log,
     vec,
     Address,
     BytesN,
@@ -72,6 +68,26 @@ pub struct InsuranceFund;
 // The `InsuranceFundTrait` trait provides the interface for interacting with a liquidity pool.
 #[contractimpl]
 impl InsuranceFundTrait for InsuranceFund {
+    fn initialize(
+        e: Env,
+        admin: Address,
+        emergency_admin: Address,
+        token: Address,
+        max_shares: u128
+    ) {
+        admin.require_auth();
+
+        let access_control = AccessControl::new(&e);
+        if access_control.get_role_safe(&Role::Admin).is_some() {
+            panic_with_error!(&e, AccessControlError::AdminAlreadySet);
+        }
+        access_control.set_role_address(&Role::Admin, &admin);
+        access_control.set_role_address(&Role::EmergencyAdmin, &emergency_admin);
+
+        set_token(&e, &token);
+        set_max_shares(&e, &max_shares);
+    }
+
     fn get_unstaking_period(e: Env) -> u64 {
         get_unstaking_period(&e)
     }
@@ -161,6 +177,8 @@ impl InsuranceFundTrait for InsuranceFund {
             if_shares_after,
             new_total_shares
         );
+
+        save_stake(&e, &user, &stake);
 
         transfer_token(&e, &get_token(&e), &user, &e.current_contract_address(), &(amount as i128));
     }
@@ -319,6 +337,8 @@ impl InsuranceFundTrait for InsuranceFund {
         stake.last_withdraw_request_shares = 0;
         stake.last_withdraw_request_value = 0;
         stake.last_withdraw_request_ts = now;
+
+        save_stake(&e, &user, &stake);
     }
 
     fn withdraw(e: Env, user: Address) {
@@ -394,6 +414,8 @@ impl InsuranceFundTrait for InsuranceFund {
             if_shares_after,
             total_shares
         );
+
+        save_stake(&e, &user, &stake);
 
         transfer_token(
             &e,
@@ -494,23 +516,6 @@ impl UpgradeableContract for InsuranceFund {
 // The `AdminInterface` trait provides the interface for administrative actions.
 #[contractimpl]
 impl AdminInterface for InsuranceFund {
-    // Initializes the admin user.
-    //
-    // # Arguments
-    //
-    // * `account` - The address of the admin user.
-    fn initialize(e: Env, admin: Address, token: Address) {
-        admin.require_auth();
-
-        let access_control = AccessControl::new(&e);
-        if access_control.get_role_safe(&Role::Admin).is_some() {
-            panic_with_error!(&e, AccessControlError::AdminAlreadySet);
-        }
-        access_control.set_role_address(&Role::Admin, &admin);
-
-        put_token(&e, &token);
-    }
-
     // Sets the unstaking period.
     //
     // # Arguments
@@ -519,8 +524,7 @@ impl AdminInterface for InsuranceFund {
     // * `unstaking_period` - The new unstaking period.
     fn set_unstaking_period(e: Env, admin: Address, unstaking_period: u64) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.assert_address_has_role(&admin, &Role::Admin);
+        require_admin(&e, &admin);
 
         set_unstaking_period(&e, &unstaking_period);
     }
@@ -533,8 +537,7 @@ impl AdminInterface for InsuranceFund {
     // * `max_shares` - The max number of shares.
     fn set_max_shares(e: Env, admin: Address, max_shares: u128) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.assert_address_has_role(&admin, &Role::Admin);
+        require_admin(&e, &admin);
 
         set_max_shares(&e, &max_shares);
     }
@@ -547,8 +550,7 @@ impl AdminInterface for InsuranceFund {
     // * `max_shares` - The max number of shares.ƒ
     fn resolve_liquidity_deficit(e: Env, admin: Address, pool_address: Address) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.assert_address_has_role(&admin, &Role::Admin);
+        require_admin(&e, &admin);
 
         let insurance_vault_amount = get_insurance_vault_amount(&e);
 
@@ -615,7 +617,7 @@ impl AdminInterface for InsuranceFund {
     // * `admin` - The address of the admin.
     fn kill_deposit(e: Env, admin: Address) {
         admin.require_auth();
-        require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
+        require_admin(&e, &admin);
 
         set_is_killed_deposit(&e, &true);
         FundEvents::new(&e).kill_deposit();
@@ -628,7 +630,7 @@ impl AdminInterface for InsuranceFund {
     // * `admin` - The address of the admin.
     fn kill_request_withdraw(e: Env, admin: Address) {
         admin.require_auth();
-        require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
+        require_admin(&e, &admin);
 
         set_is_killed_request_withdraw(&e, &true);
         FundEvents::new(&e).kill_request_withdraw();
@@ -641,46 +643,46 @@ impl AdminInterface for InsuranceFund {
     // * `admin` - The address of the admin.
     fn kill_withdraw(e: Env, admin: Address) {
         admin.require_auth();
-        require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
+        require_admin(&e, &admin);
 
         set_is_killed_withdraw(&e, &true);
         FundEvents::new(&e).kill_withdraw();
     }
 
-    // Resumes the pool deposits.
+    // Resumes insurance fund deposits.
     //
     // # Arguments
     //
     // * `admin` - The address of the admin.
     fn unkill_deposit(e: Env, admin: Address) {
         admin.require_auth();
-        require_pause_admin_or_owner(&e, &admin);
+        require_admin(&e, &admin);
 
         set_is_killed_deposit(&e, &false);
         FundEvents::new(&e).unkill_deposit();
     }
 
-    // Resumes the pool swaps.
+    // Resumes insurance fund withdrawal requests.
     //
     // # Arguments
     //
     // * `admin` - The address of the admin.
     fn unkill_request_withdraw(e: Env, admin: Address) {
         admin.require_auth();
-        require_pause_admin_or_owner(&e, &admin);
+        require_admin(&e, &admin);
 
         set_is_killed_request_withdraw(&e, &false);
         FundEvents::new(&e).unkill_request_withdraw();
     }
 
-    // Resumes the pool withdrawals.
+    // Resumes insurance fund withdrawals.
     //
     // # Arguments
     //
     // * `admin` - The address of the admin.
     fn unkill_withdraw(e: Env, admin: Address) {
         admin.require_auth();
-        require_pause_admin_or_owner(&e, &admin);
+        require_admin(&e, &admin);
 
         set_is_killed_withdraw(&e, &false);
         FundEvents::new(&e).unkill_withdraw();

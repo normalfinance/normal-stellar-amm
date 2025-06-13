@@ -1,11 +1,14 @@
 use paste::paste;
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
-use soroban_sdk::{contracttype, panic_with_error, Address, Env};
-use utils::bump::{bump_instance, bump_persistent, bump_temporary};
+use soroban_sdk::{ contracttype, panic_with_error, Address, Env };
+use utils::bump::{ bump_instance, bump_persistent, bump_temporary };
 use utils::errors::storage_errors::StorageError;
 use utils::{
     generate_instance_storage_getter_and_setter_with_default,
-    generate_instance_storage_getter_with_default, generate_instance_storage_setter,
+    generate_instance_storage_getter_with_default,
+    generate_instance_storage_getter_and_setter,
+    generate_instance_storage_setter,
+    generate_instance_storage_getter,
 };
 
 #[derive(Clone)]
@@ -22,6 +25,7 @@ enum DataKey {
     IsKilledWithdraw,
 }
 
+generate_instance_storage_getter_and_setter!(token, DataKey::Token, Address);
 generate_instance_storage_getter_and_setter_with_default!(
     is_killed_deposit,
     DataKey::IsKilledDeposit,
@@ -59,19 +63,6 @@ generate_instance_storage_getter_and_setter_with_default!(
     0
 );
 generate_instance_storage_getter_and_setter_with_default!(max_shares, DataKey::MaxShares, u128, 0);
-
-pub fn get_token(e: &Env) -> Address {
-    bump_instance(e);
-    match e.storage().instance().get(&DataKey::Token) {
-        Some(v) => v,
-        None => panic_with_error!(e, StorageError::ValueNotInitialized),
-    }
-}
-
-pub fn put_token(e: &Env, token: &Address) {
-    bump_instance(e);
-    e.storage().instance().set(&DataKey::Token, token)
-}
 
 pub fn get_insurance_vault_amount(e: &Env) -> u128 {
     SorobanTokenClient::new(e, &get_token(e)).balance(&e.current_contract_address()) as u128
