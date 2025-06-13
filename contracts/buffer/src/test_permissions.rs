@@ -1,12 +1,10 @@
 #![cfg(test)]
 
-// use crate::testutils::{ install_dummy_wasm, jump, Setup };
+use crate::testutils::Setup;
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{ symbol_short, Address, Symbol };
+use soroban_sdk::{ symbol_short, Address, Symbol, Vec };
 use utils::test_utils::{ install_dummy_wasm, jump };
-
-use crate::testutils::Setup;
 
 // test admin transfer ownership
 #[test]
@@ -14,7 +12,7 @@ use crate::testutils::Setup;
 fn test_admin_transfer_ownership_too_early() {
     let setup = Setup::default();
     let buffer = setup.buffer;
-    let admin_original = setup.admin;
+    let admin_original = setup.users[0].clone();
     let admin_new = Address::generate(&setup.env);
 
     buffer.commit_transfer_ownership(&admin_original, &symbol_short!("Admin"), &admin_new);
@@ -227,29 +225,21 @@ fn test_transfer_ownership_separate_deadlines() {
     assert!(buffer.try_set_emergency_mode(&setup.emergency_admin, &false).is_err());
 }
 
-// upgrade
+// upgrade pool & token
 #[test]
-fn test_commit_upgrade_third_party_user() {
+fn test_commit_upgrade() {
     let setup = Setup::default();
     let buffer = setup.buffer;
+    let new_wasm = install_dummy_wasm(&setup.env);
     let user = Address::generate(&setup.env);
-    assert!(buffer.try_commit_upgrade(&user, &install_dummy_wasm(&setup.env)).is_err());
-}
 
-#[test]
-fn test_commit_upgrade_emergency_admin() {
-    let setup = Setup::default();
-    let buffer = setup.buffer;
-    assert!(
-        buffer.try_commit_upgrade(&setup.emergency_admin, &install_dummy_wasm(&setup.env)).is_err()
-    );
-}
-
-#[test]
-fn test_commit_upgrade_admin() {
-    let setup = Setup::default();
-    let buffer = setup.buffer;
-    assert!(buffer.try_commit_upgrade(&setup.admin, &install_dummy_wasm(&setup.env)).is_ok());
+    for (addr, is_ok) in [
+        (user, false),
+        (setup.admin, true),
+        (setup.emergency_admin, false),
+    ] {
+        assert_eq!(buffer.try_commit_upgrade(&addr, &new_wasm).is_ok(), is_ok);
+    }
 }
 
 #[test]
@@ -275,11 +265,19 @@ fn test_apply_upgrade_emergency_admin() {
 fn test_apply_upgrade_admin() {
     let setup = Setup::default();
     let buffer = setup.buffer;
-    buffer.commit_upgrade(&setup.admin, &install_dummy_wasm(&setup.env));
-    jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
+    // let token = ShareTokenClient::new(&setup.env, &buffer.share_id());
+    let new_wasm = install_dummy_wasm(&setup.env);
+
     assert_ne!(buffer.version(), 130);
-    assert!(buffer.try_apply_upgrade(&setup.admin).is_ok());
+    // assert_ne!(token.version(), 130);
+
+    buffer.commit_upgrade(&setup.admin, &new_wasm);
+    jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
+    assert_eq!(buffer.apply_upgrade(&setup.admin), new_wasm);
+
+    // check contracts updated, dummy contract version is 130
     assert_eq!(buffer.version(), 130);
+    // assert_eq!(token.version(), 130);
 }
 
 // emergency mode
@@ -303,4 +301,78 @@ fn test_set_emergency_mode_admin() {
     let setup = Setup::default();
     let buffer = setup.buffer;
     assert!(buffer.try_set_emergency_mode(&setup.emergency_admin, &false).is_ok());
+}
+
+// kill switches
+#[test]
+fn test_kill_deposit() {
+    let setup = Setup::default();
+    let buffer = setup.buffer;
+    let user = Address::generate(&setup.env);
+
+    for (addr, is_ok) in [
+        (user.clone(), false),
+        (setup.admin.clone(), true),
+    ] {
+        assert_eq!(buffer.try_kill_deposit(&addr).is_ok(), is_ok);
+    }
+}
+
+#[test]
+fn test_kill_request_payout() {
+    let setup = Setup::default();
+    let buffer = setup.buffer;
+    let user = Address::generate(&setup.env);
+
+    for (addr, is_ok) in [
+        (user.clone(), false),
+        (setup.admin.clone(), true),
+    ] {
+        assert_eq!(buffer.try_kill_request_payout(&addr).is_ok(), is_ok);
+    }
+}
+
+#[test]
+fn test_unkill_deposit() {
+    let setup = Setup::default();
+    let buffer = setup.buffer;
+    let user = Address::generate(&setup.env);
+
+    for (addr, is_ok) in [
+        (user.clone(), false),
+        (setup.admin.clone(), true),
+    ] {
+        assert_eq!(buffer.try_unkill_deposit(&addr).is_ok(), is_ok);
+    }
+}
+
+#[test]
+fn test_unkill_request_payout() {
+    let setup = Setup::default();
+    let buffer = setup.buffer;
+    let user = Address::generate(&setup.env);
+
+    for (addr, is_ok) in [
+        (user.clone(), false),
+        (setup.admin.clone(), true),
+    ] {
+        assert_eq!(buffer.try_unkill_request_payout(&addr).is_ok(), is_ok);
+    }
+}
+
+// manage privileged addresses
+
+#[test]
+fn test_set_router() {
+    let setup = Setup::default();
+    let buffer = setup.buffer;
+    let router = Address::generate(&setup.env);
+    let user = Address::generate(&setup.env);
+
+    for (addr, is_ok) in [
+        (user, false),
+        (setup.admin, true),
+    ] {
+        assert_eq!(buffer.try_set_router(&addr, &router).is_ok(), is_ok);
+    }
 }

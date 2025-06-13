@@ -1,13 +1,30 @@
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{ Address, Env };
 
 use crate::reserve::Reserve;
 
 pub trait BufferTrait {
+    //
+    fn initialize(e: Env, admin: Address, emergency_admin: Address, router: Address);
+
     // Deposit swap fees into the Buffer
     fn deposit(e: Env, sender: Address, token: Address, amount: u128);
 
     // Resolve pool liquidity deficit using reserves
     fn request_payout(e: Env, sender: Address, oken: Address, amount: u128);
+
+    // Sync token balances with reserves
+    fn sync(e: Env, admin: Address, token: Address);
+
+    // Skim excess token balances
+    fn skim(e: Env, admin: Address, token: Address) -> i128;
+
+    //   _______    _______  ___________  ___________  _______   _______    ________
+    //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
+    // (: ( \___) (: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
+    //  \/ \       \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
+    //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
+    // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
+    //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
 
     // Get the Router
     fn get_router(e: Env) -> Address;
@@ -29,9 +46,6 @@ pub trait BufferTrait {
 }
 
 pub trait AdminInterface {
-    // Initialize admin user. Will panic if called twice
-    fn init_admin(e: Env, account: Address);
-
     // Set the Router
     fn set_router(e: Env, admin: Address, router: Address);
 
@@ -47,11 +61,13 @@ pub trait AdminInterface {
     // Withdraw surplus reserves
     fn withdraw_surplus(e: Env, admin: Address, token: Address, amount: u128);
 
-    // Sync token balances with reserves
-    fn sync(e: Env, admin: Address, token: Address);
-
-    // Skim excess token balances
-    fn skim(e: Env, admin: Address, token: Address) -> i128;
+    //    _______     __       ____  ____   ________  _______  ________
+    //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\
+    //   (. |__) :) /    \    |   (  ) : |(:   \___/(: ______)(.  ___  :)
+    //   |:  ____/ /' /\  \   (:  |  | . ) \___  \   \/    |  |: \   ) ||
+    //   (|  /    //  __'  \   \\ \__/ //   __/  \\  // ___)_ (| (___\ ||
+    //  /|__/ \  /   /  \\  \  /\\ __ //\  /" \   :)(:      "||:       :)
+    // (_______)(___/    \___)(__________)(_______/  \_______)(________/
 
     // Stop buffer instantly
     fn kill_deposit(e: Env, admin: Address);

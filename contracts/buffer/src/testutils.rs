@@ -12,13 +12,8 @@ use utils::test_utils::{
     fee_collector,
     get_token_admin_client,
     oracle_registry,
-    pool,
     pool_router,
     setup_buffer,
-    setup_fee_collector,
-    setup_mock_pool,
-    setup_oracle_registry,
-    setup_pool_router,
 };
 use std::vec;
 
@@ -46,9 +41,6 @@ pub(crate) struct Setup<'a> {
 
     // contracts
     pub(crate) buffer: buffer::Client<'a>,
-    pub(crate) router: pool_router::Client<'a>,
-    pub(crate) oracle_registry: oracle_registry::Client<'a>,
-    pub(crate) fee_collector: fee_collector::Client<'a>,
 
     // tokens
     pub(crate) token_a: SorobanTokenClient<'a>,
@@ -88,40 +80,17 @@ impl Setup<'_> {
         let token_a_admin_client = get_token_admin_client(&e, &token_a.address.clone());
         let token_b_admin_client = get_token_admin_client(&e, &token_b.address.clone());
 
-        // Setup auxilary contracts
-        let oracle_registry = setup_oracle_registry(&e, &admin, &asset);
-        let router = setup_pool_router(&e, &admin);
-        let buffer = setup_buffer(&e, &admin, &router.address);
-        let fee_collector = setup_fee_collector(
-            &e,
-            &admin,
-            &router.address,
-            &buffer.address,
-            &fee_destination
-        );
+        let router = Address::generate(&e);
+        let fee_collector = Address::generate(&e);
 
-        // Finish setting up the Buffer
-        buffer.set_fee_collector(&admin, &fee_collector.address);
-
-        // create swap pool & deposit initial liquidity
-        setup_mock_pool(
-            &e,
-            &router,
-            &admin,
-            &asset,
-            &Vec::from_array(&e, [token_a.address.clone(), token_b.address.clone()]),
-            &oracle_registry.address,
-            &token_b_admin_client
-        );
+        let buffer = setup_buffer(&e, &admin, &emergency_admin, &router);
+        buffer.set_fee_collector(&admin, &fee_collector);
 
         Self {
             env: e,
             admin,
             emergency_admin,
-            oracle_registry,
             buffer,
-            router,
-            fee_collector,
             users,
             token_a,
             token_a_admin_client,

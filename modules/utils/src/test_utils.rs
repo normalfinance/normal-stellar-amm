@@ -130,10 +130,16 @@ pub fn setup_mock_pool<'a>(
     swap_pool.deposit(&admin, &1_000_000_000_0000000);
 }
 
-pub fn setup_buffer<'a>(e: &Env, admin: &Address, router: &Address) -> buffer::Client<'a> {
+pub fn setup_buffer<'a>(
+    e: &Env,
+    admin: &Address,
+    emergency_admin: &Address,
+    router: &Address
+) -> buffer::Client<'a> {
     let buffer = deploy_buffer_contract(e);
-    buffer.init_admin(admin);
-    buffer.set_router(admin, router);
+    // buffer.init_admin(admin);
+    buffer.initialize(admin, emergency_admin, router);
+    // buffer.set_router(admin, router);
     // manually set fee_collector later once it's initialized...
 
     buffer
