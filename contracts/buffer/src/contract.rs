@@ -3,7 +3,23 @@ use crate::events::{ BufferEvents, Events };
 use crate::interface::{ AdminInterface, BufferTrait };
 use crate::reserve::Reserve;
 use crate::storage::{
-    get_buffer_reserve_amount, get_fee_collector, get_is_killed_deposit, get_is_killed_request_payout, get_last_payout_timestamp, get_min_reserve_ratio, get_min_time_between_payouts, get_reserve, get_router, put_reserve, set_fee_collector, set_is_killed_deposit, set_is_killed_request_payout, set_last_payout_timestamp, set_min_reserve_ratio, set_min_time_between_payouts, set_router
+    get_buffer_reserve_amount,
+    get_fee_collector,
+    get_is_killed_deposit,
+    get_is_killed_request_payout,
+    get_last_payout_timestamp,
+    get_min_reserve_ratio,
+    get_min_time_between_payouts,
+    get_reserve,
+    get_router,
+    put_reserve,
+    set_fee_collector,
+    set_is_killed_deposit,
+    set_is_killed_request_payout,
+    set_last_payout_timestamp,
+    set_min_reserve_ratio,
+    set_min_time_between_payouts,
+    set_router,
 };
 use access_control::access::{ AccessControl, AccessControlTrait };
 use access_control::emergency::{ get_emergency_mode, set_emergency_mode };
@@ -14,16 +30,7 @@ use access_control::management::SingleAddressManagementTrait;
 use access_control::role::{ Role, SymbolRepresentation };
 use access_control::transfer::TransferOwnershipTrait;
 use access_control::utils::{ require_admin };
-use soroban_sdk::{
-    contract,
-    contractimpl,
-    panic_with_error,
-    Address,
-    BytesN,
-    Env,
-    Symbol,
-    Vec,
-};
+use soroban_sdk::{ contract, contractimpl, panic_with_error, Address, BytesN, Env, Symbol, Vec };
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
@@ -37,6 +44,8 @@ pub struct Buffer;
 #[contractimpl]
 impl BufferTrait for Buffer {
     fn initialize(e: Env, admin: Address, emergency_admin: Address, router: Address) {
+        admin.require_auth();
+
         let access_control = AccessControl::new(&e);
         if access_control.get_role_safe(&Role::Admin).is_some() {
             panic_with_error!(&e, BufferError::AlreadyInitialized);
@@ -219,7 +228,6 @@ impl AdminInterface for Buffer {
 
         set_min_time_between_payouts(&e, &min_time);
     }
-
 
     // Sets the minimum time between payouts.
     //

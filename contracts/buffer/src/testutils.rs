@@ -63,17 +63,13 @@ impl Setup<'_> {
         let users = Self::generate_random_users(&e, config.users_count);
         let admin = users[0].clone();
         let emergency_admin = Address::generate(&e);
-        let asset = Address::generate(&e);
-        let fee_destination = Address::generate(&e);
-
+        
         let token_a = create_token_contract(&e, &admin);
-
         let token_a_admin_client = get_token_admin_client(&e, &token_a.address.clone());
 
         let router = Address::generate(&e);
         let fee_collector = Address::generate(&e);
 
-        // let buffer = setup_buffer(&e, &admin, &emergency_admin, &router);
         let buffer = create_buffer_contract(&e);
         buffer.initialize(&admin, &emergency_admin, &router);
         buffer.set_fee_collector(&admin, &fee_collector);
@@ -102,10 +98,6 @@ impl Setup<'_> {
 mod buffer {
     soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/buffer.wasm");
 }
-
-// pub(crate) fn deploy_buffer_contract<'a>(e: &Env) -> BufferClient<'a> {
-//     BufferClient::new(e, &e.register(&e.register(crate::Buffer {}, ()))
-// }
 
 pub fn create_buffer_contract<'a>(e: &Env) -> BufferClient<'a> {
     let buffer = BufferClient::new(e, &e.register(crate::Buffer {}, ()));
