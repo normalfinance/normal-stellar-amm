@@ -1,7 +1,8 @@
 use crate::errors::InsuranceFundError;
 use crate::events::Events as FundEvents;
 use crate::events::InsuranceFundEvents;
-
+use crate::interest::calculate_rate;
+use crate::interest::calculate_utilization;
 use crate::interface::{ AdminInterface, InsuranceFundTrait };
 use crate::stake::Stake;
 use crate::stake::{
@@ -14,24 +15,35 @@ use crate::stake::{
     vault_amount_to_if_shares,
     StakeAction,
 };
-use crate::storage::set_token;
 use crate::storage::{
+    get_base_rate,
+    get_coverage_buffer,
+    get_optimal_coverage,
+    get_optimal_utilization,
+    get_rate_slope_a,
+    get_rate_slope_b,
+    get_token,
     get_insurance_vault_amount,
     get_is_killed_deposit,
     get_is_killed_request_withdraw,
     get_is_killed_withdraw,
-    get_max_shares,
     get_shares_base,
-    get_token,
     get_total_shares,
     get_unstaking_period,
+    set_base_rate,
+    set_coverage_buffer,
+    set_optimal_coverage,
+    set_optimal_utilization,
+    set_rate_slope_a,
+    set_rate_slope_b,
+    set_token,
     set_is_killed_deposit,
     set_is_killed_request_withdraw,
     set_is_killed_withdraw,
-    set_max_shares,
     set_total_shares,
     set_unstaking_period,
 };
+
 use access_control::access::{ AccessControl, AccessControlTrait };
 use access_control::emergency::{ get_emergency_mode, set_emergency_mode };
 use access_control::errors::AccessControlError;
@@ -41,13 +53,10 @@ use access_control::management::SingleAddressManagementTrait;
 use access_control::role::{ Role, SymbolRepresentation };
 use access_control::transfer::TransferOwnershipTrait;
 use access_control::utils::{ require_admin };
-use soroban_sdk::auth::{ ContractContext, InvokerContractAuthEntry, SubContractInvocation };
 use soroban_sdk::{
     contract,
     contractimpl,
     panic_with_error,
-    log,
-    vec,
     Address,
     BytesN,
     Env,
@@ -73,7 +82,10 @@ impl InsuranceFundTrait for InsuranceFund {
         admin: Address,
         emergency_admin: Address,
         token: Address,
-        max_shares: u128
+        coverage_buffer: u128,
+        optimal_utilization: u32,
+        base_rate: i32,
+        rate_slopes: (i32, i32)
     ) {
         admin.require_auth();
 
@@ -85,23 +97,13 @@ impl InsuranceFundTrait for InsuranceFund {
         access_control.set_role_address(&Role::EmergencyAdmin, &emergency_admin);
 
         set_token(&e, &token);
-        set_max_shares(&e, &max_shares);
-    }
 
-    fn get_unstaking_period(e: Env) -> u64 {
-        get_unstaking_period(&e)
-    }
+        set_coverage_buffer(&e, &coverage_buffer);
 
-    fn get_total_shares(e: Env) -> u128 {
-        get_total_shares(&e)
-    }
-
-    fn get_max_shares(e: Env) -> u128 {
-        get_max_shares(&e)
-    }
-
-    fn get_stake(e: Env, user: Address) -> Stake {
-        get_stake(&e, &user)
+        set_optimal_utilization(&e, &optimal_utilization);
+        set_base_rate(&e, &base_rate);
+        set_rate_slope_a(&e, &rate_slopes.0);
+        set_rate_slope_b(&e, &rate_slopes.1);
     }
 
     fn deposit(e: Env, user: Address, amount: u128) {
@@ -111,9 +113,22 @@ impl InsuranceFundTrait for InsuranceFund {
             panic_with_error!(e, InsuranceFundError::FundDepositKilled);
         }
 
+        let now = e.ledger().timestamp();
+
+        let optimal_coverage = get_optimal_coverage(&e);
+        let coverage_buffer = get_coverage_buffer(&e);
+        let insurance_vault_amount = get_insurance_vault_amount(&e);
+
+        // Ensure amount will not put Insurance Fund over optimal coverage (plus the buffer if it's set)
+        validate!(
+            e,
+            insurance_vault_amount + amount <= optimal_coverage + coverage_buffer,
+            InsuranceFundError::TooMuchInsurance
+        );
+
         let mut stake = get_stake(&e, &user);
 
-        //  "withdraw request in progress"
+        // "withdraw request in progress"
         validate!(
             &e,
             stake.last_withdraw_request_shares == 0 && stake.last_withdraw_request_value == 0,
@@ -122,9 +137,7 @@ impl InsuranceFundTrait for InsuranceFund {
 
         let total_shares = get_total_shares(&e);
 
-        let insurance_vault_amount = get_insurance_vault_amount(&e);
-
-        //  "Insurance Fund balance should be non-zero for new stakers to enter"
+        // "Insurance Fund balance should be non-zero for new stakers to enter"
         validate!(
             &e,
             !(insurance_vault_amount == 0 && total_shares != 0),
@@ -135,15 +148,11 @@ impl InsuranceFundTrait for InsuranceFund {
         apply_rebase_to_stake(&e, &mut stake);
 
         let total_shares = get_total_shares(&e);
-        let max_shares = get_max_shares(&e);
 
         let if_shares_before = stake.checked_if_shares(&e);
         let total_if_shares_before = total_shares;
 
         let n_shares = vault_amount_to_if_shares(&e, amount, total_shares, insurance_vault_amount);
-
-        // Ensure amount will not put Insurance Fund over max_shares
-        validate!(e, total_shares + n_shares <= max_shares, InsuranceFundError::TooMuchInsurance);
 
         // reset cost basis if no shares
         stake.cost_basis = if if_shares_before == 0 {
@@ -160,7 +169,6 @@ impl InsuranceFundTrait for InsuranceFund {
 
         let new_total_shares = get_total_shares(&e);
 
-        let now = e.ledger().timestamp();
         FundEvents::new(&e).if_stake_record(
             now,
             user.clone(),
@@ -405,6 +413,87 @@ impl InsuranceFundTrait for InsuranceFund {
         // "insurance_fund_vault.amount must remain > 0"
         validate!(&e, insurance_vault_amount > 0, InsuranceFundError::InvalidIFDetected);
     }
+
+    fn pay_premium(e: Env, sender: Address, amount: u128) {
+        sender.require_auth();
+
+        transfer_token(
+            &e,
+            &get_token(&e),
+            &sender,
+            &e.current_contract_address(),
+            &(amount as i128)
+        );
+
+        FundEvents::new(&e).collect_premium(sender, amount);
+    }
+
+    //   _______    _______  ___________  ___________  _______   _______    ________
+    //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
+    // (: ( \___) (: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
+    //  \/ \       \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
+    //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
+    // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
+    //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
+
+    fn get_token(e: Env) -> Address {
+        get_token(&e)
+    }
+
+    fn get_unstaking_period(e: Env) -> u64 {
+        get_unstaking_period(&e)
+    }
+
+    fn get_optimal_coverage(e: Env) -> u128 {
+        get_optimal_coverage(&e)
+    }
+
+    fn get_coverage_buffer(e: Env) -> u128 {
+        get_coverage_buffer(&e)
+    }
+
+    fn get_total_shares(e: Env) -> u128 {
+        get_total_shares(&e)
+    }
+
+    fn get_share_base(e: Env) -> u128 {
+        get_shares_base(&e)
+    }
+
+    fn get_stake(e: Env, user: Address) -> Stake {
+        get_stake(&e, &user)
+    }
+
+    fn get_optimal_utilization(e: Env) -> u32 {
+        get_optimal_utilization(&e)
+    }
+
+    fn get_utilization(e: Env) -> u32 {
+        let insurance_vault_amount = get_insurance_vault_amount(&e);
+        let optimal_coverage = get_optimal_coverage(&e);
+        calculate_utilization(insurance_vault_amount, optimal_coverage)
+    }
+
+    fn get_rate(e: Env) -> i32 {
+        let optimal_utilization = get_optimal_utilization(&e);
+        let base_rate = get_base_rate(&e);
+
+        let insurance_vault_amount = get_insurance_vault_amount(&e);
+        let optimal_coverage = get_optimal_coverage(&e);
+        let utilization = calculate_utilization(insurance_vault_amount, optimal_coverage);
+
+        let (slope1, slope2) = (get_rate_slope_a(&e), get_rate_slope_b(&e));
+
+        calculate_rate(&e, utilization, optimal_utilization, base_rate, slope1, slope2)
+    }
+
+    fn get_base_rate(e: Env) -> i32 {
+        get_base_rate(&e)
+    }
+
+    fn get_rate_slopes(e: Env) -> (i32, i32) {
+        (get_rate_slope_a(&e), get_rate_slope_b(&e))
+    }
 }
 
 // The `UpgradeableContract` trait provides the interface for upgrading the contract.
@@ -488,12 +577,6 @@ impl UpgradeableContract for InsuranceFund {
 // The `AdminInterface` trait provides the interface for administrative actions.
 #[contractimpl]
 impl AdminInterface for InsuranceFund {
-    // Sets the unstaking period.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `unstaking_period` - The new unstaking period.
     fn set_unstaking_period(e: Env, admin: Address, unstaking_period: u64) {
         admin.require_auth();
         require_admin(&e, &admin);
@@ -506,12 +589,36 @@ impl AdminInterface for InsuranceFund {
     // # Arguments
     //
     // * `admin` - The address of the admin.
-    // * `max_shares` - The max number of shares.
-    fn set_max_shares(e: Env, admin: Address, max_shares: u128) {
+    // * `optimal_coverage` - The max number of shares.
+    fn set_optimal_coverage(e: Env, admin: Address, optimal_coverage: u128) {
         admin.require_auth();
         require_admin(&e, &admin);
 
-        set_max_shares(&e, &max_shares);
+        set_optimal_coverage(&e, &optimal_coverage);
+    }
+
+    fn set_coverage_buffer(e: Env, admin: Address, coverage_buffer: u128) {
+        admin.require_auth();
+        require_admin(&e, &admin);
+
+        set_coverage_buffer(&e, &coverage_buffer);
+    }
+
+    fn set_rate_config(
+        e: Env,
+        admin: Address,
+        optimal_utilization: u32,
+        base_rate: i32,
+        rate_slope_a: i32,
+        rate_slope_b: i32
+    ) {
+        admin.require_auth();
+        require_admin(&e, &admin);
+
+        set_optimal_utilization(&e, &optimal_utilization);
+        set_base_rate(&e, &base_rate);
+        set_rate_slope_a(&e, &rate_slope_a);
+        set_rate_slope_b(&e, &rate_slope_b);
     }
 
     // Sets the max shares the Insurance Fund can have.
@@ -528,7 +635,7 @@ impl AdminInterface for InsuranceFund {
 
         let pay_from_insurance: u128 = e.invoke_contract(
             &pool_address,
-            &Symbol::new(&e, "get_pay_from_insurance"),
+            &Symbol::new(&e, "pay_insurance_claim"),
             Vec::from_array(&e, [
                 e.current_contract_address().to_val(),
                 insurance_vault_amount.into_val(&e),
@@ -541,33 +648,6 @@ impl AdminInterface for InsuranceFund {
                 &e,
                 pay_from_insurance < insurance_vault_amount,
                 InsuranceFundError::InsufficientCollateral
-            );
-
-            e.authorize_as_current_contract(
-                vec![
-                    &e,
-                    InvokerContractAuthEntry::Contract(SubContractInvocation {
-                        context: ContractContext {
-                            contract: get_token(&e).clone(),
-                            fn_name: Symbol::new(&e, "transfer"),
-                            args: (
-                                e.current_contract_address(),
-                                pool_address.clone(),
-                                pay_from_insurance as i128,
-                            ).into_val(&e),
-                        },
-                        sub_invocations: vec![&e],
-                    })
-                ]
-            );
-
-            let _paid: u128 = e.invoke_contract(
-                &pool_address,
-                &Symbol::new(&e, "pay_insurance_claim"),
-                Vec::from_array(&e, [
-                    e.current_contract_address().to_val(),
-                    pay_from_insurance.into_val(&e),
-                ])
             );
 
             let new_insurance_vault_amount = get_insurance_vault_amount(&e);

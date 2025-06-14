@@ -3,6 +3,7 @@
 mod contract;
 pub mod errors;
 mod events;
+mod interest;
 mod interface;
 mod stake;
 mod storage;

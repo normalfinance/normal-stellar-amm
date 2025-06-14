@@ -73,7 +73,15 @@ impl Setup<'_> {
         let token_a_admin_client = get_token_admin_client(&e, &token_a.address.clone());
 
         let insurance_fund = create_insurance_fund_contract(&e);
-        insurance_fund.initialize(&admin, &emergency_admin, &token_a.address, &1_000_000_0000000_u128);
+        insurance_fund.initialize(
+            &admin,
+            &emergency_admin,
+            &token_a.address,
+            &0,
+            &80_00000_u32, // 80%
+            &2_00000_i32, // 2%
+            &(10_00000_i32, 60_00000_i32) // 10% and 60%
+        );
 
         Self {
             env: e,

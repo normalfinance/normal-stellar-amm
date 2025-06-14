@@ -145,6 +145,77 @@ fn test_deposit() {
     });
 }
 
+#[test]
+fn test_deposit_back_to_back() {
+    let setup = Setup::new_with_config(
+        &(TestConfig {
+            mint_to_user: i128::MAX,
+            ..TestConfig::default()
+        })
+    );
+
+    let users = setup.users;
+    let amount_to_deposit = 100_0000000_u128;
+    let amount_to_deposit_2 = 50_0000000_u128;
+
+    setup.insurance_fund.deposit(&users[1], &amount_to_deposit);
+    setup.insurance_fund.deposit(&users[1], &amount_to_deposit_2);
+
+    assert_eq!(
+        setup.token_a.balance(&users[1]),
+        i128::MAX - ((amount_to_deposit - amount_to_deposit_2) as i128)
+    );
+    assert_eq!(
+        setup.token_a.balance(&setup.insurance_fund.address),
+        (amount_to_deposit + amount_to_deposit_2) as i128
+    );
+
+    // Insurance Fund issued shares
+    assert_eq!(setup.insurance_fund.get_total_shares(), amount_to_deposit);
+    assert_eq!(setup.insurance_fund.get_stake(&users[1]), Stake {
+        cost_basis: amount_to_deposit,
+        if_base: 0,
+        if_shares: amount_to_deposit,
+        last_valid_ts: 0,
+        last_withdraw_request_shares: 0,
+        last_withdraw_request_ts: 0,
+        last_withdraw_request_value: 0,
+    });
+}
+
+#[test]
+fn test_deposit_from_multiple_users() {
+    let setup = Setup::new_with_config(
+        &(TestConfig {
+            mint_to_user: i128::MAX,
+            ..TestConfig::default()
+        })
+    );
+
+    let users = setup.users;
+    let amount_to_deposit = 100_0000000_u128;
+    let amount_to_deposit_2 = 50_0000000_u128;
+
+    setup.insurance_fund.deposit(&users[1], &amount_to_deposit);
+    setup.insurance_fund.deposit(&users[2], &amount_to_deposit_2);
+
+    // Token was transferred from user to Insurance Fund
+    assert_eq!(setup.token_a.balance(&users[1]), i128::MAX - (amount_to_deposit as i128));
+    assert_eq!(setup.token_a.balance(&setup.insurance_fund.address), amount_to_deposit as i128);
+
+    // Insurance Fund issued shares
+    assert_eq!(setup.insurance_fund.get_total_shares(), amount_to_deposit);
+    assert_eq!(setup.insurance_fund.get_stake(&users[1]), Stake {
+        cost_basis: amount_to_deposit,
+        if_base: 0,
+        if_shares: amount_to_deposit,
+        last_valid_ts: 0,
+        last_withdraw_request_shares: 0,
+        last_withdraw_request_ts: 0,
+        last_withdraw_request_value: 0,
+    });
+}
+
 // #[test]
 // fn test_request_withdraw() {
 //     let setup = Setup::default();

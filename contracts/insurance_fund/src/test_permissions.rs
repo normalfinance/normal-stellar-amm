@@ -435,16 +435,17 @@ fn test_set_unstaking_period() {
     }
 }
 
-#[test]
-fn test_set_max_shares() {
-    let setup = Setup::default();
-    let insurance_fund = setup.insurance_fund;
-    let user = Address::generate(&setup.env);
+// #[test]
+// fn test_set_router() {
+//     let setup = Setup::default();
+//     let insurance_fund = setup.insurance_fund;
+//     let user = Address::generate(&setup.env);
+//     let new_router = Address::generate(&setup.env);
 
-    for (addr, is_ok) in [
-        (user, false),
-        (setup.admin, true),
-    ] {
-        assert_eq!(insurance_fund.try_set_max_shares(&addr, &10_000_000_u128).is_ok(), is_ok);
-    }
-}
+//     for (addr, is_ok) in [
+//         (user, false),
+//         (setup.admin, true),
+//     ] {
+//         assert_eq!(insurance_fund.try_set_router(&addr, &new_router).is_ok(), is_ok);
+//     }
+// }
