@@ -1,11 +1,12 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::stake::Stake;
+use crate::stake::{ Stake, StakeAction };
 use crate::testutils::{ Setup, TestConfig };
 use soroban_sdk::testutils::{ Address as _, AuthorizedFunction, AuthorizedInvocation, Events };
+use soroban_sdk::token::TokenClient;
 use soroban_sdk::{ vec, Address, Error, IntoVal, Symbol, Val, Vec };
-use utils::constant::THIRTY_DAY;
+use utils::constant::{ ONE_HOUR, THIRTEEN_DAY, THIRTY_DAY };
 // use utils::test_utils::insurance_fund::Stake;
 use utils::test_utils::jump;
 
@@ -111,9 +112,26 @@ use utils::test_utils::jump;
 fn test_initialize_twice() {
     let setup = Setup::default();
     let token = Address::generate(&setup.env);
-    setup.insurance_fund.initialize(&setup.admin, &setup.emergency_admin, &token, &1_000_000_u128);
+    setup.insurance_fund.initialize(
+        &setup.admin,
+        &setup.emergency_admin,
+        &setup.token_a.address,
+        &0,
+        &80_00000_u32, // 80%
+        &2_00000_i32, // 2%
+        &(10_00000_i32, 60_00000_i32) // 10% and 60%);
+    );
 }
 
+/**
+ * Deposit Tests
+ * [ ] Singular deposit
+ * [ ] Multiple deposits, same user
+ * [ ] Multiple deposits, different users
+ * [ ] Deposit over optimal coverage FAIL 20
+ * [ ] Deposit while withdraw in progress FAIL 9
+ *
+ */
 #[test]
 fn test_deposit() {
     let setup = Setup::new_with_config(
@@ -138,7 +156,6 @@ fn test_deposit() {
         cost_basis: amount_to_deposit,
         if_base: 0,
         if_shares: amount_to_deposit,
-        last_valid_ts: 0,
         last_withdraw_request_shares: 0,
         last_withdraw_request_ts: 0,
         last_withdraw_request_value: 0,
@@ -176,7 +193,6 @@ fn test_deposit_back_to_back() {
         cost_basis: amount_to_deposit,
         if_base: 0,
         if_shares: amount_to_deposit,
-        last_valid_ts: 0,
         last_withdraw_request_shares: 0,
         last_withdraw_request_ts: 0,
         last_withdraw_request_value: 0,
@@ -209,73 +225,473 @@ fn test_deposit_from_multiple_users() {
         cost_basis: amount_to_deposit,
         if_base: 0,
         if_shares: amount_to_deposit,
-        last_valid_ts: 0,
         last_withdraw_request_shares: 0,
         last_withdraw_request_ts: 0,
         last_withdraw_request_value: 0,
     });
 }
 
-// #[test]
-// fn test_request_withdraw() {
-//     let setup = Setup::default();
-//     setup.insurance_fund.request_withdraw(&user);
-// }
+#[test]
+#[should_panic(expected = "Error(Contract, #20)")]
+fn test_deposit_over_optimal_coverage() {
+    let setup = Setup::new_with_config(
+        &(TestConfig {
+            mint_to_user: i128::MAX,
+            ..TestConfig::default()
+        })
+    );
 
-// #[test]
-// #[should_panic(expected = "Error(Contract, #9)")]
-// fn test_request_withdraw_while_in_progress() {
-//     let setup = Setup::default();
-//     let user = Address::generate(&setup.env);
+    let users = setup.users;
+    let optimal_coverage = 100_0000000_u128;
+    let amount_to_deposit = 101_0000000_u128;
 
-//     setup.insurance_fund.request_withdraw(&user);
-// }
+    // Update the optimal coverage
+    setup.insurance_fund.set_optimal_coverage(&setup.admin, &optimal_coverage);
 
-// #[test]
-// fn test_cancel_request_withdraw() {
-//     let setup = Setup::default();
-// }
+    // Attempt the deposit
+    setup.insurance_fund.deposit(&users[1], &amount_to_deposit);
+}
 
-// #[test]
-// fn test_withdraw() {
-//     let setup = Setup::default();
-// }
+#[test]
+#[should_panic(expected = "Error(Contract, #9)")]
+fn test_deposit_while_request_withdraw_in_progress() {
+    let setup = Setup::new_with_config(
+        &(TestConfig {
+            mint_to_user: i128::MAX,
+            ..TestConfig::default()
+        })
+    );
 
-// #[test]
-// #[should_panic(expected = "Error(Contract, #2)")]
-// fn test_withdraw_during_unstaking_period() {
-//     let setup = Setup::default();
-//     let user = Address::generate(&setup.env);
+    let users = setup.users;
+    let amount_to_deposit = 100_0000000_u128;
 
-//     setup.insurance_fund.withdraw(&user);
-// }
+    // Make initial deposit
+    setup.insurance_fund.deposit(&users[1], &amount_to_deposit);
 
-// #[test]
-// #[should_panic(expected = "Error(Contract, #2)")]
-// fn test_withdraw_without_requesting() {
-//     let setup = Setup::default();
-//     let user = Address::generate(&setup.env);
+    jump(&setup.env, 10);
 
-//     setup.insurance_fund.withdraw(&user);
-// }
+    // Request a withdrawal
+    setup.insurance_fund.request_withdraw(&users[1], &amount_to_deposit);
 
-// #[test]
-// #[should_panic(expected = "Error(Contract, #9)")]
-// fn test_deposit_during_withdraw() {
-//     let setup = Setup::default();
-//     let user = Address::generate(&setup.env);
+    // 10 seconds, not enough to pass the unstaking period
+    jump(&setup.env, 10);
 
-//     setup.insurance_fund.deposit(&user, &setup.token_a.address, &100_0000000_u128);
-// }
+    // Attempt another deposit
+    setup.insurance_fund.deposit(&users[1], &amount_to_deposit);
+}
 
-// #[test]
-// #[should_panic(expected = "Error(Contract, #16)")]
-// fn test_request_withdraw_during_unstaking_period() {
-//     let setup = Setup::default();
-//     let user = Address::generate(&setup.env);
+/**
+ * Request Withdraw Tests
+ * [ ] happy path
+ * [ ] already in progress FAIL 9
+ * [ ] empty vault amount FAIL 12 (if already shares)
+ * [ ] zero request fails FAIL 11
+ * [ ] insufficent user shares FAIL 13
+ * [ ] error if too low vault amount FAIL 3
+ * [ ]
+ *
+ */
 
-//     setup.insurance_fund.deposit(&user, &setup.token_a.address, &100_0000000_u128);
-// }
+#[test]
+fn test_request_withdraw() {
+    let setup = Setup::default();
+    let users = setup.users;
+    let amount_to_deposit = 100_0000000_u128;
+
+    // Make initial deposit
+    setup.insurance_fund.deposit(&users[1], &amount_to_deposit);
+
+    let stake_before = setup.insurance_fund.get_stake(&users[1]);
+
+    // Request a withdrawal
+    setup.insurance_fund.request_withdraw(&users[1], &amount_to_deposit);
+
+    // Ensure no tokens were transferred
+    assert_eq!(setup.token_a.balance(&users[1]), i128::MAX - (amount_to_deposit as i128));
+    assert_eq!(setup.token_a.balance(&setup.insurance_fund.address), amount_to_deposit as i128);
+
+    // Ensure user stake was updated
+    assert_eq!(setup.insurance_fund.get_stake(&users[1]), Stake {
+        cost_basis: stake_before.cost_basis,
+        if_base: stake_before.if_base,
+        if_shares: stake_before.if_shares,
+        last_withdraw_request_shares: amount_to_deposit, // n_shares
+        last_withdraw_request_ts: setup.env.ledger().timestamp(),
+        last_withdraw_request_value: amount_to_deposit,
+    });
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #9)")]
+fn test_request_withdraw_while_in_progress() {
+    let setup = Setup::default();
+    let users = setup.users;
+    let amount_to_deposit = 100_0000000_u128;
+
+    // Make initial deposit
+    setup.insurance_fund.deposit(&users[1], &amount_to_deposit);
+
+    jump(&setup.env, 10);
+
+    // Request a withdrawal
+    setup.insurance_fund.request_withdraw(&users[1], &amount_to_deposit);
+
+    // 10 seconds, not enough to pass the unstaking period
+    jump(&setup.env, 10);
+
+    // Attempt another request withdraw
+    setup.insurance_fund.request_withdraw(&users[1], &amount_to_deposit);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #12)")]
+fn test_request_withdraw_with_empty_vault() {
+    let setup = Setup::default();
+    let users = setup.users;
+    let amount_to_deposit = 100_0000000_u128;
+
+    // Make initial deposit
+    setup.insurance_fund.deposit(&users[1], &amount_to_deposit);
+
+    // Burn tokens from Insurance Fund
+    TokenClient::new(&setup.env, &setup.token_a.address).burn(
+        &setup.insurance_fund.address,
+        &(amount_to_deposit as i128)
+    );
+
+    // Request a withdrawal
+    setup.insurance_fund.request_withdraw(&users[1], &amount_to_deposit);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #11)")]
+fn test_request_withdraw_with_zero_amount() {
+    let setup = Setup::default();
+    let users = setup.users;
+    let amount_to_deposit = 100_0000000_u128;
+
+    // Make initial deposit
+    setup.insurance_fund.deposit(&users[1], &amount_to_deposit);
+
+    // Request a withdrawal
+    setup.insurance_fund.request_withdraw(&users[1], &0);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #13)")]
+fn test_request_withdraw_with_insufficient_shares() {
+    let setup = Setup::default();
+    let users = setup.users;
+    let amount_to_deposit = 100_0000000_u128;
+
+    // Make initial deposit
+    setup.insurance_fund.deposit(&users[1], &amount_to_deposit);
+
+    // Request a withdrawal
+    setup.insurance_fund.request_withdraw(&users[1], &(amount_to_deposit + 10_0000000_u128));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #3)")]
+fn test_request_withdraw_with_insufficient_vault_amount() {
+    let setup = Setup::default();
+    let users = setup.users;
+    let amount_to_deposit = 100_0000000_u128;
+
+    // Make initial deposit
+    setup.insurance_fund.deposit(&users[1], &amount_to_deposit);
+
+    // Burn some tokens from Insurance Fund
+    TokenClient::new(&setup.env, &setup.token_a.address).burn(
+        &setup.insurance_fund.address,
+        &50_0000000_i128
+    );
+
+    // Request a withdrawal
+    setup.insurance_fund.request_withdraw(&users[1], &amount_to_deposit);
+}
+
+#[test]
+fn test_cancel_request_withdraw() {
+    let setup = Setup::default();
+    let users = setup.users;
+    let amount_to_deposit = 100_0000000_u128;
+
+    // Make initial deposit
+    setup.insurance_fund.deposit(&users[1], &amount_to_deposit);
+
+    // Request a withdrawal
+    setup.insurance_fund.request_withdraw(&users[1], &amount_to_deposit);
+
+    let stake_before = setup.insurance_fund.get_stake(&users[1]);
+
+    // Cancel withdrawal request
+    setup.insurance_fund.cancel_request_withdraw(&users[1]);
+
+    assert_eq!(setup.insurance_fund.get_total_shares(), amount_to_deposit);
+    assert_eq!(setup.insurance_fund.get_stake(&users[1]), Stake {
+        cost_basis: stake_before.cost_basis,
+        if_base: stake_before.if_base,
+        if_shares: stake_before.if_shares - 0,
+        last_withdraw_request_shares: 0,
+        last_withdraw_request_ts: setup.env.ledger().timestamp(),
+        last_withdraw_request_value: 0,
+    });
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #10)")]
+fn test_cancel_request_withdraw_no_request_in_progress() {
+    let setup = Setup::default();
+    let users = setup.users;
+    let amount_to_deposit = 100_0000000_u128;
+
+    // Make initial deposit
+    setup.insurance_fund.deposit(&users[1], &amount_to_deposit);
+
+    // Cancel withdrawal request
+    setup.insurance_fund.cancel_request_withdraw(&users[1]);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #6)")]
+fn test_cancel_request_withdraw_invalid_rebase() {
+    let setup = Setup::default();
+    let users = setup.users;
+    let amount_to_deposit = 100_0000000_u128;
+
+    // Make initial deposit
+    setup.insurance_fund.deposit(&users[1], &amount_to_deposit);
+
+    // Request a withdrawal
+    setup.insurance_fund.request_withdraw(&users[1], &amount_to_deposit);
+
+    // TODO: overwrite the if_base
+    // setup.insurance_fund.set
+
+    // Cancel withdrawal request
+    setup.insurance_fund.cancel_request_withdraw(&users[1]);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #12)")]
+fn test_cancel_request_withdraw_increasing_shares() {
+    let setup = Setup::default();
+    let users = setup.users;
+    let amount_to_deposit = 100_0000000_u128;
+
+    // Make initial deposit
+    setup.insurance_fund.deposit(&users[1], &amount_to_deposit);
+
+    // Request a withdrawal
+    setup.insurance_fund.request_withdraw(&users[1], &amount_to_deposit);
+
+    // Mint tokens to the Insurance Fund to skew the users new share amount
+    setup.token_a_admin_client.mint(&setup.insurance_fund.address, &50_0000000_i128);
+
+    // Cancel withdrawal request
+    setup.insurance_fund.cancel_request_withdraw(&users[1]);
+}
+
+#[test]
+fn test_withdraw() {
+    let setup = Setup::default();
+    let users = setup.users;
+    let amount_to_deposit = 100_0000000_u128;
+
+    // Make initial deposit
+    setup.insurance_fund.deposit(&users[1], &amount_to_deposit);
+
+    // Request a withdrawal
+    setup.insurance_fund.request_withdraw(&users[1], &amount_to_deposit);
+
+    let total_shares_before = setup.insurance_fund.get_total_shares();
+    let stake_before = setup.insurance_fund.get_stake(&users[1]);
+
+    // Simulate unstaking period
+    let unstaking_period = setup.insurance_fund.get_unstaking_period();
+    jump(&setup.env, unstaking_period + ONE_HOUR);
+
+    // Withdraw
+    setup.insurance_fund.withdraw(&users[1]);
+
+    assert_eq!(setup.insurance_fund.get_total_shares(), total_shares_before - amount_to_deposit);
+    assert_eq!(setup.insurance_fund.get_stake(&users[1]), Stake {
+        cost_basis: stake_before.cost_basis - 1,
+        if_base: stake_before.if_base,
+        if_shares: 0,
+        last_withdraw_request_shares: 0,
+        last_withdraw_request_ts: setup.env.ledger().timestamp(),
+        last_withdraw_request_value: 0,
+    });
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #14)")]
+fn test_withdraw_during_unstaking_period() {
+    let setup = Setup::default();
+    let users = setup.users;
+    let amount_to_deposit = 100_0000000_u128;
+
+    // Make initial deposit
+    setup.insurance_fund.deposit(&users[1], &amount_to_deposit);
+
+    // Request a withdrawal
+    setup.insurance_fund.request_withdraw(&users[1], &amount_to_deposit);
+
+    // Simulate unstaking period less ONE_HOUR
+    let unstaking_period = setup.insurance_fund.get_unstaking_period();
+    jump(&setup.env, unstaking_period - ONE_HOUR);
+
+    // Withdraw
+    setup.insurance_fund.withdraw(&users[1]);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2)")]
+// let n_shares = stake.last_withdraw_request_shares; must be postive FAIL 2
+fn test_withdraw_without_prior_request() {
+    let setup = Setup::default();
+    let users = setup.users;
+    let amount_to_deposit = 100_0000000_u128;
+
+    // Make initial deposit
+    setup.insurance_fund.deposit(&users[1], &amount_to_deposit);
+
+    // Simulate unstaking period
+    let unstaking_period = setup.insurance_fund.get_unstaking_period();
+    jump(&setup.env, unstaking_period + ONE_HOUR);
+
+    // Withdraw
+    setup.insurance_fund.withdraw(&users[1]);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #13)")]
+//MUST if_shares_before >= n_shares FAIL 13
+fn test_withdraw_not_decrease_shares() {
+    let setup = Setup::default();
+    let users = setup.users;
+    let amount_to_deposit = 100_0000000_u128;
+
+    // Make initial deposit
+    setup.insurance_fund.deposit(&users[1], &amount_to_deposit);
+
+    // Request a withdrawal
+    setup.insurance_fund.request_withdraw(&users[1], &amount_to_deposit);
+
+    // Simulate unstaking period
+    let unstaking_period = setup.insurance_fund.get_unstaking_period();
+    jump(&setup.env, unstaking_period + ONE_HOUR);
+
+    // TODO: idk what to change here for the failure
+
+    // Withdraw
+    setup.insurance_fund.withdraw(&users[1]);
+}
+
+#[test]
+fn test_pay_premium() {
+    let setup = Setup::default();
+    let users = setup.users;
+    let amount_to_pay = 100_0000000_u128;
+
+    let total_shares_before = setup.insurance_fund.get_total_shares();
+
+    setup.insurance_fund.pay_premium(&users[1], &amount_to_pay);
+
+    // Ensure token is transferred from
+    assert_eq!(setup.token_a.balance(&setup.insurance_fund.address), amount_to_pay as i128);
+    assert_eq!(setup.token_a.balance(&users[1]), 0);
+
+    // Ensure total_shares is unchanged - so LPs accrue interest value
+    assert_eq!(setup.insurance_fund.get_total_shares(), total_shares_before);
+}
+
+#[test]
+fn test_events() {
+    let setup = Setup::new_with_config(
+        &(TestConfig {
+            ..TestConfig::default()
+        })
+    );
+    let e = setup.env;
+    let insurance_fund = setup.insurance_fund;
+    let token1 = setup.token_a;
+    let user1 = setup.users[1].clone();
+    let amount_to_deposit = 100_0000000_u128;
+    let amount_to_withdraw = 50_0000000_u128;
+    let amount_to_pay = 25_0000000_u128;
+
+    // mint
+    setup.token_a_admin_client.mint(&user1, &(amount_to_deposit as i128));
+
+    // deposit
+    insurance_fund.deposit(&user1, &amount_to_deposit);
+    assert_eq!(
+        vec![&e, e.events().all().last().unwrap()],
+        vec![&e, (
+            insurance_fund.address.clone(),
+            (Symbol::new(&e, "if_stake_record"), user1.clone(), StakeAction::Deposit).into_val(&e),
+            amount_to_deposit.into_val(&e),
+        )]
+    );
+
+    // request_withdraw
+    insurance_fund.request_withdraw(&user1, &amount_to_withdraw);
+    assert_eq!(
+        vec![&e, e.events().all().last().unwrap()],
+        vec![&e, (
+            insurance_fund.address.clone(),
+            (
+                Symbol::new(&e, "if_stake_record"),
+                user1.clone(),
+                StakeAction::WithdrawRequest,
+            ).into_val(&e),
+            amount_to_withdraw.into_val(&e),
+        )]
+    );
+
+    // cancel_request_withdraw
+    insurance_fund.cancel_request_withdraw(&user1);
+    assert_eq!(
+        vec![&e, e.events().all().last().unwrap()],
+        vec![&e, (
+            insurance_fund.address.clone(),
+            (
+                Symbol::new(&e, "if_stake_record"),
+                user1.clone(),
+                StakeAction::WithdrawCancelRequest,
+            ).into_val(&e),
+            amount_to_withdraw.into_val(&e),
+        )]
+    );
+
+    // withdraw
+    insurance_fund.request_withdraw(&user1, &amount_to_withdraw);
+    jump(&e, THIRTEEN_DAY + ONE_HOUR);
+    insurance_fund.withdraw(&user1);
+    assert_eq!(
+        vec![&e, e.events().all().last().unwrap()],
+        vec![&e, (
+            insurance_fund.address.clone(),
+            (Symbol::new(&e, "if_stake_record"), user1.clone(), StakeAction::Withdraw).into_val(&e),
+            amount_to_withdraw.into_val(&e),
+        )]
+    );
+
+    // pay premium
+    setup.token_a_admin_client.mint(&user1, &(amount_to_pay as i128));
+    insurance_fund.pay_premium(&user1, &amount_to_pay);
+    assert_eq!(
+        vec![&e, e.events().all().last().unwrap()],
+        vec![&e, (
+            insurance_fund.address.clone(),
+            (Symbol::new(&e, "collect_premium"), user1.clone()).into_val(&e),
+            amount_to_pay.into_val(&e),
+        )]
+    );
+}
 
 //    _______     __       ____  ____   ________  _______  ________
 //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\

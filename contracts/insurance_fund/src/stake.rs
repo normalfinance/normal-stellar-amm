@@ -23,21 +23,19 @@ pub struct Stake {
     pub if_shares: u128,
     pub last_withdraw_request_shares: u128, // get zero as 0 when not in escrow
     pub if_base: u128, // exponent for if_shares decimal places (for rebase)
-    pub last_valid_ts: u64,
     pub last_withdraw_request_value: u128,
     pub last_withdraw_request_ts: u64,
     pub cost_basis: u128,
 }
 
 impl Stake {
-    pub fn new(now: u64) -> Self {
+    pub fn new() -> Self {
         Stake {
             last_withdraw_request_shares: 0,
             last_withdraw_request_value: 0,
             last_withdraw_request_ts: 0,
             cost_basis: 0,
             if_base: 0,
-            last_valid_ts: now,
             if_shares: 0,
         }
     }
@@ -80,7 +78,7 @@ pub fn get_stake(e: &Env, key: &Address) -> Stake {
             bump_persistent(e, &key);
             stake
         }
-        None => Stake::new(e.ledger().timestamp()),
+        None => Stake::new(),
     };
 
     stake_info

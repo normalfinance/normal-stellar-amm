@@ -62,7 +62,7 @@ impl InsuranceFundEvents for Events {
         self.env()
             .events()
             .publish(
-                (Symbol::new(self.env(), "deposit"), user, action),
+                (Symbol::new(self.env(), "if_stake_record"), user, action),
                 (
                     ts,
                     amount,

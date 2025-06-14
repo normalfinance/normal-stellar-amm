@@ -1,6 +1,8 @@
 use soroban_fixed_point_math::FixedPoint;
-use soroban_sdk::{ Env };
+use soroban_sdk::{ panic_with_error, Env };
 use utils::{ constant::PRICE_PRECISION, math::safe_math::SafeMath };
+
+use crate::errors::InsuranceFundError;
 
 // Calculates the utilization percentage of the insurance fund.
 //
@@ -45,6 +47,14 @@ pub fn calculate_rate(
     slope1: i32,
     slope2: i32
 ) -> i32 {
+    if utilization == 0 {
+        return base_rate;
+    }
+
+    if optimal_utilization == 0 {
+        panic_with_error!(&e, InsuranceFundError::InvalidOptimalUtilization);
+    }
+
     let utilization = utilization as i32;
     let optimal_utilization = optimal_utilization as i32;
 
@@ -113,6 +123,23 @@ mod tests {
         assert_eq!(utilization, 0); // 0% utilization
     }
 
+    #[test]
+    #[should_panic(expected = "Error(Contract, #21)")]
+    fn test_zero_optimal_utilization() {
+        let e = Env::default();
+        // optimal_utilization = 0 could panic on division unless handled
+        calculate_rate(&e, 5000, 0, 100, 400, 1500);
+    }
+
+    #[test]
+    fn test_utilization_above_100_percent_in_rate() {
+        let e = Env::default();
+        let rate = calculate_rate(&e, 11_000, 8000, 100, 400, 1500);
+        // excess = 3000, remaining = 2000
+        // rate = 100 + 400 + (3000 / 2000) * 1500 = 100 + 400 + 2250 = 2750
+        assert_eq!(rate, 2750);
+    }
+
     // interest rate
 
     #[test]
@@ -120,14 +147,6 @@ mod tests {
         let e = Env::default();
         let rate = calculate_rate(&e, 0, 8000, 100, 400, 1500);
         assert_eq!(rate, 100); // Only base rate should apply
-    }
-
-    #[test]
-    fn test_negative_utilization() {
-        let e = Env::default();
-        let rate = calculate_rate(&e, -1000, 8000, 100, 400, 1500);
-        // This should still compute: 100 + (-1000 * 400 / 8000) = 100 - 50 = 50
-        assert_eq!(rate, 50);
     }
 
     #[test]
@@ -141,15 +160,7 @@ mod tests {
     #[test]
     fn test_low_utilization_rate() {
         let e = Env::default();
-
-        let utilization = 5000; // 50%
-        let base_rate = 100; // 1.00%
-        let slope_a = 400; // 4.00% max at optimal
-        let slope_b = 1500; // 15.00% for high usage
-        let optimal_util = 8000; // 80%
-
-        let rate = calculate_rate(&e, utilization, optimal_util, base_rate, slope_a, slope_b);
-        // Expected: base + (util / optimal) * slope_a
+        let rate = calculate_rate(&e, 5000, 8000, 100, 400, 1500);
         // 100 + (5000 / 8000 * 400) = 100 + 250 = 350
         assert_eq!(rate, 350);
     }
@@ -157,46 +168,24 @@ mod tests {
     #[test]
     fn test_utilization_at_optimal() {
         let e = Env::default();
-
-        let utilization = 8000; // 80%
-        let base_rate = 100;
-        let slope_a = 400;
-        let slope_b = 1500;
-        let optimal_util = 8000;
-
-        let rate = calculate_rate(&e, utilization, optimal_util, base_rate, slope_a, slope_b);
-        // Should be base + slope_a
-        assert_eq!(rate, base_rate + slope_a);
+        let rate = calculate_rate(&e, 8000, 8000, 100, 400, 1500);
+        // base + slope_a = 100 + 400 = 500
+        assert_eq!(rate, 500);
     }
 
     #[test]
     fn test_high_utilization_rate() {
         let e = Env::default();
-
-        let utilization = 9500; // 95%
-        let base_rate = 100;
-        let slope_a = 400;
-        let slope_b = 1500;
-        let optimal_util = 8000;
-
-        let rate = calculate_rate(&e, utilization, optimal_util, base_rate, slope_a, slope_b);
-        // base + slope_a + ((util - opt) / (1 - opt)) * slope_b
-        // 100 + 400 + ((1500 / 2000) * 1500) = 100 + 400 + 1125 = 1625
+        let rate = calculate_rate(&e, 9500, 8000, 100, 400, 1500);
+        // base + slope_a + ((1500 / 2000) * 1500) = 100 + 400 + 1125 = 1625
         assert_eq!(rate, 1625);
     }
 
     #[test]
     fn test_max_utilization() {
         let e = Env::default();
-
-        let utilization = 10_000; // 100%
-        let base_rate = 100;
-        let slope_a = 400;
-        let slope_b = 1500;
-        let optimal_util = 8000;
-
-        let rate = calculate_rate(&e, utilization, optimal_util, base_rate, slope_a, slope_b);
-        // base + slope_a + (2000 / 2000 * slope_b)
-        assert_eq!(rate, base_rate + slope_a + slope_b);
+        let rate = calculate_rate(&e, 10_000, 8000, 100, 400, 1500);
+        // base + slope_a + slope_b = 100 + 400 + 1500 = 2000
+        assert_eq!(rate, 2000);
     }
 }

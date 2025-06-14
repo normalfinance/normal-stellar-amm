@@ -106,6 +106,15 @@ impl InsuranceFundTrait for InsuranceFund {
         set_rate_slope_b(&e, &rate_slopes.1);
     }
 
+    /**
+     * Deposit Tests
+     * [ ] Singular deposit
+     * [ ] Multiple deposits, same user
+     * [ ] Multiple deposits, different users
+     * [x] Deposit over optimal coverage FAIL 20
+     * [x] Deposit while withdraw in progress FAIL 9
+     *
+     */
     fn deposit(e: Env, user: Address, amount: u128) {
         user.require_auth();
 
@@ -136,13 +145,6 @@ impl InsuranceFundTrait for InsuranceFund {
         );
 
         let total_shares = get_total_shares(&e);
-
-        // "Insurance Fund balance should be non-zero for new stakers to enter"
-        validate!(
-            &e,
-            !(insurance_vault_amount == 0 && total_shares != 0),
-            InsuranceFundError::InvalidIFForNewStakes
-        );
 
         apply_rebase_to_insurance_fund(&e, insurance_vault_amount);
         apply_rebase_to_stake(&e, &mut stake);
@@ -295,13 +297,6 @@ impl InsuranceFundTrait for InsuranceFund {
 
         //  "if stake base != base"
         validate!(&e, stake.if_base == shares_base, InsuranceFundError::InvalidIFRebase);
-
-        //  "No withdraw request in progress"
-        validate!(
-            &e,
-            stake.last_withdraw_request_shares != 0,
-            InsuranceFundError::InvalidIFUnstakeCancel
-        );
 
         let if_shares_lost = calculate_if_shares_lost(&e, &stake, insurance_vault_amount);
 

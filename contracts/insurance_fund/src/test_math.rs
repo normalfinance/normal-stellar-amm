@@ -110,7 +110,7 @@ pub fn if_shares_lost_test() {
     let unstaking_period = 0;
     let mut total_shares = 1000 * QUOTE_PRECISION;
 
-    let mut if_stake = Stake::new(0);
+    let mut if_stake = Stake::new();
     if_stake.update_if_shares(&setup.env, 100 * QUOTE_PRECISION);
     if_stake.last_withdraw_request_shares = 100 * QUOTE_PRECISION;
     if_stake.last_withdraw_request_value = 100 * QUOTE_PRECISION - 1;

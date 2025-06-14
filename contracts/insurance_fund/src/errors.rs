@@ -9,8 +9,8 @@ pub enum InsuranceFundError {
     NoIFWithdrawAvailable = 1,
     InvalidIFUnstake = 2,
     InvalidIFUnstakeSize = 3,
-    InvalidIFUnstakeCancel = 4,
-    InvalidIFForNewStakes = 5,
+    // InvalidIFUnstakeCancel = 4,
+    // InvalidIFForNewStakes = 5,
     InvalidIFRebase = 6,
     InvalidInsuranceUnstakeSize = 7,
     // InsuranceFundOperationPaused = 8,
@@ -26,6 +26,8 @@ pub enum InsuranceFundError {
     InsufficientCollateral = 18,
     InvalidIFDetected = 19,
     TooMuchInsurance = 20,
+    
+    InvalidOptimalUtilization = 21,
 
     FundDepositKilled = 30,
     FundRequestWithdrawKilled = 31,
