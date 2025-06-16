@@ -57,7 +57,8 @@ pub fn update_twap(
     historical_oracle_data: &HistoricalOracleData,
     oracle_price_data: &OraclePriceData,
     sanitize_clamp_denominator: i64,
-    now: u64
+    now: u64,
+    registering: bool
 ) {
     let capped_oracle_update_price = sanitize_new_price(
         e,
@@ -65,6 +66,7 @@ pub fn update_twap(
         historical_oracle_data.last_oracle_price_twap,
         sanitize_clamp_denominator
     );
+    log!(e, "capped_oracle_update_price", capped_oracle_update_price);
 
     let oracle_price_twap = calculate_new_twap(
         e,
@@ -74,9 +76,14 @@ pub fn update_twap(
         historical_oracle_data.last_oracle_price_twap_ts,
         FIVE_MINUTE as u64
     );
+    log!(e, "oracle_price_twap", oracle_price_twap);
 
     let new_historical_oracle_data = HistoricalOracleData {
-        last_oracle_price_twap: oracle_price_twap,
+        last_oracle_price_twap: if registering {
+            0
+        } else {
+            oracle_price_twap
+        },
         last_oracle_price: oracle_price_data.price,
         last_oracle_delay: oracle_price_data.delay,
         last_oracle_price_twap_ts: now,
@@ -188,16 +195,20 @@ pub fn oracle_validity(
     last_oracle_twap: u128,
     oracle_price_data: &OraclePriceData
 ) -> OracleValidity {
-    let OraclePriceData { price: oracle_price, delay: oracle_delay, .. } = *oracle_price_data;
+    let OraclePriceData { price: oracle_price, delay: oracle_delay } = *oracle_price_data;
 
     let oracle_guard_rails = get_oracle_guard_rails(e);
 
     let is_oracle_price_nonpositive = oracle_price <= 0;
+    log!(e, "price", oracle_price);
+
+    log!(e, "twap", last_oracle_twap);
 
     let is_oracle_price_too_volatile = oracle_price
         .max(last_oracle_twap)
         .safe_div(e, last_oracle_twap.min(oracle_price).max(1))
         .gt(&(oracle_guard_rails.validity.too_volatile_ratio as u128));
+    log!(e, "is_oracle_price_too_volatile", is_oracle_price_too_volatile);
 
     let is_stale_for_pool = oracle_delay.gt(
         &oracle_guard_rails.validity.slots_before_stale_for_pool

@@ -83,7 +83,8 @@ impl OracleRegistryTrait for OracleRegistry {
             &historical_oracle_data,
             &oracle_price_data,
             oracle.sanitize_clamp_denominator,
-            now
+            now,
+            false
         );
 
         oracle_price_data
@@ -242,21 +243,17 @@ impl AdminInterface for OracleRegistry {
         admin.require_auth();
         require_admin(&e, &admin);
 
-        if get_oracle_base(&e, &asset_id).is_none() {
-            panic_with_error!(&e, OracleRegistryError::OracleNotRegistered);
+        if get_oracle_base(&e, &asset_id).is_some() {
+            panic_with_error!(&e, OracleRegistryError::OracleAlreadyRegistered);
         }
 
         let now = e.ledger().timestamp();
         let oracle_price_data = get_oracle_price(&e, &oracle_addr, &asset, now);
 
         // Check oracle validity
-        let historical_oracle_data = get_historical_oracle_data(&e, &asset_id);
         let oracle_is_valid =
-            oracle_validity(
-                &e,
-                historical_oracle_data.last_oracle_price_twap,
-                &oracle_price_data
-            ) == OracleValidity::Valid;
+            oracle_validity(&e, oracle_price_data.price, &oracle_price_data) ==
+            OracleValidity::Valid;
 
         if !oracle_is_valid {
             panic_with_error!(&e, OracleRegistryError::OracleInvalid);
@@ -265,10 +262,11 @@ impl AdminInterface for OracleRegistry {
         update_twap(
             &e,
             &asset_id,
-            &historical_oracle_data,
+            &get_historical_oracle_data(&e, &asset_id),
             &oracle_price_data,
             sanitize_clamp_denominator,
-            now
+            now,
+            true
         );
 
         let oracle = OracleInfo {
@@ -384,7 +382,8 @@ impl AdminInterface for OracleRegistry {
             &historical_oracle_data,
             &(OraclePriceData { price: price, delay: 0 }),
             oracle.sanitize_clamp_denominator,
-            now
+            now,
+            false
         );
     }
 
