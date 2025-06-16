@@ -8,7 +8,7 @@ mod oracle;
 mod storage;
 mod storage_types;
 mod test;
-// mod test_permissions;
+mod test_permissions;
 mod testutils;
 
 pub use contract::{ OracleRegistry, OracleRegistryClient };

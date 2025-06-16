@@ -9,7 +9,7 @@ pub enum OracleRegistryError {
     NotAuthorized = 16,
     AdminNotSet = 17,
     InvalidPrice = 18,
-    OracleExists = 19,
+    OracleNotRegistered = 19,
     PriceOverrideLimitExceeded = 20,
     OracleNotFound = 21,
     OracleFrozen = 22,

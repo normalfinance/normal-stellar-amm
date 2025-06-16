@@ -71,8 +71,7 @@ pub fn deploy_pool(
     lp_token_symbol: &String,
     fee_fraction: u32,
     tier: &PoolTier,
-    quote_max_insurance: u128,
-    oracle_registry: &Address
+    quote_max_insurance: u128
 ) -> (BytesN<32>, Address) {
     let tokens_salt = get_tokens_salt(e, tokens);
     let pool_wasm_hash = get_constant_product_pool_hash(e);
@@ -99,8 +98,7 @@ pub fn deploy_pool(
         lp_token_symbol,
         fee_fraction,
         tier,
-        quote_max_insurance,
-        oracle_registry
+        quote_max_insurance
     );
 
     add_tokens_set(e, tokens);
@@ -134,8 +132,7 @@ fn init_pool(
     lp_token_symbol: &String,
     fee_fraction: u32,
     tier: &PoolTier,
-    quote_max_insurance: u128,
-    oracle_registry: &Address
+    quote_max_insurance: u128
 ) {
     let token_wasm_hash = get_token_hash(e);
     let incentives = get_incentives_manager(e);
@@ -178,8 +175,7 @@ fn init_pool(
             },
             fee_fraction,
             tier: tier.clone(),
-            quote_max_insurance,
-            oracle_registry: oracle_registry.clone(),
+            quote_max_insurance
         },
         reward_config: RewardConfig { reward_token },
         plane,

@@ -14,7 +14,6 @@ use soroban_sdk::{ testutils::Address as _, Address, BytesN, Env, Symbol, Vec };
 use utils::storage::{
     InitializeAllParams,
     InitializeParams,
-    OraclePair,
     PoolTier,
     PrivilegedAddresses,
     RewardConfig,

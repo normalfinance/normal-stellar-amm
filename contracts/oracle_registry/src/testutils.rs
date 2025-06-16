@@ -1,25 +1,25 @@
 #![cfg(test)]
 extern crate std;
-use crate::storage_types::OracleGuardRails;
+use crate::storage_types::{ OracleGuardRails, PriceDivergenceGuardRails, ValidityGuardRails };
 use crate::OracleRegistryClient;
 use sep_40_oracle::testutils::{ Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM };
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::token::{
-    StellarAssetClient as SorobanTokenAdminClient,
-    TokenClient as SorobanTokenClient,
-};
+
 use soroban_sdk::{ Address, BytesN, Env, String, Symbol, Vec };
-use utils::storage::{ OraclePair };
-use utils::test_utils::{ create_token_contract, get_token_admin_client, setup_oracle_registry };
+use utils::constant::PERCENTAGE_PRECISION_U64;
+use std::vec;
 
 pub(crate) struct TestConfig {
-    pub(crate) default_oracle_guardrails: OracleGuardRails,
+    pub(crate) users_count: u32,
+    pub(crate) oracle_guard_rails: OracleGuardRails,
+    pub(crate) price_override_limit: u128,
 }
 
 impl Default for TestConfig {
     fn default() -> Self {
         TestConfig {
-            default_oracle_guardrails: OracleGuardRails {
+            users_count: 3,
+            oracle_guard_rails: OracleGuardRails {
                 price_divergence: PriceDivergenceGuardRails {
                     oracle_twap_percent_divergence: PERCENTAGE_PRECISION_U64 / 2,
                 },
@@ -29,6 +29,7 @@ impl Default for TestConfig {
                     too_volatile_ratio: 5, // 5x or 80% down
                 },
             },
+            price_override_limit: 100,
         }
     }
 }
@@ -38,10 +39,12 @@ pub(crate) struct Setup<'a> {
 
     // addresses
     pub(crate) admin: Address,
-    pub(crate) user: Address,
+    pub(crate) emergency_admin: Address,
+    pub(crate) users: vec::Vec<Address>,
+    pub(crate) USDC: Address,
 
     // contracts
-    pub(crate) oracle_registry: OracleRegistryClient<'a>, // oracle_registry::Client<'a>,
+    pub(crate) registry: OracleRegistryClient<'a>,
 
     // oracles
     pub(crate) asset_id: Symbol,
@@ -72,12 +75,22 @@ impl Setup<'_> {
         e.mock_all_auths();
         e.cost_estimate().budget().reset_unlimited();
 
-        let admin = Address::generate(&e);
-        let user = Address::generate(&e);
+        let users = Self::generate_random_users(&e, config.users_count);
+        let admin = users[0].clone();
+        let emergency_admin = Address::generate(&e);
 
-        let token = create_token_contract(&e, &admin);
+        // tokens
+        let USDC = Address::generate(&e);
 
-        let oracle_registry = setup_oracle_registry(&e, &admin, &Address::generate(&e));
+        let registry = create_oracle_registry_contract(&e);
+        registry.initialize(&admin, &emergency_admin);
+        registry.register_oracle(
+            &admin,
+            &Symbol::new(e, "BTC"),
+            &e.register(pool_router::WASM, ()), // MockPriceOracleWASM
+            asset,
+            &7
+        );
 
         // register oracle
         let oracle_client = MockPriceOracleClient::new(&e, &Address::generate(&e));
@@ -97,13 +110,43 @@ impl Setup<'_> {
         Self {
             env: e,
             admin,
-            user,
-            oracle_registry,
+            emergency_admin,
+            users,
+            USDC,
+            registry,
             asset_id: Symbol::new(&e, "BTC"),
             unregistered_asset_id: Symbol::new(&e, "ETH"),
             oracle_client,
-            oracle_guardrails: config.default_oracle_guardrails,
+            oracle_guardrails: config.oracle_guard_rails,
             initial_oracle_price,
         }
     }
+
+    pub(crate) fn generate_random_users(e: &Env, users_count: u32) -> vec::Vec<Address> {
+        let mut users = vec![];
+        for _c in 0..users_count {
+            users.push(Address::generate(e));
+        }
+        users
+    }
+}
+
+pub(crate) fn update_oracle_price(setup: &Setup, oracle: &Address, new_price: u128, now: &u64) {
+    let client = MockPriceOracleClient::new(&setup.env, oracle);
+    client.set_data(
+        &setup.admin,
+        &MockAsset::Stellar(setup.USDC.clone()),
+        &Vec::from_array(&setup.env, [MockAsset::Other(setup.asset_id.clone())]),
+        &7,
+        &(5 * 60 * 60)
+    );
+    client.set_price(&Vec::from_array(&setup.env, [new_price as i128]), now);
+}
+
+pub mod oracle_registry {
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/oracle_registry.wasm");
+}
+
+pub fn create_oracle_registry_contract<'a>(e: &Env) -> OracleRegistryClient<'a> {
+    OracleRegistryClient::new(e, &e.register(crate::OracleRegistry, ()))
 }

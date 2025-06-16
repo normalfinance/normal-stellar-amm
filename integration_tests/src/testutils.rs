@@ -8,7 +8,7 @@ use soroban_sdk::token::{
     TokenClient as SorobanTokenClient,
 };
 use soroban_sdk::{ Address, BytesN, Env, String, Symbol, Vec };
-use utils::storage::{ OraclePair, PoolTier };
+use utils::storage::{ PoolTier };
 
 pub(crate) struct Setup<'a> {
     pub(crate) env: Env,

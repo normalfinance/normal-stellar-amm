@@ -37,6 +37,9 @@ pub trait AdminInterface {
     // Set the Buffer
     fn set_buffer(e: Env, admin: Address, buffer: Address);
 
+    //
+    fn set_insurance_fund(e: Env, admin: Address, insurance_fund: Address);
+
     // Set the Fee Collector
     fn set_fee_destination(e: Env, admin: Address, fee_destination: Address);
 
@@ -57,13 +60,4 @@ pub trait AdminInterface {
 
     // Claim swap fees and send to the fee destination
     fn claim_fees(e: Env, admin: Address, token: Address) -> u128;
-
-    // Claim swap fees, swap them to the token, and send to the fee destination
-    fn claim_fees_and_swap(
-        e: Env,
-        admin: Address,
-        swap: (Vec<Address>, BytesN<32>, Address),
-        token: Address,
-        out_min: u128
-    ) -> u128;
 }

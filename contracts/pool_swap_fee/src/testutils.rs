@@ -82,7 +82,7 @@ impl Setup<'_> {
         let plane = deploy_plane_contract(&e);
 
         let oracle_registry = setup_oracle_registry(&e, &admin, &asset);
-        let router = setup_pool_router(&e, &admin);
+        let router = deploy_pool_router_contract(&e);
         let fee_collector = setup_fee_collector(
             &e,
             &admin,
@@ -124,7 +124,28 @@ impl Setup<'_> {
     }
 }
 
-fn deploy_plane_contract<'a>(e: &Env) -> Address {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/pool_plane.wasm");
-    Client::new(e, &e.register(WASM, ())).address
+pub mod pool {
+    soroban_sdk::contractimport!(file = "../target/wasm32v1-none/release/pool.wasm");
+}
+
+pub fn create_contract<'a>(
+    e: &Env,
+    router: &Address,
+    operator: &Address,
+    fee_destination: &Address,
+    swap_fee: u32
+) -> ProviderSwapFeeCollectorClient<'a> {
+    let contract = ProviderSwapFeeCollectorClient::new(
+        e,
+        &e.register(crate::ProviderSwapFeeCollector, (router, operator, fee_destination, swap_fee))
+    );
+    contract
+}
+
+pub mod pool_router {
+    soroban_sdk::contractimport!(file = "../target/wasm32v1-none/release/pool_router.wasm");
+}
+
+fn deploy_pool_router_contract<'a>(e: Env) -> pool_router::Client<'a> {
+    pool_router::Client::new(&e, &e.register(pool_router::WASM, ()))
 }

@@ -71,13 +71,6 @@ pub struct PrivilegedAddresses {
 
 #[contracttype]
 #[derive(Clone)]
-pub struct OraclePair {
-    pub base_oracle: Address,
-    pub quote_oracle: Address,
-}
-
-#[contracttype]
-#[derive(Clone)]
 pub struct RewardConfig {
     // The address of the reward token.
     pub reward_token: Address,
@@ -91,8 +84,6 @@ pub struct InitializeParams {
     pub privileged_addrs: PrivilegedAddresses,
     // The address of the Router.
     pub router: Address,
-    // The address of the Oracle Registry.
-    pub oracle_registry: Address,
     // The
     pub base_asset_id: Symbol,
     //
@@ -168,9 +159,30 @@ pub struct PoolInfo {
 #[derive(Clone, Debug)]
 #[contracttype]
 pub struct OracleInfo {
-    pub oracle_address: Address,
+    pub address: Address,
     pub asset: Address,
-    pub decimals: u32, // Optional: for price normalization
+    pub decimals: u32,
     pub frozen: bool,
+    pub sanitize_clamp_denominator: Option<i64>,
     pub last_updated: u64,
+}
+
+#[derive(Clone, Debug)]
+#[contracttype]
+pub struct MutableOracleInfo {
+    pub address: Option<Address>,
+    pub decimals: Option<u32>,
+    pub frozen: Option<bool>,
+    pub sanitize_clamp_denominator: Option<i64>,
+}
+
+impl MutableOracleInfo {
+    pub fn new() -> Self {
+        MutableOracleInfo {
+            address: None,
+            decimals: None,
+            frozen: None,
+            sanitize_clamp_denominator: None,
+        }
+    }
 }

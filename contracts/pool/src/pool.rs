@@ -7,11 +7,11 @@ use crate::events::PoolEvents;
 use crate::storage::get_last_oracle_valid;
 use crate::storage::get_last_trade_ts;
 use crate::storage::get_last_update_ts;
-use crate::storage::get_oracle_registry;
+use crate::storage::get_router;
 use crate::storage::get_volume_24h;
 use crate::storage::set_last_trade_ts;
 use crate::storage::set_volume_24h;
-use crate::storage::{ get_reserve_a, get_reserve_b, put_reserve_a };
+use crate::storage::{ get_reserve_a, get_reserve_b, set_reserve_a };
 use pool_tokens::{ burn_synthetic_tokens, get_total_synthetic_tokens, mint_synthetic_tokens };
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::contracttype;
@@ -87,6 +87,17 @@ impl Pool {
             PoolTier::Speculative => None, // DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR
             PoolTier::HighlySpeculative => None, // DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR
             PoolTier::Isolated => None, // DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR
+        }
+    }
+
+    pub fn get_insurance_coverage_multiplier(&self) -> u64 {
+        match self.tier {
+            PoolTier::A => 10_u64, // 10%
+            PoolTier::B => 5_u64, // 20%
+            PoolTier::C => 2_u64, // 50%
+            PoolTier::Speculative => 10_u64,
+            PoolTier::HighlySpeculative => 10_u64,
+            PoolTier::Isolated => 10_u64,
         }
     }
 
@@ -183,7 +194,7 @@ impl Pool {
 
     pub fn get_oracle_price(&self, e: Env, asset_id: Symbol, now: u64) -> OraclePriceData {
         let oracle_price_data: OraclePriceData = e.invoke_contract(
-            &get_oracle_registry(&e),
+            &get_router(&e),
             &Symbol::new(&e, "get_price"),
             Vec::from_array(&e, [
                 e.current_contract_address().to_val(),
@@ -254,11 +265,11 @@ impl Pool {
 
         if delta_a > 0 {
             mint_synthetic_tokens(&e, &e.current_contract_address(), delta_a);
-            put_reserve_a(&e, reserve_a + (delta_a as u128));
+            set_reserve_a(&e, &(reserve_a + (delta_a as u128)));
         }
         if delta_a < 0 {
             burn_synthetic_tokens(&e, &e.current_contract_address(), delta_a.abs() as u128);
-            put_reserve_a(&e, reserve_a - (delta_a.abs() as u128));
+            set_reserve_a(&e, &(reserve_a - (delta_a.abs() as u128)));
         }
 
         LiquidityPoolEvents::new(&e).rebalance(delta_a, now);

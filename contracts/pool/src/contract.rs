@@ -18,20 +18,18 @@ use crate::storage::{
     get_is_killed_deposit,
     get_is_killed_swap,
     get_is_killed_withdraw,
-    get_oracle_registry,
     get_pool,
     get_reserve_a,
     get_reserve_b,
     get_router,
     get_token_future_wasm,
-    put_reserve_a,
-    put_reserve_b,
     set_is_killed_claim,
     set_is_killed_deposit,
     set_is_killed_swap,
     set_is_killed_withdraw,
-    set_oracle_registry,
     set_pool,
+    set_reserve_a,
+    set_reserve_b,
     set_router,
     set_token_future_wasm,
 };
@@ -168,7 +166,6 @@ impl PoolTrait for Pool {
         );
 
         set_router(&e, &params.router);
-        set_oracle_registry(&e, &params.oracle_registry);
 
         // TODO: validate oracle asset ids
 
@@ -200,8 +197,6 @@ impl PoolTrait for Pool {
 
         put_token_lp(&e, share_contract);
         put_token_synthetic(&e, token_a.clone());
-        put_reserve_a(&e, 0);
-        put_reserve_b(&e, 0);
 
         let pool = PoolType {
             asset: params.asset,
@@ -298,7 +293,7 @@ impl PoolTrait for Pool {
         );
 
         // Increase reserves
-        put_reserve_b(&e, reserve_b + token_b_amount);
+        set_reserve_b(&e, &(reserve_b + token_b_amount));
 
         // Rebalance the pool
         let base_oracle_price_data = pool.get_oracle_price(
@@ -424,9 +419,9 @@ impl PoolTrait for Pool {
         sell_token_client.transfer(&user, &e.current_contract_address(), &(in_amount as i128));
 
         if in_idx == 0 {
-            put_reserve_a(&e, reserve_a + in_amount);
+            set_reserve_a(&e, &(reserve_a + in_amount));
         } else {
-            put_reserve_b(&e, reserve_b + in_amount);
+            set_reserve_b(&e, &(reserve_b + in_amount));
         }
 
         let (new_reserve_a, new_reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
@@ -466,11 +461,11 @@ impl PoolTrait for Pool {
 
         if out_idx == 0 {
             transfer_a(&e, &user, out_a);
-            put_reserve_a(&e, reserve_a - out);
+            set_reserve_a(&e, &(reserve_a - out));
             pool.update_volume_24h(&e, in_amount, now);
         } else {
             transfer_b(&e, &user, out_b);
-            put_reserve_b(&e, reserve_b - out);
+            set_reserve_b(&e, &(reserve_b - out));
             pool.update_volume_24h(&e, out_b, now);
         }
 
@@ -627,9 +622,9 @@ impl PoolTrait for Pool {
         );
 
         if in_idx == 0 {
-            put_reserve_a(&e, reserve_a + in_amount);
+            set_reserve_a(&e, &(reserve_a + in_amount));
         } else {
-            put_reserve_b(&e, reserve_b + in_amount);
+            set_reserve_b(&e, &(reserve_b + in_amount));
         }
 
         let (new_reserve_a, new_reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
@@ -669,10 +664,10 @@ impl PoolTrait for Pool {
 
         if out_idx == 0 {
             transfer_a(&e, &user, out_a);
-            put_reserve_a(&e, reserve_a - out_amount);
+            set_reserve_a(&e, &(reserve_a - out_amount));
         } else {
             transfer_b(&e, &user, out_b);
-            put_reserve_b(&e, reserve_b - out_amount);
+            set_reserve_b(&e, &(reserve_b - out_amount));
         }
 
         LiquidityPoolEvents::new(&e).trade(
@@ -762,7 +757,7 @@ impl PoolTrait for Pool {
 
         // Transfer any remaining to the user
         transfer_b(&e, &user, share_amount);
-        put_reserve_b(&e, reserve_b - share_amount);
+        set_reserve_b(&e, &(reserve_b - share_amount));
 
         // Rebalance the pool
         let pool = get_pool(&e);
@@ -811,6 +806,11 @@ impl PoolTrait for Pool {
         // returns fee fraction. 0.01% = 1; 1% = 100; 0.3% = 30
         let pool = get_pool(&e);
         pool.fee_fraction
+    }
+
+    fn get_insurance_coverage(e: Env) -> u128 {
+        let pool = get_pool(&e);
+        pool.insurance_claim.quote_max_insurance
     }
 
     // Returns information about the pool.
@@ -984,7 +984,7 @@ impl AdminInterfaceTrait for Pool {
         pool.rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
     }
 
-    fn get_pay_from_insurance(e: Env, sender: Address, insurance_vault_amount: u128) -> u128 {
+    fn pay_insurance_claim(e: Env, sender: Address, insurance_vault_amount: u128) -> u128 {
         // check pool has liquidity deficit
 
         let now = e.ledger().timestamp();
@@ -1060,13 +1060,7 @@ impl AdminInterfaceTrait for Pool {
 
         pool.insurance_claim.last_revenue_withdraw_ts = now;
 
-        insurance_withdraw
-    }
-
-    fn pay_insurance_claim(e: Env, sender: Address, amount: u128) -> u128 {
-        sender.require_auth();
-
-        let pool = get_pool(&e);
+        // DO IT
 
         // Deposit token_b from Insurance Fund to Pool
         transfer_token(
@@ -1074,14 +1068,17 @@ impl AdminInterfaceTrait for Pool {
             &pool.token_b,
             &sender,
             &e.current_contract_address(),
-            &(amount as i128)
+            &(insurance_withdraw as i128)
         );
 
         // Update the reserves
         let reserve_b = get_reserve_b(&e);
-        put_reserve_b(&e, reserve_b + amount);
+        set_reserve_b(&e, &(reserve_b + insurance_withdraw));
 
-        amount
+        // Rebalance
+        pool.rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
+
+        insurance_withdraw
     }
 
     // Stops the pool deposits instantly.

@@ -23,6 +23,9 @@ pub trait PoolInterfaceTrait {
     // Fee fraction getter. 1 = 0.01%
     fn get_fee_fraction(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u32;
 
+    // Insurance Claim - Max quote insurance getter.
+    fn get_insurance_coverage(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
+
     // Deposit coins into the pool.
     // desired_amounts: List of amounts of coins to deposit
     // Returns amounts deposited and the amount of LP tokens received in exchange for the deposited tokens.
@@ -212,8 +215,7 @@ pub trait PoolsManagementTrait {
         lp_token_info: (String, String),
         fee_fraction: u32,
         tier: PoolTier,
-        quote_max_insurance: u128,
-        oracle_registry: Address
+        quote_max_insurance: u128
     ) -> (BytesN<32>, Address);
 
     // Get all pools addresses

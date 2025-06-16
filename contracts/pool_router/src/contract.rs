@@ -196,6 +196,12 @@ impl PoolInterfaceTrait for PoolRouter {
         e.invoke_contract(&pool_id, &Symbol::new(&e, "get_fee_fraction"), Vec::new(&e))
     }
 
+    fn get_insurance_coverage(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
+        e.invoke_contract(&pool_id, &Symbol::new(&e, "get_insurance_coverage"), Vec::new(&e))
+    }
+
     // Deposits tokens into the pool.
     //
     // # Arguments
@@ -1078,8 +1084,7 @@ impl PoolsManagementTrait for PoolRouter {
         lp_token_info: (String, String),
         fee_fraction: u32,
         tier: PoolTier,
-        quote_max_insurance: u128,
-        oracle_registry: Address
+        quote_max_insurance: u128
     ) -> (BytesN<32>, Address) {
         user.require_auth();
 
@@ -1104,8 +1109,7 @@ impl PoolsManagementTrait for PoolRouter {
                     &lp_token_info.1,
                     fee_fraction,
                     &tier,
-                    quote_max_insurance,
-                    &oracle_registry
+                    quote_max_insurance
                 ),
         }
     }

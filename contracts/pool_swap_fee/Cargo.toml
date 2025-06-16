@@ -16,6 +16,7 @@ access_control = { workspace = true }
 incentives = { workspace = true }
 pool_tokens = { workspace = true }
 upgrade = { workspace = true }
+soroban-fixed-point-math = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

@@ -925,6 +925,7 @@ dependencies = [
  "paste",
  "pool_tokens",
  "sep-40-oracle",
+ "soroban-fixed-point-math",
  "soroban-sdk",
  "upgrade",
  "utils",

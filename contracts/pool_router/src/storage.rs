@@ -67,6 +67,7 @@ enum DataKey {
     PoolCounter,
     PoolPlane,
     LiquidityCalculator,
+    OracleRegistry, // the address of the Oracle Registry contract.
 
     // Temporary storage
     RewardsConfig, // Global reward config
@@ -135,6 +136,7 @@ generate_instance_storage_getter_and_setter!(
     DataKey::LiquidityCalculator,
     Address
 );
+generate_instance_storage_getter_and_setter!(oracle_registry, DataKey::OracleRegistry, Address);
 
 pub fn get_rewards_config(e: &Env) -> GlobalRewardsConfig {
     match e.storage().temporary().get(&DataKey::RewardsConfig) {

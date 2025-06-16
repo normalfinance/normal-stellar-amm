@@ -1,7 +1,10 @@
+use core::cmp::max;
+
 use crate::errors::Error;
 use crate::events::{ Events, ProviderFeeEvents };
 use crate::interface::{ AdminInterface, PoolSwapFeeInterface };
 use crate::incentives::get_incentives_manager;
+use soroban_fixed_point_math::FixedPoint;
 use access_control::access::{ AccessControl, AccessControlTrait };
 use access_control::emergency::{ get_emergency_mode, set_emergency_mode };
 use access_control::errors::AccessControlError;
@@ -17,16 +20,22 @@ use access_control::utils::{
 };
 use pool_tokens::{ get_total_lp_tokens, get_user_balance_lp };
 use utils::math::safe_math::SafeMath;
+use utils::math::stats::calculate_rolling_sum;
 use crate::storage::{
     get_buffer,
     get_buffer_fraction,
     get_fee_destination,
+    get_insurance_fund,
+    get_last_trade_ts,
     get_lp_revenue_fraction,
     get_router,
+    get_volume_30d,
     set_buffer,
     set_buffer_fraction,
     set_fee_destination,
+    set_insurance_fund,
     set_router,
+    set_volume_30d,
 };
 use soroban_sdk::auth::{ ContractContext, InvokerContractAuthEntry, SubContractInvocation };
 use soroban_sdk::token::Client as SorobanTokenClient;
@@ -45,7 +54,7 @@ use soroban_sdk::{
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
-use utils::constant::{ FEE_DENOMINATOR, PRICE_PRECISION };
+use utils::constant::{ FEE_DENOMINATOR, PRICE_PRECISION, PRICE_PRECISION_I128, THIRTY_DAY };
 use utils::token::transfer_token;
 
 #[contract]
@@ -79,9 +88,34 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
     ) -> u128 {
         user.require_auth();
 
+        let now = e.ledger().timestamp();
+
         transfer_token(&e, &token_in, &user, &e.current_contract_address(), &(in_amount as i128));
 
+        // Fetch the pool's fee fraction
         let router = get_router(&e);
+        let pool_fee_fraction: u32 = e.invoke_contract(
+            &router,
+            &Symbol::new(&e, "get_fee_fraction"),
+            Vec::from_array(&e, [
+                e.current_contract_address().to_val(),
+                tokens.clone().to_val(),
+                pool_index.clone().to_val(),
+            ])
+        );
+
+        // Always collect the fee in token_b
+        let fee_amount = 0;
+        let quote_asset_amount;
+
+        // Update fee if on token_in
+        let selling_token_b = token_in == tokens.get(1).unwrap();
+        if selling_token_b {
+            quote_asset_amount = in_amount;
+            fee_amount = (in_amount * (pool_fee_fraction as u128)) / (FEE_DENOMINATOR as u128);
+            in_amount = in_amount - fee_amount;
+        }
+
         e.authorize_as_current_contract(
             vec![
                 &e,
@@ -111,21 +145,17 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
             ])
         );
 
-        let pool_fee_fraction: u32 = e.invoke_contract(
-            &router,
-            &Symbol::new(&e, "get_fee_fraction"),
-            Vec::from_array(&e, [
-                e.current_contract_address().to_val(),
-                tokens.clone().to_val(),
-                pool_index.clone().to_val(),
-            ])
-        );
-
-        let fee_amount = (amount_out * (pool_fee_fraction as u128)) / (FEE_DENOMINATOR as u128);
-        let amount_out_w_fee = amount_out - fee_amount;
-        if amount_out_w_fee < out_min {
-            panic_with_error!(&e, Error::OutMinNotSatisfied);
+        // Update fee if on token_out
+        if !selling_token_b {
+            quote_asset_amount = amount_out;
+            fee_amount = (amount_out * (pool_fee_fraction as u128)) / (FEE_DENOMINATOR as u128);
+            let amount_out_w_fee = amount_out - fee_amount;
+            if amount_out_w_fee < out_min {
+                panic_with_error!(&e, Error::OutMinNotSatisfied);
+            }
         }
+
+        // Send token_out to the user
         transfer_token(
             &e,
             &token_out,
@@ -133,16 +163,27 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
             &user,
             &(amount_out_w_fee as i128)
         );
-        Events::new(&e).charge_provider_fee(token_out.clone(), fee_amount);
 
-        //
+        // UPDATE METRICS
+        let volume_30d = get_volume_30d(&e);
+        let since_last = max(1_u64, now.safe_sub(&e, get_last_trade_ts(&e)));
+        let updated_volume_30d = calculate_rolling_sum(
+            &e,
+            volume_30d,
+            quote_asset_amount,
+            since_last,
+            THIRTY_DAY
+        );
+        set_volume_30d(&e, &updated_volume_30d);
+
+        // LP FEES
         let lp_revenue_fraction = get_lp_revenue_fraction(&e);
         let lp_fee_amount =
             (fee_amount * (lp_revenue_fraction as u128)) / (FEE_DENOMINATOR as u128);
 
-        // Deposit portion of swap fee to the Buffer
         let protocol_fee_amount = fee_amount.safe_sub(&e, lp_fee_amount);
 
+        // BUFFER
         let buffer_fraction = get_buffer_fraction(&e);
         let fee_amount_for_buffer = (protocol_fee_amount * (buffer_fraction as u128)) / 10_000_u128;
         let buffer = get_buffer(&e);
@@ -174,9 +215,61 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
             ])
         );
 
-        Events::new(&e).settle_revenue(token_out, fee_amount_for_buffer as u128);
+        protocol_fee_amount = protocol_fee_amount - fee_amount_for_buffer;
+        Events::new(&e).buffer_deposit(token_out, fee_amount_for_buffer as u128);
 
-        let remaining_fee = protocol_fee_amount.safe_sub(&e, fee_amount_for_buffer);
+        // INSURANCE FUND
+        let insurance_fund = get_insurance_fund(&e);
+        let insurance_premium_rate: i32 = e.invoke_contract(
+            &insurance_fund,
+            &Symbol::new(&e, "get_rate"),
+            Vec::from_array(&e, [e.current_contract_address().to_val()])
+        );
+        let pool_insurance_coverage: u128 = e.invoke_contract(
+            &router,
+            &Symbol::new(&e, "get_insurance_coverage"),
+            Vec::from_array(&e, [
+                e.current_contract_address().to_val(),
+                tokens.clone().to_val(),
+                pool_index.clone().to_val(),
+            ])
+        );
+
+        if insurance_premium_rate > 0 {
+            let estimated_annual_volume = updated_volume_30d.fixed_mul_floor(365, 30).unwrap();
+
+            let total_annual_premium = pool_insurance_coverage
+                .fixed_mul_floor(insurance_premium_rate as u128, PRICE_PRECISION)
+                .unwrap();
+            let premium_per_dollar_swapped = total_annual_premium.safe_div(
+                &e,
+                estimated_annual_volume
+            );
+            // Lesser of premium or what's left of protocol fee
+            let insurance_premium_to_pay = quote_asset_amount
+                .safe_mul(&e, premium_per_dollar_swapped)
+                .min(protocol_fee_amount);
+
+            if insurance_premium_to_pay > 0 {
+                // TODO: must we also call the Pool to update last_revenue_withdraw_ts and rev_withdraw_since_last_settle?
+
+                let premium_paid: u128 = e.invoke_contract(
+                    &insurance_fund,
+                    &Symbol::new(&e, "pay_premium"),
+                    Vec::from_array(&e, [
+                        e.current_contract_address().to_val(),
+                        insurance_premium_to_pay.into_val(&e),
+                    ])
+                );
+
+                protocol_fee_amount = protocol_fee_amount - insurance_premium_to_pay;
+                Events::new(&e).insurance_premium(token_out, insurance_premium_to_pay);
+            }
+        }
+
+        Events::new(&e).charge_provider_fee(token_out.clone(), protocol_fee_amount);
+
+        // INCENTIVES
 
         // Update total incentives data and refresh/initialize user incentive
         let out_idx = 0;
@@ -203,7 +296,7 @@ impl AdminInterface for PoolSwapFeeCollector {
     // * `admin` - The address of the admin user.
     fn init_admin(e: Env, admin: Address) {
         admin.require_auth();
-        
+
         let access_control = AccessControl::new(&e);
         if access_control.get_role_safe(&Role::Admin).is_some() {
             panic_with_error!(&e, AccessControlError::AdminAlreadySet);
@@ -237,6 +330,20 @@ impl AdminInterface for PoolSwapFeeCollector {
         access_control.assert_address_has_role(&admin, &Role::Admin);
 
         set_buffer(&e, &buffer);
+    }
+
+    // Sets the insurance fund address.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `insurance_fund` - The address of the Buffer contract.
+    fn set_insurance_fund(e: Env, admin: Address, insurance_fund: Address) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, &Role::Admin);
+
+        set_insurance_fund(&e, &insurance_fund);
     }
 
     // Sets the fee destination address.
@@ -327,6 +434,7 @@ impl AdminInterface for PoolSwapFeeCollector {
 
         let token_client = SorobanTokenClient::new(&e, &token);
         let amount = token_client.balance(&e.current_contract_address());
+
         transfer_token(
             &e,
             &token,
@@ -336,73 +444,6 @@ impl AdminInterface for PoolSwapFeeCollector {
         );
         Events::new(&e).claim_fee(token.clone(), amount as u128, token, amount as u128);
         amount as u128
-    }
-
-    // claim_fees_and_swap
-    // Claims fees and swaps them immediately using the router.
-    //
-    // Arguments:
-    //   - e: The Soroban environment.
-    //   - admin: The address calling for the fee claim and swap (must match the stored operator).
-    //   - swap: A vector describing the swap path; each element is a tuple of (intermediate token addresses, function hash, output token address).
-    //   - token: The token for which fees are claimed.
-    //   - out_min: The minimum acceptable output amount from the swap.
-    //   - to: The destination address for the swapped tokens.
-    //
-    // Returns:
-    //   - A u128 value representing the output token amount received after the swap.
-    fn claim_fees_and_swap(
-        e: Env,
-        admin: Address,
-        swap: (Vec<Address>, BytesN<32>, Address),
-        token: Address,
-        out_min: u128
-    ) -> u128 {
-        admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.assert_address_has_role(&admin, &Role::Admin);
-
-        let (_, _, token_out) = swap.clone();
-        let router = get_router(&e);
-        let token_client = SorobanTokenClient::new(&e, &token);
-        let amount = token_client.balance(&e.current_contract_address()) as u128;
-        e.authorize_as_current_contract(
-            vec![
-                &e,
-                InvokerContractAuthEntry::Contract(SubContractInvocation {
-                    context: ContractContext {
-                        contract: token.clone(),
-                        fn_name: Symbol::new(&e, "transfer"),
-                        args: (
-                            e.current_contract_address(),
-                            router.clone(),
-                            amount as i128,
-                        ).into_val(&e),
-                    },
-                    sub_invocations: vec![&e],
-                })
-            ]
-        );
-        let out_amount: u128 = e.invoke_contract(
-            &get_router(&e),
-            &Symbol::new(&e, "swap"),
-            Vec::from_array(&e, [
-                e.current_contract_address().to_val(),
-                swap.into_val(&e),
-                token.clone().to_val(),
-                amount.into_val(&e),
-                out_min.into_val(&e),
-            ])
-        );
-        transfer_token(
-            &e,
-            &token_out,
-            &e.current_contract_address(),
-            &get_fee_destination(&e),
-            &(out_amount as i128)
-        );
-        Events::new(&e).claim_fee(token, amount, token_out, out_amount);
-        out_amount
     }
 }
 

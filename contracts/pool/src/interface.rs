@@ -73,6 +73,9 @@ pub trait PoolTrait {
     // Fee fraction getter. 1 = 0.01%
     fn get_fee_fraction(e: Env) -> u32;
 
+    // Insurance Claim - Max quote insurance getter.
+    fn get_insurance_coverage(e: Env) -> u128;
+
     // Get dictionary of basic pool information: type, fee, special parameters if any.
     fn get_info(e: Env) -> PoolInfo;
 }
@@ -109,10 +112,7 @@ pub trait AdminInterfaceTrait {
     fn rebalance(e: Env, admin: Address);
 
     //
-    fn get_pay_from_insurance(e: Env, sender: Address, insurance_vault_amount: u128) -> u128;
-
-    //
-    fn pay_insurance_claim(e: Env, sender: Address, amount: u128) -> u128;
+    fn pay_insurance_claim(e: Env, sender: Address, insurance_vault_amount: u128) -> u128;
 
     // Stop pool instantly
     fn kill_deposit(e: Env, admin: Address);
