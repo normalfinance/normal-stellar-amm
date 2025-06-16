@@ -5,7 +5,8 @@ use crate::testutils::Setup;
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{ symbol_short, Address, Symbol };
-use utils::constant::{ PERCENTAGE_PRECISION_U64 };
+use utils::constant::{ ONE_HOUR, PERCENTAGE_PRECISION_U64 };
+use utils::storage::MutableOracleInfo;
 use utils::test_utils::{ install_dummy_wasm, jump };
 
 // test admin transfer ownership
@@ -345,7 +346,21 @@ fn test_set_price_override_limit() {
         (user, false),
         (setup.admin, true),
     ] {
-        assert_eq!(registry.try_set_price_override_limit(&addr, &10_000_000_u128).is_ok(), is_ok);
+        assert_eq!(registry.try_set_price_override_limit(&addr, &110_u32).is_ok(), is_ok);
+    }
+}
+
+#[test]
+fn test_set_price_override_threshold() {
+    let setup = Setup::default();
+    let registry = setup.registry;
+    let user = Address::generate(&setup.env);
+
+    for (addr, is_ok) in [
+        (user, false),
+        (setup.admin, true),
+    ] {
+        assert_eq!(registry.try_set_price_override_threshold(&addr, &ONE_HOUR).is_ok(), is_ok);
     }
 }
 
@@ -364,7 +379,7 @@ fn test_register_oracle() {
     ] {
         assert_eq!(
             registry
-                .try_register_oracle(&addr, &new_asset_id, &new_oracle, &new_oracle, &7)
+                .try_register_oracle(&addr, &new_asset_id, &new_oracle, &new_oracle, &7, &0)
                 .is_ok(),
             is_ok
         );
@@ -372,34 +387,20 @@ fn test_register_oracle() {
 }
 
 #[test]
-fn test_set_oracle_address() {
+fn test_update_oracle() {
     let setup = Setup::default();
     let registry = setup.registry;
     let user = Address::generate(&setup.env);
-    let new_oracle = Address::generate(&setup.env);
+    let update = MutableOracleInfo {
+        decimals: Some(9),
+        ..MutableOracleInfo::new()
+    };
 
     for (addr, is_ok) in [
         (user, false),
         (setup.admin, true),
     ] {
-        assert_eq!(
-            registry.try_set_oracle_address(&addr, &setup.asset_id, &new_oracle).is_ok(),
-            is_ok
-        );
-    }
-}
-
-#[test]
-fn test_set_oracle_decimals() {
-    let setup = Setup::default();
-    let registry = setup.registry;
-    let user = Address::generate(&setup.env);
-
-    for (addr, is_ok) in [
-        (user, false),
-        (setup.admin, true),
-    ] {
-        assert_eq!(registry.try_set_oracle_decimals(&addr, &setup.asset_id, &8).is_ok(), is_ok);
+        assert_eq!(registry.try_update_oracle(&addr, &setup.asset_id, &update).is_ok(), is_ok);
     }
 }
 
@@ -413,34 +414,6 @@ fn test_set_oracle_price() {
         (user, false),
         (setup.admin, true),
     ] {
-        assert_eq!(registry.try_set_oracle_price(&addr, &setup.asset_id, &10, &12).is_ok(), is_ok);
-    }
-}
-
-#[test]
-fn test_freeze_oracle() {
-    let setup = Setup::default();
-    let registry = setup.registry;
-    let user = Address::generate(&setup.env);
-
-    for (addr, is_ok) in [
-        (user, false),
-        (setup.admin, true),
-    ] {
-        assert_eq!(registry.try_freeze_oracle(&addr, &setup.asset_id).is_ok(), is_ok);
-    }
-}
-
-#[test]
-fn test_unfreeze_oracle() {
-    let setup = Setup::default();
-    let registry = setup.registry;
-    let user = Address::generate(&setup.env);
-
-    for (addr, is_ok) in [
-        (user, false),
-        (setup.admin, true),
-    ] {
-        assert_eq!(registry.try_unfreeze_oracle(&addr, &setup.asset_id).is_ok(), is_ok);
+        assert_eq!(registry.try_set_oracle_price(&addr, &setup.asset_id, &12).is_ok(), is_ok);
     }
 }

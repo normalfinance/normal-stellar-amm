@@ -23,6 +23,9 @@ pub const PRICE_PRECISION_I128: i128 = PRICE_PRECISION as i128;
 pub const PRICE_PRECISION_U64: u64 = 10_000_000; //expo = -7;
 pub const PRICE_PRECISION_I64: i64 = 10_000_000; //expo = -7;
 
+pub const PRICE_PRECISION_U32: u32 = 10_000_000; //expo = -7;
+pub const PRICE_PRECISION_I32: i32 = 10_000_000; //expo = -7;
+
 pub const PERCENTAGE_PRECISION: u128 = 10_000_000; // expo -7 (represents 100%)
 pub const PERCENTAGE_PRECISION_I128: i128 = PERCENTAGE_PRECISION as i128;
 pub const PERCENTAGE_PRECISION_U64: u64 = PERCENTAGE_PRECISION as u64;

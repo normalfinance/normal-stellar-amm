@@ -14,4 +14,5 @@ pub enum OracleRegistryError {
     OracleNotFound = 21,
     OracleFrozen = 22,
     OracleInvalid = 23,
+    PriceOverrideTooSoon = 24,
 }

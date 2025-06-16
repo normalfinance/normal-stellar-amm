@@ -32,10 +32,10 @@ pub trait AdminInterface {
         e: Env,
         admin: Address,
         asset_id: Symbol,
-        oracle: Address,
+        oracle_addr: Address,
         asset: Address,
         decimals: u32,
-        sanitize_clamp_denominator: Option<i64>
+        sanitize_clamp_denominator: i64
     ) -> OracleInfo;
 
     // Update oracle info
@@ -47,13 +47,7 @@ pub trait AdminInterface {
     ) -> OracleInfo;
 
     // Admin failsafe to manually set the oracle price
-    fn set_oracle_price(
-        e: Env,
-        admin: Address,
-        asset_id: Symbol,
-        oracle_price_twap: u128,
-        price: u128
-    );
+    fn set_oracle_price(e: Env, admin: Address, asset_id: Symbol, price: u128);
 
     //   _______    _______  ___________  ___________  _______   _______    ________
     //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )

@@ -29,7 +29,6 @@ pub fn get_oracle_price(e: &Env, oracle: &Address, asset: &Address, now: u64) ->
     let published_ts: u64;
 
     let oracle_price_data = oracle_client.lastprice(&oracle_asset).unwrap();
-    // let decimals = oracle_client.decimals();
 
     oracle_price = oracle_price_data.price as u128;
     published_ts = oracle_price_data.timestamp;
@@ -57,7 +56,7 @@ pub fn update_twap(
     asset_id: &Symbol,
     historical_oracle_data: &HistoricalOracleData,
     oracle_price_data: &OraclePriceData,
-    sanitize_clamp_denominator: Option<i64>,
+    sanitize_clamp_denominator: i64,
     now: u64
 ) {
     let capped_oracle_update_price = sanitize_new_price(

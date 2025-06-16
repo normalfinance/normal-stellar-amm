@@ -2,14 +2,14 @@ use crate::errors::OracleRegistryError;
 use crate::events::{ Events, OracleRegistryEvents };
 use crate::interface::{ AdminInterface, OracleRegistryTrait };
 use crate::oracle::{ get_oracle_price, oracle_validity, update_twap };
+use soroban_fixed_point_math::FixedPoint;
 use crate::storage::{
     get_historical_oracle_data,
     get_oracle,
+    get_oracle_base,
     get_oracle_guard_rails,
     get_price_override_limit,
     get_price_override_threshold,
-    oracle_exists,
-    put_historical_oracle_data,
     put_oracle,
     set_oracle_guard_rails,
     set_price_override_limit,
@@ -31,6 +31,7 @@ use soroban_sdk::{ contract, contractimpl, panic_with_error, Address, BytesN, En
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
+use utils::constant::{ PRICE_PRECISION };
 use utils::storage::{ MutableOracleInfo, OracleInfo, OraclePriceData };
 
 #[contract]
@@ -52,10 +53,10 @@ impl OracleRegistryTrait for OracleRegistry {
 
     fn get_price(e: Env, asset_id: Symbol, cached: bool) -> OraclePriceData {
         let now = e.ledger().timestamp();
-        let oracle_info = get_oracle(&e, &asset_id);
+        let oracle = get_oracle(&e, &asset_id);
         let historical_oracle_data = get_historical_oracle_data(&e, &asset_id);
 
-        if cached || oracle_info.frozen {
+        if cached || oracle.frozen {
             return OraclePriceData {
                 price: historical_oracle_data.last_oracle_price_twap,
                 delay: historical_oracle_data.last_oracle_delay,
@@ -63,7 +64,7 @@ impl OracleRegistryTrait for OracleRegistry {
         }
 
         // Fetch a new price
-        let oracle_price_data = get_oracle_price(&e, &oracle_info.address, &oracle_info.asset, now);
+        let oracle_price_data = get_oracle_price(&e, &oracle.address, &oracle.asset, now);
 
         let oracle_is_valid =
             oracle_validity(
@@ -81,7 +82,7 @@ impl OracleRegistryTrait for OracleRegistry {
             &asset_id,
             &historical_oracle_data,
             &oracle_price_data,
-            oracle_info.sanitize_clamp_denominator,
+            oracle.sanitize_clamp_denominator,
             now
         );
 
@@ -233,20 +234,20 @@ impl AdminInterface for OracleRegistry {
         e: Env,
         admin: Address,
         asset_id: Symbol,
-        oracle: Address,
+        oracle_addr: Address,
         asset: Address,
         decimals: u32,
-        sanitize_clamp_denominator: Option<i64>
+        sanitize_clamp_denominator: i64
     ) -> OracleInfo {
         admin.require_auth();
         require_admin(&e, &admin);
 
-        if oracle_exists(&e, &asset_id) {
+        if get_oracle_base(&e, &asset_id).is_none() {
             panic_with_error!(&e, OracleRegistryError::OracleNotRegistered);
         }
 
         let now = e.ledger().timestamp();
-        let oracle_price_data = get_oracle_price(&e, &oracle, &asset, now);
+        let oracle_price_data = get_oracle_price(&e, &oracle_addr, &asset, now);
 
         // Check oracle validity
         let historical_oracle_data = get_historical_oracle_data(&e, &asset_id);
@@ -270,17 +271,17 @@ impl AdminInterface for OracleRegistry {
             now
         );
 
-        let oracle_info = OracleInfo {
-            address: oracle,
+        let oracle = OracleInfo {
+            address: oracle_addr,
             asset,
             decimals,
             frozen: false,
             sanitize_clamp_denominator,
             last_updated: now,
         };
-        put_oracle(&e, &asset_id, &oracle_info);
+        put_oracle(&e, &asset_id, &oracle);
 
-        oracle_info
+        oracle
     }
 
     // Sets the oracle guard rails.
@@ -298,37 +299,50 @@ impl AdminInterface for OracleRegistry {
         admin.require_auth();
         require_admin(&e, &admin);
 
-        if oracle_exists(&e, &asset_id) {
+        if let Some(oracle) = get_oracle_base(&e, &asset_id) {
+            let now = e.ledger().timestamp();
+
+            // Address validation
+            if let Some(oracle_addr) = params.address.clone() {
+                let oracle_price_data = get_oracle_price(&e, &oracle_addr, &oracle.asset, now);
+
+                // Check oracle validity
+                let historical_oracle_data = get_historical_oracle_data(&e, &asset_id);
+                let oracle_is_valid =
+                    oracle_validity(
+                        &e,
+                        historical_oracle_data.last_oracle_price_twap,
+                        &oracle_price_data
+                    ) == OracleValidity::Valid;
+
+                if !oracle_is_valid {
+                    panic_with_error!(&e, OracleRegistryError::OracleInvalid);
+                }
+            }
+
+            // Decimal validation
+            if let Some(decimals) = params.decimals {
+                if decimals > 18 {
+                    panic_with_error!(&e, OracleRegistryError::AdminNotSet);
+                }
+            }
+
+            let updated_oracle = OracleInfo {
+                address: params.address.unwrap_or(oracle.address),
+                decimals: params.decimals.unwrap_or(oracle.decimals),
+                sanitize_clamp_denominator: params.sanitize_clamp_denominator.unwrap_or(
+                    oracle.sanitize_clamp_denominator
+                ),
+                frozen: params.frozen.unwrap_or(oracle.frozen),
+                last_updated: now,
+                ..oracle
+            };
+            put_oracle(&e, &asset_id, &updated_oracle);
+
+            updated_oracle
+        } else {
             panic_with_error!(&e, OracleRegistryError::OracleNotRegistered);
         }
-
-        let now = e.ledger().timestamp();
-        let oracle_info = get_oracle(&e, &asset_id);
-
-        // Address validation
-        if let Some(oracle) = params.address {
-            // check oracle returns data - will error if fails price validation
-            get_oracle_price(&e, &oracle, &oracle_info.asset, now);
-        }
-
-        // Decimal validation
-        if let Some(decimals) = params.decimals {
-            if decimals < 0 || decimals > 30 {
-                panic_with_error!(&e, OracleRegistryError::AdminNotSet);
-            }
-        }
-
-        let updated_oracle_info = OracleInfo {
-            address: params.address.unwrap_or(oracle_info.address),
-            decimals: params.decimals.unwrap_or(oracle_info.decimals),
-            sanitize_clamp_denominator: params.sanitize_clamp_denominator,
-            frozen: params.frozen.unwrap_or(oracle_info.frozen),
-            last_updated: now,
-            ..oracle_info
-        };
-        put_oracle(&e, &asset_id, &updated_oracle_info);
-
-        updated_oracle_info
     }
 
     // Sets the oracle price manually.
@@ -338,33 +352,40 @@ impl AdminInterface for OracleRegistry {
     // * `admin` - The address of the admin.
     // * `asset_id` - The address of the rewards admin.
     // * `price` - The address of the rewards admin.
-    fn set_oracle_price(
-        e: Env,
-        admin: Address,
-        asset_id: Symbol,
-        oracle_price_twap: u128,
-        price: u128
-    ) {
+    fn set_oracle_price(e: Env, admin: Address, asset_id: Symbol, price: u128) {
         admin.require_auth();
         require_admin(&e, &admin);
 
         let now = e.ledger().timestamp();
+        let oracle = get_oracle(&e, &asset_id);
 
-        // let oracle_info = get_oracle(&e, &asset_id);
+        // Rate limit
+        let override_threshold = get_price_override_threshold(&e);
+        // @dev The timestamp of the last override is not tracked, meaning any
+        // update to the oracle will reset this counter. May be changed in the future.
+        if now - oracle.last_updated >= override_threshold {
+            panic_with_error!(&e, OracleRegistryError::PriceOverrideTooSoon);
+        }
+
+        // Smooth price updates
         let override_limit = get_price_override_limit(&e);
         let historical_oracle_data = get_historical_oracle_data(&e, &asset_id);
-
-        if historical_oracle_data.last_oracle_price_twap / price > override_limit {
+        let price_delta = historical_oracle_data.last_oracle_price_twap
+            .fixed_div_floor(price, PRICE_PRECISION)
+            .unwrap() as i32;
+        if (price_delta.abs() as u32) >= override_limit {
             panic_with_error!(&e, OracleRegistryError::PriceOverrideLimitExceeded);
         }
 
-        let new_historical_oracle_data = HistoricalOracleData {
-            last_oracle_price_twap: oracle_price_twap,
-            last_oracle_price: price,
-            last_oracle_delay: 0,
-            last_oracle_price_twap_ts: now,
-        };
-        put_historical_oracle_data(&e, &asset_id, &new_historical_oracle_data);
+        // Update the price and twap
+        update_twap(
+            &e,
+            &asset_id,
+            &historical_oracle_data,
+            &(OraclePriceData { price: price, delay: 0 }),
+            oracle.sanitize_clamp_denominator,
+            now
+        );
     }
 
     // TODO: unregister oracle

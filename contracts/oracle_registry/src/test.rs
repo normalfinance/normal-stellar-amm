@@ -1,16 +1,11 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::storage_types::{
-    HistoricalOracleData,
-    OracleGuardRails,
-    PriceDivergenceGuardRails,
-    ValidityGuardRails,
-};
-use crate::testutils::{ update_oracle_price, Setup };
+use crate::storage_types::{ HistoricalOracleData, OracleGuardRails, PriceDivergenceGuardRails };
+use crate::testutils::{ update_oracle_price, Setup, TestConfig };
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{ Address, Vec };
-use utils::constant::{ ONE_HOUR, PERCENTAGE_PRECISION_U64 };
+use soroban_sdk::{ Address };
+use utils::constant::{ ONE_HOUR, ONE_MINUTE };
 use utils::storage::{ MutableOracleInfo, OracleInfo };
 use utils::test_utils::jump;
 
@@ -138,25 +133,40 @@ fn test_get_price_invalid_oracle_price_volatility() {
 #[test]
 fn test_register_oracle() {
     let setup = Setup::default();
-    let oracle = Address::generate(&setup.env);
-    let asset = Address::generate(&setup.env);
+    let oracle_addr = Address::generate(&setup.env);
+    let asset_addr = Address::generate(&setup.env);
 
-    let oracle_info = setup.registry.register_oracle(
+    setup.registry.register_oracle(
         &setup.admin,
         &setup.unregistered_asset_id,
-        &oracle,
-        &asset,
-        &7
+        &oracle_addr,
+        &asset_addr,
+        &7,
+        &0
     );
 
-    // assert_eq!(setup.token_b.balance(&user), 9870300);
+    assert_eq!(setup.registry.get_oracle(&setup.unregistered_asset_id), OracleInfo {
+        address: oracle_addr,
+        asset: asset_addr,
+        decimals: 7,
+        frozen: false,
+        sanitize_clamp_denominator: 0,
+        last_updated: setup.env.ledger().timestamp(),
+    });
 }
 
 #[test]
 #[should_panic(expected = "Error(Contract, #2906)")]
 fn test_register_oracle_already_exists() {
     let setup = Setup::default();
-    setup.registry.register_oracle(&setup.admin, &setup.asset_id, false, None);
+    setup.registry.register_oracle(
+        &setup.admin,
+        &setup.asset_id, // already registerd in testutils.rs
+        &Address::generate(&setup.env),
+        &Address::generate(&setup.env),
+        &7,
+        &0
+    );
 }
 
 #[test]
@@ -165,10 +175,11 @@ fn test_register_oracle_no_response() {
     let setup = Setup::default();
     setup.registry.register_oracle(
         &setup.admin,
-        &setup.asset_id,
+        &setup.unregistered_asset_id,
         &Address::generate(&setup.env),
         &Address::generate(&setup.env),
-        &7
+        &7,
+        &0
     );
 }
 
@@ -178,88 +189,97 @@ fn test_register_oracle_no_response() {
 #[should_panic(expected = "Error(Contract, #19)")]
 fn test_update_oracle_does_not_exist() {
     let setup = Setup::default();
-    setup.registry.update_oracle(&setup.user, &setup.unregistered_asset_id);
+    let update = MutableOracleInfo {
+        address: Some(Address::generate(&setup.env)),
+        ..MutableOracleInfo::new()
+    };
+    setup.registry.update_oracle(&setup.admin, &setup.unregistered_asset_id, &update);
 }
 
 #[test]
 fn test_set_address() {
     let setup = Setup::default();
-
+    let new_oracle_addr = Address::generate(&setup.env);
     let update = MutableOracleInfo {
-        address: Some(Address::generate(&setup.env)),
+        address: Some(new_oracle_addr.clone()),
         ..MutableOracleInfo::new()
     };
 
     let oracle_info = setup.registry.update_oracle(&setup.admin, &setup.asset_id, &update);
 
-    assert_eq!(oracle_info, OracleInfo {
-        address: new_address,
-        last_updated: setup.env.ledger().timestamp(),
-        ..oracle_info
-    });
+    assert_eq!(oracle_info.address, new_oracle_addr);
+    assert_eq!(oracle_info.last_updated, setup.env.ledger().timestamp());
 }
 
-#[test]
-#[should_panic(expected = "Error(Contract, #2906)")]
-fn test_update_oracle_no_response() {
-    let setup = Setup::default();
-    setup.registry.set_address(
-        &setup.admin,
-        &setup.asset_id,
-        &Address::generate(&setup.env)
-    );
-}
+// #[test]
+// #[should_panic(expected = "Error(Contract, #2906)")]
+// fn test_update_oracle_no_response() {
+//     let setup = Setup::default();
+//     // TODO: how do we simulate no response?
+//     setup.registry.set_address(&setup.admin, &setup.asset_id, &Address::generate(&setup.env));
+// }
 
 #[test]
 fn test_set_oracle_decimals() {
     let setup = Setup::default();
-    let oracle_info = setup.registry.update_oracle(&setup.admin, &setup.asset_id, &9);
-    assert_eq!(oracle_info.decimals, 9);
+    let update = MutableOracleInfo {
+        decimals: Some(9),
+        ..MutableOracleInfo::new()
+    };
+    let updated_oracle_info = setup.registry.update_oracle(&setup.admin, &setup.asset_id, &update);
+    assert_eq!(updated_oracle_info.decimals, 9);
 }
 
 #[test]
 #[should_panic(expected = "Error(Contract, #2906)")]
 fn test_set_oracle_decimals_invalid() {
     let setup = Setup::default();
-
     let update = MutableOracleInfo {
-        decimals: Some(100),
+        decimals: Some(31),
         ..MutableOracleInfo::new()
     };
-
     setup.registry.update_oracle(&setup.admin, &setup.asset_id, &update);
 }
 
 #[test]
-fn test_set_oracle_price() {
+fn test_set_oracle_sanitize_clamp() {
     let setup = Setup::default();
-    let oracle_info = setup.registry.set_oracle_price(&setup.admin, &setup.asset_id, &9, &10);
-    assert_eq!(oracle_info.decimals, 9);
+    let update = MutableOracleInfo {
+        sanitize_clamp_denominator: Some(10),
+        ..MutableOracleInfo::new()
+    };
+    let updated_oracle_info = setup.registry.update_oracle(&setup.admin, &setup.asset_id, &update);
+    assert_eq!(updated_oracle_info.sanitize_clamp_denominator, 10);
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #20)")]
-fn test_set_oracle_price_outside_limit() {
+fn test_set_oracle_sanitize_clamp_none() {
     let setup = Setup::default();
-    setup.registry.set_oracle_price(&setup.admin, &setup.asset_id, &9, &10);
+    let update = MutableOracleInfo {
+        sanitize_clamp_denominator: Some(0),
+        ..MutableOracleInfo::new()
+    };
+    let updated_oracle_info = setup.registry.update_oracle(&setup.admin, &setup.asset_id, &update);
+    assert_eq!(updated_oracle_info.sanitize_clamp_denominator, 0);
 }
 
 #[test]
 fn test_freeze_oracle() {
     let setup = Setup::default();
-
     let update = MutableOracleInfo {
         frozen: Some(true),
         ..MutableOracleInfo::new()
     };
 
-    let price_before = 0;
+    let oracle_price_data_before = setup.registry.get_price(&setup.asset_id, &false);
+
+    // Freeze
     let oracle_info = setup.registry.update_oracle(&setup.admin, &setup.asset_id, &update);
     assert_eq!(oracle_info.frozen, true);
 
     // Ensure price cannot be updated
-    let oracle_price_data = setup.registry.get_price(&setup.user, &setup.asset_id, &false);
-    assert_eq!(oracle_price_data.price, price_before);
+    let oracle_price_data = setup.registry.get_price(&setup.asset_id, &false);
+    assert_eq!(oracle_price_data.price, oracle_price_data_before.price);
 }
 
 #[test]
@@ -274,8 +294,9 @@ fn test_unfreeze_oracle() {
 
     let last_price_before = setup.registry.get_last_price(&setup.asset_id);
 
-    jump(setup.env, 10);
-    update_oracle_price(&setup, oracle, new_price, now);
+    jump(&setup.env, 10);
+    let oracle = setup.registry.get_oracle(&setup.asset_id);
+    update_oracle_price(&setup, &oracle.address, 10, &setup.env.ledger().timestamp());
 
     let unfreeze_update = MutableOracleInfo {
         frozen: Some(false),
@@ -292,7 +313,52 @@ fn test_unfreeze_oracle() {
 
     // Ensure price can now be updated (calling get_price() will update it)
     let oracle_price_data = setup.registry.get_price(&setup.asset_id, &false);
-    assert_ne!(oracle_price_data.price, price_before);
+    assert_ne!(oracle_price_data.price, last_price_before.last_oracle_price);
+}
+
+// set price
+
+#[test]
+fn test_set_oracle_price() {
+    let setup = Setup::default();
+    let new_price = 10;
+
+    setup.registry.set_oracle_price(&setup.admin, &setup.asset_id, &new_price);
+
+    let price = setup.registry.get_price(&setup.asset_id, &false);
+    let last_price = setup.registry.get_last_price(&setup.asset_id);
+
+    assert_eq!(price.price, new_price);
+    assert_eq!(last_price.last_oracle_price, new_price);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #20)")]
+fn test_set_oracle_price_outside_limit() {
+    let setup = Setup::default();
+    let limit = setup.registry.get_price_override_limit();
+
+    let current_price = setup.registry.get_price(&setup.asset_id, &false);
+    let new_price = current_price.price * ((limit as u128) + 10_u128); // 0.10% over the limit
+
+    setup.registry.set_oracle_price(&setup.admin, &setup.asset_id, &new_price);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #24)")]
+fn test_set_oracle_price_too_soon() {
+    let setup = Setup::default();
+    let limit = setup.registry.get_price_override_limit();
+    let threshold = setup.registry.get_price_override_threshold();
+
+    let current_price = setup.registry.get_price(&setup.asset_id, &false);
+    let new_price = current_price.price * ((limit as u128) - 10_u128); // 0.10% under the limit
+
+    setup.registry.set_oracle_price(&setup.admin, &setup.asset_id, &new_price);
+
+    jump(&setup.env, threshold - (ONE_MINUTE as u64));
+
+    setup.registry.set_oracle_price(&setup.admin, &setup.asset_id, &new_price);
 }
 
 //  admin
@@ -305,8 +371,6 @@ fn test_set_oracle_guardrails() {
         })
     );
 
-    // let guardrails_before = setup.registry.get_oracle_guardrails();
-
     let new_guardrails = OracleGuardRails {
         price_divergence: PriceDivergenceGuardRails {
             oracle_twap_percent_divergence: 10,
@@ -314,9 +378,12 @@ fn test_set_oracle_guardrails() {
         ..setup.oracle_guardrails
     };
 
-    let oracle_price_data = setup.registry.set_oracle_guardrails(&setup.admin, &new_guardrails);
+    setup.registry.set_oracle_guardrails(&setup.admin, &new_guardrails);
 
-    assert_eq!(setup.registry.get_oracle_guardrails(), new_guardrails);
+    assert_eq!(
+        setup.registry.get_oracle_guardrails().price_divergence.oracle_twap_percent_divergence,
+        new_guardrails.price_divergence.oracle_twap_percent_divergence
+    );
 }
 
 #[test]

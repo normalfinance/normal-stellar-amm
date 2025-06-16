@@ -156,14 +156,14 @@ pub struct PoolInfo {
 // |:  __   \ (:      "|(:   _(  _|/\  |\  /" \   :)     \:  |   |:  __   \  /   /
 // |__|  \___) \_______) \_______)(__\_|_)(_______/       \__|   |__|  \___)|___/
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[contracttype]
 pub struct OracleInfo {
     pub address: Address,
     pub asset: Address,
     pub decimals: u32,
     pub frozen: bool,
-    pub sanitize_clamp_denominator: Option<i64>,
+    pub sanitize_clamp_denominator: i64, // zero if not set
     pub last_updated: u64,
 }
 

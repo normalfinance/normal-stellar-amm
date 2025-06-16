@@ -41,13 +41,21 @@ generate_instance_storage_getter_and_setter_with_default!(
     FIVE_MINUTE as u64
 );
 
-pub(crate) fn get_oracle(e: &Env, asset_id: &Symbol) -> OracleInfo {
+pub(crate) fn get_oracle_base(e: &Env, asset_id: &Symbol) -> Option<OracleInfo> {
     let key = DataKey::OraclesSet(asset_id.clone());
     match e.storage().persistent().get(&key) {
         Some(value) => {
             bump_persistent(e, &key);
             value
         }
+        None => None,
+    }
+}
+
+pub(crate) fn get_oracle(e: &Env, asset_id: &Symbol) -> OracleInfo {
+    let result = get_oracle_base(e, asset_id);
+    match result {
+        Some(value) => { value }
         None => panic_with_error!(&e, StorageError::ValueNotInitialized),
     }
 }

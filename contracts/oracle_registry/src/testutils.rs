@@ -5,7 +5,7 @@ use crate::OracleRegistryClient;
 use sep_40_oracle::testutils::{ Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM };
 use soroban_sdk::testutils::Address as _;
 
-use soroban_sdk::{ Address, BytesN, Env, String, Symbol, Vec };
+use soroban_sdk::{ Address, Env, Symbol, Vec };
 use utils::constant::PERCENTAGE_PRECISION_U64;
 use std::vec;
 
@@ -80,16 +80,20 @@ impl Setup<'_> {
         let emergency_admin = Address::generate(&e);
 
         // tokens
+        let asset_id = Symbol::new(&e, "BTC");
+        let unregistered_asset_id = Symbol::new(&e, "ETH");
+        let asset_addr = Address::generate(&e);
         let USDC = Address::generate(&e);
 
         let registry = create_oracle_registry_contract(&e);
         registry.initialize(&admin, &emergency_admin);
         registry.register_oracle(
             &admin,
-            &Symbol::new(e, "BTC"),
-            &e.register(pool_router::WASM, ()), // MockPriceOracleWASM
-            asset,
-            &7
+            &asset_id,
+            &e.register(MockPriceOracleWASM, ()),
+            &asset_addr,
+            &7,
+            &0
         );
 
         // register oracle
@@ -97,8 +101,8 @@ impl Setup<'_> {
         let initial_oracle_price = 100_u128;
         oracle_client.set_data(
             &admin,
-            &MockAsset::Stellar(token),
-            &Vec::from_array(&e, [MockAsset::Other(Symbol::new(&e, "BTC"))]),
+            &MockAsset::Stellar(USDC.clone()),
+            &Vec::from_array(&e, [MockAsset::Other(asset_id.clone())]),
             &7,
             &(5 * 60 * 60)
         );
@@ -114,8 +118,8 @@ impl Setup<'_> {
             users,
             USDC,
             registry,
-            asset_id: Symbol::new(&e, "BTC"),
-            unregistered_asset_id: Symbol::new(&e, "ETH"),
+            asset_id,
+            unregistered_asset_id,
             oracle_client,
             oracle_guardrails: config.oracle_guard_rails,
             initial_oracle_price,
