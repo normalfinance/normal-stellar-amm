@@ -2,7 +2,7 @@
 extern crate std;
 
 // use crate::constants::CONSTANT_PRODUCT_FEE_AVAILABLE;
-use crate::testutils::{self, setup_mock_pool};
+use crate::testutils::{ self, create_plane_contract, test_token };
 use crate::testutils::{ Setup };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::{
@@ -26,6 +26,7 @@ use soroban_sdk::{
     Vec,
     U256,
 };
+use utils::constant::CONSTANT_PRODUCT_FEE_AVAILABLE;
 use utils::storage::PoolTier;
 use utils::test_utils::{
     assert_approx_eq_abs,
@@ -58,10 +59,12 @@ fn test_constant_product_pool() {
     let (pool_hash, pool_address) = router.init_pool(
         &user1,
         &get_mock_oracle_registry_ids(&e),
-        &setup.asset,
+        &setup.btc_addr,
         &tokens,
         &get_mock_lp_token_info(&e),
-        &30
+        &30,
+        &PoolTier::A,
+        &1_000_000_u128
     );
 
     assert_eq!(router.pool_type(&tokens, &pool_hash), Symbol::new(&e, "constant_product"));
@@ -213,18 +216,22 @@ fn test_init_pool_twice() {
     let (pool_hash1, pool_address1) = router.init_pool(
         &user1,
         &get_mock_oracle_registry_ids(&e),
-        &setup.asset,
+        &setup.btc_addr,
         &tokens,
         &get_mock_lp_token_info(&e),
-        &30
+        &30,
+        &PoolTier::A,
+        &1_000_000_u128
     );
     let (pool_hash2, pool_address2) = router.init_pool(
         &user1,
         &get_mock_oracle_registry_ids(&e),
-        &setup.asset,
+        &setup.eth_addr,
         &tokens,
         &get_mock_lp_token_info(&e),
-        &30
+        &30,
+        &PoolTier::A,
+        &1_000_000_u128
     );
     assert_eq!(pool_hash1, pool_hash2);
     assert_eq!(pool_address1, pool_address2);
@@ -237,7 +244,10 @@ fn test_init_pool_twice() {
         &get_mock_oracle_registry_ids(&e),
         &setup.asset,
         &tokens,
-        &get_mock_lp_token_info(&e) & 10
+        &get_mock_lp_token_info(&e),
+        &10,
+        &PoolTier::A,
+        &1_000_000_u128
     );
     assert_eq!(router.get_pools(&tokens).len(), 2);
 
@@ -246,7 +256,10 @@ fn test_init_pool_twice() {
         &get_mock_oracle_registry_ids(&e),
         &setup.asset,
         &tokens,
-        &get_mock_lp_token_info(&e) & 100
+        &get_mock_lp_token_info(&e),
+        &100,
+        &PoolTier::A,
+        &1_000_000_u128
     );
     assert_eq!(router.get_pools(&tokens).len(), 3);
 
@@ -255,7 +268,10 @@ fn test_init_pool_twice() {
         &get_mock_oracle_registry_ids(&e),
         &setup.asset,
         &tokens,
-        &get_mock_lp_token_info(&e) & 10
+        &get_mock_lp_token_info(&e),
+        &10,
+        &PoolTier::A,
+        &1_000_000_u128
     );
     assert_eq!(router.get_pools(&tokens).len(), 3);
 }
@@ -280,10 +296,12 @@ fn test_init_pool_bad_tokens() {
     router.init_pool(
         &user1,
         &get_mock_oracle_registry_ids(&e),
-        &setup.asset,
+        &setup.btc_addr,
         &tokens,
         &get_mock_lp_token_info(&e),
-        &30
+        &30,
+        &PoolTier::A,
+        &1_000_000_u128
     );
 }
 
@@ -307,10 +325,12 @@ fn test_simple_ongoing_reward() {
     let (pool_hash, pool_address) = router.init_pool(
         &user1,
         &get_mock_oracle_registry_ids(&e),
-        &setup.asset,
+        &setup.btc_addr,
         &tokens,
         &get_mock_lp_token_info(&e),
-        &30
+        &30,
+        &PoolTier::A,
+        &1_000_000_u128
     );
 
     let reward_1_tps = 10_5000000_u128;
@@ -414,18 +434,22 @@ fn test_rewards_distribution() {
     let (pool_hash1, pool_address1) = router.init_pool(
         &user1,
         &get_mock_oracle_registry_ids(&e),
-        &setup.asset,
+        &setup.btc_addr,
         &tokens1,
         &get_mock_lp_token_info(&e),
-        &30
+        &30,
+        &PoolTier::A,
+        &1_000_000_u128
     );
     let (pool_hash2, pool_address2) = router.init_pool(
         &user1,
         &get_mock_oracle_registry_ids(&e),
-        &setup.asset,
+        &setup.eth_addr,
         &tokens2,
         &get_mock_lp_token_info(&e),
-        &30
+        &30,
+        &PoolTier::A,
+        &1_000_000_u128
     );
 
     let reward_tps = 10_5000000_u128;
@@ -530,10 +554,12 @@ fn test_rewards_distribution_as_operator() {
     let (pool_hash, _pool_address) = router.init_pool(
         &user1,
         &get_mock_oracle_registry_ids(&e),
-        &setup.asset,
+        &setup.btc_addr,
         &tokens,
         &get_mock_lp_token_info(&e),
-        &30
+        &30,
+        &PoolTier::A,
+        &1_000_000_u128
     );
 
     let reward_1_tps = 10_5000000_u128;
@@ -607,10 +633,12 @@ fn test_rewards_distribution_override() {
     let (pool_hash, _pool_address) = router.init_pool(
         &user1,
         &get_mock_oracle_registry_ids(&e),
-        &setup.asset,
+        &setup.btc_addr,
         &tokens,
         &get_mock_lp_token_info(&e),
-        &30
+        &30,
+        &PoolTier::A,
+        &1_000_000_u128
     );
 
     let reward_1_tps = 10_5000000_u128;
@@ -683,10 +711,12 @@ fn test_liqidity_not_filled() {
     let (pool_hash, _pool_address) = router.init_pool(
         &user1,
         &get_mock_oracle_registry_ids(&e),
-        &setup.asset,
+        &setup.btc_addr,
         &tokens,
         &get_mock_lp_token_info(&e),
-        &30
+        &30,
+        &PoolTier::A,
+        &1_000_000_u128
     );
 
     token2.mint(&user1, &2000);
@@ -714,10 +744,12 @@ fn test_fill_liqidity_reentrancy() {
     let (pool_hash, _pool_address) = router.init_pool(
         &user1,
         &get_mock_oracle_registry_ids(&e),
-        &setup.asset,
+        &setup.btc_addr,
         &tokens,
         &get_mock_lp_token_info(&e),
-        &30
+        &30,
+        &PoolTier::A,
+        &1_000_000_u128
     );
     token2.mint(&user1, &2000);
 
@@ -745,10 +777,12 @@ fn test_config_pool_rewards_reentrancy() {
     let (pool_hash, _pool_address) = router.init_pool(
         &user1,
         &get_mock_oracle_registry_ids(&e),
-        &setup.asset,
+        &setup.btc_addr,
         &tokens,
         &get_mock_lp_token_info(&e),
-        &30
+        &30,
+        &PoolTier::A,
+        &1_000_000_u128
     );
     token2.mint(&user1, &2000);
 
@@ -776,10 +810,12 @@ fn test_config_pool_rewards_after_new_global_config() {
     let (pool_hash, _pool_address) = router.init_pool(
         &user1,
         &get_mock_oracle_registry_ids(&e),
-        &setup.asset,
+        &setup.btc_addr,
         &tokens,
         &get_mock_lp_token_info(&e),
-        &30
+        &30,
+        &PoolTier::A,
+        &1_000_000_u128
     );
     token2.mint(&user1, &2000);
 
@@ -815,10 +851,12 @@ fn test_config_pool_after_liquidity_fill() {
     let (pool_1_hash, _pool_1_address) = router.init_pool(
         &user1,
         &get_mock_oracle_registry_ids(&e),
-        &setup.asset,
+        &setup.btc_addr,
         &tokens,
         &get_mock_lp_token_info(&e),
-        &30
+        &30,
+        &PoolTier::A,
+        &1_000_000_u128
     );
     router.deposit(&user1, &tokens, &pool_1_hash, &1000);
 
@@ -835,9 +873,12 @@ fn test_config_pool_after_liquidity_fill() {
     let (pool_2_hash, _pool_2_address) = router.init_pool(
         &user1,
         &get_mock_oracle_registry_ids(&e),
-        &setup.asset,
+        &setup.btc_addr,
         &tokens,
-        &get_mock_lp_token_info(&e) & 10
+        &get_mock_lp_token_info(&e),
+        &10,
+        &PoolTier::A,
+        &1_000_000_u128
     );
     router.deposit(&user1, &tokens, &pool_2_hash, &1000);
     assert_eq!(router.config_pool_rewards(&tokens, &pool_2_hash), 0);
@@ -860,10 +901,12 @@ fn test_fill_liquidity_no_config() {
     let (pool_hash, _pool_address) = router.init_pool(
         &user1,
         &get_mock_oracle_registry_ids(&e),
-        &setup.asset,
+        &setup.btc_addr,
         &tokens,
         &get_mock_lp_token_info(&e),
-        &30
+        &30,
+        &PoolTier::A,
+        &1_000_000_u128
     );
     token2.mint(&user1, &2000);
 
@@ -889,10 +932,12 @@ fn test_config_rewards_not_admin() {
     router.init_pool(
         &user1,
         &get_mock_oracle_registry_ids(&e),
-        &setup.asset,
+        &setup.btc_addr,
         &tokens,
         &get_mock_lp_token_info(&e),
-        &30
+        &30,
+        &PoolTier::A,
+        &1_000_000_u128
     );
 
     let rewards = Vec::from_array(&e, [(tokens.clone(), 1_0000000)]);
@@ -917,10 +962,12 @@ fn test_config_rewards_duplicated_tokens() {
     router.init_pool(
         &user1,
         &get_mock_oracle_registry_ids(&e),
-        &setup.asset,
+        &setup.btc_addr,
         &tokens,
         &get_mock_lp_token_info(&e),
-        &30
+        &30,
+        &PoolTier::A,
+        &1_000_000_u128
     );
 
     let rewards = Vec::from_array(&e, [
@@ -947,10 +994,12 @@ fn test_config_rewards_tokens_not_sorted() {
     router.init_pool(
         &user1,
         &get_mock_oracle_registry_ids(&e),
-        &setup.asset,
+        &setup.btc_addr,
         &tokens,
         &get_mock_lp_token_info(&e),
-        &30
+        &30,
+        &PoolTier::A,
+        &1_000_000_u128
     );
 
     let rewards = Vec::from_array(&e, [
@@ -1001,9 +1050,12 @@ fn test_unexpected_fee() {
     router.init_pool(
         &user1,
         &get_mock_oracle_registry_ids(&e),
-        &setup.asset,
+        &setup.btc_addr,
         &tokens,
-        &get_mock_lp_token_info(&e) & fee
+        &get_mock_lp_token_info(&e),
+        &fee,
+        &PoolTier::A,
+        &1_000_000_u128
     );
 }
 
@@ -1026,9 +1078,12 @@ fn test_event_correct() {
     let (pool_hash, pool_address) = router.init_pool(
         &user1,
         &get_mock_oracle_registry_ids(&e),
-        &setup.asset,
+        &setup.btc_addr,
         &tokens,
-        &get_mock_lp_token_info(&e) & fee
+        &get_mock_lp_token_info(&e),
+        &fee,
+        &PoolTier::A,
+        &1_000_000_u128
     );
 
     let init_pool_event = e.events().all().last().unwrap();
@@ -1144,11 +1199,12 @@ fn test_tokens_storage() {
             router.init_pool(
                 &user1,
                 &get_mock_oracle_registry_ids(&e),
-                &setup.asset,
+                &setup.btc_addr,
                 &pair,
-                &String::from_str(&e, "Pool Share Token"),
-                &String::from_str(&e, "Pool Share Token"),
-                &30
+                &get_mock_lp_token_info(&e),
+                &30,
+                &PoolTier::A,
+                &1_000_000_u128
             );
         }
     }
@@ -1187,10 +1243,12 @@ fn test_create_pool_payment() {
     router.init_pool(
         &user1,
         &get_mock_oracle_registry_ids(&e),
-        &setup.asset,
+        &setup.btc_addr,
         &tokens,
         &get_mock_lp_token_info(&e),
-        &30
+        &30,
+        &PoolTier::A,
+        &1_000_000_u128
     );
     // assert_eq!(reward_token.balance(&payments_destination), 100);
     // assert_eq!(reward_token.balance(&payments_destination), 1100);
@@ -1215,10 +1273,12 @@ fn test_rewards_distribution_without_outstanding_rewards() {
     let (pool_hash1, pool_address1) = router.init_pool(
         &user,
         &get_mock_oracle_registry_ids(&e),
-        &setup.asset,
+        &setup.btc_addr,
         &tokens,
         &get_mock_lp_token_info(&e),
-        &30
+        &30,
+        &PoolTier::A,
+        &1_000_000_u128
     );
 
     let reward_tps = 1_5000000_u128;
@@ -1274,10 +1334,12 @@ fn test_privileged_users() {
     let (_, standard_address) = router.init_pool(
         &user1,
         &get_mock_oracle_registry_ids(&e),
-        &setup.asset,
+        &setup.btc_addr,
         &tokens,
         &get_mock_lp_token_info(&e),
-        &30
+        &30,
+        &PoolTier::A,
+        &1_000_000_u128
     );
     let privileged_addrs: Map<Symbol, Vec<Address>> = Map::from_array(&e, [
         (Symbol::new(&e, "Admin"), Vec::from_array(&e, [setup.admin])),
