@@ -429,19 +429,20 @@ fn test_set_privileged_addresses() {
     for (addr, is_ok) in [
         (user, false),
         (setup.admin.clone(), true),
+        (setup.rewards_admin.clone(), false),
         (setup.operations_admin.clone(), false),
         (setup.pause_admin.clone(), false),
         (setup.emergency_pause_admin.clone(), false),
     ] {
         assert_eq!(
-            pool
-                .try_set_privileged_addrs(
-                    &addr,
-                    &setup.operations_admin.clone(),
-                    &setup.pause_admin.clone(),
-                    &Vec::from_array(&setup.env, [setup.emergency_pause_admin.clone()])
-                )
-                .is_ok(),
+            pool.try_set_privileged_addrs(
+                &addr,
+                &setup.rewards_admin.clone(),
+                &setup.operations_admin.clone(),
+                &setup.pause_admin.clone(),
+                &Vec::from_array(&setup.env, [setup.emergency_pause_admin.clone()])
+            )
+            .is_ok(),
             is_ok
         );
     }
@@ -481,13 +482,12 @@ fn test_set_rewards_config() {
         (setup.emergency_pause_admin, false),
     ] {
         assert_eq!(
-            pool
-                .try_set_rewards_config(
-                    &addr,
-                    &setup.env.ledger().timestamp().saturating_add(10),
-                    &1
-                )
-                .is_ok(),
+            pool.try_set_incentives_config(
+                &addr,
+                &setup.env.ledger().timestamp().saturating_add(10),
+                &1
+            )
+            .is_ok(),
             is_ok
         );
         jump(&setup.env, 10);

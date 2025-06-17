@@ -6,6 +6,7 @@ use crate::storage::{
     add_tokens_set,
     get_constant_product_pool_hash,
     get_pool_next_counter,
+    get_pools_plain,
     get_token_hash,
     PoolType,
 };
@@ -175,7 +176,7 @@ fn init_pool(
             },
             fee_fraction,
             tier: tier.clone(),
-            quote_max_insurance
+            quote_max_insurance,
         },
         reward_config: RewardConfig { reward_token },
         plane,

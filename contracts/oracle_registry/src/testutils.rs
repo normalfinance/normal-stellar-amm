@@ -270,23 +270,6 @@ fn setup_price_feed_oracle<'a>(
     (oracle_id, oracle_client)
 }
 
-pub(crate) fn update_oracle_price(
-    setup: &Setup,
-    oracle: &Address,
-    new_prices: Vec<i128>,
-    now: &u64
-) {
-    let client = MockPriceOracleClient::new(&setup.env, oracle);
-    // client.set_data(
-    //     &setup.admin,
-    //     &MockAsset::Stellar(setup.USDC.clone()),
-    //     &Vec::from_array(&setup.env, [MockAsset::Other(setup.asset_id.clone())]),
-    //     &7,
-    //     &(5 * 60 * 60)
-    // );
-    client.set_price(&new_prices, now);
-}
-
 pub mod oracle_registry {
     soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/oracle_registry.wasm");
 }

@@ -132,33 +132,3 @@ pub fn create_pool_router_contract<'a>(e: &Env) -> PoolRouterClient<'a> {
     let router = PoolRouterClient::new(e, &e.register(crate::PoolRouter {}, ()));
     router
 }
-
-// // create swap pool & deposit initial liquidity
-// pub fn setup_mock_pool<'a>(
-//     e: &Env,
-//     setup: &Setup<'a>,
-//     tokens: Option<Vec<Address>
-//     // router: &PoolRouterClient<'a>,
-//     // admin: &Address,
-//     // asset: &Address,
-//     // tokens: &Vec<Address>,
-//     // token_client: &SorobanTokenAdminClient<'a>
-// ) -> (BytesN<32>, Address, pool::Client) {
-//     let tokens = if Some(tokens) {}
-
-//     let (pool_hash, pool_address) = setup.router.init_pool(
-//         &setup.admin,
-//         &get_mock_oracle_registry_ids(&e),
-//         asset,
-//         tokens,
-//         &get_mock_lp_token_info(&e),
-//         &30,
-//         &PoolTier::A,
-//         &1_000_000u128
-//     );
-//     let pool = pool::Client::new(&e, &pool_address);
-//     token_client.mint(&admin, &1_000_000_000_0000000);
-//     pool.deposit(&admin, &1_000_000_000_0000000);
-
-//     (pool_hash, pool_address, pool)
-// }

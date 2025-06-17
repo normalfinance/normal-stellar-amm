@@ -4,40 +4,22 @@ extern crate std;
 use rand::rngs::StdRng;
 use rand::{ Rng, SeedableRng };
 use utils::constant::{ PERCENTAGE_PRECISION_U64, PRICE_PRECISION, PRICE_PRECISION_I128 };
-use utils::oracle::{ OracleGuardRails, PriceDivergenceGuardRails, ValidityGuardRails };
 
-use crate::testutils::{
-    create_plane_contract,
-    create_pool_contract,
-    create_token_contract,
-    get_token_admin_client,
-    install_token_wasm,
-    Setup,
-    TestConfig,
-};
+use crate::testutils::{ create_pool_contract, Setup, TestConfig };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
-use sep_40_oracle::testutils::{ Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM };
-use sep_40_oracle::Asset;
 use soroban_fixed_point_math::FixedPoint;
 use soroban_sdk::String;
 use utils::storage::{
     InitializeAllParams,
     InitializeParams,
-    OraclePair,
     PoolTier,
     PrivilegedAddresses,
     RewardConfig,
     TokenInitInfo,
 };
-// use sep_40_oracle::Asset;
-use core::cmp::min;
 use soroban_sdk::testutils::{ AuthorizedFunction, AuthorizedInvocation, Events };
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient,
-    TokenClient as SorobanTokenClient,
-};
-use soroban_sdk::{
-    symbol_short,
     testutils::Address as _,
     vec,
     Address,
@@ -48,8 +30,15 @@ use soroban_sdk::{
     Val,
     Vec,
 };
-use token_share::Client as ShareTokenClient;
-use utils::test_utils::{ assert_approx_eq_abs, install_dummy_wasm, jump };
+use pool_tokens::Client as ShareTokenClient;
+use utils::test_utils::{
+    assert_approx_eq_abs,
+    create_token_contract,
+    get_mock_lp_token_info,
+    install_dummy_wasm,
+    install_token_wasm,
+    jump,
+};
 
 #[test]
 fn test() {
@@ -74,9 +63,13 @@ fn test() {
     let total_reward_1 = reward_1_tps * 60;
     let amount_to_deposit = 100_0000000; // 100.00
 
-    let target_price = setup.quote_oracle_price
-        .fixed_div_floor(setup.base_oracle_price, PRICE_PRECISION_I128)
+    let btc_price = setup.oracle_client.lastprice(&setup.btc_asset).unwrap();
+    let xlm_price = setup.oracle_client.lastprice(&setup.xlm_asset).unwrap();
+
+    let target_price = xlm_price.price
+        .fixed_div_floor(btc_price.price, PRICE_PRECISION_I128)
         .unwrap();
+
     let expected_mint_amount = (amount_to_deposit as i128)
         .fixed_div_floor(target_price, PRICE_PRECISION_I128)
         .unwrap();
@@ -120,22 +113,30 @@ fn test() {
     assert_eq!(token_reward.balance(&admin), 0);
     // 30 seconds passed, half of the reward is available for the user
     jump(&e, 30);
-    assert_eq!(liq_pool.claim(&admin), total_reward_1 / 2);
+    assert_eq!(liq_pool.claim(&admin).0, total_reward_1 / 2);
     assert_eq!(token_reward.balance(&admin) as u128, total_reward_1 / 2);
     // 60 seconds more passed. full reward was available though half already claimed
     jump(&e, 60);
-    assert_eq!(liq_pool.claim(&admin), total_reward_1 / 2);
+    assert_eq!(liq_pool.claim(&admin).0, total_reward_1 / 2);
     assert_eq!(token_reward.balance(&admin) as u128, total_reward_1);
 
     // more rewards added with different configs
     let total_reward_2 = reward_2_tps * 100;
-    liq_pool.set_rewards_config(&admin, &e.ledger().timestamp().saturating_add(100), &reward_2_tps);
+    liq_pool.set_incentives_config(
+        &admin,
+        &e.ledger().timestamp().saturating_add(100),
+        &reward_2_tps
+    );
     jump(&e, 105);
     let total_reward_3 = reward_3_tps * 50;
-    liq_pool.set_rewards_config(&admin, &e.ledger().timestamp().saturating_add(50), &reward_3_tps);
+    liq_pool.set_incentives_config(
+        &admin,
+        &e.ledger().timestamp().saturating_add(50),
+        &reward_3_tps
+    );
     jump(&e, 500);
     // two rewards available for the user
-    assert_eq!(liq_pool.claim(&admin), total_reward_2 + total_reward_3);
+    assert_eq!(liq_pool.claim(&admin).0, total_reward_2 + total_reward_3);
     assert_eq!(
         token_reward.balance(&admin) as u128,
         total_reward_1 + total_reward_2 + total_reward_3
@@ -161,10 +162,7 @@ fn test() {
 
     // selling quote for base (1 > 0)
     // expected = (1*4) / (100+1) - ((1*4)/(100+1) * (30 / 10_000))
-    assert_eq!(liq_pool.estimate_swap(&1, &0, &swap_in_amount), (
-        expected_swap_result,
-        expected_mint_amount,
-    ));
+    assert_eq!(liq_pool.estimate_swap(&1, &0, &swap_in_amount), expected_swap_result);
     assert_eq!(
         liq_pool.swap(&user1, &1, &0, &swap_in_amount, &expected_swap_result),
         expected_swap_result
@@ -420,7 +418,8 @@ fn initialize_already_initialized() {
             emergency_pause_admins: Vec::from_array(&setup.env, [users[0].clone()]),
         },
         router: users[0].clone(),
-        oracles: setup.oracles.clone(),
+        base_asset_id: setup.btc_asset_id,
+        quote_asset_id: setup.xlm_asset_id,
         asset: setup.asset.clone(),
         tokens: Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]),
         lp_token_info: TokenInitInfo {
@@ -430,6 +429,7 @@ fn initialize_already_initialized() {
         },
         fee_fraction: 10_u32,
         tier: PoolTier::A,
+        quote_max_insurance: 1_000_000_u128,
     };
 
     setup.liq_pool.initialize(&params);
@@ -497,20 +497,21 @@ fn test_custom_fee() {
     ] {
         let pool = create_pool_contract(
             &setup.env,
-            &Address::generate(&setup.env),
-            &setup.users[0],
-            &setup.oracles,
-            &setup.oracle_guard_rails,
-            &setup.asset,
+            &setup.admin,
+            &setup.router,
+            &setup.btc_asset_id,
+            &setup.xlm_asset_id,
+            &setup.btc_addr,
             &install_token_wasm(&setup.env),
-            &String::from_str(&setup.env, "Pool Share Token"),
-            &String::from_str(&setup.env, "Pool Share Token"),
+            &get_mock_lp_token_info(&setup.env),
             &Vec::from_array(&setup.env, [
                 setup.token1.address.clone(),
                 setup.token2.address.clone(),
             ]),
             &setup.token_reward.address,
-            fee_config.0 // ten percent
+            fee_config.0, // ten percent
+            &PoolTier::A,
+            1_000_000_u128
         );
         pool.deposit(&setup.users[0], &100_0000000);
         assert_eq!(pool.estimate_swap(&1, &0, &1_0000000), (fee_config.1, 0));
@@ -565,7 +566,7 @@ fn test_simple_ongoing_reward() {
     assert_eq!(liq_pool.get_total_accumulated_reward(), TestConfig::default().reward_tps * 40);
     assert_eq!(liq_pool.get_total_claimed_reward(), 0);
 
-    assert_eq!(liq_pool.claim(&users[0]), total_reward_1 / 2);
+    assert_eq!(liq_pool.claim(&users[0]).0, total_reward_1 / 2);
     assert_eq!(token_reward.balance(&users[0]) as u128, total_reward_1 / 2);
 
     assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
@@ -580,7 +581,7 @@ fn test_simple_ongoing_reward() {
     assert_eq!(liq_pool.get_total_accumulated_reward(), total_reward_1);
     assert_eq!(liq_pool.get_total_claimed_reward(), TestConfig::default().reward_tps * 30);
 
-    assert_eq!(liq_pool.claim(&users[0]), (total_reward_1 * 2) / 6);
+    assert_eq!(liq_pool.claim(&users[0]).0, (total_reward_1 * 2) / 6);
     assert_eq!(token_reward.balance(&users[0]) as u128, (total_reward_1 * 5) / 6);
 
     assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
@@ -625,7 +626,7 @@ fn test_simple_reward() {
     jump(&env, 10);
     let reward_1_tps = 10_5000000_u128;
     let total_reward_1 = reward_1_tps * 60;
-    liq_pool.set_rewards_config(
+    liq_pool.set_incentives_config(
         &users[0],
         &env.ledger().timestamp().saturating_add(60),
         &reward_1_tps
@@ -634,13 +635,17 @@ fn test_simple_reward() {
     // 90 seconds. rewards ended.
     jump(&env, 70);
     // calling set rewards config to checkpoint. should be removed
-    liq_pool.set_rewards_config(&users[0], &env.ledger().timestamp().saturating_add(60), &0_u128);
+    liq_pool.set_incentives_config(
+        &users[0],
+        &env.ledger().timestamp().saturating_add(60),
+        &0_u128
+    );
 
     // 100 seconds. user claim reward
     jump(&env, 10);
     assert_eq!(token_reward.balance(&users[0]), 0);
     // full reward should be available to the user
-    assert_eq!(liq_pool.claim(&users[0]), total_reward_1);
+    assert_eq!(liq_pool.claim(&users[0]).0, total_reward_1);
     assert_eq!(token_reward.balance(&users[0]) as u128, total_reward_1);
 }
 
@@ -658,11 +663,11 @@ fn test_two_users_rewards() {
     //  so it gets only 1/4 of total reward
     liq_pool.deposit(&users[0], &100);
     jump(&env, 30);
-    assert_eq!(liq_pool.claim(&users[0]), total_reward_1 / 2);
+    assert_eq!(liq_pool.claim(&users[0]).0, total_reward_1 / 2);
     liq_pool.deposit(&users[1], &100);
     jump(&env, 100);
-    assert_eq!(liq_pool.claim(&users[0]), total_reward_1 / 4);
-    assert_eq!(liq_pool.claim(&users[1]), total_reward_1 / 4);
+    assert_eq!(liq_pool.claim(&users[0]).0, total_reward_1 / 4);
+    assert_eq!(liq_pool.claim(&users[1]).0, total_reward_1 / 4);
     assert_eq!(token_reward.balance(&users[0]) as u128, (total_reward_1 / 4) * 3);
     assert_eq!(token_reward.balance(&users[1]) as u128, total_reward_1 / 4);
 }
@@ -681,8 +686,8 @@ fn test_lazy_user_rewards() {
     jump(&env, 59);
     liq_pool.deposit(&users[1], &1000);
     jump(&env, 100);
-    let user1_claim = liq_pool.claim(&users[0]);
-    let user2_claim = liq_pool.claim(&users[1]);
+    let user1_claim = liq_pool.claim(&users[0]).0;
+    let user2_claim = liq_pool.claim(&users[1]).0;
     assert_approx_eq_abs(
         user1_claim,
         (total_reward_1 * 59) / 60 + ((total_reward_1 / 1100) * 100) / 60,
@@ -715,7 +720,7 @@ fn test_rewards_disable_before_expiration() {
     let admin = users[0].clone();
     let tps = 1_0000000;
     // admin sets rewards distribution a bit in the future from the expected point
-    liq_pool.set_rewards_config(&admin, &env.ledger().timestamp().saturating_add(100), &tps);
+    liq_pool.set_incentives_config(&admin, &env.ledger().timestamp().saturating_add(100), &tps);
 
     // user 2 enters. now user 1 gets 5% of total reward, user 2 receives 50%
     jump(&env, 20);
@@ -726,12 +731,12 @@ fn test_rewards_disable_before_expiration() {
 
     // before config expiration, admin decides to stop as it's time to reward other pools
     jump(&env, 50);
-    liq_pool.set_rewards_config(&admin, &env.ledger().timestamp().saturating_add(10), &0);
+    liq_pool.set_incentives_config(&admin, &env.ledger().timestamp().saturating_add(10), &0);
 
     // user decides to claim in far future
     jump(&env, 1000);
-    assert_eq!(liq_pool.claim(&users[1]), (tps * 20) / 10 + (tps * 10) / 20 + (tps * 50) / 10);
-    assert_eq!(liq_pool.claim(&users[2]), (tps * 10) / 2);
+    assert_eq!(liq_pool.claim(&users[1]).0, (tps * 20) / 10 + (tps * 10) / 20 + (tps * 50) / 10);
+    assert_eq!(liq_pool.claim(&users[2]).0, (tps * 10) / 2);
 }
 
 #[test]
@@ -754,13 +759,13 @@ fn test_rewards_disable_after_expiration() {
     let admin = users[0].clone();
     let tps = 1_0000000;
     // admin sets rewards distribution, then decides to stop rewards after expiration
-    liq_pool.set_rewards_config(&admin, &env.ledger().timestamp().saturating_add(100), &tps);
+    liq_pool.set_incentives_config(&admin, &env.ledger().timestamp().saturating_add(100), &tps);
     jump(&env, 150);
-    liq_pool.set_rewards_config(&admin, &env.ledger().timestamp().saturating_add(100), &0);
+    liq_pool.set_incentives_config(&admin, &env.ledger().timestamp().saturating_add(100), &0);
 
     // user decides to claim in far future
     jump(&env, 1000);
-    assert_eq!(liq_pool.claim(&users[1]), (tps * 100) / 10);
+    assert_eq!(liq_pool.claim(&users[1]).0, (tps * 100) / 10);
 }
 
 #[test]
@@ -784,13 +789,13 @@ fn test_rewards_set_new_after_expiration() {
     let tps_1 = 1_0000000;
     let tps_2 = 10000;
     // admin configures first rewards distribution, then it ends and admin sets new one which also expires
-    liq_pool.set_rewards_config(&admin, &env.ledger().timestamp().saturating_add(100), &tps_1);
+    liq_pool.set_incentives_config(&admin, &env.ledger().timestamp().saturating_add(100), &tps_1);
     jump(&env, 150);
-    liq_pool.set_rewards_config(&admin, &env.ledger().timestamp().saturating_add(100), &tps_2);
+    liq_pool.set_incentives_config(&admin, &env.ledger().timestamp().saturating_add(100), &tps_2);
 
     // user decides to claim in far future
     jump(&env, 1000);
-    assert_eq!(liq_pool.claim(&users[1]), (tps_1 * 100) / 10 + (tps_2 * 100) / 10);
+    assert_eq!(liq_pool.claim(&users[1]).0, (tps_1 * 100) / 10 + (tps_2 * 100) / 10);
 }
 
 #[test]
@@ -802,9 +807,9 @@ fn test_rewards_same_expiration_time() {
     let users = setup.users;
 
     jump(&env, 10);
-    liq_pool.set_rewards_config(&users[0], &env.ledger().timestamp().saturating_add(100), &1);
+    liq_pool.set_incentives_config(&users[0], &env.ledger().timestamp().saturating_add(100), &1);
     jump(&env, 10);
-    liq_pool.set_rewards_config(&users[0], &env.ledger().timestamp().saturating_add(90), &2);
+    liq_pool.set_incentives_config(&users[0], &env.ledger().timestamp().saturating_add(90), &2);
 }
 
 #[test]
@@ -817,9 +822,9 @@ fn test_rewards_past() {
 
     jump(&env, 10);
     let original_expiration_time = env.ledger().timestamp().saturating_add(100);
-    liq_pool.set_rewards_config(&users[0], &original_expiration_time, &1);
+    liq_pool.set_incentives_config(&users[0], &original_expiration_time, &1);
     jump(&env, 1000);
-    liq_pool.set_rewards_config(&users[0], &original_expiration_time.saturating_add(90), &2);
+    liq_pool.set_incentives_config(&users[0], &original_expiration_time.saturating_add(90), &2);
 }
 
 fn test_rewards_many_users(iterations_to_simulate: u32) {
@@ -853,7 +858,7 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
     token_reward_admin_client.mint(&liq_pool.address, &1_000_000_000_000_0000000);
 
     let reward_1_tps = 10_5000000_u128;
-    liq_pool.set_rewards_config(
+    liq_pool.set_incentives_config(
         &admin,
         &env
             .ledger()
@@ -880,7 +885,7 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
 
     jump(&env, 100);
     env.cost_estimate().budget().reset_default();
-    let user1_claim = liq_pool.claim(&first_user);
+    let (user1_claim, _, _) = liq_pool.claim(&first_user);
     env.cost_estimate().budget().print();
     assert_approx_eq_abs(user1_claim, expected_reward, 10000); // small loss because of rounding is fine
 }
@@ -932,10 +937,12 @@ fn test_swaps_many_users(iterations_to_simulate: u32) {
     let max_b = 100_000_000_u128; // 0.1 token B (e.g., USDC)
 
     // Test pool price peg
-    let pool_price = liq_pool.get_price(&true, &false);
-    let expected_price = setup.quote_oracle_price
-        .fixed_div_floor(setup.base_oracle_price, PRICE_PRECISION_I128)
+    let pool_price = 0;
+
+    let expected_price = setup.init_xlm_price
+        .fixed_div_floor(setup.init_btc_price, PRICE_PRECISION_I128)
         .unwrap();
+
     assert_approx_eq_abs(pool_price, expected_price as u128, 10_000); // allow small rounding tolerance
 
     for i in 1..iterations_to_simulate as usize {
@@ -1102,7 +1109,7 @@ fn test_config_rewards_not_admin() {
     let liq_pool = setup.liq_pool;
     let users = setup.users;
 
-    liq_pool.set_rewards_config(
+    liq_pool.set_incentives_config(
         &users[1],
         &env.ledger().timestamp().saturating_add(60),
         &10_5000000_u128
@@ -1117,7 +1124,7 @@ fn test_config_rewards_router() {
     let liq_pool = setup.liq_pool;
     let router = setup.router;
 
-    liq_pool.set_rewards_config(
+    liq_pool.set_incentives_config(
         &router,
         &env.ledger().timestamp().saturating_add(60),
         &10_5000000_u128
@@ -1138,12 +1145,12 @@ fn test_config_rewards_override() {
     assert_eq!(liq_pool.get_total_accumulated_reward(), 0);
     assert_eq!(liq_pool.get_total_configured_reward(), 0);
     let tps = 10_5000000_u128;
-    liq_pool.set_rewards_config(&router, &env.ledger().timestamp().saturating_add(60), &tps);
+    liq_pool.set_incentives_config(&router, &env.ledger().timestamp().saturating_add(60), &tps);
 
     jump(&env, 30);
     assert_eq!(liq_pool.get_total_accumulated_reward(), tps * 30);
     assert_eq!(liq_pool.get_total_configured_reward(), tps * 60);
-    liq_pool.set_rewards_config(&router, &env.ledger().timestamp().saturating_add(0), &0);
+    liq_pool.set_incentives_config(&router, &env.ledger().timestamp().saturating_add(0), &0);
 
     assert_eq!(liq_pool.get_total_accumulated_reward(), tps * 30);
     assert_eq!(liq_pool.get_total_configured_reward(), tps * 30);
@@ -1447,7 +1454,7 @@ fn test_claim_killed() {
     jump(&env, 10);
     let reward_1_tps = 10_5000000_u128;
     let total_reward_1 = reward_1_tps * 60;
-    liq_pool.set_rewards_config(
+    liq_pool.set_incentives_config(
         &users[0],
         &env.ledger().timestamp().saturating_add(60),
         &reward_1_tps
@@ -1473,14 +1480,15 @@ fn test_claim_killed() {
     assert_eq!(liq_pool.get_is_killed_withdraw(), false);
     assert_eq!(liq_pool.get_is_killed_swap(), false);
     assert_eq!(liq_pool.get_is_killed_claim(), false);
-    assert_eq!(liq_pool.claim(&users[1]), total_reward_1);
+    assert_eq!(liq_pool.claim(&users[1]).0, total_reward_1);
 }
 
 #[test]
 fn test_withdraw_rewards() {
+    let setup = Setup::setup(&TestConfig::default());
     // test user cannot withdraw reward tokens from the pool
-    let e = Env::default();
-    e.mock_all_auths();
+    let e = setup.env;
+    let liq_pool = setup.liq_pool;
 
     let admin = Address::generate(&e);
     let user1 = Address::generate(&e);
@@ -1497,29 +1505,13 @@ fn test_withdraw_rewards() {
     let token2_admin_client = get_token_admin_client(&e, &token2.address);
     let token_reward_admin_client = SorobanTokenAdminClient::new(&e, &token1.address.clone());
 
-    // Create pool
-    let liq_pool = create_pool_contract(
-        &e,
-        &admin,
-        &plane.address,
-        &router,
-        &registry.address,
-        &oracle_guard_rails,
-        &asset,
-        &install_token_wasm(&e),
-        &String::from_str(&e, "Pool Share Token"),
-        &String::from_str(&e, "Pool Share Token"),
-        &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
-        &token_reward_admin_client.address,
-        30
-    );
     let token_share = ShareTokenClient::new(&e, &liq_pool.share_id());
 
     token2_admin_client.mint(&user1, &100_0000000);
     liq_pool.deposit(&user1, &100_0000000);
     assert_eq!(liq_pool.get_reserves(), Vec::from_array(&e, [50_0000000, 100_0000000]));
 
-    liq_pool.set_rewards_config(
+    liq_pool.set_incentives_config(
         &admin,
         &e.ledger().timestamp().saturating_add(100),
         &1_000_0000000
@@ -1542,8 +1534,8 @@ fn test_withdraw_rewards() {
     assert_eq!(token1.balance(&user2), 1_000_0000000);
     assert_eq!(token2.balance(&user2), 1_000_0000000);
 
-    assert_eq!(liq_pool.claim(&user1), 1_000_0000000 * 100);
-    assert_eq!(liq_pool.claim(&user2), 0);
+    assert_eq!(liq_pool.claim(&user1).0, 1_000_0000000 * 100);
+    assert_eq!(liq_pool.claim(&user2).0, 0);
 }
 
 // // #[test]
@@ -1581,7 +1573,7 @@ fn test_withdraw_rewards() {
 // //         30
 // //     );
 
-// //     liq_pool.set_rewards_config(
+// //     liq_pool.set_incentives_config(
 // //         &admin,
 // //         &e.ledger().timestamp().saturating_add(100),
 // //         &1_000_0000000
@@ -1656,12 +1648,12 @@ fn test_withdraw_rewards() {
 // //     // swap is balanced, so values should be the same
 // //     assert_eq!(estimate1_before_rewards, estimate2_before_rewards);
 
-// //     liq_pool1.set_rewards_config(
+// //     liq_pool1.set_incentives_config(
 // //         &admin,
 // //         &e.ledger().timestamp().saturating_add(100),
 // //         &1_000_0000000
 // //     );
-// //     liq_pool2.set_rewards_config(
+// //     liq_pool2.set_incentives_config(
 // //         &admin,
 // //         &e.ledger().timestamp().saturating_add(100),
 // //         &1_000_0000000
@@ -1741,7 +1733,7 @@ fn test_withdraw_rewards() {
 // //     liq_pool.deposit(&user1, &100_0000000, &0);
 // //     assert_eq!(liq_pool.get_reserves(), Vec::from_array(&e, [100_0000000, 100_0000000]));
 
-// //     liq_pool.set_rewards_config(&admin, &e.ledger().timestamp().saturating_add(100), &1000);
+// //     liq_pool.set_incentives_config(&admin, &e.ledger().timestamp().saturating_add(100), &1000);
 // //     jump(&e, 100);
 
 // //     assert!(liq_pool.try_claim(&user1).is_err());
@@ -1835,7 +1827,7 @@ fn test_withdraw_rewards() {
 //         30
 //     );
 
-//     liq_pool.set_rewards_config(
+//     liq_pool.set_incentives_config(
 //         &admin,
 //         &e.ledger().timestamp().saturating_add(100),
 //         &1_000_0000000
@@ -1907,7 +1899,7 @@ fn test_withdraw_rewards() {
 // //     token_2_admin_client.mint(&user, &1000_0000000);
 // //     liq_pool.deposit(&user, &1000_0000000, &0);
 
-// //     liq_pool.set_rewards_config(&admin, &e.ledger().timestamp().saturating_add(60), &1_0000000);
+// //     liq_pool.set_incentives_config(&admin, &e.ledger().timestamp().saturating_add(60), &1_0000000);
 // //     // pool has configured rewards, but not minted
 // //     assert_eq!(liq_pool.get_unused_reward(), 0);
 
@@ -1925,12 +1917,12 @@ fn test_withdraw_rewards() {
 // //     jump(&e, 10);
 
 // //     // pool stops rewards on new iteration
-// //     liq_pool.set_rewards_config(&admin, &e.ledger().timestamp().saturating_add(0), &0);
+// //     liq_pool.set_incentives_config(&admin, &e.ledger().timestamp().saturating_add(0), &0);
 // //     assert_eq!(liq_pool.get_unused_reward(), 1_0000000 * 80);
 
 // //     jump(&e, 10);
 // //     // new config iteration. pool got 50 seconds of rewards. 100 - 20 - 50 = 30 unused
-// //     liq_pool.set_rewards_config(&admin, &e.ledger().timestamp().saturating_add(50), &1_0000000);
+// //     liq_pool.set_incentives_config(&admin, &e.ledger().timestamp().saturating_add(50), &1_0000000);
 
 // //     // neither time nor claim should affect unused rewards
 // //     assert_eq!(liq_pool.get_unused_reward(), 1_0000000 * 30);
@@ -1973,7 +1965,7 @@ fn test_withdraw_rewards() {
 // //     token_2_admin_client.mint(&user, &1000_0000000);
 // //     liq_pool.deposit(&user, &1000_0000000, &0);
 
-// //     liq_pool.set_rewards_config(&admin, &e.ledger().timestamp().saturating_add(60), &1_0000000);
+// //     liq_pool.set_incentives_config(&admin, &e.ledger().timestamp().saturating_add(60), &1_0000000);
 // //     // pool has configured rewards, but not minted
 // //     assert_eq!(liq_pool.get_unused_reward(), 0);
 
@@ -1991,12 +1983,12 @@ fn test_withdraw_rewards() {
 // //     jump(&e, 10);
 
 // //     // pool stops rewards on new iteration
-// //     liq_pool.set_rewards_config(&admin, &e.ledger().timestamp().saturating_add(0), &0);
+// //     liq_pool.set_incentives_config(&admin, &e.ledger().timestamp().saturating_add(0), &0);
 // //     assert_eq!(liq_pool.get_unused_reward(), 1_0000000 * 80);
 
 // //     jump(&e, 10);
 // //     // new config iteration. pool got 50 seconds of rewards. 100 - 20 - 50 = 30 unused
-// //     liq_pool.set_rewards_config(&admin, &e.ledger().timestamp().saturating_add(50), &1_0000000);
+// //     liq_pool.set_incentives_config(&admin, &e.ledger().timestamp().saturating_add(50), &1_0000000);
 
 // //     // neither time nor claim should affect unused rewards
 // //     assert_eq!(liq_pool.get_unused_reward(), 1_0000000 * 30);
@@ -2140,7 +2132,7 @@ fn test_set_rewards_config() {
     let setup = Setup::default();
     let pool = setup.liq_pool;
 
-    pool.set_rewards_config(
+    pool.set_incentives_config(
         &setup.admin.clone(),
         &setup.env.ledger().timestamp().saturating_add(100),
         &1_0000000
@@ -2360,7 +2352,7 @@ fn test_regular_upgrade_pool() {
 // //     token_reward_admin_client.mint(&liq_pool.address, &1_000_000_0000000);
 // //     let reward_1_tps = 10_5000000_u128;
 // //     let total_reward_1 = reward_1_tps * 70;
-// //     liq_pool.set_rewards_config(
+// //     liq_pool.set_incentives_config(
 // //         &setup.admin,
 // //         &setup.env.ledger().timestamp().saturating_add(70),
 // //         &reward_1_tps

@@ -117,9 +117,7 @@ impl Pool {
         base_oracle_price: u128,
         quote_oracle_price: u128
     ) -> i128 {
-        // "base_oracle_price <= 0"
         validate!(e, base_oracle_price > 0, PoolError::InvalidOracle);
-        // "quote_oracle_price <= 0"
         validate!(e, quote_oracle_price > 0, PoolError::InvalidOracle);
 
         let base_token_supply = get_total_synthetic_tokens(&e);
@@ -136,62 +134,6 @@ impl Pool {
         net_quote_asset_value.safe_sub(e, net_base_asset_value)
     }
 
-    // pub fn is_price_divergence_ok_for_settle_pnl(&self, oracle_price: i64) -> bool {
-    //     let oracle_divergence = oracle_price
-    //         .safe_sub(self.amm.historical_oracle_data.last_oracle_price_twap_5min)?
-    //         .safe_mul(PERCENTAGE_PRECISION_I64)?
-    //         .safe_div(
-    //             self.amm.historical_oracle_data.last_oracle_price_twap_5min.min(oracle_price)
-    //         )?
-    //         .unsigned_abs();
-
-    //     let oracle_divergence_limit = match self.contract_tier {
-    //         ContractTier::A => PERCENTAGE_PRECISION_U64 / 200, // 50 bps
-    //         ContractTier::B => PERCENTAGE_PRECISION_U64 / 200, // 50 bps
-    //         ContractTier::C => PERCENTAGE_PRECISION_U64 / 100, // 100 bps
-    //         ContractTier::Speculative => PERCENTAGE_PRECISION_U64 / 40, // 250 bps
-    //         ContractTier::HighlySpeculative => PERCENTAGE_PRECISION_U64 / 40, // 250 bps
-    //         ContractTier::Isolated => PERCENTAGE_PRECISION_U64 / 40, // 250 bps
-    //     };
-
-    //     if oracle_divergence >= oracle_divergence_limit {
-    //         msg!(
-    //             "market_index={} price divergence too large to safely settle pnl: {} >= {}",
-    //             self.market_index,
-    //             oracle_divergence,
-    //             oracle_divergence_limit
-    //         );
-    //         return Ok(false);
-    //     }
-
-    //     let min_price = oracle_price.min(
-    //         self.amm.historical_oracle_data.last_oracle_price_twap_5min
-    //     );
-
-    //     let std_limit = (
-    //         match self.contract_tier {
-    //             ContractTier::A => min_price / 50, // 200 bps
-    //             ContractTier::B => min_price / 50, // 200 bps
-    //             ContractTier::C => min_price / 20, // 500 bps
-    //             ContractTier::Speculative => min_price / 10, // 1000 bps
-    //             ContractTier::HighlySpeculative => min_price / 10, // 1000 bps
-    //             ContractTier::Isolated => min_price / 10, // 1000 bps
-    //         }
-    //     ).unsigned_abs();
-
-    //     if self.amm.oracle_std.max(self.amm.mark_std) >= std_limit {
-    //         msg!(
-    //             "market_index={} std too large to safely settle pnl: {} >= {}",
-    //             self.market_index,
-    //             self.amm.oracle_std.max(self.amm.mark_std),
-    //             std_limit
-    //         );
-    //         return Ok(false);
-    //     }
-
-    //     Ok(true)
-    // }
-
     pub fn get_oracle_price(&self, e: Env, asset_id: Symbol, now: u64) -> OraclePriceData {
         let oracle_price_data: OraclePriceData = e.invoke_contract(
             &get_router(&e),
@@ -205,13 +147,7 @@ impl Pool {
         oracle_price_data
     }
 
-    pub fn peg_price(
-        &self,
-        e: &Env,
-        base_oracle_price: u128,
-        quote_oracle_price: u128,
-        now: u64
-    ) -> u128 {
+    pub fn peg_price(&self, e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -> u128 {
         if base_oracle_price == 0 || quote_oracle_price == 0 {
             return 0;
         }
@@ -236,16 +172,10 @@ impl Pool {
         get_last_oracle_valid(e) && current_ts == get_last_update_ts(e)
     }
 
-    pub fn get_delta_a(
-        &self,
-        e: &Env,
-        base_oracle_price: u128,
-        quote_oracle_price: u128,
-        now: u64
-    ) -> i128 {
+    pub fn get_delta_a(&self, e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -> i128 {
         let (reserve_a, reserve_b) = (get_reserve_a(e), get_reserve_b(e));
 
-        let peg_price = self.peg_price(e, base_oracle_price, quote_oracle_price, now);
+        let peg_price = self.peg_price(e, base_oracle_price, quote_oracle_price);
         let target_reserve_a = reserve_b.fixed_div_floor(e, &peg_price, &PRICE_PRECISION);
         let delta_a = (target_reserve_a as i128).checked_sub(reserve_a as i128).unwrap();
 
@@ -261,7 +191,7 @@ impl Pool {
         let reserve_a = get_reserve_a(&e);
 
         // Find the ideal reserve_a amount such that the pool's price is equal to the oracle price
-        let delta_a = self.get_delta_a(&e, base_oracle_price, quote_oracle_price, now);
+        let delta_a = self.get_delta_a(&e, base_oracle_price, quote_oracle_price);
 
         if delta_a > 0 {
             mint_synthetic_tokens(&e, &e.current_contract_address(), delta_a);

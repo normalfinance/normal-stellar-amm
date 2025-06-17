@@ -92,6 +92,7 @@ use utils::storage::{
     AddressAndAmount,
     InitializeAllParams,
     InitializeParams,
+    OraclePriceData,
     PoolInfo,
     PoolResponse,
     PoolStatus,
@@ -167,7 +168,26 @@ impl PoolTrait for Pool {
 
         set_router(&e, &params.router);
 
-        // TODO: validate oracle asset ids
+        // validate oracle asset ids
+        let now = e.ledger().timestamp();
+        let _base_oracle_price_data: OraclePriceData = e.invoke_contract(
+            &get_router(&e),
+            &Symbol::new(&e, "get_price"),
+            Vec::from_array(&e, [
+                e.current_contract_address().to_val(),
+                params.base_asset_id.to_val(),
+                now.into_val(&e),
+            ])
+        );
+        let _quote_oracle_price_data: OraclePriceData = e.invoke_contract(
+            &get_router(&e),
+            &Symbol::new(&e, "get_price"),
+            Vec::from_array(&e, [
+                e.current_contract_address().to_val(),
+                params.quote_asset_id.to_val(),
+                now.into_val(&e),
+            ])
+        );
 
         if params.tokens.len() != 2 {
             panic_with_error!(&e, PoolValidationError::WrongInputVecSize);
@@ -498,7 +518,7 @@ impl PoolTrait for Pool {
     // # Returns
     //
     // A tuple containing the estimated amount of the output token that would be received and the amount of token_a to mint/burn.
-    fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: u128) -> u128 {
+    fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: u128) -> (u128, i128) {
         if in_idx == out_idx {
             panic_with_error!(&e, PoolValidationError::CannotSwapSameToken);
         }
@@ -518,12 +538,27 @@ impl PoolTrait for Pool {
         let reserve_sell = reserves.get(in_idx).unwrap();
         let reserve_buy = reserves.get(out_idx).unwrap();
 
-        let now = e.ledger().timestamp();
         let pool = get_pool(&e);
         let out = pool.get_amount_out(&e, in_amount, reserve_sell, reserve_buy).0;
-        // let delta_a = pool.get_delta_a(&e, now);
 
-        out
+        let now = e.ledger().timestamp();
+        let base_oracle_price_data = pool.get_oracle_price(
+            e.clone(),
+            pool.base_asset_id.clone(),
+            now
+        );
+        let quote_oracle_price_data = pool.get_oracle_price(
+            e.clone(),
+            pool.quote_asset_id.clone(),
+            now
+        );
+        let delta_a = pool.get_delta_a(
+            &e,
+            base_oracle_price_data.price,
+            quote_oracle_price_data.price
+        );
+
+        (out, delta_a)
     }
 
     // Swaps tokens in the pool.
@@ -699,7 +734,12 @@ impl PoolTrait for Pool {
     // # Returns
     //
     // A tuple containing the estimated amount of the output token that would be received and the amount of token_a to mint/burn.
-    fn estimate_swap_strict_receive(e: Env, in_idx: u32, out_idx: u32, out_amount: u128) -> u128 {
+    fn estimate_swap_strict_receive(
+        e: Env,
+        in_idx: u32,
+        out_idx: u32,
+        out_amount: u128
+    ) -> (u128, i128) {
         if in_idx == out_idx {
             panic_with_error!(&e, PoolValidationError::CannotSwapSameToken);
         }
@@ -718,12 +758,27 @@ impl PoolTrait for Pool {
         let reserve_sell = reserves.get(in_idx).unwrap();
         let reserve_buy = reserves.get(out_idx).unwrap();
 
-        let now = e.ledger().timestamp();
         let pool = get_pool(&e);
         let out = pool.get_amount_out_strict_receive(&e, out_amount, reserve_sell, reserve_buy).0;
-        // let delta_a = pool.get_delta_a(&e, now);
 
-        out
+        let now = e.ledger().timestamp();
+        let base_oracle_price_data = pool.get_oracle_price(
+            e.clone(),
+            pool.base_asset_id.clone(),
+            now
+        );
+        let quote_oracle_price_data = pool.get_oracle_price(
+            e.clone(),
+            pool.quote_asset_id.clone(),
+            now
+        );
+        let delta_a = pool.get_delta_a(
+            &e,
+            base_oracle_price_data.price,
+            quote_oracle_price_data.price
+        );
+
+        (out, delta_a)
     }
 
     // Withdraws tokens from the pool.

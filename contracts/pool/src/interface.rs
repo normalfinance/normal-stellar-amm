@@ -42,7 +42,7 @@ pub trait PoolTrait {
     ) -> u128;
 
     // Estimate amount of coins to retrieve using swap function
-    fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: u128) -> u128;
+    fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: u128) -> (u128, i128);
 
     // Perform an exchange between two coins with strict amount to receive.
     // in_idx: Index value for the coin to send
@@ -59,7 +59,7 @@ pub trait PoolTrait {
     ) -> u128;
 
     // Estimate amount of coins to retrieve using swap_strict_receive function
-    fn estimate_swap_strict_receive(e: Env, in_idx: u32, out_idx: u32, out_amount: u128) -> u128;
+    fn estimate_swap_strict_receive(e: Env, in_idx: u32, out_idx: u32, out_amount: u128) -> (u128, i128);
 
     // Transfers share_amount of pool share tokens to this contract,
     // burns all pools share tokens in this contracts, and sends
