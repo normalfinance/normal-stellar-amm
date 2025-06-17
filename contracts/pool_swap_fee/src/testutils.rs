@@ -90,6 +90,10 @@ impl Setup<'_> {
             &buffer.address,
             &fee_destination
         );
+        fee_collector.init_admin(admin);
+        fee_collector.set_router(admin, router);
+        fee_collector.set_buffer(admin, buffer);
+        fee_collector.set_fee_destination(admin, fee_destination);
 
         // Finish setting up the Buffer
         buffer.set_fee_collector(&admin, &fee_collector.address);
