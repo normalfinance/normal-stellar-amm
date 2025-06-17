@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 tasks:
   clean:
     cmd: cargo clean
@@ -12,6 +12,7 @@ tasks:
   build:
     cmds:
       - task -d ../pool build || exit 1
+      - task -d ../liquidity_calculator build || exit 1
       - soroban contract build --package pool-router
       - soroban contract optimize --wasm ../../target/wasm32v1-none/release/pool_router.wasm --wasm-out ../../target/wasm32v1-none/release/pool_router.wasm
       - ls -l ../../target/wasm32v1-none/release/*.wasm

@@ -89,6 +89,11 @@ impl Default for Setup<'_> {
         let plane = create_plane_contract(&env);
         router.set_pools_plane(&admin, &plane.address);
 
+        let liquidity_calculator = create_liquidity_calculator_contract(&env);
+        liquidity_calculator.init_admin(&admin);
+        liquidity_calculator.set_pools_plane(&admin, &plane.address);
+        router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
+
         Setup {
             env: e,
             admin,
@@ -112,4 +117,14 @@ mod pool_plane {
 
 pub fn create_plane_contract<'a>(e: &Env) -> pool_plane::Client<'a> {
     pool_plane::Client::new(e, &e.register(pool_plane::WASM, ()))
+}
+
+mod liquidity_calculator {
+    soroban_sdk::contractimport!(
+        file = "../../target/wasm32v1-none/release/liquidity_calculator.wasm"
+    );
+}
+
+pub fn create_liquidity_calculator_contract<'a>(e: &Env) -> liquidity_calculator::Client<'a> {
+    liquidity_calculator::Client::new(e, &e.register(liquidity_calculator::WASM, ()))
 }
