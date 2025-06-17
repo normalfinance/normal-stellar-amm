@@ -6,6 +6,8 @@ use utils::errors::storage_errors::StorageError;
 use utils::{
     generate_instance_storage_getter_and_setter_with_default,
     generate_instance_storage_getter_with_default,
+    generate_instance_storage_getter_and_setter,
+    generate_instance_storage_getter,
     generate_instance_storage_setter,
 };
 
@@ -16,6 +18,7 @@ enum DataKey {
     ReserveB, // total token_b amount in the pool (y in the constant product formula)
 
     Pool, // struct containing infrequently updated pool data
+    Plane,
     Router, // the Pool Router contract address
     OracleRegistry, // the Oracle Registry contract address (for getting oracle prices)
 
@@ -31,6 +34,8 @@ enum DataKey {
 
     TokenFutureWASM,
 }
+
+generate_instance_storage_getter_and_setter!(plane, DataKey::Plane, Address);
 
 generate_instance_storage_getter_and_setter_with_default!(
     is_killed_swap,

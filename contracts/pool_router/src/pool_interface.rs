@@ -71,6 +71,14 @@ pub trait PoolInterfaceTrait {
         pool_index: BytesN<32>,
         share_amount: u128
     ) -> u128;
+
+    fn get_liquidity(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> U256;
+
+    // Set liquidity calculator address. it's separate contract optimized to estimate liquidity for multiple pools
+    fn set_liquidity_calculator(e: Env, admin: Address, calculator: Address);
+
+    // Get liquidity calculator address
+    fn get_liquidity_calculator(e: Env) -> Address;
 }
 
 pub trait IncentivesInterfaceTrait {
@@ -94,6 +102,17 @@ pub trait IncentivesInterfaceTrait {
     // of the tokens respectively.
     fn get_tokens_for_reward(e: Env) -> Map<Vec<Address>, (u32, bool, U256)>;
 
+    // Sums up the liquidity of all pools for given tokens set and returns the total liquidity
+    //
+    // # Arguments
+    //
+    // * `tokens` - A vector of token addresses for which to calculate the total liquidity.
+    //
+    // # Returns
+    //
+    // A `U256` value representing the total liquidity for the given set of tokens.
+    fn get_total_liquidity(e: Env, tokens: Vec<Address>) -> U256;
+
     // Configures the global rewards for the liquidity pool.
     //
     // # Arguments
@@ -110,6 +129,13 @@ pub trait IncentivesInterfaceTrait {
         expired_at: u64,
         tokens_votes: Vec<(Vec<Address>, u32)>
     );
+
+    // Fills the aggregated liquidity information for a given set of tokens.
+    //
+    // # Arguments
+    //
+    // * `tokens` - A vector of token addresses for which to fill the liquidity.
+    fn fill_liquidity(e: Env, tokens: Vec<Address>);
 
     // Configures the rewards for a specific pool.
     //
@@ -222,4 +248,12 @@ pub trait PoolsManagementTrait {
         start: u128,
         end: u128
     ) -> Vec<(Vec<Address>, Map<BytesN<32>, Address>)>;
+}
+
+pub trait PoolPlaneInterface {
+    // configure pools plane address to be used as lightweight proxy to optimize instructions & batch operations
+    fn set_pools_plane(e: Env, admin: Address, plane: Address);
+
+    // get pools plane address
+    fn get_plane(e: Env) -> Address;
 }

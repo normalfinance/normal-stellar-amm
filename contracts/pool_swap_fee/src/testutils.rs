@@ -79,6 +79,8 @@ impl Setup<'_> {
         let token_b_admin_client = get_token_admin_client(&e, &token_b.address.clone());
 
         // Setup auxilary contracts
+        let plane = deploy_plane_contract(&e);
+
         let oracle_registry = setup_oracle_registry(&e, &admin, &asset);
         let router = setup_pool_router(&e, &admin);
         let fee_collector = setup_fee_collector(
@@ -88,6 +90,10 @@ impl Setup<'_> {
             &buffer.address,
             &fee_destination
         );
+        fee_collector.init_admin(admin);
+        fee_collector.set_router(admin, router);
+        fee_collector.set_buffer(admin, buffer);
+        fee_collector.set_fee_destination(admin, fee_destination);
 
         // Finish setting up the Buffer
         buffer.set_fee_collector(&admin, &fee_collector.address);
@@ -116,4 +122,9 @@ impl Setup<'_> {
             token_b_admin_client,
         }
     }
+}
+
+fn deploy_plane_contract<'a>(e: &Env) -> Address {
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/pool_plane.wasm");
+    Client::new(e, &e.register(WASM, ())).address
 }

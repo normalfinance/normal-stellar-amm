@@ -1,5 +1,6 @@
 #![cfg(test)]
 extern crate std;
+use crate::plane::{ pool_plane, PoolPlaneClient };
 use crate::PoolClient;
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use sep_40_oracle::testutils::{ Asset as MockAsset, MockPriceOracleClient };
@@ -72,6 +73,7 @@ pub(crate) struct Setup<'a> {
     // contracts
     pub(crate) liq_pool: PoolClient<'a>,
     pub(crate) router: Address,
+    pub(crate) plane: PoolPlaneClient<'a>,
 
     // state
     pub(crate) base_oracle_price: i128,
@@ -142,26 +144,18 @@ impl Setup<'_> {
         let asset_ids = get_mock_oracle_registry_ids(&e);
         let lp_token_info = get_mock_lp_token_info(&e);
 
+        let plane = create_plane_contract(&e);
+
         let router = Address::generate(&e);
 
         // ===
-
-        // let xlm = Address::generate(&e);
-        let usdc = Address::generate(&e);
-
-        let asset = Asset::Other(Symbol::new(&e, "SOL"));
-        let asset_mock = MockAsset::Other(Symbol::new(&e, "SOL"));
-        // let quote_asset = Asset::Other(Symbol::new(&e, "XLM"));
-        let quote_asset_mock = MockAsset::Other(Symbol::new(&e, "XLM"));
-
-        let base_oracle_price = 2_0000000; // $2.00
-        let quote_oracle_price = 0_5000000; // $0.50
 
         // ===
 
         let liq_pool = create_pool_contract(
             &e,
             &admin,
+            &plane,
             &router,
             &oracle_registry.address,
             &asset_ids.0,
@@ -202,6 +196,7 @@ impl Setup<'_> {
 
         Self {
             env: e,
+            plane,
             router,
             oracles,
             asset,
@@ -256,6 +251,7 @@ impl Setup<'_> {
 pub fn create_pool_contract<'a>(
     e: &Env,
     admin: &Address,
+    plane: &Address,
     router: &Address,
     oracle_registry: &Address,
     base_asset_id: &Symbol,
@@ -299,9 +295,14 @@ pub fn create_pool_contract<'a>(
         reward_config: RewardConfig {
             reward_token: reward_token.clone(),
         },
+        plane: plane.clone(),
     };
     pool.initialize_all(&params);
     pool
+}
+
+pub(crate) fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
+    PoolPlaneClient::new(e, &e.register(pool_plane::WASM, ()))
 }
 
 // #[test]
