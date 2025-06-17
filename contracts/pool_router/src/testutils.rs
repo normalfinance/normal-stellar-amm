@@ -1,10 +1,16 @@
 #![cfg(test)]
 extern crate std;
 
+use crate::testutils::oracle_registry::{
+    OracleGuardRails,
+    PriceDivergenceGuardRails,
+    ValidityGuardRails,
+};
 use crate::PoolRouterClient;
 use sep_40_oracle::testutils::{ Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM };
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{ Address, Env, Symbol, Vec };
+use utils::constant::PERCENTAGE_PRECISION_U64;
 use utils::test_utils::{
     get_mock_lp_token_info,
     get_mock_oracle_registry_ids,
@@ -117,10 +123,7 @@ impl Default for Setup<'_> {
         liquidity_calculator.set_pools_plane(&admin, &plane.address);
         router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
 
-        // Oracle Registy
-        let registry = create_oracle_registry_contract(&e);
-
-        // assets
+        // Oracle Registry
         let btc_addr = Address::generate(&e);
         let eth_addr = Address::generate(&e);
         let btc_asset_id = Symbol::new(&e, "BTC");
@@ -147,6 +150,24 @@ impl Default for Setup<'_> {
         let init_eth_price = 3000_0000000_i128; // $3,000
         let prices: Vec<i128> = Vec::from_array(&e, [init_btc_price, init_eth_price]);
         oracle_client.set_price(&prices, &start_time);
+
+        let registry = create_oracle_registry_contract(&e);
+        registry.initialize(&admin, &emergency_admin);
+        registry.set_oracle_guardrails(
+            &admin,
+            &(OracleGuardRails {
+                price_divergence: PriceDivergenceGuardRails {
+                    oracle_twap_percent_divergence: PERCENTAGE_PRECISION_U64 / 2,
+                },
+                validity: ValidityGuardRails {
+                    slots_before_stale_for_pool: 10, // ~5 seconds
+                    confidence_interval_max_size: 20_000, // 2% of price
+                    too_volatile_ratio: 5, // 5x or 80% down
+                },
+            })
+        );
+
+        registry.register_oracle(&admin, &btc_asset_id, &oracle_id, &btc_addr, &7, &0);
 
         Setup {
             env: e,

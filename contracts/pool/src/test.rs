@@ -3,12 +3,28 @@ extern crate std;
 
 use rand::rngs::StdRng;
 use rand::{ Rng, SeedableRng };
+use soroban_sdk::symbol_short;
 use utils::constant::{ PERCENTAGE_PRECISION_U64, PRICE_PRECISION, PRICE_PRECISION_I128 };
 
 use crate::testutils::{ create_pool_contract, Setup, TestConfig };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_fixed_point_math::FixedPoint;
-use soroban_sdk::String;
+use soroban_sdk::{
+    testutils::Address as _,
+    vec,
+    Address,
+    Env,
+    Error,
+    IntoVal,
+    String,
+    Symbol,
+    Val,
+    Vec,
+};
+use soroban_sdk::token::{
+    StellarAssetClient as SorobanTokenAdminClient,
+    TokenClient as SorobanTokenClient,
+};
 use utils::storage::{
     InitializeAllParams,
     InitializeParams,
@@ -18,23 +34,12 @@ use utils::storage::{
     TokenInitInfo,
 };
 use soroban_sdk::testutils::{ AuthorizedFunction, AuthorizedInvocation, Events };
-use soroban_sdk::token::{
-    StellarAssetClient as SorobanTokenAdminClient,
-    testutils::Address as _,
-    vec,
-    Address,
-    Env,
-    Error,
-    IntoVal,
-    Symbol,
-    Val,
-    Vec,
-};
 use pool_tokens::Client as ShareTokenClient;
 use utils::test_utils::{
     assert_approx_eq_abs,
     create_token_contract,
     get_mock_lp_token_info,
+    get_token_admin_client,
     install_dummy_wasm,
     install_token_wasm,
     jump,
@@ -162,7 +167,10 @@ fn test() {
 
     // selling quote for base (1 > 0)
     // expected = (1*4) / (100+1) - ((1*4)/(100+1) * (30 / 10_000))
-    assert_eq!(liq_pool.estimate_swap(&1, &0, &swap_in_amount), expected_swap_result);
+    assert_eq!(liq_pool.estimate_swap(&1, &0, &swap_in_amount), (
+        expected_swap_result,
+        expected_mint_amount,
+    ));
     assert_eq!(
         liq_pool.swap(&user1, &1, &0, &swap_in_amount, &expected_swap_result),
         expected_swap_result
@@ -255,7 +263,7 @@ fn test() {
     // TODO: how do we assert the pool burned token1
 
     jump(&e, 600);
-    assert_eq!(liq_pool.claim(&admin), 0);
+    assert_eq!(liq_pool.claim(&admin).0, 0);
     assert_eq!(
         token_reward.balance(&admin) as u128,
         total_reward_1 + total_reward_2 + total_reward_3
@@ -420,7 +428,7 @@ fn initialize_already_initialized() {
         router: users[0].clone(),
         base_asset_id: setup.btc_asset_id,
         quote_asset_id: setup.xlm_asset_id,
-        asset: setup.asset.clone(),
+        asset: setup.btc_addr.clone(),
         tokens: Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]),
         lp_token_info: TokenInitInfo {
             token_wasm_hash: install_token_wasm(&setup.env),
@@ -455,8 +463,9 @@ fn initialize_already_initialized_plane() {
                 emergency_pause_admins: Vec::from_array(&setup.env, [users[0].clone()]),
             },
             router: users[0].clone(),
-            oracles: setup.oracles.clone(),
-            target_asset: setup.target_asset.clone(),
+            base_asset_id: setup.btc_asset_id.clone(),
+            quote_asset_id: setup.xlm_asset_id.clone(),
+            asset: setup.btc_addr.clone(),
             tokens: Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]),
             lp_token_info: TokenInitInfo {
                 token_wasm_hash: install_token_wasm(&setup.env),
@@ -464,6 +473,8 @@ fn initialize_already_initialized_plane() {
                 symbol: String::from_str(&setup.env, "Pool Share Token"),
             },
             fee_fraction: 10_u32,
+            tier: PoolTier::A,
+            quote_max_insurance: 1_000_000_u128,
         },
         reward_config: RewardConfig {
             reward_token: setup.token_reward.address,
@@ -498,7 +509,8 @@ fn test_custom_fee() {
         let pool = create_pool_contract(
             &setup.env,
             &setup.admin,
-            &setup.router,
+            &setup.plane.address,
+            &setup.router.address,
             &setup.btc_asset_id,
             &setup.xlm_asset_id,
             &setup.btc_addr,
@@ -950,19 +962,19 @@ fn test_swaps_many_users(iterations_to_simulate: u32) {
         let token_a_vol = rng.gen_range(
             -(max_token_a_volatility as i128)..max_token_a_volatility as i128
         );
-        let new_token_a_price = setup.base_oracle_price + token_a_vol;
-        setup.base_oracle_client.set_price(
-            &Vec::from_array(&env, [new_token_a_price]),
-            &env.ledger().timestamp()
-        );
+
+        let btc_price = setup.oracle_client.lastprice(&setup.btc_asset).unwrap();
+        let new_token_a_price = btc_price.price + token_a_vol;
 
         // Update the quote asset price
         let token_b_vol = rng.gen_range(
             -(max_token_b_volatility as i128)..max_token_b_volatility as i128
         );
-        let new_token_b_price = setup.quote_oracle_price + token_b_vol;
-        setup.quote_oracle_client.set_price(
-            &Vec::from_array(&env, [new_token_b_price]),
+        let xlm_price = setup.oracle_client.lastprice(&setup.xlm_asset).unwrap();
+        let new_token_b_price = xlm_price.price + token_b_vol;
+
+        setup.oracle_client.set_price(
+            &Vec::from_array(&env, [new_token_a_price, new_token_b_price]),
             &env.ledger().timestamp()
         );
 
@@ -1016,7 +1028,8 @@ fn test_swaps_many_users(iterations_to_simulate: u32) {
 
         // Test pool price peg
         if check_price {
-            let pool_price = liq_pool.get_price(&true, &false);
+            let reserves = liq_pool.get_reserves();
+            let pool_price = reserves.get(0).unwrap() / reserves.get(1).unwrap();
             let expected_price = new_token_b_price
                 .fixed_div_floor(new_token_a_price, PRICE_PRECISION_I128)
                 .unwrap();
@@ -1125,7 +1138,7 @@ fn test_config_rewards_router() {
     let router = setup.router;
 
     liq_pool.set_incentives_config(
-        &router,
+        &router.address,
         &env.ledger().timestamp().saturating_add(60),
         &10_5000000_u128
     );
@@ -1145,12 +1158,20 @@ fn test_config_rewards_override() {
     assert_eq!(liq_pool.get_total_accumulated_reward(), 0);
     assert_eq!(liq_pool.get_total_configured_reward(), 0);
     let tps = 10_5000000_u128;
-    liq_pool.set_incentives_config(&router, &env.ledger().timestamp().saturating_add(60), &tps);
+    liq_pool.set_incentives_config(
+        &router.address,
+        &env.ledger().timestamp().saturating_add(60),
+        &tps
+    );
 
     jump(&env, 30);
     assert_eq!(liq_pool.get_total_accumulated_reward(), tps * 30);
     assert_eq!(liq_pool.get_total_configured_reward(), tps * 60);
-    liq_pool.set_incentives_config(&router, &env.ledger().timestamp().saturating_add(0), &0);
+    liq_pool.set_incentives_config(
+        &router.address,
+        &env.ledger().timestamp().saturating_add(0),
+        &0
+    );
 
     assert_eq!(liq_pool.get_total_accumulated_reward(), tps * 30);
     assert_eq!(liq_pool.get_total_configured_reward(), tps * 30);
@@ -1197,9 +1218,13 @@ fn test_large_numbers() {
     let user1 = users[0].clone();
     let amount_to_deposit = u128::MAX / 1_000_000;
     let desired_amount = amount_to_deposit;
-    let target_price = setup.quote_oracle_price
-        .fixed_div_floor(setup.base_oracle_price, PRICE_PRECISION_I128)
+
+    let btc_price = setup.oracle_client.lastprice(&setup.btc_asset).unwrap();
+    let xlm_price = setup.oracle_client.lastprice(&setup.xlm_asset).unwrap();
+    let target_price = xlm_price.price
+        .fixed_div_floor(btc_price.price, PRICE_PRECISION_I128)
         .unwrap();
+
     let expected_mint_amount = amount_to_deposit
         .fixed_div_floor(target_price as u128, PRICE_PRECISION)
         .unwrap();
@@ -1496,8 +1521,6 @@ fn test_withdraw_rewards() {
 
     let mut token1 = create_token_contract(&e, &admin);
     let mut token2 = create_token_contract(&e, &admin);
-
-    let plane = create_plane_contract(&e);
 
     if &token2.address < &token1.address {
         std::mem::swap(&mut token1, &mut token2);
@@ -2287,7 +2310,7 @@ fn test_regular_upgrade_token() {
     let contract = setup.liq_pool;
     let token = ShareTokenClient::new(&setup.env, &contract.share_id());
 
-    let token_wasm = setup.env.deployer().upload_contract_wasm(token_share::token::WASM);
+    let token_wasm = setup.env.deployer().upload_contract_wasm(pool_tokens::token::WASM);
     let new_wasm = install_dummy_wasm(&setup.env);
 
     // dummy wasm has version 130, everything else has greater version
