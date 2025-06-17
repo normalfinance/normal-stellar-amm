@@ -86,6 +86,9 @@ impl Default for Setup<'_> {
         // );
         // router.apply_transfer_ownership(&admin, &Symbol::new(&e, "EmergencyAdmin"));
 
+        let plane = create_plane_contract(&env);
+        router.set_pools_plane(&admin, &plane.address);
+
         Setup {
             env: e,
             admin,
@@ -101,4 +104,12 @@ impl Default for Setup<'_> {
             emergency_pause_admin,
         }
     }
+}
+
+mod pool_plane {
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/pool_plane.wasm");
+}
+
+pub fn create_plane_contract<'a>(e: &Env) -> pool_plane::Client<'a> {
+    pool_plane::Client::new(e, &e.register(pool_plane::WASM, ()))
 }

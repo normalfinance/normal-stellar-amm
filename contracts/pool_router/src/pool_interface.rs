@@ -71,6 +71,14 @@ pub trait PoolInterfaceTrait {
         pool_index: BytesN<32>,
         share_amount: u128
     ) -> u128;
+
+    fn get_liquidity(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> U256;
+
+    // Set liquidity calculator address. it's separate contract optimized to estimate liquidity for multiple pools
+    fn set_liquidity_calculator(e: Env, admin: Address, calculator: Address);
+
+    // Get liquidity calculator address
+    fn get_liquidity_calculator(e: Env) -> Address;
 }
 
 pub trait IncentivesInterfaceTrait {
@@ -222,4 +230,12 @@ pub trait PoolsManagementTrait {
         start: u128,
         end: u128
     ) -> Vec<(Vec<Address>, Map<BytesN<32>, Address>)>;
+}
+
+pub trait PoolPlaneInterface {
+    // configure pools plane address to be used as lightweight proxy to optimize instructions & batch operations
+    fn set_pools_plane(e: Env, admin: Address, plane: Address);
+
+    // get pools plane address
+    fn get_plane(e: Env) -> Address;
 }

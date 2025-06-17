@@ -2,6 +2,8 @@ use crate::errors::{ PoolError, PoolValidationError };
 use crate::events::Events as LiquidityPoolEvents;
 use crate::events::PoolEvents;
 use crate::incentives::get_incentives_manager;
+use crate::plane::update_plane;
+use crate::plane_interface::Plane;
 use crate::pool::{ InsuranceClaim, Pool as PoolType };
 use crate::interface::{
     AdminInterfaceTrait,
@@ -119,6 +121,7 @@ impl PoolCrunch for Pool {
     fn initialize_all(e: Env, params: InitializeAllParams) {
         // merge whole initialize process into one because lack of caching of VM components
         // https://github.com/stellar/rs-soroban-env/issues/827
+        Self::init_pools_plane(e.clone(), params.plane);
         Self::initialize(e.clone(), params.base);
         Self::initialize_incentives_config(e.clone(), params.reward_config.reward_token);
     }
@@ -218,6 +221,9 @@ impl PoolTrait for Pool {
             expiry_ts: 0,
         };
         set_pool(&e, &pool);
+
+        // update plane data for every pool update
+        update_plane(&e);
     }
 
     // Returns the pool's share token address.
@@ -322,6 +328,9 @@ impl PoolTrait for Pool {
                 total_shares + shares_to_mint,
                 user_shares + shares_to_mint
             );
+
+        // update plane data for every pool update
+        update_plane(&e);
 
         LiquidityPoolEvents::new(&e).deposit_liquidity(
             pool.token_b,
@@ -467,6 +476,9 @@ impl PoolTrait for Pool {
 
         // After swapping, rebalance the pool
         pool.rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
+
+        // update plane data for every pool update
+        update_plane(&e);
 
         LiquidityPoolEvents::new(&e).trade(
             user,
@@ -675,6 +687,9 @@ impl PoolTrait for Pool {
         // Rebalance the pool
         pool.rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
 
+        // update plane data for every pool update
+        update_plane(&e);
+
         in_amount
     }
 
@@ -769,6 +784,9 @@ impl PoolTrait for Pool {
         incentives
             .manager()
             .update_working_balance(&user, total_shares - share_amount, user_shares - share_amount);
+
+        // update plane data for every pool update
+        update_plane(&e);
 
         LiquidityPoolEvents::new(&e).withdraw_liquidity(pool.token_b, share_amount, share_amount);
 
@@ -1613,6 +1631,52 @@ impl IncentivesTrait for Pool {
         );
 
         (reward, fee_a, fee_b)
+    }
+}
+
+#[contractimpl]
+impl Plane for LiquidityPool {
+    // Sets the plane for the pool.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `plane` - The address of the plane.
+    //
+    // # Panics
+    //
+    // If the plane has already been initialized.
+    fn init_pools_plane(e: Env, plane: Address) {
+        if has_plane(&e) {
+            panic_with_error!(&e, LiquidityPoolError::PlaneAlreadyInitialized);
+        }
+
+        set_plane(&e, &plane);
+    }
+
+    fn set_pools_plane(e: Env, admin: Address, plane: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+
+        set_plane(&e, &plane);
+    }
+
+    // Returns the plane of the pool.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    //
+    // # Returns
+    //
+    // The address of the plane.
+    fn get_pools_plane(e: Env) -> Address {
+        get_plane(&e)
+    }
+
+    // Updates the plane data in case the plane contract was updated.
+    fn backfill_plane_data(e: Env) {
+        update_plane(&e);
     }
 }
 

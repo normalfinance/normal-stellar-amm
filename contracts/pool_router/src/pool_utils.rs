@@ -12,7 +12,7 @@ use crate::storage::{
 use access_control::access::AccessControl;
 use access_control::management::{ MultipleAddressesManagementTrait, SingleAddressManagementTrait };
 use access_control::role::Role;
-use incentives::storage::{  RewardTokenStorageTrait };
+use incentives::storage::{ RewardTokenStorageTrait };
 use sep_40_oracle::Asset;
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{ panic_with_error, String };
@@ -29,7 +29,12 @@ use soroban_sdk::{
     Vec,
 };
 use utils::storage::{
-    InitializeAllParams, InitializeParams, PoolTier, PrivilegedAddresses, RewardConfig, TokenInitInfo
+    InitializeAllParams,
+    InitializeParams,
+    PoolTier,
+    PrivilegedAddresses,
+    RewardConfig,
+    TokenInitInfo,
 };
 
 pub fn get_pool_salt(e: &Env, fee_fraction: &u32) -> BytesN<32> {
@@ -149,6 +154,8 @@ fn init_pool(
     let pause_admin = access_control.get_role_safe(&Role::PauseAdmin).unwrap_or(admin.clone());
     let emergency_pause_admins = access_control.get_role_addresses(&Role::EmergencyPauseAdmin);
 
+    let plane = get_pool_plane(e);
+
     let params = InitializeAllParams {
         base: InitializeParams {
             admin,
@@ -175,6 +182,7 @@ fn init_pool(
             oracle_registry: oracle_registry.clone(),
         },
         reward_config: RewardConfig { reward_token },
+        plane,
     };
 
     e.invoke_contract::<()>(

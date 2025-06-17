@@ -2,15 +2,25 @@ use crate::errors::PoolRouterError;
 use crate::pool_utils::get_tokens_salt;
 use paste::paste;
 use soroban_sdk::{
-    contracterror, contracttype, panic_with_error, Address, BytesN, Env, Map, Vec, U256,
+    contracterror,
+    contracttype,
+    panic_with_error,
+    Address,
+    BytesN,
+    Env,
+    Map,
+    Vec,
+    U256,
 };
-use utils::bump::{bump_instance, bump_persistent, bump_temporary};
+use utils::bump::{ bump_instance, bump_persistent, bump_temporary };
 use utils::constant::MAX_POOLS_FOR_PAIR;
 use utils::errors::storage_errors::StorageError;
 use utils::{
-    generate_instance_storage_getter, generate_instance_storage_getter_and_setter,
+    generate_instance_storage_getter,
+    generate_instance_storage_getter_and_setter,
     generate_instance_storage_getter_and_setter_with_default,
-    generate_instance_storage_getter_with_default, generate_instance_storage_setter,
+    generate_instance_storage_getter_with_default,
+    generate_instance_storage_setter,
 };
 
 #[contracttype]
@@ -55,10 +65,12 @@ enum DataKey {
     TokenHash,
     ConstantPoolHash,
     PoolCounter,
+    PoolPlane,
+    LiquidityCalculator,
 
     // Temporary storage
-    RewardsConfig,                          // Global reward config
-    RewardTokensList,                       // Tokens for reward
+    RewardsConfig, // Global reward config
+    RewardTokensList, // Tokens for reward
     RewardTokensPoolsLiquidity(BytesN<32>), // Per pool liquidity
 }
 
@@ -117,6 +129,12 @@ generate_instance_storage_getter_and_setter_with_default!(
     u128,
     0
 );
+generate_instance_storage_getter_and_setter!(pool_plane, DataKey::PoolPlane, Address);
+generate_instance_storage_getter_and_setter!(
+    liquidity_calculator,
+    DataKey::LiquidityCalculator,
+    Address
+);
 
 pub fn get_rewards_config(e: &Env) -> GlobalRewardsConfig {
     match e.storage().temporary().get(&DataKey::RewardsConfig) {
@@ -124,10 +142,11 @@ pub fn get_rewards_config(e: &Env) -> GlobalRewardsConfig {
             bump_temporary(e, &DataKey::RewardsConfig);
             v
         }
-        None => GlobalRewardsConfig {
-            tps: 0,
-            expired_at: 0,
-        },
+        None =>
+            GlobalRewardsConfig {
+                tps: 0,
+                expired_at: 0,
+            },
     }
 }
 
@@ -168,7 +187,7 @@ pub fn get_reward_tokens_detailed(e: &Env, salt: BytesN<32>) -> Map<BytesN<32>, 
 pub fn set_reward_tokens_detailed(
     e: &Env,
     salt: BytesN<32>,
-    value: &Map<BytesN<32>, (U256, bool)>,
+    value: &Map<BytesN<32>, (U256, bool)>
 ) {
     let key = DataKey::RewardTokensPoolsLiquidity(salt);
     let result = e.storage().temporary().set(&key, value);
@@ -209,16 +228,13 @@ pub fn add_pool(
     salt: BytesN<32>,
     pool_index: BytesN<32>,
     pool_type: PoolType,
-    pool_address: Address,
+    pool_address: Address
 ) {
     let mut pools = get_pools(e, salt.clone());
-    pools.set(
-        pool_index,
-        PoolData {
-            pool_type,
-            address: pool_address.clone(),
-        },
-    );
+    pools.set(pool_index, PoolData {
+        pool_type,
+        address: pool_address.clone(),
+    });
 
     if pools.len() > MAX_POOLS_FOR_PAIR {
         panic_with_error!(&e, PoolRouterError::PoolsOverMax);
