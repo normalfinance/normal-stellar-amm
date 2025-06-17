@@ -60,6 +60,11 @@ generate_instance_storage_getter_and_setter_with_default!(
 );
 generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
 
+pub(crate) fn has_plane(e: &Env) -> bool {
+    let key = DataKey::Plane;
+    e.storage().instance().has(&key)
+}
+
 pub(crate) fn set_pool(e: &Env, pool: &Pool) {
     let key = DataKey::Pool;
     bump_instance(e);

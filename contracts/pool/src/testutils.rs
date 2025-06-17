@@ -4,7 +4,6 @@ use crate::plane::{ pool_plane, PoolPlaneClient };
 use crate::PoolClient;
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use sep_40_oracle::testutils::{ Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM };
-use sep_40_oracle::Asset;
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient,
     TokenClient as SorobanTokenClient,
@@ -280,7 +279,7 @@ impl Setup<'_> {
         Self {
             env: e,
             plane,
-            registry,
+            // registry,
             router,
 
             // oracle
@@ -318,9 +317,7 @@ impl Setup<'_> {
         }
     }
 
-    pub(crate) fn target_price(setup: &Setup) -> u128 {
-        
-    }
+    pub(crate) fn target_price(setup: &Setup) -> u128 {}
 
     pub(crate) fn generate_random_users(e: &Env, users_count: u32) -> vec::Vec<Address> {
         let mut users = vec![];
@@ -415,6 +412,8 @@ pub fn create_pool_contract<'a>(
 
 pub(crate) fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
     PoolPlaneClient::new(e, &e.register(pool_plane::WASM, ()))
+}
+
 mod pool_router {
     soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/pool_router.wasm");
 }

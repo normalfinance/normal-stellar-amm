@@ -19,6 +19,7 @@ use crate::router_interface::AdminInterface;
 use crate::storage::{
     get_liquidity_calculator,
     get_pool,
+    get_pool_plane,
     get_pools_plain,
     get_pools_vec,
     get_reward_tokens,
@@ -30,6 +31,7 @@ use crate::storage::{
     remove_pool,
     set_constant_product_pool_hash,
     set_liquidity_calculator,
+    set_pool_plane,
     set_reward_tokens,
     set_reward_tokens_detailed,
     set_rewards_config,
@@ -355,36 +357,57 @@ impl PoolInterfaceTrait for PoolRouter {
         amount
     }
 
-    // Calculates and returns the liquidity of the provided pools.
-    // It interacts with the `PoolPlaneClient` to get the data for the pools
-    // and then calculates the liquidity based on the pool type (standard or stableswap).
+    // Returns the total liquidity of the pool.
     //
     // # Arguments
     //
-    // * `pools` - A vector of addresses representing the pools.
+    // * `e` - The environment.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
     //
     // # Returns
     //
-    // * A vector of U256 values representing the liquidity of the provided pools.
-    fn get_liquidity(e: Env, pools: Vec<Address>) -> Vec<U256> {
-        let data = plane_client.get(&pools);
-        let mut result = Vec::new(&e);
-        for pool_idx in 0..pools.len() {
-            let (pool_type, init_args, reserves) = data.get(pool_idx).unwrap();
+    // The total liquidity of the pool as a U256.
+    fn get_liquidity(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> U256 {
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
 
-            let mut out = U256::from_u32(&e, 0);
-
-            let (fee, reserves) = parse_standard_data(init_args, reserves);
-            out = out.add(
-                &U256::from_u128(&e, get_liquidity(&e, fee, &reserves, 0, 1))
-            );
-            out = out.add(
-                &U256::from_u128(&e, get_liquidity(&e, fee, &reserves, 1, 0))
-            );
-
-            result.push_back(out);
+        let calculator = get_liquidity_calculator(&e);
+        match
+            LiquidityCalculatorClient::new(&e, &calculator)
+                .get_liquidity(&Vec::from_array(&e, [pool_id]))
+                .get(0)
+        {
+            Some(v) => v,
+            None => panic_with_error!(&e, PoolRouterError::LiquidityCalculationError),
         }
-        result
+    }
+
+    // Returns the address of the liquidity calculator.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    //
+    // # Returns
+    //
+    // The address of the liquidity calculator.
+    fn get_liquidity_calculator(e: Env) -> Address {
+        get_liquidity_calculator(&e)
+    }
+
+    // Sets the liquidity calculator.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `admin` - The address of the admin user.
+    // * `calculator` - The address of the liquidity calculator.
+    fn set_liquidity_calculator(e: Env, admin: Address, calculator: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+
+        set_liquidity_calculator(&e, &calculator);
     }
 }
 
@@ -1208,7 +1231,7 @@ impl PoolsManagementTrait for PoolRouter {
 
 // The `PoolPlaneInterface` trait provides the interface for interacting with a pool plane.
 #[contractimpl]
-impl PoolPlaneInterface for LiquidityPoolRouter {
+impl PoolPlaneInterface for PoolRouter {
     // Sets the pool plane.
     // Pool plane is a contract which knows current state of every pool
     // and can be used to estimate swaps without calling pool contracts.

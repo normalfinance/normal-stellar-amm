@@ -18,15 +18,18 @@ use crate::storage::{
     get_is_killed_deposit,
     get_is_killed_swap,
     get_is_killed_withdraw,
+    get_plane,
     get_pool,
     get_reserve_a,
     get_reserve_b,
     get_router,
     get_token_future_wasm,
+    has_plane,
     set_is_killed_claim,
     set_is_killed_deposit,
     set_is_killed_swap,
     set_is_killed_withdraw,
+    set_plane,
     set_pool,
     set_reserve_a,
     set_reserve_b,
@@ -1687,7 +1690,7 @@ impl IncentivesTrait for Pool {
 }
 
 #[contractimpl]
-impl Plane for LiquidityPool {
+impl Plane for Pool {
     // Sets the plane for the pool.
     //
     // # Arguments
@@ -1700,7 +1703,7 @@ impl Plane for LiquidityPool {
     // If the plane has already been initialized.
     fn init_pools_plane(e: Env, plane: Address) {
         if has_plane(&e) {
-            panic_with_error!(&e, LiquidityPoolError::PlaneAlreadyInitialized);
+            panic_with_error!(&e, PoolError::PlaneAlreadyInitialized);
         }
 
         set_plane(&e, &plane);
