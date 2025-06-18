@@ -16,7 +16,6 @@ use crate::reserve::Reserve;
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
-    Router, // The address of the Router contract (only one who can call `request_payout()`).
     FeeCollector, // The address of the Fee Collector contract (only one who can call `deposit()`).
     MinTimeBetweenPayouts, // The minimum time between payouts to prevent repeated or too-frequent payouts (rate limiting).
 
@@ -25,9 +24,8 @@ enum DataKey {
     MinReserveRatio, // The minimum reserve the Buffer must maintain
 
     IsKilledDeposit,
-    IsKilledRequestPayout,
+    IsKilledResolveLiquidityDeficit,
 }
-generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
 generate_instance_storage_getter_and_setter!(fee_collector, DataKey::FeeCollector, Address);
 generate_instance_storage_getter_and_setter_with_default!(
     is_killed_deposit,
@@ -36,8 +34,8 @@ generate_instance_storage_getter_and_setter_with_default!(
     false
 );
 generate_instance_storage_getter_and_setter_with_default!(
-    is_killed_request_payout,
-    DataKey::IsKilledRequestPayout,
+    is_killed_resolve_liquidity_deficit,
+    DataKey::IsKilledResolveLiquidityDeficit,
     bool,
     false
 );

@@ -319,7 +319,7 @@ fn test_kill_deposit() {
 }
 
 #[test]
-fn test_kill_request_payout() {
+fn test_kill_resolve_liquidity_deficit() {
     let setup = Setup::default();
     let buffer = setup.buffer;
     let user = Address::generate(&setup.env);
@@ -328,7 +328,7 @@ fn test_kill_request_payout() {
         (user.clone(), false),
         (setup.admin.clone(), true),
     ] {
-        assert_eq!(buffer.try_kill_request_payout(&addr).is_ok(), is_ok);
+        assert_eq!(buffer.try_kill_resolve_liquidity_deficit(&addr).is_ok(), is_ok);
     }
 }
 
@@ -347,7 +347,7 @@ fn test_unkill_deposit() {
 }
 
 #[test]
-fn test_unkill_request_payout() {
+fn test_unkill_resolve_liquidity_deficit() {
     let setup = Setup::default();
     let buffer = setup.buffer;
     let user = Address::generate(&setup.env);
@@ -356,26 +356,11 @@ fn test_unkill_request_payout() {
         (user.clone(), false),
         (setup.admin.clone(), true),
     ] {
-        assert_eq!(buffer.try_unkill_request_payout(&addr).is_ok(), is_ok);
+        assert_eq!(buffer.try_unkill_resolve_liquidity_deficit(&addr).is_ok(), is_ok);
     }
 }
 
 // admin setters
-
-#[test]
-fn test_set_router() {
-    let setup = Setup::default();
-    let buffer = setup.buffer;
-    let router = Address::generate(&setup.env);
-    let user = Address::generate(&setup.env);
-
-    for (addr, is_ok) in [
-        (user, false),
-        (setup.admin, true),
-    ] {
-        assert_eq!(buffer.try_set_router(&addr, &router).is_ok(), is_ok);
-    }
-}
 
 #[test]
 fn test_set_fee_collector() {
@@ -438,3 +423,4 @@ fn test_set_reserve_max_balance() {
     }
 }
 
+// resolve_liquidity_deficit() in integration_tests

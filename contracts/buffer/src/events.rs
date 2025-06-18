@@ -18,7 +18,7 @@ impl Events {
 pub(crate) trait BufferEvents {
     fn deposit(&self, token: Address, user: Address, amount: u128);
 
-    fn request_payout(&self, token: Address, user: Address, amount: u128);
+    fn resolve_liquidity_deficit(&self, token: Address, user: Address, amount: u128);
 
     fn withdraw_surplus(&self, token: Address, user: Address, amount: u128);
 
@@ -28,9 +28,9 @@ pub(crate) trait BufferEvents {
 
     fn unkill_deposit(&self);
 
-    fn kill_request_payout(&self);
+    fn kill_resolve_liquidity_deficit(&self);
 
-    fn unkill_request_payout(&self);
+    fn unkill_resolve_liquidity_deficit(&self);
 }
 
 impl BufferEvents for Events {
@@ -40,10 +40,10 @@ impl BufferEvents for Events {
             .publish((Symbol::new(self.env(), "deposit"), token, user), amount);
     }
 
-    fn request_payout(&self, token: Address, user: Address, amount: u128) {
+    fn resolve_liquidity_deficit(&self, token: Address, user: Address, amount: u128) {
         self.env()
             .events()
-            .publish((Symbol::new(self.env(), "request_payout"), token, user), amount);
+            .publish((Symbol::new(self.env(), "resolve_liquidity_deficit"), token, user), amount);
     }
 
     fn withdraw_surplus(&self, token: Address, user: Address, amount: u128) {
@@ -70,15 +70,15 @@ impl BufferEvents for Events {
             .publish((Symbol::new(self.env(), "unkill_deposit"),), ())
     }
 
-    fn kill_request_payout(&self) {
+    fn kill_resolve_liquidity_deficit(&self) {
         self.env()
             .events()
-            .publish((Symbol::new(self.env(), "kill_request_payout"),), ())
+            .publish((Symbol::new(self.env(), "kill_resolve_liquidity_deficit"),), ())
     }
 
-    fn unkill_request_payout(&self) {
+    fn unkill_resolve_liquidity_deficit(&self) {
         self.env()
             .events()
-            .publish((Symbol::new(self.env(), "unkill_request_payout"),), ())
+            .publish((Symbol::new(self.env(), "unkill_resolve_liquidity_deficit"),), ())
     }
 }

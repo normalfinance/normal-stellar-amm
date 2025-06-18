@@ -6,20 +6,18 @@ use crate::storage::{
     get_buffer_reserve_amount,
     get_fee_collector,
     get_is_killed_deposit,
-    get_is_killed_request_payout,
+    get_is_killed_resolve_liquidity_deficit,
     get_last_payout_timestamp,
     get_min_reserve_ratio,
     get_min_time_between_payouts,
     get_reserve,
-    get_router,
     put_reserve,
     set_fee_collector,
     set_is_killed_deposit,
-    set_is_killed_request_payout,
+    set_is_killed_resolve_liquidity_deficit,
     set_last_payout_timestamp,
     set_min_reserve_ratio,
     set_min_time_between_payouts,
-    set_router,
 };
 use access_control::access::{ AccessControl, AccessControlTrait };
 use access_control::emergency::{ get_emergency_mode, set_emergency_mode };
@@ -30,7 +28,18 @@ use access_control::management::SingleAddressManagementTrait;
 use access_control::role::{ Role, SymbolRepresentation };
 use access_control::transfer::TransferOwnershipTrait;
 use access_control::utils::{ require_admin };
-use soroban_sdk::{ contract, contractimpl, panic_with_error, Address, BytesN, Env, Symbol, Vec };
+use soroban_sdk::{
+    contract,
+    contractimpl,
+    log,
+    panic_with_error,
+    Address,
+    BytesN,
+    Env,
+    IntoVal,
+    Symbol,
+    Vec,
+};
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
@@ -43,7 +52,13 @@ pub struct Buffer;
 // The `BufferTrait` trait provides the interface for interacting with the buffer.
 #[contractimpl]
 impl BufferTrait for Buffer {
-    fn initialize(e: Env, admin: Address, emergency_admin: Address, router: Address) {
+    fn initialize(
+        e: Env,
+        admin: Address,
+        emergency_admin: Address,
+        time_bt_payouts: u64,
+        min_reserve_ratio: u32
+    ) {
         admin.require_auth();
 
         let access_control = AccessControl::new(&e);
@@ -53,7 +68,8 @@ impl BufferTrait for Buffer {
         access_control.set_role_address(&Role::Admin, &admin);
         access_control.set_role_address(&Role::EmergencyAdmin, &emergency_admin);
 
-        set_router(&e, &router);
+        set_min_time_between_payouts(&e, &time_bt_payouts);
+        set_min_reserve_ratio(&e, &min_reserve_ratio);
     }
 
     fn deposit(e: Env, sender: Address, token: Address, amount: u128) {
@@ -79,44 +95,6 @@ impl BufferTrait for Buffer {
         transfer_token(&e, &token, &sender, &e.current_contract_address(), &(amount as i128));
 
         Events::new(&e).deposit(token, sender, amount);
-    }
-
-    fn request_payout(e: Env, sender: Address, token: Address, amount: u128) {
-        sender.require_auth();
-
-        let router = get_router(&e);
-        if sender != router {
-            panic_with_error!(&e, BufferError::NotAuthorized);
-        }
-
-        if get_is_killed_request_payout(&e) {
-            panic_with_error!(e, BufferError::BufferRequestPayoutKilled);
-        }
-
-        validate_token_contract(&e, &token);
-
-        // Ensure time since last payout is greater than the minimum time b/t payouts
-        let now = e.ledger().timestamp();
-        let last_payout_ts = get_last_payout_timestamp(&e);
-        let min_time_bt_payouts = get_min_time_between_payouts(&e);
-        if last_payout_ts > 0 && now - last_payout_ts <= min_time_bt_payouts {
-            panic_with_error!(&e, BufferError::PayoutTooSoon);
-        }
-
-        // Ensure Buffer reserve has sufficient balance
-        let reserve = get_reserve(&e, &token);
-        if amount > reserve.balance {
-            panic_with_error!(&e, BufferError::InsufficentFunds);
-        }
-
-        // Update the Buffer reserve
-        put_reserve(&e, &token, &reserve.payout(&e, amount, now));
-        set_last_payout_timestamp(&e, &now);
-
-        // Transfer tokens to Pool
-        transfer_token(&e, &token, &e.current_contract_address(), &sender, &(amount as i128));
-
-        Events::new(&e).request_payout(token, sender, amount);
     }
 
     // Sync token balances with reserves.
@@ -156,11 +134,6 @@ impl BufferTrait for Buffer {
         }
     }
 
-    // Returns the Router address.
-    fn get_router(e: Env) -> Address {
-        get_router(&e)
-    }
-
     // Returns the Fee Collector address.
     fn get_fee_collector(e: Env) -> Address {
         get_fee_collector(&e)
@@ -190,19 +163,6 @@ impl BufferTrait for Buffer {
 // The `AdminInterface` trait provides the interface for administrative actions.
 #[contractimpl]
 impl AdminInterface for Buffer {
-    // Sets the router address.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `router` - The address of the router contract.
-    fn set_router(e: Env, admin: Address, router: Address) {
-        admin.require_auth();
-        require_admin(&e, &admin);
-
-        set_router(&e, &router);
-    }
-
     // Sets the fee collector address.
     //
     // # Arguments
@@ -258,6 +218,54 @@ impl AdminInterface for Buffer {
         put_reserve(&e, &token, &reserve.update_max_balance(max_balance, now));
     }
 
+    fn resolve_liquidity_deficit(
+        e: Env,
+        admin: Address,
+        token: Address,
+        amount: u128,
+        pool_address: Address
+    ) -> u128 {
+        admin.require_auth();
+        require_admin(&e, &admin);
+
+        if get_is_killed_resolve_liquidity_deficit(&e) {
+            panic_with_error!(e, BufferError::BufferRequestPayoutKilled);
+        }
+
+        validate_token_contract(&e, &token);
+
+        // Ensure time since last payout is greater than the minimum time b/t payouts
+        let now = e.ledger().timestamp();
+        let last_payout_ts = get_last_payout_timestamp(&e);
+        let min_time_bt_payouts = get_min_time_between_payouts(&e);
+        if now - last_payout_ts <= min_time_bt_payouts {
+            panic_with_error!(&e, BufferError::PayoutTooSoon);
+        }
+
+        // Ensure Buffer reserve has sufficient balance
+        let reserve = get_reserve(&e, &token);
+        if amount > reserve.balance {
+            panic_with_error!(&e, BufferError::InsufficentFunds);
+        }
+
+        // Update the Buffer reserve
+        put_reserve(&e, &token, &reserve.payout(&e, amount, now));
+        set_last_payout_timestamp(&e, &now);
+
+        let paid: u128 = e.invoke_contract(
+            &pool_address,
+            &Symbol::new(&e, "pay_insurance_claim"),
+            Vec::from_array(&e, [e.current_contract_address().to_val(), amount.into_val(&e)])
+        );
+
+        // Transfer tokens to Pool
+        // transfer_token(&e, &token, &e.current_contract_address(), &sender, &(amount as i128));
+
+        Events::new(&e).resolve_liquidity_deficit(token, admin, amount);
+
+        paid
+    }
+
     // Withdraws surplus reservess.
     //
     // # Arguments
@@ -275,7 +283,6 @@ impl AdminInterface for Buffer {
         let reserve = get_reserve(&e, &token);
         let min_reserve_ratio = get_min_reserve_ratio(&e);
         let min_reserve = (reserve.balance * (min_reserve_ratio as u128)) / 10_000;
-
         if reserve.balance - amount < min_reserve {
             panic_with_error!(&e, BufferError::WithdrawalOverMinimumReserve);
         }
@@ -312,12 +319,12 @@ impl AdminInterface for Buffer {
     // # Arguments
     //
     // * `admin` - The address of the admin.
-    fn kill_request_payout(e: Env, admin: Address) {
+    fn kill_resolve_liquidity_deficit(e: Env, admin: Address) {
         admin.require_auth();
         require_admin(&e, &admin);
 
-        set_is_killed_request_payout(&e, &true);
-        Events::new(&e).kill_request_payout();
+        set_is_killed_resolve_liquidity_deficit(&e, &true);
+        Events::new(&e).kill_resolve_liquidity_deficit();
     }
 
     // Resumes the buffer deposits.
@@ -338,12 +345,12 @@ impl AdminInterface for Buffer {
     // # Arguments
     //
     // * `admin` - The address of the admin.
-    fn unkill_request_payout(e: Env, admin: Address) {
+    fn unkill_resolve_liquidity_deficit(e: Env, admin: Address) {
         admin.require_auth();
         require_admin(&e, &admin);
 
-        set_is_killed_request_payout(&e, &false);
-        Events::new(&e).unkill_request_payout();
+        set_is_killed_resolve_liquidity_deficit(&e, &false);
+        Events::new(&e).unkill_resolve_liquidity_deficit();
     }
 
     // Get deposit killswitch status.
@@ -352,8 +359,8 @@ impl AdminInterface for Buffer {
     }
 
     // Get payout killswitch status.
-    fn get_is_killed_request_payout(e: Env) -> bool {
-        get_is_killed_request_payout(&e)
+    fn get_is_killed_resolve_deficit(e: Env) -> bool {
+        get_is_killed_resolve_liquidity_deficit(&e)
     }
 }
 
