@@ -48,7 +48,11 @@ use access_control::management::{ MultipleAddressesManagementTrait, SingleAddres
 use access_control::role::Role;
 use access_control::role::SymbolRepresentation;
 use access_control::transfer::TransferOwnershipTrait;
-use access_control::utils::{ require_operations_admin_or_owner, require_rewards_admin_or_owner };
+use access_control::utils::{
+    require_admin,
+    require_operations_admin_or_owner,
+    require_rewards_admin_or_owner,
+};
 use incentives::storage::{ RewardTokenStorageTrait };
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
@@ -70,7 +74,7 @@ use soroban_sdk::{
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
-use utils::constant::CONSTANT_PRODUCT_FEE_AVAILABLE;
+use utils::constant::{ MAX_POOL_FEE };
 use utils::storage::{ PoolInfo, PoolTier };
 use utils::token::{ transfer_token, transfer_token_from };
 
@@ -1068,7 +1072,7 @@ impl PoolsManagementTrait for PoolRouter {
     //
     // # Arguments
     //
-    // * `user` - The address of the user initializing the pool.
+    // * `admin` - The address of the admin initializing the pool.
     // * `tokens` - A vector of token addresses that the pool consists of.
     // * `fee_fraction` - The fee fraction for the pool. Should match pre-defined set of values: 0.1%, 0.3%, 1%.
     //
@@ -1079,7 +1083,7 @@ impl PoolsManagementTrait for PoolRouter {
     // * The address of the pool.
     fn init_pool(
         e: Env,
-        user: Address,
+        admin: Address,
         oracle_registry_ids: (Symbol, Symbol),
         asset: Address,
         tokens: Vec<Address>,
@@ -1088,9 +1092,10 @@ impl PoolsManagementTrait for PoolRouter {
         tier: PoolTier,
         quote_max_insurance: u128
     ) -> (BytesN<32>, Address) {
-        user.require_auth();
+        admin.require_auth();
+        require_admin(&e, &admin);
 
-        if !CONSTANT_PRODUCT_FEE_AVAILABLE.contains(&fee_fraction) {
+        if fee_fraction > MAX_POOL_FEE {
             panic_with_error!(&e, PoolRouterError::BadFee);
         }
 

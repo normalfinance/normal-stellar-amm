@@ -204,11 +204,9 @@ pub trait IncentivesInterfaceTrait {
 
 pub trait PoolsManagementTrait {
     // Initialize standard pool with custom arguments.
-    // fee_fraction should match pre-defined set of values: 0.1%, 0.3%, 1%
-    // 10 = 0.1%, 30 = 0.3%, 100 = 1%
     fn init_pool(
         e: Env,
-        user: Address,
+        admin: Address,
         oracle_registry_ids: (Symbol, Symbol),
         asset: Address,
         tokens: Vec<Address>,

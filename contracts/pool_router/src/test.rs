@@ -1,7 +1,6 @@
 #![cfg(test)]
 extern crate std;
 
-// use crate::constants::CONSTANT_PRODUCT_FEE_AVAILABLE;
 use crate::testutils::{ self, create_plane_contract, test_token };
 use crate::testutils::{ Setup };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
@@ -25,8 +24,7 @@ use soroban_sdk::{
     Val,
     Vec,
     U256,
-};
-use utils::constant::CONSTANT_PRODUCT_FEE_AVAILABLE;
+};;
 use utils::storage::PoolTier;
 use utils::test_utils::{
     assert_approx_eq_abs,
@@ -1032,6 +1030,7 @@ fn test_config_rewards_no_pools_for_tokens() {
     );
 }
 
+// TODO: change to fee over max fee
 #[test]
 #[should_panic(expected = "Error(Contract, #302)")]
 fn test_unexpected_fee() {
@@ -1046,7 +1045,7 @@ fn test_unexpected_fee() {
     let user1 = Address::generate(&e);
     reward_token.mint(&user1, &10_0000000);
 
-    let fee = CONSTANT_PRODUCT_FEE_AVAILABLE[1] + 1;
+    let fee = 30 + 1;
     router.init_pool(
         &user1,
         &get_mock_oracle_registry_ids(&e),
@@ -1073,7 +1072,7 @@ fn test_event_correct() {
     let user1 = Address::generate(&e);
 
     reward_token.mint(&user1, &10000000_0000000);
-    let fee = CONSTANT_PRODUCT_FEE_AVAILABLE[1];
+    let fee = 30;
 
     let (pool_hash, pool_address) = router.init_pool(
         &user1,
