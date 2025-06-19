@@ -7,7 +7,7 @@ use soroban_sdk::token::{
     TokenClient as SorobanTokenClient,
 };
 use soroban_sdk::{ Address, Env };
-use utils::constant::THIRTEEN_DAY;
+use utils::constant::{ PRICE_PRECISION, PRICE_PRECISION_I128, THIRTEEN_DAY };
 use utils::test_utils::{ create_token_contract, get_token_admin_client };
 use std::vec;
 
@@ -22,7 +22,7 @@ impl Default for TestConfig {
     fn default() -> Self {
         TestConfig {
             users_count: 3,
-            mint_to_user: 1000,
+            mint_to_user: 1_000 * PRICE_PRECISION_I128,
             unstaking_period: THIRTEEN_DAY,
             max_shares: 1_000_000_u128,
         }
@@ -83,7 +83,7 @@ impl Setup<'_> {
             &2_00000_i32, // 2%
             &(10_00000_i32, 60_00000_i32) // 10% and 60%
         );
-        insurance_fund.set_optimal_coverage(&admin, &1_000_000_0000000_u128);
+        insurance_fund.set_optimal_coverage(&admin, &(1_000_000 * PRICE_PRECISION));
 
         Self {
             env: e,

@@ -146,8 +146,6 @@ impl InsuranceFundTrait for InsuranceFund {
             InsuranceFundError::IFWithdrawRequestInProgress
         );
 
-        let total_shares = get_total_shares(&e);
-
         apply_rebase_to_insurance_fund(&e, insurance_vault_amount);
         apply_rebase_to_stake(&e, &mut stake);
 

@@ -2,6 +2,7 @@ use paste::paste;
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{ contracttype, panic_with_error, Address, Env };
 use utils::bump::{ bump_instance, bump_persistent, bump_temporary };
+use utils::constant::THIRTEEN_DAY;
 use utils::errors::storage_errors::StorageError;
 use utils::{
     generate_instance_storage_getter_and_setter_with_default,
@@ -47,7 +48,7 @@ generate_instance_storage_getter_and_setter_with_default!(
     unstaking_period,
     DataKey::UnstakingPeriod,
     u64,
-    0
+    THIRTEEN_DAY
 );
 
 // Coverage

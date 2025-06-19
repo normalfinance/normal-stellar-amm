@@ -1,6 +1,6 @@
 use soroban_fixed_point_math::FixedPoint;
 use soroban_sdk::{ panic_with_error, Env };
-use utils::{ constant::PRICE_PRECISION, math::safe_math::SafeMath };
+use utils::{ constant::{ PERCENTAGE_PRECISION, PRICE_PRECISION }, math::safe_math::SafeMath };
 
 use crate::errors::InsuranceFundError;
 
@@ -14,14 +14,16 @@ use crate::errors::InsuranceFundError;
 // # Returns
 //
 // * The utilization percentage as a fixed-point `u32` (e.g. 1_000_000 = 100%).
-//   Returns 0 if either input is zero. The result is scaled by `PRICE_PRECISION`.
+//   Returns 0 if either input is zero. The result is scaled by `PERCENTAGE_PRECISION`.
 pub fn calculate_utilization(insurance_vault_amount: u128, optimal_coverage: u128) -> u32 {
     if insurance_vault_amount == 0 || optimal_coverage == 0 {
         return 0;
     }
 
     // is this safe to cast u128 down to i32?
-    insurance_vault_amount.fixed_div_floor(optimal_coverage, PRICE_PRECISION).unwrap_or(0) as u32
+    insurance_vault_amount
+        .fixed_div_floor(optimal_coverage, PERCENTAGE_PRECISION)
+        .unwrap_or(0) as u32
     //  result.min(u32::MAX as u128) as u32
 }
 
@@ -51,28 +53,37 @@ pub fn calculate_rate(
         return base_rate;
     }
 
-    if optimal_utilization == 0 {
-        panic_with_error!(&e, InsuranceFundError::InvalidOptimalUtilization);
+    if optimal_utilization == 0 || optimal_utilization >= 10_000 {
+        panic_with_error!(e, InsuranceFundError::InvalidOptimalUtilization);
     }
 
-    let utilization = utilization as i32;
-    let optimal_utilization = optimal_utilization as i32;
+    let utilization = utilization as i64;
+    let optimal_utilization = optimal_utilization as i64;
+    let base_rate = base_rate as i64;
+    let slope1 = slope1 as i64;
+    let slope2 = slope2 as i64;
 
-    if utilization <= optimal_utilization {
-        let utilization_ratio = utilization.safe_div(e, optimal_utilization);
-        let variable_rate = utilization_ratio.safe_mul(e, slope1);
-        base_rate.safe_add(e, variable_rate)
+    let rate = if utilization <= optimal_utilization {
+        // rate = base + (utilization * slope1 / optimal_utilization)
+        let variable_rate = utilization.fixed_mul_floor(slope1, optimal_utilization).unwrap();
+        base_rate + variable_rate
     } else {
-        let excess_utilization = utilization.safe_sub(e, optimal_utilization);
-        let remaining = (10_000_i32).safe_sub(e, optimal_utilization); // Assuming 100% = 10_000
-        let excess_ratio = excess_utilization.safe_div(e, remaining);
-        let slope2_part = excess_ratio.safe_mul(e, slope2);
-        base_rate.safe_add(e, slope1).safe_add(e, slope2_part)
-    }
+        // rate = base + slope1 + ((utilization - optimal_utilization) * slope2 / (10_000 - optimal_utilization))
+        let excess_util = utilization - optimal_utilization;
+        let remaining = 10_000 - optimal_utilization;
+
+        let slope2_part = excess_util.fixed_mul_floor(slope2, remaining).unwrap();
+
+        base_rate + slope1 + slope2_part
+    };
+
+    rate as i32
 }
 
 #[cfg(test)]
 mod tests {
+    use utils::constant::PERCENTAGE_PRECISION_U32;
+
     use super::*;
 
     // utilization
@@ -83,7 +94,7 @@ mod tests {
             1_000_000 * PRICE_PRECISION,
             1_000_000 * PRICE_PRECISION
         );
-        assert_eq!(utilization, 1_000_000); // 1.0 in fixed-point
+        assert_eq!(utilization, 1 * PERCENTAGE_PRECISION_U32);
     }
 
     #[test]
@@ -92,7 +103,7 @@ mod tests {
             500_000 * PRICE_PRECISION,
             1_000_000 * PRICE_PRECISION
         );
-        assert_eq!(utilization, 500_000); // 0.5 in fixed-point
+        assert_eq!(utilization, 5_000_000); // 0.5%
     }
 
     #[test]
@@ -101,7 +112,7 @@ mod tests {
             2_000_000 * PRICE_PRECISION,
             1_000_000 * PRICE_PRECISION
         );
-        assert_eq!(utilization, 2_000_000); // 2.0
+        assert_eq!(utilization, 2 * PERCENTAGE_PRECISION_U32);
     }
 
     #[test]
