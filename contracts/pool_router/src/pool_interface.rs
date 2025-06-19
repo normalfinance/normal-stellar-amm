@@ -1,5 +1,5 @@
 use soroban_sdk::{ Address, BytesN, Env, Map, String, Symbol, Val, Vec, U256 };
-use utils::{ storage::{ PoolInfo, PoolTier } };
+use utils::state::pool::{ PoolInfo, PoolTier };
 
 pub trait PoolInterfaceTrait {
     // Get symbolic explanation of pool type.
@@ -94,7 +94,7 @@ pub trait IncentivesInterfaceTrait {
     //
     // A `Map` where each key is a `Symbol` representing a configuration parameter, and the value is the corresponding value.
     // The keys are "tps" and "expired_at".
-    fn get_rewards_config(e: Env) -> Map<Symbol, i128>;
+    fn get_incentives_config(e: Env) -> Map<Symbol, i128>;
 
     // Returns a mapping of token addresses to their respective reward information.
     //
@@ -165,7 +165,7 @@ pub trait IncentivesInterfaceTrait {
 
     // Get rewards status for the pool,
     // including amount available for the user
-    fn get_rewards_info(
+    fn get_incentives_info(
         e: Env,
         user: Address,
         tokens: Vec<Address>,
@@ -174,6 +174,9 @@ pub trait IncentivesInterfaceTrait {
 
     // Get amount of reward tokens available for the user to claim.
     fn get_user_reward(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
+
+    // Get amount of LP fees available for the user to claim.
+    fn get_user_fees(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
 
     // Get total amount of accumulated reward for the pool
     fn get_total_accumulated_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;

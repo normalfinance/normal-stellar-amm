@@ -105,15 +105,17 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         );
 
         // Always collect the fee in token_b
-        let fee_amount = 0;
-        let quote_asset_amount;
+        let mut fee_amount = 0;
+        let mut quote_asset_amount = 0;
+        let mut in_amount_mut = in_amount;
+        let mut amount_out_w_fee = 0;
 
         // Update fee if on token_in
-        let selling_token_b = token_in == tokens.get(1).unwrap();
-        if selling_token_b {
+        let quote_token_in = token_in == tokens.get(1).unwrap();
+        if quote_token_in {
             quote_asset_amount = in_amount;
             fee_amount = (in_amount * (pool_fee_fraction as u128)) / (FEE_DENOMINATOR as u128);
-            in_amount = in_amount - fee_amount;
+            in_amount_mut = in_amount - fee_amount;
         }
 
         e.authorize_as_current_contract(
@@ -126,7 +128,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
                         args: (
                             e.current_contract_address(),
                             router.clone(),
-                            in_amount as i128,
+                            in_amount_mut as i128,
                         ).into_val(&e),
                     },
                     sub_invocations: vec![&e],
@@ -140,19 +142,20 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
                 e.current_contract_address().to_val(),
                 user.clone().to_val(),
                 token_in.clone().to_val(),
-                in_amount.into_val(&e),
+                in_amount_mut.into_val(&e),
                 out_min.into_val(&e),
             ])
         );
 
         // Update fee if on token_out
-        if !selling_token_b {
+        if !quote_token_in {
             quote_asset_amount = amount_out;
             fee_amount = (amount_out * (pool_fee_fraction as u128)) / (FEE_DENOMINATOR as u128);
-            let amount_out_w_fee = amount_out - fee_amount;
-            if amount_out_w_fee < out_min {
-                panic_with_error!(&e, Error::OutMinNotSatisfied);
-            }
+        }
+
+        amount_out_w_fee = amount_out - fee_amount;
+        if amount_out_w_fee < out_min {
+            panic_with_error!(&e, Error::OutMinNotSatisfied);
         }
 
         // Send token_out to the user
@@ -181,7 +184,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         let lp_fee_amount =
             (fee_amount * (lp_revenue_fraction as u128)) / (FEE_DENOMINATOR as u128);
 
-        let protocol_fee_amount = fee_amount.safe_sub(&e, lp_fee_amount);
+        let mut protocol_fee_amount = fee_amount.safe_sub(&e, lp_fee_amount);
 
         // BUFFER
         let buffer_fraction = get_buffer_fraction(&e);
@@ -216,7 +219,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         );
 
         protocol_fee_amount = protocol_fee_amount - fee_amount_for_buffer;
-        Events::new(&e).buffer_deposit(token_out, fee_amount_for_buffer as u128);
+        Events::new(&e).buffer_deposit(token_out.clone(), fee_amount_for_buffer as u128);
 
         // INSURANCE FUND
         let insurance_fund = get_insurance_fund(&e);
@@ -263,11 +266,11 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
                 );
 
                 protocol_fee_amount = protocol_fee_amount - insurance_premium_to_pay;
-                Events::new(&e).insurance_premium(token_out, insurance_premium_to_pay);
+                Events::new(&e).insurance_premium(token_out.clone(), insurance_premium_to_pay);
             }
         }
 
-        Events::new(&e).charge_provider_fee(token_out.clone(), protocol_fee_amount);
+        Events::new(&e).charge_provider_fee(token_out, protocol_fee_amount);
 
         // INCENTIVES
 
@@ -415,6 +418,18 @@ impl AdminInterface for PoolSwapFeeCollector {
     //   - A u32 value representing the portion of revenue for the buffer in basis points.
     fn get_buffer_fraction(e: Env) -> u32 {
         get_buffer_fraction(&e)
+    }
+
+    // get_lp_revenue_fraction
+    // Returns the buffer revenue fee in basis points.
+    //
+    // Arguments:
+    //   - e: The Soroban environment.
+    //
+    // Returns:
+    //   - A u32 value representing the portion of revenue for the buffer in basis points.
+    fn get_lp_revenue_fraction(e: Env) -> u32 {
+        get_lp_revenue_fraction(&e)
     }
 
     // claim_fees

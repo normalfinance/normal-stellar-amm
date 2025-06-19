@@ -116,6 +116,7 @@ fn test_initialize_twice() {
         &setup.admin,
         &setup.emergency_admin,
         &setup.token_a.address,
+        &THIRTEEN_DAY,
         &0,
         &80_00000_u32, // 80%
         &2_00000_i32, // 2%
@@ -324,7 +325,12 @@ fn test_request_withdraw() {
 #[test]
 #[should_panic(expected = "Error(Contract, #9)")]
 fn test_request_withdraw_while_in_progress() {
-    let setup = Setup::default();
+    let setup = Setup::new_with_config(
+        &(TestConfig {
+            mint_to_user: i128::MAX,
+            ..TestConfig::default()
+        })
+    );
     let users = setup.users;
     let amount_to_deposit = 100_0000000_u128;
 
@@ -346,7 +352,12 @@ fn test_request_withdraw_while_in_progress() {
 #[test]
 #[should_panic(expected = "Error(Contract, #12)")]
 fn test_request_withdraw_with_empty_vault() {
-    let setup = Setup::default();
+    let setup = Setup::new_with_config(
+        &(TestConfig {
+            mint_to_user: i128::MAX,
+            ..TestConfig::default()
+        })
+    );
     let users = setup.users;
     let amount_to_deposit = 100_0000000_u128;
 
@@ -366,7 +377,12 @@ fn test_request_withdraw_with_empty_vault() {
 #[test]
 #[should_panic(expected = "Error(Contract, #11)")]
 fn test_request_withdraw_with_zero_amount() {
-    let setup = Setup::default();
+    let setup = Setup::new_with_config(
+        &(TestConfig {
+            mint_to_user: i128::MAX,
+            ..TestConfig::default()
+        })
+    );
     let users = setup.users;
     let amount_to_deposit = 100_0000000_u128;
 
@@ -380,7 +396,12 @@ fn test_request_withdraw_with_zero_amount() {
 #[test]
 #[should_panic(expected = "Error(Contract, #13)")]
 fn test_request_withdraw_with_insufficient_shares() {
-    let setup = Setup::default();
+    let setup = Setup::new_with_config(
+        &(TestConfig {
+            mint_to_user: i128::MAX,
+            ..TestConfig::default()
+        })
+    );
     let users = setup.users;
     let amount_to_deposit = 100_0000000_u128;
 
@@ -394,7 +415,12 @@ fn test_request_withdraw_with_insufficient_shares() {
 #[test]
 #[should_panic(expected = "Error(Contract, #3)")]
 fn test_request_withdraw_with_insufficient_vault_amount() {
-    let setup = Setup::default();
+    let setup = Setup::new_with_config(
+        &(TestConfig {
+            mint_to_user: i128::MAX,
+            ..TestConfig::default()
+        })
+    );
     let users = setup.users;
     let amount_to_deposit = 100_0000000_u128;
 
@@ -413,7 +439,12 @@ fn test_request_withdraw_with_insufficient_vault_amount() {
 
 #[test]
 fn test_cancel_request_withdraw() {
-    let setup = Setup::default();
+    let setup = Setup::new_with_config(
+        &(TestConfig {
+            mint_to_user: i128::MAX,
+            ..TestConfig::default()
+        })
+    );
     let users = setup.users;
     let amount_to_deposit = 100_0000000_u128;
 
@@ -442,7 +473,12 @@ fn test_cancel_request_withdraw() {
 #[test]
 #[should_panic(expected = "Error(Contract, #10)")]
 fn test_cancel_request_withdraw_no_request_in_progress() {
-    let setup = Setup::default();
+    let setup = Setup::new_with_config(
+        &(TestConfig {
+            mint_to_user: i128::MAX,
+            ..TestConfig::default()
+        })
+    );
     let users = setup.users;
     let amount_to_deposit = 100_0000000_u128;
 
@@ -456,7 +492,12 @@ fn test_cancel_request_withdraw_no_request_in_progress() {
 #[test]
 #[should_panic(expected = "Error(Contract, #6)")]
 fn test_cancel_request_withdraw_invalid_rebase() {
-    let setup = Setup::default();
+    let setup = Setup::new_with_config(
+        &(TestConfig {
+            mint_to_user: i128::MAX,
+            ..TestConfig::default()
+        })
+    );
     let users = setup.users;
     let amount_to_deposit = 100_0000000_u128;
 
@@ -476,7 +517,12 @@ fn test_cancel_request_withdraw_invalid_rebase() {
 #[test]
 #[should_panic(expected = "Error(Contract, #12)")]
 fn test_cancel_request_withdraw_increasing_shares() {
-    let setup = Setup::default();
+    let setup = Setup::new_with_config(
+        &(TestConfig {
+            mint_to_user: i128::MAX,
+            ..TestConfig::default()
+        })
+    );
     let users = setup.users;
     let amount_to_deposit = 100_0000000_u128;
 
@@ -495,7 +541,12 @@ fn test_cancel_request_withdraw_increasing_shares() {
 
 #[test]
 fn test_withdraw() {
-    let setup = Setup::default();
+    let setup = Setup::new_with_config(
+        &(TestConfig {
+            mint_to_user: i128::MAX,
+            ..TestConfig::default()
+        })
+    );
     let users = setup.users;
     let amount_to_deposit = 100_0000000_u128;
 
@@ -529,7 +580,12 @@ fn test_withdraw() {
 #[test]
 #[should_panic(expected = "Error(Contract, #14)")]
 fn test_withdraw_during_unstaking_period() {
-    let setup = Setup::default();
+    let setup = Setup::new_with_config(
+        &(TestConfig {
+            mint_to_user: i128::MAX,
+            ..TestConfig::default()
+        })
+    );
     let users = setup.users;
     let amount_to_deposit = 100_0000000_u128;
 
@@ -551,7 +607,12 @@ fn test_withdraw_during_unstaking_period() {
 #[should_panic(expected = "Error(Contract, #2)")]
 // let n_shares = stake.last_withdraw_request_shares; must be postive FAIL 2
 fn test_withdraw_without_prior_request() {
-    let setup = Setup::default();
+    let setup = Setup::new_with_config(
+        &(TestConfig {
+            mint_to_user: i128::MAX,
+            ..TestConfig::default()
+        })
+    );
     let users = setup.users;
     let amount_to_deposit = 100_0000000_u128;
 
@@ -570,7 +631,12 @@ fn test_withdraw_without_prior_request() {
 #[should_panic(expected = "Error(Contract, #13)")]
 //MUST if_shares_before >= n_shares FAIL 13
 fn test_withdraw_not_decrease_shares() {
-    let setup = Setup::default();
+    let setup = Setup::new_with_config(
+        &(TestConfig {
+            mint_to_user: i128::MAX,
+            ..TestConfig::default()
+        })
+    );
     let users = setup.users;
     let amount_to_deposit = 100_0000000_u128;
 

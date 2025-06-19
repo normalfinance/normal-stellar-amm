@@ -4,7 +4,7 @@ use crate::events::PoolEvents;
 use crate::incentives::get_incentives_manager;
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
-use crate::pool::{ InsuranceClaim, Pool as PoolType };
+use crate::pool::{ get_amount_out_strict_receive, get_delta_a, get_net_liquidity_imbalance, get_oracle_price, rebalance, update_volume_24h };
 use crate::interface::{
     AdminInterfaceTrait,
     IncentivesTrait,
@@ -91,15 +91,19 @@ use utils::constant::{
     INSURANCE_SPECULATIVE_MAX,
 };
 use utils::math::safe_math::SafeMath;
-use utils::storage::{
-    AddressAndAmount,
-    InitializeAllParams,
-    InitializeParams,
-    OraclePriceData,
-    PoolInfo,
-    PoolResponse,
-    PoolStatus,
-    PoolTier,
+use utils::state::pool::InsuranceClaim;
+use utils::state::{
+    pool::{
+        Pool as PoolType,
+        PoolInfo,
+        PoolResponse,
+        PoolStatus,
+        PoolTier,
+        InitializeAllParams,
+        InitializeParams,
+    },
+    token::AddressAndAmount,
+    oracle_registry::OraclePriceData,
 };
 use utils::token::transfer_token;
 use utils::validate;
@@ -319,18 +323,10 @@ impl PoolTrait for Pool {
         set_reserve_b(&e, &(reserve_b + token_b_amount));
 
         // Rebalance the pool
-        let base_oracle_price_data = pool.get_oracle_price(
-            e.clone(),
-            pool.base_asset_id.clone(),
-            now
-        );
-        let quote_oracle_price_data = pool.get_oracle_price(
-            e.clone(),
-            pool.quote_asset_id.clone(),
-            now
-        );
+        let base_oracle_price_data = get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
+        let quote_oracle_price_data = get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
 
-        pool.rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
+        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
 
         // Now calculate how many new pool shares to mint
         let total_shares = get_total_lp_tokens(&e);
@@ -406,18 +402,10 @@ impl PoolTrait for Pool {
         let now = e.ledger().timestamp();
         let pool = get_pool(&e);
 
-        let base_oracle_price_data = pool.get_oracle_price(
-            e.clone(),
-            pool.base_asset_id.clone(),
-            now
-        );
-        let quote_oracle_price_data = pool.get_oracle_price(
-            e.clone(),
-            pool.quote_asset_id.clone(),
-            now
-        );
+        let base_oracle_price_data = get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
+        let quote_oracle_price_data = get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
 
-        pool.rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
+        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
 
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
@@ -485,15 +473,15 @@ impl PoolTrait for Pool {
         if out_idx == 0 {
             transfer_a(&e, &user, out_a);
             set_reserve_a(&e, &(reserve_a - out));
-            pool.update_volume_24h(&e, in_amount, now);
+            update_volume_24h(&e, in_amount, now);
         } else {
             transfer_b(&e, &user, out_b);
             set_reserve_b(&e, &(reserve_b - out));
-            pool.update_volume_24h(&e, out_b, now);
+            update_volume_24h(&e, out_b, now);
         }
 
         // After swapping, rebalance the pool
-        pool.rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
+        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -545,21 +533,9 @@ impl PoolTrait for Pool {
         let out = pool.get_amount_out(&e, in_amount, reserve_sell, reserve_buy).0;
 
         let now = e.ledger().timestamp();
-        let base_oracle_price_data = pool.get_oracle_price(
-            e.clone(),
-            pool.base_asset_id.clone(),
-            now
-        );
-        let quote_oracle_price_data = pool.get_oracle_price(
-            e.clone(),
-            pool.quote_asset_id.clone(),
-            now
-        );
-        let delta_a = pool.get_delta_a(
-            &e,
-            base_oracle_price_data.price,
-            quote_oracle_price_data.price
-        );
+        let base_oracle_price_data = get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
+        let quote_oracle_price_data = get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
+        let delta_a = get_delta_a(&e, base_oracle_price_data.price, quote_oracle_price_data.price);
 
         (out, delta_a)
     }
@@ -612,18 +588,10 @@ impl PoolTrait for Pool {
         let now = e.ledger().timestamp();
         let pool = get_pool(&e);
 
-        let base_oracle_price_data = pool.get_oracle_price(
-            e.clone(),
-            pool.base_asset_id.clone(),
-            now
-        );
-        let quote_oracle_price_data = pool.get_oracle_price(
-            e.clone(),
-            pool.quote_asset_id.clone(),
-            now
-        );
+        let base_oracle_price_data = get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
+        let quote_oracle_price_data = get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
 
-        pool.rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
+        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
 
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
@@ -636,11 +604,12 @@ impl PoolTrait for Pool {
             panic_with_error!(&e, PoolValidationError::EmptyPool);
         }
 
-        let (in_amount, fee) = pool.get_amount_out_strict_receive(
+        let (in_amount, fee) = get_amount_out_strict_receive(
             &e,
             out_amount,
             reserve_sell,
-            reserve_buy
+            reserve_buy,
+            pool.fee_fraction
         );
 
         if in_amount > in_max {
@@ -718,7 +687,7 @@ impl PoolTrait for Pool {
         );
 
         // Rebalance the pool
-        pool.rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
+        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -762,24 +731,18 @@ impl PoolTrait for Pool {
         let reserve_buy = reserves.get(out_idx).unwrap();
 
         let pool = get_pool(&e);
-        let out = pool.get_amount_out_strict_receive(&e, out_amount, reserve_sell, reserve_buy).0;
+        let out = get_amount_out_strict_receive(
+            &e,
+            out_amount,
+            reserve_sell,
+            reserve_buy,
+            pool.fee_fraction
+        ).0;
 
         let now = e.ledger().timestamp();
-        let base_oracle_price_data = pool.get_oracle_price(
-            e.clone(),
-            pool.base_asset_id.clone(),
-            now
-        );
-        let quote_oracle_price_data = pool.get_oracle_price(
-            e.clone(),
-            pool.quote_asset_id.clone(),
-            now
-        );
-        let delta_a = pool.get_delta_a(
-            &e,
-            base_oracle_price_data.price,
-            quote_oracle_price_data.price
-        );
+        let base_oracle_price_data = get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
+        let quote_oracle_price_data = get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
+        let delta_a = get_delta_a(&e, base_oracle_price_data.price, quote_oracle_price_data.price);
 
         (out, delta_a)
     }
@@ -820,18 +783,10 @@ impl PoolTrait for Pool {
         // Rebalance the pool
         let pool = get_pool(&e);
 
-        let base_oracle_price_data = pool.get_oracle_price(
-            e.clone(),
-            pool.base_asset_id.clone(),
-            now
-        );
-        let quote_oracle_price_data = pool.get_oracle_price(
-            e.clone(),
-            pool.quote_asset_id.clone(),
-            now
-        );
+        let base_oracle_price_data = get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
+        let quote_oracle_price_data = get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
 
-        pool.rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
+        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
 
         // Checkpoint resulting working balance
         incentives
@@ -879,6 +834,7 @@ impl PoolTrait for Pool {
     fn get_info(e: Env) -> PoolInfo {
         let pool = get_pool(&e);
         let pool_response = PoolResponse {
+            pool: pool.clone(),
             asset_a: AddressAndAmount {
                 address: get_token_synthetic(&e),
                 amount: get_reserve_a(&e),
@@ -896,7 +852,6 @@ impl PoolTrait for Pool {
         PoolInfo {
             pool_address: e.current_contract_address(),
             pool_response,
-            total_fee_bps: pool.fee_fraction,
         }
     }
 }
@@ -1028,18 +983,10 @@ impl AdminInterfaceTrait for Pool {
         let now = e.ledger().timestamp();
         let pool = get_pool(&e);
 
-        let base_oracle_price_data = pool.get_oracle_price(
-            e.clone(),
-            pool.base_asset_id.clone(),
-            now
-        );
-        let quote_oracle_price_data = pool.get_oracle_price(
-            e.clone(),
-            pool.quote_asset_id.clone(),
-            now
-        );
+        let base_oracle_price_data = get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
+        let quote_oracle_price_data = get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
 
-        pool.rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
+        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
     }
 
     fn pay_insurance_claim(e: Env, sender: Address, insurance_vault_amount: u128) -> u128 {
@@ -1051,16 +998,8 @@ impl AdminInterfaceTrait for Pool {
         // "Pool is in settlement mode"
         validate!(&e, !pool.is_in_settlement(now), PoolError::PoolActionPaused);
 
-        let base_oracle_price_data = pool.get_oracle_price(
-            e.clone(),
-            pool.base_asset_id.clone(),
-            now
-        );
-        let quote_oracle_price_data = pool.get_oracle_price(
-            e.clone(),
-            pool.quote_asset_id.clone(),
-            now
-        );
+        let base_oracle_price_data = get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
+        let quote_oracle_price_data = get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
 
         // controller::orders::validate_market_within_price_band(perp_market, state, oracle_price);
 
@@ -1069,7 +1008,7 @@ impl AdminInterfaceTrait for Pool {
         // update_twap()
 
         let excess_liquidity_imbalance = if pool.liquidity_max_imbalance > 0 {
-            let net_liquidity_imbalance = pool.get_net_liquidity_imbalance(
+            let net_liquidity_imbalance = get_net_liquidity_imbalance(
                 &e,
                 base_oracle_price_data.price,
                 quote_oracle_price_data.price
@@ -1134,7 +1073,7 @@ impl AdminInterfaceTrait for Pool {
         set_reserve_b(&e, &(reserve_b + insurance_withdraw));
 
         // Rebalance
-        pool.rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
+        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
 
         insurance_withdraw
     }
@@ -1512,6 +1451,9 @@ impl IncentivesTrait for Pool {
         result.set(symbol_short!("last_time"), pool_data.rewards_last_time as i128);
         result.set(symbol_short!("pool_acc"), user_data.pool_accumulated_rewards as i128);
         result.set(symbol_short!("block"), pool_data.block as i128);
+        result.set(symbol_short!("fee_a"), pool_data.fee_growth_a_per_lp as i128);
+        result.set(symbol_short!("fee_b"), pool_data.fee_growth_b_per_lp as i128);
+
         result.set(symbol_short!("usr_block"), user_data.last_block as i128);
         result.set(symbol_short!("to_claim"), user_data.rewards_to_claim as i128);
         result.set(symbol_short!("check_a"), user_data.fee_checkpoint_a as i128);

@@ -58,6 +58,12 @@ pub trait AdminInterface {
     // Get the Fee Destination
     fn get_fee_destination(e: Env) -> Address;
 
+    // Get the 
+    fn get_buffer_fraction(e: Env) -> u32;
+
+    // Get the 
+    fn get_lp_revenue_fraction(e: Env) -> u32;
+
     // Claim swap fees and send to the fee destination
     fn claim_fees(e: Env, admin: Address, token: Address) -> u128;
 }

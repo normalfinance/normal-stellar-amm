@@ -2,11 +2,11 @@
 extern crate std;
 
 use crate::storage_types::{ HistoricalOracleData, OracleGuardRails, PriceDivergenceGuardRails };
-use crate::testutils::{ update_oracle_price, Setup, TestConfig };
+use crate::testutils::{ Setup, TestConfig };
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{ Address, Vec };
 use utils::constant::{ FIVE_MINUTE, ONE_HOUR, ONE_MINUTE, TWENTY_FOUR_HOUR };
-use utils::storage::{ MutableOracleInfo, OracleInfo };
+use utils::state::oracle_registry::{ MutableOracleInfo, OracleInfo };
 use utils::test_utils::jump;
 
 #[test]

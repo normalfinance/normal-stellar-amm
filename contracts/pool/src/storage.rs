@@ -1,8 +1,8 @@
-use crate::pool::Pool;
 use paste::paste;
 use soroban_sdk::{ contracttype, panic_with_error, Address, BytesN, Env };
 pub use utils::bump::bump_instance;
 use utils::errors::storage_errors::StorageError;
+use utils::state::pool::Pool as PoolType;
 use utils::{
     generate_instance_storage_getter_and_setter_with_default,
     generate_instance_storage_getter_with_default,
@@ -65,13 +65,13 @@ pub(crate) fn has_plane(e: &Env) -> bool {
     e.storage().instance().has(&key)
 }
 
-pub(crate) fn set_pool(e: &Env, pool: &Pool) {
+pub(crate) fn set_pool(e: &Env, pool: &PoolType) {
     let key = DataKey::Pool;
     bump_instance(e);
     e.storage().instance().set(&key, pool);
 }
 
-pub(crate) fn get_pool(e: &Env) -> Pool {
+pub(crate) fn get_pool(e: &Env) -> PoolType {
     let key = DataKey::Pool;
     match e.storage().instance().get(&key) {
         Some(v) => v,

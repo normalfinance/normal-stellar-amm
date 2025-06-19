@@ -77,11 +77,13 @@ impl Setup<'_> {
             &admin,
             &emergency_admin,
             &token_a.address,
+            &THIRTEEN_DAY,
             &0,
             &80_00000_u32, // 80%
             &2_00000_i32, // 2%
             &(10_00000_i32, 60_00000_i32) // 10% and 60%
         );
+        insurance_fund.set_optimal_coverage(&admin, &1_000_000_0000000_u128);
 
         Self {
             env: e,

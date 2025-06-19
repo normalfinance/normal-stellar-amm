@@ -9,6 +9,7 @@ pub trait InsuranceFundTrait {
         admin: Address,
         emergency_admin: Address,
         token: Address,
+        unstaking_period: u64,
         coverage_buffer: u128,
         optimal_utilization: u32,
         base_rate: i32,

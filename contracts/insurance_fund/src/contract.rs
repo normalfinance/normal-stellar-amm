@@ -82,6 +82,7 @@ impl InsuranceFundTrait for InsuranceFund {
         admin: Address,
         emergency_admin: Address,
         token: Address,
+        unstaking_period: u64,
         coverage_buffer: u128,
         optimal_utilization: u32,
         base_rate: i32,
@@ -98,6 +99,7 @@ impl InsuranceFundTrait for InsuranceFund {
 
         set_token(&e, &token);
 
+        set_unstaking_period(&e, &unstaking_period);
         set_coverage_buffer(&e, &coverage_buffer);
 
         set_optimal_utilization(&e, &optimal_utilization);
@@ -649,6 +651,8 @@ impl AdminInterface for InsuranceFund {
             // "insurance_fund_vault_amount must remain > 0"
             validate!(&e, new_insurance_vault_amount > 0, InsuranceFundError::InvalidIFDetected);
         }
+
+        // TODO: add event
     }
 
     // Stops the insurance fund deposits instantly.

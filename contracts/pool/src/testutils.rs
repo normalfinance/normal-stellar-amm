@@ -16,13 +16,10 @@ use soroban_sdk::token::{
 use soroban_sdk::String;
 use soroban_sdk::{ testutils::Address as _, Address, BytesN, Env, Symbol, Vec };
 use utils::constant::{ PERCENTAGE_PRECISION_U64, PRICE_PRECISION_I128 };
-use utils::storage::{
-    InitializeAllParams,
-    InitializeParams,
-    PoolTier,
-    PrivilegedAddresses,
-    RewardConfig,
-    TokenInitInfo,
+use utils::state::{
+    pool::{ InitializeAllParams, InitializeParams, PoolTier, RewardConfig },
+    access::PrivilegedAddresses,
+    token::TokenInitInfo,
 };
 
 use pool_tokens::token_contract::{ Client as PoolTokenClient, WASM };
@@ -211,7 +208,7 @@ impl Setup<'_> {
 
         let btc_asset_id = Symbol::new(&e, "BTC");
         let eth_asset_id = Symbol::new(&e, "ETH");
-        let xlm_asset_id = Symbol::new(&e, "XL ");
+        let xlm_asset_id = Symbol::new(&e, "XLM");
 
         let btc_asset = MockAsset::Stellar(btc_addr.clone());
         let eth_asset = MockAsset::Stellar(eth_addr.clone());

@@ -1,5 +1,5 @@
 use soroban_sdk::{ Address, BytesN, Env, Map, Symbol, Vec };
-use utils::storage::{ InitializeAllParams, InitializeParams, PoolInfo, PoolStatus, PoolTier };
+use utils::state::pool::{ InitializeAllParams, InitializeParams, PoolInfo, PoolStatus, PoolTier };
 
 pub trait PoolCrunch {
     // Initialize pool completely to reduce calculations cost

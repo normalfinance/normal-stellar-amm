@@ -75,7 +75,7 @@ use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
 use utils::constant::{ MAX_POOL_FEE };
-use utils::storage::{ PoolInfo, PoolTier };
+use utils::state::pool::{PoolInfo, PoolTier};
 use utils::token::{ transfer_token, transfer_token_from };
 
 #[contract]
@@ -617,7 +617,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
     //
     // A `Map` where each key is a `Symbol` representing a configuration parameter, and the value is the corresponding value.
     // The keys are "tps" and "expired_at".
-    fn get_rewards_config(e: Env) -> Map<Symbol, i128> {
+    fn get_incentives_config(e: Env) -> Map<Symbol, i128> {
         let rewards_config = get_rewards_config(&e);
         let mut result = Map::new(&e);
         result.set(symbol_short!("tps"), rewards_config.tps as i128);
@@ -838,7 +838,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
         pool_tps
     }
 
-    // Get rewards status for the pool, including amount available for the user
+    // Get incentives status for the pool, including amount available for the user
     //
     // # Arguments
     //
@@ -850,7 +850,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
     // # Returns
     //
     // A map of symbols to integers representing the rewards info.
-    fn get_rewards_info(
+    fn get_incentives_info(
         e: Env,
         user: Address,
         tokens: Vec<Address>,
@@ -861,7 +861,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
 
         e.invoke_contract(
             &pool_id,
-            &Symbol::new(&e, "get_rewards_info"),
+            &Symbol::new(&e, "get_incentives_info"),
             Vec::from_array(&e, [user.clone().into_val(&e)])
         )
     }
@@ -890,6 +890,29 @@ impl IncentivesInterfaceTrait for PoolRouter {
         e.invoke_contract(
             &pool_id,
             &Symbol::new(&e, "get_user_reward"),
+            Vec::from_array(&e, [user.clone().into_val(&e)])
+        )
+    }
+
+    // Get amount of LP fees available for the user to claim.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `user` - The address of the user.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    //
+    // # Returns
+    //
+    // The user LP fee as a u128.
+    fn get_user_fees(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
+
+        e.invoke_contract(
+            &pool_id,
+            &Symbol::new(&e, "get_user_fees"),
             Vec::from_array(&e, [user.clone().into_val(&e)])
         )
     }

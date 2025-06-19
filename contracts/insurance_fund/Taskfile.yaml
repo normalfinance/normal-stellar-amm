@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 tasks:
   clean:
     cmd: cargo clean
@@ -14,6 +14,7 @@ tasks:
       - soroban contract build --package insurance-fund
       - soroban contract optimize --wasm ../../target/wasm32v1-none/release/insurance_fund.wasm --wasm-out ../../target/wasm32v1-none/release/insurance_fund.wasm
       - ls -l ../../target/wasm32v1-none/release/*.wasm
+      - cp ../../target/wasm32v1-none/release/insurance_fund.wasm ../../wasm/insurance_fund.wasm
 
   test:
     deps:

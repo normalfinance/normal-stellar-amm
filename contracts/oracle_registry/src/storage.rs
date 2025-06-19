@@ -3,7 +3,7 @@ use soroban_sdk::{ contracttype, panic_with_error, Env, Symbol };
 use utils::bump::{ bump_instance, bump_persistent, bump_temporary };
 use utils::constant::FIVE_MINUTE;
 use utils::errors::storage_errors::StorageError;
-use utils::storage::{ OracleInfo };
+use utils::state::oracle_registry::{ OracleInfo };
 use utils::{
     generate_instance_storage_getter_and_setter_with_default,
     generate_instance_storage_getter_with_default,

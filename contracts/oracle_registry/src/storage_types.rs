@@ -1,7 +1,7 @@
 use soroban_sdk::contracttype;
 use utils::{
     constant::{PERCENTAGE_PRECISION_U64, PRICE_PRECISION},
-    errors::oracle_error::OracleError, storage::OraclePriceData,
+    errors::oracle_error::OracleError, state::oracle_registry::OraclePriceData,
 };
 
 #[contracttype]

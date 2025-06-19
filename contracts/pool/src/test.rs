@@ -25,13 +25,10 @@ use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient,
     TokenClient as SorobanTokenClient,
 };
-use utils::storage::{
-    InitializeAllParams,
-    InitializeParams,
-    PoolTier,
-    PrivilegedAddresses,
-    RewardConfig,
-    TokenInitInfo,
+use utils::state::{
+    pool::{ InitializeAllParams, InitializeParams, PoolTier, RewardConfig },
+    access::PrivilegedAddresses,
+    token::TokenInitInfo,
 };
 use soroban_sdk::testutils::{ AuthorizedFunction, AuthorizedInvocation, Events };
 use pool_tokens::Client as ShareTokenClient;
@@ -2025,6 +2022,40 @@ fn test_withdraw_rewards() {
 // //     assert_eq!(liq_pool.return_unused_reward(&admin), 1_0000000 * 30);
 // //     assert_eq!(setup.token_reward.balance(&router), 1_0000000 * 30);
 // // }
+
+//     ______     _______        __       ______   ___       _______
+//    /    " \   /"      \      /""\     /" _  "\ |"  |     /"     "|
+//   // ____  \ |:        |    /    \   (: ( \___)||  |    (: ______)
+//  /  /    ) :)|_____/   )   /' /\  \   \/ \     |:  |     \/    |
+// (: (____/ //  //      /   //  __'  \  //  \ _   \  |___  // ___)_
+//  \        /  |:  __   \  /   /  \\  \(:   _) \ ( \_|:  \(:      "|
+//   \"_____/   |__|  \___)(___/    \___)\_______) \_______)\_______)
+
+#[test]
+fn test_swap_with_invalid_oracle() {
+    let setup = Setup::default();
+    let users = setup.users;
+
+    // Collect pre-swap values
+    let last_price = setup.registry.get_last_price(&setup.btc_asset_id);
+
+    // Invalidate the oracle
+
+    // Swap
+    let amount_out = setup.router.swap(
+        &users[1],
+        &tokens,
+        &setup.token1.address,
+        &setup.token2.address,
+        &setup.pool_index,
+        &10_0000000,
+        &2_8952731
+    );
+
+    // [ ] Ensure swap was executed at the last valid oracle price and NOT the invalid price
+}
+
+// paused ops
 
 #[test]
 fn test_kill_deposit_event() {

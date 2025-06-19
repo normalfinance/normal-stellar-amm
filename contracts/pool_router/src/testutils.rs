@@ -166,7 +166,6 @@ impl Default for Setup<'_> {
                 },
             })
         );
-
         registry.register_oracle(&admin, &btc_asset_id, &oracle_id, &btc_addr, &7, &0);
 
         Setup {

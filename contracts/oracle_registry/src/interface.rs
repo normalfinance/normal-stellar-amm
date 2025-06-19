@@ -1,5 +1,5 @@
 use soroban_sdk::{ Address, Env, Symbol };
-use utils::storage::{ MutableOracleInfo, OracleInfo, OraclePriceData };
+use utils::state::oracle_registry::{ MutableOracleInfo, OracleInfo, OraclePriceData };
 
 use crate::storage_types::{ HistoricalOracleData, OracleGuardRails };
 

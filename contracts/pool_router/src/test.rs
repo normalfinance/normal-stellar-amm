@@ -24,8 +24,8 @@ use soroban_sdk::{
     Val,
     Vec,
     U256,
-};;
-use utils::storage::PoolTier;
+};
+use utils::state::pool::PoolTier;
 use utils::test_utils::{
     assert_approx_eq_abs,
     assert_approx_eq_abs_u256,

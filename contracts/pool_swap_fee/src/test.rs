@@ -16,7 +16,7 @@ fn test_strict_send() {
     let (pool_index, _pool_address) = setup.router.get_pools(&tokens).iter().last().unwrap();
 
     // Record init Buffer balance
-    let buffer_balance_before = setup.token_b.balance(&setup.buffer.address);
+    let buffer_balance_before = setup.token_b.balance(&setup.buffer);
 
     // Mint user token_b to swap
     let user = Address::generate(&setup.env);
@@ -34,6 +34,8 @@ fn test_strict_send() {
     );
     assert_eq!(result, 9870300); // (10000000 - .3%) - 1%
     assert_eq!(setup.token_a.balance(&user), 9870300);
+
+    
 }
 
 #[test]

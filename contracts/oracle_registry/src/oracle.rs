@@ -3,7 +3,7 @@ use soroban_sdk::{ log, panic_with_error, Address, Env, Symbol };
 use utils::{
     constant::{ FIVE_MINUTE, PERCENTAGE_PRECISION_U64, PRICE_PRECISION_U64 },
     math::{ pool::sanitize_new_price, safe_math::SafeMath, stats::calculate_new_twap },
-    storage::OraclePriceData,
+    state::oracle_registry::OraclePriceData,
 };
 
 use crate::{

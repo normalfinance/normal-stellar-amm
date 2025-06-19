@@ -3,7 +3,14 @@ use crate::events::{ Events, PoolRouterEvents };
 use crate::incentives::get_incentives_manager;
 use crate::liquidity_calculator::LiquidityCalculatorClient;
 use crate::storage::{
-    add_pool, add_tokens_set, get_constant_product_pool_hash, get_pool_next_counter, get_pool_plane, get_pools_plain, get_token_hash, PoolType
+    add_pool,
+    add_tokens_set,
+    get_constant_product_pool_hash,
+    get_pool_next_counter,
+    get_pool_plane,
+    get_pools_plain,
+    get_token_hash,
+    PoolType,
 };
 use access_control::access::AccessControl;
 use access_control::management::{ MultipleAddressesManagementTrait, SingleAddressManagementTrait };
@@ -22,13 +29,10 @@ use soroban_sdk::{
     Val,
     Vec,
 };
-use utils::storage::{
-    InitializeAllParams,
-    InitializeParams,
-    PoolTier,
-    PrivilegedAddresses,
-    RewardConfig,
-    TokenInitInfo,
+use utils::state::{
+    pool::{ InitializeAllParams, InitializeParams, PoolTier, RewardConfig },
+    access::PrivilegedAddresses,
+    token::TokenInitInfo,
 };
 
 pub fn get_pool_salt(e: &Env, fee_fraction: &u32) -> BytesN<32> {

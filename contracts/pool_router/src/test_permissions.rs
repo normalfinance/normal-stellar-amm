@@ -4,7 +4,7 @@ use crate::testutils::{ Setup };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{ symbol_short, Address, Symbol, Vec };
-use utils::storage::PoolTier;
+use utils::state::pool::PoolTier;
 use utils::test_utils::{
     get_mock_lp_token_info,
     get_mock_oracle_registry_ids,
