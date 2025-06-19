@@ -14,10 +14,7 @@ use access_control::management::{ MultipleAddressesManagementTrait, SingleAddres
 use access_control::role::Role;
 use access_control::role::SymbolRepresentation;
 use access_control::transfer::TransferOwnershipTrait;
-use access_control::utils::{
-    require_pause_admin_or_owner,
-    require_pause_or_emergency_pause_admin_or_owner,
-};
+use access_control::utils::{ require_admin };
 use pool_tokens::{ get_total_lp_tokens, get_user_balance_lp };
 use utils::math::safe_math::SafeMath;
 use utils::math::stats::calculate_rolling_sum;
@@ -34,6 +31,7 @@ use crate::storage::{
     set_buffer_fraction,
     set_fee_destination,
     set_insurance_fund,
+    set_lp_revenue_fraction,
     set_router,
     set_volume_30d,
 };
@@ -54,7 +52,7 @@ use soroban_sdk::{
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
-use utils::constant::{ FEE_DENOMINATOR, PRICE_PRECISION, PRICE_PRECISION_I128, THIRTY_DAY };
+use utils::constant::{ FEE_DENOMINATOR, PRICE_PRECISION, THIRTY_DAY };
 use utils::token::transfer_token;
 
 #[contract]
@@ -297,7 +295,7 @@ impl AdminInterface for PoolSwapFeeCollector {
     // # Arguments
     //
     // * `admin` - The address of the admin user.
-    fn init_admin(e: Env, admin: Address) {
+    fn init_admin(e: Env, admin: Address, emergency_admin: Address) {
         admin.require_auth();
 
         let access_control = AccessControl::new(&e);
@@ -305,132 +303,94 @@ impl AdminInterface for PoolSwapFeeCollector {
             panic_with_error!(&e, AccessControlError::AdminAlreadySet);
         }
         access_control.set_role_address(&Role::Admin, &admin);
+        access_control.set_role_address(&Role::EmergencyAdmin, &emergency_admin);
     }
 
-    // Sets the router address.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `router` - The address of the router contract.
+    //   ________  _______  ___________  ___________  _______   _______
+    //  /"       )/"     "|("     _   ")("     _   ")/"     "| /"      \
+    // (:   \___/(: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |
+    //  \___  \   \/    |      \\_ /        \\_ /    \/    |  |_____/   )
+    //   __/  \\  // ___)_     |.  |        |.  |    // ___)_  //      /
+    //  /" \   :)(:      "|    \:  |        \:  |   (:      "||:  __   \
+    // (_______/  \_______)     \__|         \__|    \_______)|__|  \___)
+
     fn set_router(e: Env, admin: Address, router: Address) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.assert_address_has_role(&admin, &Role::Admin);
+        require_admin(&e, &admin);
 
         set_router(&e, &router);
     }
 
-    // Sets the buffer address.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `buffer` - The address of the Buffer contract.
     fn set_buffer(e: Env, admin: Address, buffer: Address) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.assert_address_has_role(&admin, &Role::Admin);
+        require_admin(&e, &admin);
 
         set_buffer(&e, &buffer);
     }
 
-    // Sets the insurance fund address.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `insurance_fund` - The address of the Buffer contract.
     fn set_insurance_fund(e: Env, admin: Address, insurance_fund: Address) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.assert_address_has_role(&admin, &Role::Admin);
+        require_admin(&e, &admin);
 
         set_insurance_fund(&e, &insurance_fund);
     }
 
-    // Sets the fee destination address.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `fee_destination` - The address of the fee destination.
     fn set_fee_destination(e: Env, admin: Address, fee_destination: Address) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.assert_address_has_role(&admin, &Role::Admin);
+        require_admin(&e, &admin);
 
         set_fee_destination(&e, &fee_destination);
     }
 
-    // Set the buffer fraction
-    fn set_buffer_fraction(e: Env, admin: Address, buffer_fraction: u32) {
+    fn set_buffer_fraction(e: Env, admin: Address, fraction: u32) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.assert_address_has_role(&admin, &Role::Admin);
+        require_admin(&e, &admin);
 
-        set_buffer_fraction(&e, &buffer_fraction);
+        set_buffer_fraction(&e, &fraction);
     }
 
-    // get_router
-    // Returns the address of the router contract used for swaps.
-    //
-    // Arguments:
-    //   - e: The Soroban environment.
-    //
-    // Returns:
-    //   - An Address representing the router.
+    fn set_lp_revenue_fraction(e: Env, admin: Address, fraction: u32) {
+        admin.require_auth();
+        require_admin(&e, &admin);
+
+        set_lp_revenue_fraction(&e, &fraction);
+    }
+
+    //   _______    _______  ___________  ___________  _______   _______
+    //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \
+    // (: ( \___) (: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |
+    //  \/ \       \/    |      \\_ /        \\_ /    \/    |  |_____/   )
+    //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /
+    // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \
+    //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)
+
     fn get_router(e: Env) -> Address {
         get_router(&e)
     }
 
-    // get_buffer
-    // Returns the address of the buffer contract used for fee deposits.
-    //
-    // Arguments:
-    //   - e: The Soroban environment.
-    //
-    // Returns:
-    //   - An Address representing the buffer.
     fn get_buffer(e: Env) -> Address {
         get_buffer(&e)
     }
 
-    // get_fee_destination
-    // Returns the address where fees are sent.
-    //
-    // Arguments:
-    //   - e: The Soroban environment.
-    //
-    // Returns:
-    //   - An Address representing the fee destination.
     fn get_fee_destination(e: Env) -> Address {
         get_fee_destination(&e)
     }
 
-    // get_buffer_fraction
-    // Returns the buffer revenue fee in basis points.
-    //
-    // Arguments:
-    //   - e: The Soroban environment.
-    //
-    // Returns:
-    //   - A u32 value representing the portion of revenue for the buffer in basis points.
     fn get_buffer_fraction(e: Env) -> u32 {
         get_buffer_fraction(&e)
     }
 
-    // get_lp_revenue_fraction
-    // Returns the buffer revenue fee in basis points.
-    //
-    // Arguments:
-    //   - e: The Soroban environment.
-    //
-    // Returns:
-    //   - A u32 value representing the portion of revenue for the buffer in basis points.
     fn get_lp_revenue_fraction(e: Env) -> u32 {
         get_lp_revenue_fraction(&e)
     }
+
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
     // claim_fees
     // Claims all fees held by the contract and transfers them to the specified address.
@@ -444,8 +404,7 @@ impl AdminInterface for PoolSwapFeeCollector {
     //   - A u128 value representing the claimed token amount.
     fn claim_fees(e: Env, admin: Address, token: Address) -> u128 {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.assert_address_has_role(&admin, &Role::Admin);
+        require_admin(&e, &admin);
 
         let token_client = SorobanTokenClient::new(&e, &token);
         let amount = token_client.balance(&e.current_contract_address());
@@ -457,7 +416,7 @@ impl AdminInterface for PoolSwapFeeCollector {
             &get_fee_destination(&e),
             &amount
         );
-        Events::new(&e).claim_fee(token.clone(), amount as u128, token, amount as u128);
+        Events::new(&e).claim_fee(token, amount as u128);
         amount as u128
     }
 }

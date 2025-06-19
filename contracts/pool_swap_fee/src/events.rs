@@ -18,7 +18,7 @@ impl Events {
 pub(crate) trait ProviderFeeEvents {
     fn charge_provider_fee(&self, token: Address, amount: u128);
 
-    fn claim_fee(&self, token: Address, amount: u128, swapped_to: Address, swapped_amount: u128);
+    fn claim_fee(&self, token: Address, amount: u128);
 
     fn buffer_deposit(&self, token: Address, amount: u128);
 
@@ -32,13 +32,10 @@ impl ProviderFeeEvents for Events {
             .publish((Symbol::new(self.env(), "charge_provider_fee"),), (token, amount));
     }
 
-    fn claim_fee(&self, token: Address, amount: u128, swapped_to: Address, swapped_amount: u128) {
+    fn claim_fee(&self, token: Address, amount: u128) {
         self.env()
             .events()
-            .publish(
-                (Symbol::new(self.env(), "withdraw_fee"),),
-                (token, amount, swapped_to, swapped_amount)
-            );
+            .publish((Symbol::new(self.env(), "withdraw_fee"),), (token, amount));
     }
 
     fn buffer_deposit(&self, token: Address, amount: u128) {
