@@ -80,7 +80,6 @@ impl Setup<'_> {
             &config.min_time_between_payouts,
             &config.min_reserve_ratio
         );
-        buffer.set_fee_collector(&admin, &fee_collector);
 
         Self {
             env: e,

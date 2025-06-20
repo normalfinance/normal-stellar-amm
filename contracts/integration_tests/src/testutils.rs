@@ -49,8 +49,11 @@ impl Default for TestConfig {
 
 pub(crate) struct Setup<'a> {
     pub(crate) env: Env,
+
+    // addresses
     pub(crate) admin: Address,
     pub(crate) emergency_admin: Address,
+    pub(crate) users: vec::Vec<Address>,
 
     pub(crate) fee_destination: Address,
     pub(crate) reward_token: Address,

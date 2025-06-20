@@ -31,8 +31,18 @@ generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
 generate_instance_storage_getter_and_setter!(buffer, DataKey::Buffer, Address);
 generate_instance_storage_getter_and_setter!(insurance_fund, DataKey::InsuranceFund, Address);
 generate_instance_storage_getter_and_setter!(fee_destination, DataKey::FeeDestination, Address);
-generate_instance_storage_getter_and_setter!(lp_revenue_fraction, DataKey::LPRevenueFraction, u32);
-generate_instance_storage_getter_and_setter!(buffer_fraction, DataKey::BufferFraction, u32);
+generate_instance_storage_getter_and_setter_with_default!(
+    buffer_fraction,
+    DataKey::BufferFraction,
+    u32,
+    500 // 5%
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    lp_revenue_fraction,
+    DataKey::LPRevenueFraction,
+    u32,
+    5000 // 50%
+);
 generate_instance_storage_getter_and_setter_with_default!(
     last_trade_ts,
     DataKey::LastTradeTs,

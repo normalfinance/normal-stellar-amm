@@ -15,7 +15,10 @@ pub(crate) struct TestConfig {
     pub(crate) users_count: u32,
     pub(crate) mint_to_user: i128,
     pub(crate) unstaking_period: u64,
-    pub(crate) max_shares: u128,
+    pub(crate) coerage_buffer: u128,
+    pub(crate) optimal_utilization: u32,
+    pub(crate) base_rate: i32,
+    pub(crate) rate_slopes: (u32, u32),
 }
 
 impl Default for TestConfig {
@@ -24,7 +27,10 @@ impl Default for TestConfig {
             users_count: 3,
             mint_to_user: 1_000 * PRICE_PRECISION_I128,
             unstaking_period: THIRTEEN_DAY,
-            max_shares: 1_000_000_u128,
+            coerage_buffer: 0,
+            optimal_utilization: 80_00000_u32, // 80%
+            base_rate: 2_00000_i32, // 2%
+            rate_slopes: (10_00000_u32, 60_00000_u32), // 10% and 60%
         }
     }
 }
@@ -77,11 +83,11 @@ impl Setup<'_> {
             &admin,
             &emergency_admin,
             &token_a.address,
-            &THIRTEEN_DAY,
-            &0,
-            &80_00000_u32, // 80%
-            &2_00000_i32, // 2%
-            &(10_00000_i32, 60_00000_i32) // 10% and 60%
+            &config.unstaking_period,
+            &config.coerage_buffer,
+            &config.optimal_utilization,
+            &config.base_rate,
+            &config.rate_slopes
         );
         insurance_fund.set_optimal_coverage(&admin, &(1_000_000 * PRICE_PRECISION));
 

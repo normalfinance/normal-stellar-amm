@@ -1,6 +1,6 @@
 use paste::paste;
 use soroban_sdk::{ contracttype, panic_with_error, Env, Symbol };
-use utils::bump::{ bump_instance, bump_persistent, bump_temporary };
+use utils::bump::{ bump_instance, bump_persistent };
 use utils::constant::FIVE_MINUTE;
 use utils::errors::storage_errors::StorageError;
 use utils::state::oracle_registry::{ OracleInfo };
@@ -16,11 +16,11 @@ use crate::storage_types::{ HistoricalOracleData, OracleGuardRails };
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
-    OracleGuardRails, // Oracle price data validations and protections
-    OraclesSet(Symbol), // Map of Symbol to OracleInfo
-    HistoricalOracleData(Symbol), // Stores historically witnessed oracle data
-    PriceOverrideLimit, // The max an oracle price can manually be overriden in a single tx
-    PriceOverrideThreshold, // the minimum amount of time between manual price updates
+    OracleGuardRails, // a set of oracle price data validations and protections.
+    OraclesSet(Symbol), // map of asset id symbol to OracleInfo.
+    HistoricalOracleData(Symbol), // stores historically witnessed oracle data.
+    PriceOverrideLimit, // the max an oracle price can manually be overriden in a single tx.
+    PriceOverrideThreshold, // the minimum amount of time between manual price updates.
 }
 
 generate_instance_storage_getter_and_setter!(
@@ -59,14 +59,6 @@ pub(crate) fn get_oracle(e: &Env, asset_id: &Symbol) -> OracleInfo {
         None => panic_with_error!(&e, StorageError::ValueNotInitialized),
     }
 }
-
-// pub(crate) fn oracle_exists(e: &Env, asset_id: &Symbol) -> bool {
-//     let key = DataKey::OraclesSet(asset_id.clone());
-//     match e.storage().persistent().get<_, OracleInfo>(&key) {
-//         Some(value) => { true }
-//         None => false,
-//     }
-// }
 
 pub(crate) fn put_oracle(e: &Env, asset_id: &Symbol, info: &OracleInfo) {
     let key = DataKey::OraclesSet(asset_id.clone());

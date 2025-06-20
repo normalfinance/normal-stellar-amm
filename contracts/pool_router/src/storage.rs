@@ -79,7 +79,7 @@ enum DataKey {
 #[derive(Copy, Clone)]
 #[repr(u32)]
 pub enum PoolError {
-    #[doc = "PoolError: PoolAlreadyExists"]
+    #[doc = "PoolError"]
     PoolAlreadyExists = 401,
     PoolNotFound = 404,
 }

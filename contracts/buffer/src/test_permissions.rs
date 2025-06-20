@@ -363,21 +363,6 @@ fn test_unkill_resolve_liquidity_deficit() {
 // admin setters
 
 #[test]
-fn test_set_fee_collector() {
-    let setup = Setup::default();
-    let buffer = setup.buffer;
-    let fee_collector = Address::generate(&setup.env);
-    let user = Address::generate(&setup.env);
-
-    for (addr, is_ok) in [
-        (user, false),
-        (setup.admin, true),
-    ] {
-        assert_eq!(buffer.try_set_fee_collector(&addr, &fee_collector).is_ok(), is_ok);
-    }
-}
-
-#[test]
 fn test_set_min_time_between_payouts() {
     let setup = Setup::default();
     let buffer = setup.buffer;

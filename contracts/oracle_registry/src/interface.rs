@@ -4,8 +4,15 @@ use utils::state::oracle_registry::{ MutableOracleInfo, OracleInfo, OraclePriceD
 use crate::storage_types::{ HistoricalOracleData, OracleGuardRails };
 
 pub trait OracleRegistryTrait {
-    // Setup the registry
     fn initialize(e: Env, admin: Address, emergency_admin: Address);
+
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
     // Get the oracle price
     fn get_price(e: Env, asset_id: Symbol, cached: bool) -> OraclePriceData;
@@ -15,17 +22,30 @@ pub trait OracleRegistryTrait {
 
     // Get the registered oracle info
     fn get_oracle(e: Env, asset_id: Symbol) -> OracleInfo;
+
+    //   _______    _______  ___________  ___________  _______   _______    ________
+    //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
+    // (: ( \___) (: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
+    //  \/ \       \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
+    //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
+    // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
+    //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
+
+    fn get_oracle_guardrails(e: Env) -> OracleGuardRails;
+
+    fn get_price_override_limit(e: Env) -> u32;
+
+    fn get_price_override_threshold(e: Env) -> u64;
 }
 
 pub trait AdminInterface {
-    // Set oracle guardrails
-    fn set_oracle_guardrails(e: Env, admin: Address, oracle_guard_rails: OracleGuardRails);
-
-    // Set price override limit
-    fn set_price_override_limit(e: Env, admin: Address, limit: u32);
-
-    // Set price override threshold
-    fn set_price_override_threshold(e: Env, admin: Address, threshold: u64);
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
     // Create a new oracle
     fn register_oracle(
@@ -49,17 +69,17 @@ pub trait AdminInterface {
     // Admin failsafe to manually set the oracle price
     fn set_oracle_price(e: Env, admin: Address, asset_id: Symbol, price: u128);
 
-    //   _______    _______  ___________  ___________  _______   _______    ________
-    //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
-    // (: ( \___) (: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
-    //  \/ \       \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
-    //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
-    // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
-    //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
+    //   ________  _______  ___________  ___________  _______   _______    ________
+    //  /"       )/"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
+    // (:   \___/(: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
+    //  \___  \   \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
+    //   __/  \\  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
+    //  /" \   :)(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
+    // (_______/  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
 
-    fn get_oracle_guardrails(e: Env) -> OracleGuardRails;
+    fn set_oracle_guard_rails(e: Env, admin: Address, oracle_guard_rails: OracleGuardRails);
 
-    fn get_price_override_limit(e: Env) -> u32;
+    fn set_price_override_limit(e: Env, admin: Address, limit: u32);
 
-    fn get_price_override_threshold(e: Env) -> u64;
+    fn set_price_override_threshold(e: Env, admin: Address, threshold: u64);
 }

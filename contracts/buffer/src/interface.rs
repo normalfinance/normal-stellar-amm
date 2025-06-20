@@ -3,7 +3,6 @@ use soroban_sdk::{ Address, Env };
 use crate::reserve::Reserve;
 
 pub trait BufferTrait {
-    //
     fn initialize(
         e: Env,
         admin: Address,
@@ -11,6 +10,14 @@ pub trait BufferTrait {
         time_bt_payouts: u64,
         min_reserve_ratio: u32
     );
+
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
     // Deposit swap fees into the Buffer
     fn deposit(e: Env, sender: Address, token: Address, amount: u128);
@@ -29,34 +36,37 @@ pub trait BufferTrait {
     // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
     //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
 
-    // Get the Fee Collector
-    fn get_fee_collector(e: Env) -> Address;
-
-    // Get the minimum time between payouts
     fn get_min_time_between_payouts(e: Env) -> u64;
 
-    // Getter for a Buffer reserve.
     fn get_reserve(e: Env, token: Address) -> Reserve;
 
-    // Get the minimum reserve ratio
     fn get_min_reserve_ratio(e: Env) -> u32;
 
-    // Get the last payout timestamp
     fn get_last_payout_timestamp(e: Env) -> u64;
 }
 
 pub trait AdminInterface {
-    // Set the Fee Collector
-    fn set_fee_collector(e: Env, admin: Address, fee_collector: Address);
+    //   ________  _______  ___________  ___________  _______   _______    ________
+    //  /"       )/"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
+    // (:   \___/(: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
+    //  \___  \   \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
+    //   __/  \\  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
+    //  /" \   :)(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
+    // (_______/  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
 
-    // Set min time between payouts
     fn set_min_time_between_payouts(e: Env, admin: Address, min_time: u64);
 
-    // Set min reserve ratio
     fn set_min_reserve_ratio(e: Env, admin: Address, min_ratio: u32);
 
-    // Set reserve max balance
     fn set_reserve_max_balance(e: Env, admin: Address, token: Address, max_balance: u128);
+
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
     // Resolve pool liquidity deficit using reserves
     fn resolve_liquidity_deficit(

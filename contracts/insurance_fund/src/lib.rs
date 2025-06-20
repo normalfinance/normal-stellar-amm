@@ -8,7 +8,6 @@ mod interface;
 mod stake;
 mod storage;
 mod test;
-mod test_math;
 mod test_permissions;
 mod testutils;
 

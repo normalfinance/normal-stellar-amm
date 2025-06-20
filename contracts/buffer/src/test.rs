@@ -5,8 +5,23 @@ use crate::reserve::Reserve;
 use crate::testutils::{ Setup, TestConfig };
 use soroban_sdk::testutils::{ Address as _, AuthorizedFunction, AuthorizedInvocation, Events };
 use soroban_sdk::{ vec, Address, Error, IntoVal, Symbol, Val, Vec };
-use utils::constant::{ FIVE_MINUTE, TWENTY_FOUR_HOUR };
+use utils::constant::{ FIVE_MINUTE, ONE_HOUR, TWENTY_FOUR_HOUR };
 use utils::test_utils::jump;
+
+/* `resolve_liquidity_deficit()` tests are located in /integration_tests since testing this 
+function can only truly be done setting up all other contracts */
+
+/* Tests Needed:
+- [ ] Setters work
+- [ ] Getters work
+ */
+
+#[test]
+#[should_panic(expected = "Error(Contract, #103)")]
+fn test_initialize_twice() {
+    let setup = Setup::default();
+    setup.buffer.initialize(&setup.admin, &setup.emergency_admin, &ONE_HOUR, &100_u32);
+}
 
 #[test]
 fn test_deposit() {

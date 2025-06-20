@@ -4,7 +4,14 @@ use crate::events::PoolEvents;
 use crate::incentives::get_incentives_manager;
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
-use crate::pool::{ get_amount_out_strict_receive, get_delta_a, get_net_liquidity_imbalance, get_oracle_price, rebalance, update_volume_24h };
+use crate::pool::{
+    get_amount_out_strict_receive,
+    get_delta_a,
+    get_net_liquidity_imbalance,
+    get_oracle_price,
+    rebalance,
+    update_volume_24h,
+};
 use crate::interface::{
     AdminInterfaceTrait,
     IncentivesTrait,
@@ -135,15 +142,6 @@ impl PoolCrunch for Pool {
 
 #[contractimpl]
 impl PoolTrait for Pool {
-    // Returns the type of the pool.
-    //
-    // # Returns
-    //
-    // The type of the pool as a Symbol.
-    fn pool_type(e: Env) -> Symbol {
-        Symbol::new(&e, "constant_product")
-    }
-
     // Initializes the liquidity pool.
     //
     // # Arguments
@@ -248,34 +246,13 @@ impl PoolTrait for Pool {
         update_plane(&e);
     }
 
-    // Returns the pool's share token address.
-    //
-    // # Returns
-    //
-    // The pool's share token as an Address.
-    fn share_id(e: Env) -> Address {
-        get_token_lp(&e)
-    }
-
-    // Returns the total shares of the pool.
-    //
-    // # Returns
-    //
-    // The total shares of the pool as a u128.
-    fn get_total_shares(e: Env) -> u128 {
-        get_total_lp_tokens(&e)
-    }
-
-    // Returns the pool's tokens.
-    //
-    // # Returns
-    //
-    // A vector of token addresses.
-    fn get_tokens(e: Env) -> Vec<Address> {
-        let pool = get_pool(&e);
-        let token_synthetic = get_token_synthetic(&e);
-        Vec::from_array(&e, [token_synthetic, pool.token_b])
-    }
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
     // Deposits tokens into the pool.
     //
@@ -801,22 +778,58 @@ impl PoolTrait for Pool {
         share_amount
     }
 
-    // Returns the pool's reserves.
-    //
-    // # Returns
-    //
-    // A vector of the pool's reserves.
+    //   _______    _______  ___________  ___________  _______   _______    ________
+    //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
+    // (: ( \___) (: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
+    //  \/ \       \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
+    //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
+    // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
+    //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
+
+    // Returns the type of the pool.
+    fn pool_type(e: Env) -> Symbol {
+        Symbol::new(&e, "constant_product")
+    }
+
+    // Returns the pool's share token address.
+    fn share_id(e: Env) -> Address {
+        get_token_lp(&e)
+    }
+
+    // Returns the total shares of the pool.
+    fn get_total_shares(e: Env) -> u128 {
+        get_total_lp_tokens(&e)
+    }
+
+    fn get_tokens(e: Env) -> Vec<Address> {
+        let pool = get_pool(&e);
+        let token_synthetic = get_token_synthetic(&e);
+        Vec::from_array(&e, [token_synthetic, pool.token_b])
+    }
+
+    fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>> {
+        let access_control = AccessControl::new(&e);
+        let mut result: Map<Symbol, Vec<Address>> = Map::new(&e);
+        for role in [Role::Admin, Role::EmergencyAdmin, Role::OperationsAdmin, Role::PauseAdmin] {
+            result.set(role.as_symbol(&e), match access_control.get_role_safe(&role) {
+                Some(v) => Vec::from_array(&e, [v]),
+                None => Vec::new(&e),
+            });
+        }
+
+        result.set(
+            Role::EmergencyPauseAdmin.as_symbol(&e),
+            access_control.get_role_addresses(&Role::EmergencyPauseAdmin)
+        );
+
+        result
+    }
+
     fn get_reserves(e: Env) -> Vec<u128> {
         Vec::from_array(&e, [get_reserve_a(&e), get_reserve_b(&e)])
     }
 
-    // Returns the pool's fee fraction.
-    //
-    // # Returns
-    //
-    // The pool's fee fraction as a u32.
     fn get_fee_fraction(e: Env) -> u32 {
-        // returns fee fraction. 0.01% = 1; 1% = 100; 0.3% = 30
         let pool = get_pool(&e);
         pool.fee_fraction
     }
@@ -858,122 +871,13 @@ impl PoolTrait for Pool {
 
 #[contractimpl]
 impl AdminInterfaceTrait for Pool {
-    // Sets the privileged addresses.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `rewards_admin` - The address of the rewards admin.
-    // * `operations_admin` - The address of the operations admin.
-    // * `pause_admin` - The address of the pause admin.
-    // * `emergency_pause_admin` - The addresses of the emergency pause admins.
-    fn set_privileged_addrs(
-        e: Env,
-        admin: Address,
-        rewards_admin: Address,
-        operations_admin: Address,
-        pause_admin: Address,
-        emergency_pause_admins: Vec<Address>
-    ) {
-        admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.assert_address_has_role(&admin, &Role::Admin);
-
-        access_control.set_role_address(&Role::RewardsAdmin, &rewards_admin);
-        access_control.set_role_address(&Role::OperationsAdmin, &operations_admin);
-        access_control.set_role_address(&Role::PauseAdmin, &pause_admin);
-        access_control.set_role_addresses(&Role::EmergencyPauseAdmin, &emergency_pause_admins);
-        AccessControlEvents::new(&e).set_privileged_addrs(
-            rewards_admin,
-            operations_admin,
-            pause_admin,
-            emergency_pause_admins
-        );
-    }
-
-    // Returns a map of privileged roles.
-    //
-    // # Returns
-    //
-    // A map of privileged roles to their respective addresses.
-    fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>> {
-        let access_control = AccessControl::new(&e);
-        let mut result: Map<Symbol, Vec<Address>> = Map::new(&e);
-        for role in [Role::Admin, Role::EmergencyAdmin, Role::OperationsAdmin, Role::PauseAdmin] {
-            result.set(role.as_symbol(&e), match access_control.get_role_safe(&role) {
-                Some(v) => Vec::from_array(&e, [v]),
-                None => Vec::new(&e),
-            });
-        }
-
-        result.set(
-            Role::EmergencyPauseAdmin.as_symbol(&e),
-            access_control.get_role_addresses(&Role::EmergencyPauseAdmin)
-        );
-
-        result
-    }
-
-    fn set_tier(e: Env, admin: Address, tier: PoolTier) {
-        admin.require_auth();
-        require_operations_admin_or_owner(&e, &admin);
-
-        let mut pool = get_pool(&e);
-        pool.tier = tier;
-
-        set_pool(&e, &pool);
-    }
-
-    fn set_status(e: Env, admin: Address, status: PoolStatus) {
-        admin.require_auth();
-        require_operations_admin_or_owner(&e, &admin);
-
-        let mut pool = get_pool(&e);
-        pool.status = status;
-
-        set_pool(&e, &pool);
-    }
-
-    fn set_max_imbalances(
-        e: Env,
-        admin: Address,
-        liquidity_max_imbalance: u128,
-        quote_max_insurance: u128
-    ) {
-        admin.require_auth();
-        require_operations_admin_or_owner(&e, &admin);
-
-        let mut pool = get_pool(&e);
-
-        let max_insurance_for_tier = match pool.tier {
-            PoolTier::A => INSURANCE_A_MAX,
-            PoolTier::B => INSURANCE_B_MAX,
-            PoolTier::C => INSURANCE_C_MAX,
-            PoolTier::Speculative => INSURANCE_SPECULATIVE_MAX,
-            PoolTier::HighlySpeculative => INSURANCE_SPECULATIVE_MAX,
-            PoolTier::Isolated => INSURANCE_SPECULATIVE_MAX,
-        };
-
-        // "all maxs must be less than max_insurance for PoolTier ={}",
-        validate!(
-            &e,
-            liquidity_max_imbalance <= max_insurance_for_tier + 1 &&
-                quote_max_insurance <= max_insurance_for_tier,
-            PoolError::DefaultError
-        );
-
-        // "quote_max_insurance must be above pool.insurance_claim.quote_settled_insurance={}",
-        validate!(
-            &e,
-            pool.insurance_claim.quote_settled_insurance <= quote_max_insurance,
-            PoolError::DefaultError
-        );
-
-        pool.liquidity_max_imbalance = liquidity_max_imbalance;
-        pool.insurance_claim.quote_max_insurance = quote_max_insurance;
-
-        set_pool(&e, &pool);
-    }
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
     fn rebalance(e: Env, admin: Address) {
         admin.require_auth();
@@ -1078,11 +982,107 @@ impl AdminInterfaceTrait for Pool {
         insurance_withdraw
     }
 
-    // Stops the pool deposits instantly.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
+    //   ________  _______  ___________  ___________  _______   _______    ________
+    //  /"       )/"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
+    // (:   \___/(: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
+    //  \___  \   \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
+    //   __/  \\  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
+    //  /" \   :)(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
+    // (_______/  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
+
+    fn set_privileged_addrs(
+        e: Env,
+        admin: Address,
+        rewards_admin: Address,
+        operations_admin: Address,
+        pause_admin: Address,
+        emergency_pause_admins: Vec<Address>
+    ) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, &Role::Admin);
+
+        access_control.set_role_address(&Role::RewardsAdmin, &rewards_admin);
+        access_control.set_role_address(&Role::OperationsAdmin, &operations_admin);
+        access_control.set_role_address(&Role::PauseAdmin, &pause_admin);
+        access_control.set_role_addresses(&Role::EmergencyPauseAdmin, &emergency_pause_admins);
+        AccessControlEvents::new(&e).set_privileged_addrs(
+            rewards_admin,
+            operations_admin,
+            pause_admin,
+            emergency_pause_admins
+        );
+    }
+
+    fn set_tier(e: Env, admin: Address, tier: PoolTier) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+
+        let mut pool = get_pool(&e);
+        pool.tier = tier;
+
+        set_pool(&e, &pool);
+    }
+
+    fn set_status(e: Env, admin: Address, status: PoolStatus) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+
+        let mut pool = get_pool(&e);
+        pool.status = status;
+
+        set_pool(&e, &pool);
+    }
+
+    fn set_max_imbalances(
+        e: Env,
+        admin: Address,
+        liquidity_max_imbalance: u128,
+        quote_max_insurance: u128
+    ) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+
+        let mut pool = get_pool(&e);
+
+        let max_insurance_for_tier = match pool.tier {
+            PoolTier::A => INSURANCE_A_MAX,
+            PoolTier::B => INSURANCE_B_MAX,
+            PoolTier::C => INSURANCE_C_MAX,
+            PoolTier::Speculative => INSURANCE_SPECULATIVE_MAX,
+            PoolTier::HighlySpeculative => INSURANCE_SPECULATIVE_MAX,
+            PoolTier::Isolated => INSURANCE_SPECULATIVE_MAX,
+        };
+
+        // "all maxs must be less than max_insurance for PoolTier ={}",
+        validate!(
+            &e,
+            liquidity_max_imbalance <= max_insurance_for_tier + 1 &&
+                quote_max_insurance <= max_insurance_for_tier,
+            PoolError::DefaultError
+        );
+
+        // "quote_max_insurance must be above pool.insurance_claim.quote_settled_insurance={}",
+        validate!(
+            &e,
+            pool.insurance_claim.quote_settled_insurance <= quote_max_insurance,
+            PoolError::DefaultError
+        );
+
+        pool.liquidity_max_imbalance = liquidity_max_imbalance;
+        pool.insurance_claim.quote_max_insurance = quote_max_insurance;
+
+        set_pool(&e, &pool);
+    }
+
+    //    _______     __       ____  ____   ________  _______  ________
+    //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\
+    //   (. |__) :) /    \    |   (  ) : |(:   \___/(: ______)(.  ___  :)
+    //   |:  ____/ /' /\  \   (:  |  | . ) \___  \   \/    |  |: \   ) ||
+    //   (|  /    //  __'  \   \\ \__/ //   __/  \\  // ___)_ (| (___\ ||
+    //  /|__/ \  /   /  \\  \  /\\ __ //\  /" \   :)(:      "||:       :)
+    // (_______)(___/    \___)(__________)(_______/  \_______)(________/
+
     fn kill_deposit(e: Env, admin: Address) {
         admin.require_auth();
         require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
@@ -1091,11 +1091,6 @@ impl AdminInterfaceTrait for Pool {
         LiquidityPoolEvents::new(&e).kill_deposit();
     }
 
-    // Stops the pool withdrawals instantly.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
     fn kill_withdraw(e: Env, admin: Address) {
         admin.require_auth();
         require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
@@ -1104,11 +1099,6 @@ impl AdminInterfaceTrait for Pool {
         LiquidityPoolEvents::new(&e).kill_withdraw();
     }
 
-    // Stops the pool swaps instantly.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
     fn kill_swap(e: Env, admin: Address) {
         admin.require_auth();
         require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
@@ -1117,11 +1107,6 @@ impl AdminInterfaceTrait for Pool {
         LiquidityPoolEvents::new(&e).kill_swap();
     }
 
-    // Stops the pool claims instantly.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
     fn kill_claim(e: Env, admin: Address) {
         admin.require_auth();
         require_pause_or_emergency_pause_admin_or_owner(&e, &admin);
@@ -1130,11 +1115,6 @@ impl AdminInterfaceTrait for Pool {
         LiquidityPoolEvents::new(&e).kill_claim();
     }
 
-    // Resumes the pool deposits.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
     fn unkill_deposit(e: Env, admin: Address) {
         admin.require_auth();
         require_pause_admin_or_owner(&e, &admin);
@@ -1143,11 +1123,6 @@ impl AdminInterfaceTrait for Pool {
         LiquidityPoolEvents::new(&e).unkill_deposit();
     }
 
-    // Resumes the pool withdrawals.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
     fn unkill_withdraw(e: Env, admin: Address) {
         admin.require_auth();
         require_pause_admin_or_owner(&e, &admin);
@@ -1156,11 +1131,6 @@ impl AdminInterfaceTrait for Pool {
         LiquidityPoolEvents::new(&e).unkill_withdraw();
     }
 
-    // Resumes the pool swaps.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
     fn unkill_swap(e: Env, admin: Address) {
         admin.require_auth();
         require_pause_admin_or_owner(&e, &admin);
@@ -1169,11 +1139,6 @@ impl AdminInterfaceTrait for Pool {
         LiquidityPoolEvents::new(&e).unkill_swap();
     }
 
-    // Resumes the pool claims.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
     fn unkill_claim(e: Env, admin: Address) {
         admin.require_auth();
         require_pause_admin_or_owner(&e, &admin);

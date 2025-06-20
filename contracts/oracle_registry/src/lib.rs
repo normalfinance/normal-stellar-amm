@@ -2,7 +2,6 @@
 
 mod contract;
 pub mod errors;
-mod events;
 mod interface;
 mod oracle;
 mod storage;

@@ -4,7 +4,6 @@ use crate::interface::{ AdminInterface, BufferTrait };
 use crate::reserve::Reserve;
 use crate::storage::{
     get_buffer_reserve_amount,
-    get_fee_collector,
     get_is_killed_deposit,
     get_is_killed_resolve_liquidity_deficit,
     get_last_payout_timestamp,
@@ -12,7 +11,6 @@ use crate::storage::{
     get_min_time_between_payouts,
     get_reserve,
     put_reserve,
-    set_fee_collector,
     set_is_killed_deposit,
     set_is_killed_resolve_liquidity_deficit,
     set_last_payout_timestamp,
@@ -71,6 +69,14 @@ impl BufferTrait for Buffer {
         set_min_time_between_payouts(&e, &time_bt_payouts);
         set_min_reserve_ratio(&e, &min_reserve_ratio);
     }
+
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
     fn deposit(e: Env, sender: Address, token: Address, amount: u128) {
         sender.require_auth();
@@ -134,27 +140,26 @@ impl BufferTrait for Buffer {
         }
     }
 
-    // Returns the Fee Collector address.
-    fn get_fee_collector(e: Env) -> Address {
-        get_fee_collector(&e)
-    }
+    //   _______    _______  ___________  ___________  _______   _______    ________
+    //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
+    // (: ( \___) (: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
+    //  \/ \       \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
+    //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
+    // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
+    //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
 
-    // Returns the minimum time between payouts.
     fn get_min_time_between_payouts(e: Env) -> u64 {
         get_min_time_between_payouts(&e)
     }
 
-    // Returns the Buffer's reserve for a token.
     fn get_reserve(e: Env, token: Address) -> Reserve {
         get_reserve(&e, &token)
     }
 
-    // Returns the minimum reserve ratio.
     fn get_min_reserve_ratio(e: Env) -> u32 {
         get_min_reserve_ratio(&e)
     }
 
-    // Returns the last payout timestampe.
     fn get_last_payout_timestamp(e: Env) -> u64 {
         get_last_payout_timestamp(&e)
     }
@@ -163,25 +168,14 @@ impl BufferTrait for Buffer {
 // The `AdminInterface` trait provides the interface for administrative actions.
 #[contractimpl]
 impl AdminInterface for Buffer {
-    // Sets the fee collector address.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `fee_collector` - The address of the fee collector.
-    fn set_fee_collector(e: Env, admin: Address, fee_collector: Address) {
-        admin.require_auth();
-        require_admin(&e, &admin);
+    //   ________  _______  ___________  ___________  _______   _______    ________
+    //  /"       )/"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
+    // (:   \___/(: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
+    //  \___  \   \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
+    //   __/  \\  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
+    //  /" \   :)(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
+    // (_______/  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
 
-        set_fee_collector(&e, &fee_collector);
-    }
-
-    // Sets the minimum time between payouts.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `min_time` - The new minimum time between payouts.
     fn set_min_time_between_payouts(e: Env, admin: Address, min_time: u64) {
         admin.require_auth();
         require_admin(&e, &admin);
@@ -189,12 +183,6 @@ impl AdminInterface for Buffer {
         set_min_time_between_payouts(&e, &min_time);
     }
 
-    // Sets the minimum time between payouts.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `min_ratio` - The new minimum time between payouts.
     fn set_min_reserve_ratio(e: Env, admin: Address, min_ratio: u32) {
         admin.require_auth();
         require_admin(&e, &admin);
@@ -202,13 +190,6 @@ impl AdminInterface for Buffer {
         set_min_reserve_ratio(&e, &min_ratio);
     }
 
-    // Sets the max reserve balance.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `token` - The address of the token in reserve.
-    // * `max_balance` - The new reserve max balance.
     fn set_reserve_max_balance(e: Env, admin: Address, token: Address, max_balance: u128) {
         admin.require_auth();
         require_admin(&e, &admin);
@@ -217,6 +198,14 @@ impl AdminInterface for Buffer {
         let reserve = get_reserve(&e, &token);
         put_reserve(&e, &token, &reserve.update_max_balance(max_balance, now));
     }
+
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
     fn resolve_liquidity_deficit(
         e: Env,
@@ -300,6 +289,14 @@ impl AdminInterface for Buffer {
 
         Events::new(&e).withdraw_surplus(token, admin, amount);
     }
+
+    //    _______     __       ____  ____   ________  _______  ________
+    //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\
+    //   (. |__) :) /    \    |   (  ) : |(:   \___/(: ______)(.  ___  :)
+    //   |:  ____/ /' /\  \   (:  |  | . ) \___  \   \/    |  |: \   ) ||
+    //   (|  /    //  __'  \   \\ \__/ //   __/  \\  // ___)_ (| (___\ ||
+    //  /|__/ \  /   /  \\  \  /\\ __ //\  /" \   :)(:      "||:       :)
+    // (_______)(___/    \___)(__________)(_______/  \_______)(________/
 
     // Stops the buffer deposits instantly.
     //

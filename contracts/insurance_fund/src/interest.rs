@@ -1,6 +1,6 @@
 use soroban_fixed_point_math::FixedPoint;
 use soroban_sdk::{ panic_with_error, Env };
-use utils::{ constant::{ PERCENTAGE_PRECISION, PRICE_PRECISION }, math::safe_math::SafeMath };
+use utils::{ constant::{ PERCENTAGE_PRECISION }, math::safe_math::SafeMath };
 
 use crate::errors::InsuranceFundError;
 
@@ -46,8 +46,8 @@ pub fn calculate_rate(
     utilization: u32,
     optimal_utilization: u32,
     base_rate: i32,
-    slope1: i32,
-    slope2: i32
+    slope1: u32,
+    slope2: u32
 ) -> i32 {
     if utilization == 0 {
         return base_rate;
@@ -82,7 +82,7 @@ pub fn calculate_rate(
 
 #[cfg(test)]
 mod tests {
-    use utils::constant::PERCENTAGE_PRECISION_U32;
+    use utils::constant::{ PERCENTAGE_PRECISION_U32, PRICE_PRECISION };
 
     use super::*;
 
@@ -161,11 +161,19 @@ mod tests {
     }
 
     #[test]
-    fn test_negative_base_rate_and_slopes() {
+    fn test_negative_base_rate() {
         let e = Env::default();
-        let rate = calculate_rate(&e, 5000, 8000, -100, -400, -1500);
-        // -100 + (5000 / 8000 * -400) = -100 - 250 = -350
-        assert_eq!(rate, -350);
+        let rate = calculate_rate(&e, 5000, 8000, -100, 400, 1500);
+        // -100 + (5000 / 8000 * 400) = -100 + 250 = 150
+        assert_eq!(rate, 150);
+    }
+
+    #[test]
+    fn test_negative_rate() {
+        let e = Env::default();
+        let rate = calculate_rate(&e, 11000, 8000, -1000, 200, 1000);
+        // -100 + (5000 / 8000 * 400) = -100 + 250 = 150
+        assert_eq!(rate, -975);
     }
 
     #[test]

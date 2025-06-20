@@ -60,6 +60,42 @@ pub struct PoolSwapFeeCollector;
 
 #[contractimpl]
 impl PoolSwapFeeInterface for PoolSwapFeeCollector {
+    //   _______    _______  ___________  ___________  _______   _______    ________
+    //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
+    // (: ( \___) (: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
+    //  \/ \       \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
+    //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
+    // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
+    //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
+
+    fn get_router(e: Env) -> Address {
+        get_router(&e)
+    }
+
+    fn get_buffer(e: Env) -> Address {
+        get_buffer(&e)
+    }
+
+    fn get_fee_destination(e: Env) -> Address {
+        get_fee_destination(&e)
+    }
+
+    fn get_buffer_fraction(e: Env) -> u32 {
+        get_buffer_fraction(&e)
+    }
+
+    fn get_lp_revenue_fraction(e: Env) -> u32 {
+        get_lp_revenue_fraction(&e)
+    }
+
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
+
     // swap
     // Executes a token swap with fee deduction.
     //
@@ -306,13 +342,13 @@ impl AdminInterface for PoolSwapFeeCollector {
         access_control.set_role_address(&Role::EmergencyAdmin, &emergency_admin);
     }
 
-    //   ________  _______  ___________  ___________  _______   _______
-    //  /"       )/"     "|("     _   ")("     _   ")/"     "| /"      \
-    // (:   \___/(: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |
-    //  \___  \   \/    |      \\_ /        \\_ /    \/    |  |_____/   )
-    //   __/  \\  // ___)_     |.  |        |.  |    // ___)_  //      /
-    //  /" \   :)(:      "|    \:  |        \:  |   (:      "||:  __   \
-    // (_______/  \_______)     \__|         \__|    \_______)|__|  \___)
+    //   ________  _______  ___________  ___________  _______   _______    ________
+    //  /"       )/"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
+    // (:   \___/(: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
+    //  \___  \   \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
+    //   __/  \\  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
+    //  /" \   :)(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
+    // (_______/  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
 
     fn set_router(e: Env, admin: Address, router: Address) {
         admin.require_auth();
@@ -354,34 +390,6 @@ impl AdminInterface for PoolSwapFeeCollector {
         require_admin(&e, &admin);
 
         set_lp_revenue_fraction(&e, &fraction);
-    }
-
-    //   _______    _______  ___________  ___________  _______   _______
-    //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \
-    // (: ( \___) (: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |
-    //  \/ \       \/    |      \\_ /        \\_ /    \/    |  |_____/   )
-    //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /
-    // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \
-    //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)
-
-    fn get_router(e: Env) -> Address {
-        get_router(&e)
-    }
-
-    fn get_buffer(e: Env) -> Address {
-        get_buffer(&e)
-    }
-
-    fn get_fee_destination(e: Env) -> Address {
-        get_fee_destination(&e)
-    }
-
-    fn get_buffer_fraction(e: Env) -> u32 {
-        get_buffer_fraction(&e)
-    }
-
-    fn get_lp_revenue_fraction(e: Env) -> u32 {
-        get_lp_revenue_fraction(&e)
     }
 
     //  ___      ___       __        __    _____  ___

@@ -1,20 +1,17 @@
 use soroban_sdk::contracttype;
 use utils::{
-    constant::{PERCENTAGE_PRECISION_U64, PRICE_PRECISION},
-    errors::oracle_error::OracleError, state::oracle_registry::OraclePriceData,
+    constant::{ PERCENTAGE_PRECISION_U64, PRICE_PRECISION },
+    errors::oracle_error::OracleError,
+    state::oracle_registry::OraclePriceData,
 };
 
 #[contracttype]
 #[derive(Default, Clone, Copy, Eq, PartialEq, Debug)]
 pub struct HistoricalOracleData {
-    // precision: PRICE_PRECISION
     pub last_oracle_price: u128,
-    // amount of time since last update
-    pub last_oracle_delay: u64,
-    // precision: PRICE_PRECISION
+    pub last_oracle_delay: u64, // amount of time since last update.
     pub last_oracle_price_twap: u128,
-    // unix_timestamp of last snapshot
-    pub last_oracle_price_twap_ts: u64,
+    pub last_oracle_price_twap_ts: u64, // unix_timestamp of last snapshot.
 }
 
 impl HistoricalOracleData {
@@ -74,9 +71,9 @@ impl Default for OracleGuardRails {
                 oracle_twap_percent_divergence: PERCENTAGE_PRECISION_U64 / 2,
             },
             validity: ValidityGuardRails {
-                slots_before_stale_for_pool: 10,      // ~5 seconds
+                slots_before_stale_for_pool: 10, // ~5 seconds
                 confidence_interval_max_size: 20_000, // 2% of price
-                too_volatile_ratio: 5,                // 5x or 80% down
+                too_volatile_ratio: 5, // 5x or 80% down
             },
         }
     }
@@ -84,9 +81,7 @@ impl Default for OracleGuardRails {
 
 impl OracleGuardRails {
     pub fn max_oracle_twap_percent_divergence(&self) -> u64 {
-        self.price_divergence
-            .oracle_twap_percent_divergence
-            .max(PERCENTAGE_PRECISION_U64 / 2)
+        self.price_divergence.oracle_twap_percent_divergence.max(PERCENTAGE_PRECISION_U64 / 2)
     }
 }
 
@@ -95,8 +90,9 @@ impl OracleGuardRails {
 pub enum OracleValidity {
     NonPositive,
     TooVolatile,
-    TooUncertain,
-    InsufficientDataPoints,
+    // @dev have code ready to implement but oracle response does not support
+    // TooUncertain,
+    // InsufficientDataPoints,
     StaleForPool,
     #[default]
     Valid,
@@ -107,8 +103,8 @@ impl OracleValidity {
         match self {
             OracleValidity::NonPositive => OracleError::OracleNonPositive,
             OracleValidity::TooVolatile => OracleError::OracleTooVolatile,
-            OracleValidity::TooUncertain => OracleError::OracleTooUncertain,
-            OracleValidity::InsufficientDataPoints => OracleError::OracleInsufficientDataPoints,
+            // OracleValidity::TooUncertain => OracleError::OracleTooUncertain,
+            // OracleValidity::InsufficientDataPoints => OracleError::OracleInsufficientDataPoints,
             OracleValidity::StaleForPool => OracleError::OracleStaleForPool,
             OracleValidity::Valid => unreachable!(),
         }
@@ -118,10 +114,9 @@ impl OracleValidity {
 // Actions dependant on oracle prices
 #[derive(Clone, Copy, PartialEq, Debug, Eq)]
 pub enum NormalAction {
-    UpdateTwap,         // Save time-weighted average price to historical oracle data
+    UpdateTwap, // Save time-weighted average price to historical oracle data
     Rebalance, // Mint or burn synthetic tokens (token_a) in a Pool to peg its price to an oracle
-    BufferPayout, // Cover a pool liquidity deficit with Buffer reserves
-    InsuranceFundClaim, // Cover a pool liquidity deficit with Insurance Fund stakes
+    InsuranceClaim, // Cover a pool liquidity deficit with a Buffer reserve and/or Insurance Fund stakes
 }
 
 #[derive(Default, Clone, Copy, Debug)]

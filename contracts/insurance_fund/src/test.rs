@@ -3,121 +3,43 @@ extern crate std;
 
 use crate::stake::{ Stake, StakeAction };
 use crate::testutils::{ Setup, TestConfig };
-use soroban_sdk::testutils::{ Address as _, AuthorizedFunction, AuthorizedInvocation, Events };
+use soroban_sdk::testutils::{ Address as _, Events };
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::{ vec, Address, Error, IntoVal, Symbol, Val, Vec };
 use utils::constant::{ ONE_HOUR, PRICE_PRECISION, THIRTEEN_DAY, THIRTY_DAY };
 // use utils::test_utils::insurance_fund::Stake;
 use utils::test_utils::jump;
 
-// from drift
+/* `resolve_liquidity_deficit()` tests are located in /integration_tests since testing this 
+function can only truly be done setting up all other contracts */
 
-// #[test]
-// fn basic_stake_if_test() {
-//     let setup = Setup::default();
+/* Tests Needed:
+- [ ] Withdrawing all shares (a minus 1 operation is applied)
+- [ ] All operations after premium has been paid
+- [ ] Setters work
+- [ ] Getters work
 
-//     assert_eq!((0_i32).signum(), 0);
-//     assert_eq!((1_i32).signum(), 1);
-//     assert_eq!(-(1_i32).signum(), -1);
-
-//     assert_eq!((0_i128).signum(), 0);
-//     assert_eq!((1_i128).signum(), 1);
-
-//     let mut if_balance = 0;
-
-//     let mut if_stake = Stake::new(0);
-
-//     let amount = QUOTE_PRECISION as u64; // $1
-//     let mut insurance_fund = InsuranceFund {
-//         unstaking_period: 0,
-//         ..InsuranceFund::default()
-//     };
-
-//     setup.insurance_fund.deposit(user, amount);
-//     add_insurance_fund_stake(
-//         amount,
-//         if_balance,
-//         &mut if_stake,
-//         &mut user_stats,
-//         &mut spot_market,
-//         0
-//     ).unwrap();
-
-//     assert_eq!(if_stake.unchecked_if_shares(), amount as u128);
-//     if_balance += amount;
-
-//     // must request first
-//     assert!(
-//         remove_insurance_fund_stake(
-//             if_balance,
-//             &mut if_stake,
-//             &mut user_stats,
-//             &mut spot_market,
-//             0
-//         ).is_err()
-//     );
-
-//     assert_eq!(if_stake.unchecked_if_shares(), amount as u128);
-//     assert_eq!(spot_market.insurance_fund.total_shares, amount as u128);
-//     assert_eq!(spot_market.insurance_fund.shares_base, 0);
-
-//     request_remove_insurance_fund_stake(
-//         if_stake.unchecked_if_shares(),
-//         if_balance,
-//         &mut if_stake,
-//         &mut user_stats,
-//         &mut spot_market,
-//         0
-//     ).unwrap();
-//     assert_eq!(if_stake.last_withdraw_request_shares, if_stake.unchecked_if_shares());
-//     assert_eq!(if_stake.last_withdraw_request_value, if_balance - 1); //rounding in favor
-//     assert_eq!(if_stake.unchecked_if_shares(), amount as u128);
-//     assert_eq!(spot_market.insurance_fund.total_shares, amount as u128);
-//     assert_eq!(spot_market.insurance_fund.shares_base, 0);
-
-//     let amount_returned = remove_insurance_fund_stake(
-//         if_balance,
-//         &mut if_stake,
-//         &mut user_stats,
-//         &mut spot_market,
-//         0
-//     ).unwrap();
-//     assert_eq!(amount_returned, amount - 1);
-//     if_balance -= amount_returned;
-
-//     assert_eq!(if_stake.unchecked_if_shares(), 0);
-//     assert_eq!(if_stake.cost_basis, 1);
-//     assert_eq!(if_stake.last_withdraw_request_shares, 0);
-//     assert_eq!(if_stake.last_withdraw_request_value, 0);
-//     assert_eq!(spot_market.insurance_fund.total_shares, 0);
-//     assert_eq!(spot_market.insurance_fund.shares_base, 0);
-//     assert_eq!(if_balance, 1);
-
-//     add_insurance_fund_stake(
-//         1234,
-//         if_balance,
-//         &mut if_stake,
-//         &mut user_stats,
-//         &mut spot_market,
-//         0
-//     ).unwrap();
-//     assert_eq!(if_stake.cost_basis, 1234);
-//     assert_eq!(spot_market.insurance_fund.user_shares, 1234);
-//     assert_eq!(spot_market.insurance_fund.total_shares, 1235); // protocol claims the 1 balance
-//     assert_eq!(spot_market.insurance_fund.shares_base, 0);
-// }
-
-/**
- * Tests Needed
- * - [ ] Withdrawing all shares (a minus 1 operation is applied)
- * - [ ] All operations after premium has been paid
+ * Deposit Tests
+ * [ ] Singular deposit
+ * [ ] Multiple deposits, same user
+ * [ ] Multiple deposits, different users
+ * [ ] Deposit over optimal coverage FAIL 20
+ * [ ] Deposit while withdraw in progress FAIL 9
+ * 
+ *  Request Withdraw Tests
+ * [ ] happy path
+ * [ ] already in progress FAIL 9
+ * [ ] empty vault amount FAIL 12 (if already shares)
+ * [ ] zero request fails FAIL 11
+ * [ ] insufficent user shares FAIL 13
+ * [ ] error if too low vault amount FAIL 3
+ * [ ]
  */
 
 #[test]
 #[should_panic(expected = "Error(Contract, #103)")]
 fn test_initialize_twice() {
     let setup = Setup::default();
-    let token = Address::generate(&setup.env);
     setup.insurance_fund.initialize(
         &setup.admin,
         &setup.emergency_admin,
@@ -126,19 +48,10 @@ fn test_initialize_twice() {
         &0,
         &80_00000_u32, // 80%
         &2_00000_i32, // 2%
-        &(10_00000_i32, 60_00000_i32) // 10% and 60%);
+        &(10_00000_u32, 60_00000_u32) // 10% and 60%);
     );
 }
 
-/**
- * Deposit Tests
- * [ ] Singular deposit
- * [ ] Multiple deposits, same user
- * [ ] Multiple deposits, different users
- * [ ] Deposit over optimal coverage FAIL 20
- * [ ] Deposit while withdraw in progress FAIL 9
- *
- */
 #[test]
 fn test_deposit() {
     let setup = Setup::new_with_config(
@@ -295,18 +208,6 @@ fn test_deposit_while_request_withdraw_in_progress() {
     setup.insurance_fund.deposit(&users[1], &amount_to_deposit);
 }
 
-/**
- * Request Withdraw Tests
- * [ ] happy path
- * [ ] already in progress FAIL 9
- * [ ] empty vault amount FAIL 12 (if already shares)
- * [ ] zero request fails FAIL 11
- * [ ] insufficent user shares FAIL 13
- * [ ] error if too low vault amount FAIL 3
- * [ ]
- *
- */
-
 #[test]
 fn test_request_withdraw() {
     let setup = Setup::new_with_config(
@@ -341,11 +242,6 @@ fn test_request_withdraw() {
         ..stake
     });
 }
-
-// #[test]
-// test_request_withdraw_all_shares();
-// {
-// }
 
 #[test]
 #[should_panic(expected = "Error(Contract, #9)")]

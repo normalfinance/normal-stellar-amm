@@ -7,6 +7,8 @@ use crate::testutils::{ Setup };
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::{ vec, Address, IntoVal, Symbol, Vec };
+use utils::constant::ONE_MINUTE;
+use utils::test_utils::jump;
 
 /**
  * Swap Test Scenarios
@@ -111,6 +113,49 @@ use soroban_sdk::{ vec, Address, IntoVal, Symbol, Vec };
 //   (|  /   (: (____/ //(: (____/ //  \  |___
 //  /|__/ \   \        /  \        /  ( \_|:  \
 // (_______)   \"_____/    \"_____/    \_______)
+
+#[test]
+fn full_simulation() {
+    let setup = Setup::default();
+
+    // Config
+    let epochs = 1000;
+    let epoch_length = ONE_MINUTE as u64;
+    let btc_prices = Vec::from_array(&setup.env, [50_000]);
+    let xlm_prices = Vec::from_array(&setup.env, [50]);
+
+    // Trackers
+    let buffer_balance = setup.token2.balance(id);
+
+    // Simulation
+    for i in 1..epochs as usize {
+        let now = setup.env.ledger().timestamp();
+
+        // Update oracle prices
+        let btc_price = btc_prices.get(i).unwrap();
+        let xlm_price = xlm_prices.get(i).unwrap();
+        setup.oracle_client.set_price(&Vec::from_array(&setup.env, [btc_price, xlm_price]), &now);
+
+        // ...
+
+        // Execute swaps
+         setup.fee_collector.swap();
+
+        // Move time forward
+        jump(&setup.env, &epoch_length);
+    }
+
+    // Assertions
+
+    // [ ] Pool price
+
+    // [ ] Buffer reserve and balance
+
+    // [ ] Insurance Fund premiums paid
+
+    // [ ] Fee Collector revenue
+    assert_eq!()
+}
 
 #[test]
 fn test_swap() {

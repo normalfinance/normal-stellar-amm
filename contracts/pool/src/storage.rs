@@ -18,7 +18,7 @@ enum DataKey {
     ReserveB, // total token_b amount in the pool (y in the constant product formula)
 
     Pool, // struct containing infrequently updated pool data
-    Plane,
+    Plane, // the address of the pool plane.
     Router, // the Pool Router contract address
 
     Volume24h, // estimated total of volume in market
@@ -34,11 +34,10 @@ enum DataKey {
     TokenFutureWASM,
 }
 
-generate_instance_storage_getter_and_setter!(plane, DataKey::Plane, Address);
-
 generate_instance_storage_getter_and_setter_with_default!(reserve_a, DataKey::ReserveA, u128, 0);
 generate_instance_storage_getter_and_setter_with_default!(reserve_b, DataKey::ReserveB, u128, 0);
-
+generate_instance_storage_getter_and_setter!(plane, DataKey::Plane, Address);
+generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
 generate_instance_storage_getter_and_setter_with_default!(volume_24h, DataKey::Volume24h, u128, 0);
 generate_instance_storage_getter_and_setter_with_default!(
     last_trade_ts,
@@ -58,7 +57,6 @@ generate_instance_storage_getter_and_setter_with_default!(
     u64,
     0
 );
-generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
 
 pub(crate) fn has_plane(e: &Env) -> bool {
     let key = DataKey::Plane;

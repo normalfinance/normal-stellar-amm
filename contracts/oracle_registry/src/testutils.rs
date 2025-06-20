@@ -224,7 +224,7 @@ impl Setup<'_> {
         // Register the oracle with the Registry
         let registry = create_oracle_registry_contract(&e);
         registry.initialize(&admin, &emergency_admin);
-        registry.set_oracle_guardrails(&admin, &config.oracle_guard_rails);
+        registry.set_oracle_guard_rails(&admin, &config.oracle_guard_rails);
 
         registry.register_oracle(&admin, &btc_asset_id, &oracle_id, &btc_addr, &7, &0);
 

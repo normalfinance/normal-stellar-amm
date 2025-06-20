@@ -126,19 +126,17 @@ impl Default for Setup<'_> {
         // Oracle Registry
         let btc_addr = Address::generate(&e);
         let eth_addr = Address::generate(&e);
+
         let btc_asset_id = Symbol::new(&e, "BTC");
         let eth_asset_id = Symbol::new(&e, "ETH");
+        
         let btc_asset = MockAsset::Stellar(btc_addr.clone());
         let eth_asset = MockAsset::Stellar(eth_addr.clone());
-
-        let usdc_addr = Address::generate(&e);
-
-        let base = MockAsset::Other(Symbol::new(&e, "USD"));
 
         let (oracle_id, oracle_client) = setup_price_feed_oracle(
             &e,
             &admin,
-            &base,
+            &MockAsset::Other(Symbol::new(&e, "USD")),
             &Vec::from_array(&e, [btc_asset.clone(), eth_asset.clone()]),
             7,
             300

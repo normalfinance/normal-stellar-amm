@@ -1,5 +1,4 @@
 use crate::errors::OracleRegistryError;
-use crate::events::{ Events, OracleRegistryEvents };
 use crate::interface::{ AdminInterface, OracleRegistryTrait };
 use crate::oracle::{ get_oracle_price, oracle_validity, update_twap };
 use soroban_fixed_point_math::FixedPoint;
@@ -51,6 +50,14 @@ impl OracleRegistryTrait for OracleRegistry {
         access_control.set_role_address(&Role::EmergencyAdmin, &emergency_admin);
     }
 
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
+
     fn get_price(e: Env, asset_id: Symbol, cached: bool) -> OraclePriceData {
         let now = e.ledger().timestamp();
         let oracle = get_oracle(&e, &asset_id);
@@ -96,6 +103,26 @@ impl OracleRegistryTrait for OracleRegistry {
 
     fn get_oracle(e: Env, asset_id: Symbol) -> OracleInfo {
         get_oracle(&e, &asset_id)
+    }
+
+    //   _______    _______  ___________  ___________  _______   _______    ________
+    //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
+    // (: ( \___) (: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
+    //  \/ \       \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
+    //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
+    // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
+    //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
+
+    fn get_oracle_guardrails(e: Env) -> OracleGuardRails {
+        get_oracle_guard_rails(&e)
+    }
+
+    fn get_price_override_limit(e: Env) -> u32 {
+        get_price_override_limit(&e)
+    }
+
+    fn get_price_override_threshold(e: Env) -> u64 {
+        get_price_override_threshold(&e)
     }
 }
 
@@ -180,56 +207,13 @@ impl UpgradeableContract for OracleRegistry {
 // The `AdminInterface` trait provides the interface for administrative actions.
 #[contractimpl]
 impl AdminInterface for OracleRegistry {
-    // Sets the oracle guard rails.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `oracle_guard_rails` - The new oracle guard rails.
-    fn set_oracle_guardrails(e: Env, admin: Address, oracle_guard_rails: OracleGuardRails) {
-        admin.require_auth();
-        require_admin(&e, &admin);
-
-        set_oracle_guard_rails(&e, &oracle_guard_rails);
-    }
-
-    // Sets the oracle price override limit.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `limit` - The new price limit.
-    fn set_price_override_limit(e: Env, admin: Address, limit: u32) {
-        admin.require_auth();
-        require_admin(&e, &admin);
-
-        set_price_override_limit(&e, &limit);
-    }
-
-    // Sets the oracle price override threshold.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `threshold` - The new price threshold.
-    fn set_price_override_threshold(e: Env, admin: Address, threshold: u64) {
-        admin.require_auth();
-        require_admin(&e, &admin);
-
-        set_price_override_threshold(&e, &threshold);
-    }
-
-    fn get_oracle_guardrails(e: Env) -> OracleGuardRails {
-        get_oracle_guard_rails(&e)
-    }
-
-    fn get_price_override_limit(e: Env) -> u32 {
-        get_price_override_limit(&e)
-    }
-
-    fn get_price_override_threshold(e: Env) -> u64 {
-        get_price_override_threshold(&e)
-    }
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
     fn register_oracle(
         e: Env,
@@ -282,12 +266,6 @@ impl AdminInterface for OracleRegistry {
         oracle
     }
 
-    // Sets the oracle guard rails.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `oracle_guard_rails` - The address of the rewards admin.
     fn update_oracle(
         e: Env,
         admin: Address,
@@ -321,7 +299,7 @@ impl AdminInterface for OracleRegistry {
             // Decimal validation
             if let Some(decimals) = params.decimals {
                 if decimals > 18 {
-                    panic_with_error!(&e, OracleRegistryError::AdminNotSet);
+                    panic_with_error!(&e, OracleRegistryError::InvalidDecimals);
                 }
             }
 
@@ -388,6 +366,35 @@ impl AdminInterface for OracleRegistry {
     }
 
     // TODO: unregister oracle
+
+    //   ________  _______  ___________  ___________  _______   _______    ________
+    //  /"       )/"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
+    // (:   \___/(: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
+    //  \___  \   \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
+    //   __/  \\  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
+    //  /" \   :)(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
+    // (_______/  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
+
+    fn set_oracle_guard_rails(e: Env, admin: Address, oracle_guard_rails: OracleGuardRails) {
+        admin.require_auth();
+        require_admin(&e, &admin);
+
+        set_oracle_guard_rails(&e, &oracle_guard_rails);
+    }
+
+    fn set_price_override_limit(e: Env, admin: Address, limit: u32) {
+        admin.require_auth();
+        require_admin(&e, &admin);
+
+        set_price_override_limit(&e, &limit);
+    }
+
+    fn set_price_override_threshold(e: Env, admin: Address, threshold: u64) {
+        admin.require_auth();
+        require_admin(&e, &admin);
+
+        set_price_override_threshold(&e, &threshold);
+    }
 }
 
 // The `TransferableContract` trait provides the interface for transferring ownership of the contract.

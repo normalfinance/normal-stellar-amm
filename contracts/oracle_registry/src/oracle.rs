@@ -160,17 +160,11 @@ pub fn is_oracle_valid_for_action(
                 NormalAction::Rebalance => {
                     matches!(
                         oracle_validity,
-                        OracleValidity::Valid |
-                            OracleValidity::StaleForPool |
-                            OracleValidity::InsufficientDataPoints
+                        OracleValidity::Valid | OracleValidity::StaleForPool
+                        // | OracleValidity::InsufficientDataPoints
                     )
                 }
-                NormalAction::BufferPayout =>
-                    !matches!(
-                        oracle_validity,
-                        OracleValidity::NonPositive | OracleValidity::TooVolatile
-                    ),
-                NormalAction::InsuranceFundClaim =>
+                NormalAction::InsuranceClaim =>
                     !matches!(
                         oracle_validity,
                         OracleValidity::NonPositive | OracleValidity::TooVolatile
