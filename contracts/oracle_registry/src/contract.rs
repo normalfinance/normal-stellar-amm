@@ -1,16 +1,18 @@
 use crate::errors::OracleRegistryError;
-use crate::events::{ Events, OracleRegistryEvents };
 use crate::interface::{ AdminInterface, OracleRegistryTrait };
 use crate::oracle::{ get_oracle_price, oracle_validity, update_twap };
+use soroban_fixed_point_math::FixedPoint;
 use crate::storage::{
     get_historical_oracle_data,
     get_oracle,
+    get_oracle_base,
     get_oracle_guard_rails,
     get_price_override_limit,
-    put_historical_oracle_data,
+    get_price_override_threshold,
     put_oracle,
-    put_oracle_guard_rails,
+    set_oracle_guard_rails,
     set_price_override_limit,
+    set_price_override_threshold,
 };
 use crate::storage_types::{ HistoricalOracleData, OracleGuardRails, OracleValidity };
 
@@ -23,11 +25,13 @@ use access_control::management::{ MultipleAddressesManagementTrait, SingleAddres
 use access_control::role::Role;
 use access_control::role::SymbolRepresentation;
 use access_control::transfer::TransferOwnershipTrait;
+use access_control::utils::require_admin;
 use soroban_sdk::{ contract, contractimpl, panic_with_error, Address, BytesN, Env, Symbol, Vec };
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
-use utils::storage::{ OracleInfo, OraclePriceData };
+use utils::constant::{ PRICE_PRECISION };
+use utils::state::oracle_registry::{ MutableOracleInfo, OracleInfo, OraclePriceData };
 
 #[contract]
 pub struct OracleRegistry;
@@ -35,21 +39,31 @@ pub struct OracleRegistry;
 // The `OracleRegistryTrait` trait provides the interface for interacting with a liquidity pool.
 #[contractimpl]
 impl OracleRegistryTrait for OracleRegistry {
-    fn get_price(
-        e: Env,
-        sender: Address,
-        asset_id: Symbol,
-        cached: bool,
-        sanitize_clamp_denominator: Option<i64>
-    ) -> OraclePriceData {
-        sender.require_auth();
+    fn initialize(e: Env, admin: Address, emergency_admin: Address) {
+        admin.require_auth();
 
+        let access_control = AccessControl::new(&e);
+        if access_control.get_role_safe(&Role::Admin).is_some() {
+            panic_with_error!(&e, AccessControlError::AdminAlreadySet);
+        }
+        access_control.set_role_address(&Role::Admin, &admin);
+        access_control.set_role_address(&Role::EmergencyAdmin, &emergency_admin);
+    }
+
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
+
+    fn get_price(e: Env, asset_id: Symbol, cached: bool) -> OraclePriceData {
         let now = e.ledger().timestamp();
-        let oracle_info = get_oracle(&e, asset_id.clone());
-        let oracle_guard_rails = get_oracle_guard_rails(&e);
-        let historical_oracle_data = get_historical_oracle_data(&e, asset_id.clone());
+        let oracle = get_oracle(&e, &asset_id);
+        let historical_oracle_data = get_historical_oracle_data(&e, &asset_id);
 
-        if cached || oracle_info.frozen {
+        if cached || oracle.frozen {
             return OraclePriceData {
                 price: historical_oracle_data.last_oracle_price_twap,
                 delay: historical_oracle_data.last_oracle_delay,
@@ -57,37 +71,58 @@ impl OracleRegistryTrait for OracleRegistry {
         }
 
         // Fetch a new price
-        let oracle_price_data = get_oracle_price(
-            &e,
-            &oracle_info.oracle_address,
-            &oracle_info.asset,
-            now
-        );
+        let oracle_price_data = get_oracle_price(&e, &oracle.address, &oracle.asset, now);
 
         let oracle_is_valid =
             oracle_validity(
                 &e,
                 historical_oracle_data.last_oracle_price_twap,
-                &oracle_price_data,
-                &oracle_guard_rails.validity
+                &oracle_price_data
             ) == OracleValidity::Valid;
 
-        // cannot update twap if oracle is invalid
         if !oracle_is_valid {
             panic_with_error!(&e, OracleRegistryError::OracleInvalid);
         }
 
-        // Update data
         update_twap(
             &e,
-            asset_id,
+            &asset_id,
             &historical_oracle_data,
             &oracle_price_data,
-            sanitize_clamp_denominator,
-            now
+            oracle.sanitize_clamp_denominator,
+            now,
+            false
         );
 
         oracle_price_data
+    }
+
+    fn get_last_price(e: Env, asset_id: Symbol) -> HistoricalOracleData {
+        get_historical_oracle_data(&e, &asset_id)
+    }
+
+    fn get_oracle(e: Env, asset_id: Symbol) -> OracleInfo {
+        get_oracle(&e, &asset_id)
+    }
+
+    //   _______    _______  ___________  ___________  _______   _______    ________
+    //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
+    // (: ( \___) (: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
+    //  \/ \       \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
+    //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
+    // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
+    //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
+
+    fn get_oracle_guardrails(e: Env) -> OracleGuardRails {
+        get_oracle_guard_rails(&e)
+    }
+
+    fn get_price_override_limit(e: Env) -> u32 {
+        get_price_override_limit(&e)
+    }
+
+    fn get_price_override_threshold(e: Env) -> u64 {
+        get_price_override_threshold(&e)
     }
 }
 
@@ -172,173 +207,118 @@ impl UpgradeableContract for OracleRegistry {
 // The `AdminInterface` trait provides the interface for administrative actions.
 #[contractimpl]
 impl AdminInterface for OracleRegistry {
-    // Initializes the admin user.
-    //
-    // # Arguments
-    //
-    // * `account` - The address of the admin user.
-    fn init_admin(e: Env, admin: Address) {
-        admin.require_auth();
-
-        let access_control = AccessControl::new(&e);
-        if access_control.get_role_safe(&Role::Admin).is_some() {
-            panic_with_error!(&e, AccessControlError::AdminAlreadySet);
-        }
-        access_control.set_role_address(&Role::Admin, &admin);
-    }
-
-    // Sets the oracle guard rails.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `oracle_guard_rails` - The new oracle guard rails.
-    fn set_oracle_guardrails(e: Env, admin: Address, oracle_guard_rails: OracleGuardRails) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-
-        put_oracle_guard_rails(&e, &oracle_guard_rails);
-    }
-
-    // Sets the oracle price override limit.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `limit` - The new price limit.
-    fn set_price_override_limit(e: Env, admin: Address, limit: u128) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-
-        set_price_override_limit(&e, &limit);
-    }
-
-    fn get_oracle_guardrails(e: Env) -> OracleGuardRails {
-        get_oracle_guard_rails(&e)
-    }
-
-    fn get_price_override_limit(e: Env) -> u128 {
-        get_price_override_limit(&e)
-    }
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
     fn register_oracle(
         e: Env,
         admin: Address,
         asset_id: Symbol,
-        oracle: Address,
+        oracle_addr: Address,
         asset: Address,
-        decimals: u32
+        decimals: u32,
+        sanitize_clamp_denominator: i64
     ) -> OracleInfo {
         admin.require_auth();
+        require_admin(&e, &admin);
 
-        let now = e.ledger().timestamp();
-        let oracle_info = get_oracle(&e, asset_id.clone());
-
-        // check oracle returns data - will error if fails price validation
-        get_oracle_price(&e, &oracle, &oracle_info.asset, now);
-
-        let oracle_info = OracleInfo {
-            oracle_address: oracle,
-            asset,
-            decimals,
-            frozen: false,
-            last_updated: now,
-        };
-        put_oracle(&e, asset_id, &oracle_info);
-
-        oracle_info
-    }
-
-    // Sets the oracle guard rails.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `oracle_guard_rails` - The address of the rewards admin.
-    fn set_oracle_address(
-        e: Env,
-        admin: Address,
-        asset_id: Symbol,
-        address: Address
-    ) -> OracleInfo {
-        admin.require_auth();
-
-        let now = e.ledger().timestamp();
-        let oracle_info = get_oracle(&e, asset_id.clone());
-
-        // check oracle returns data - will error if fails price validation
-        get_oracle_price(&e, &address, &oracle_info.asset, now);
-
-        let updated_oracle_info = OracleInfo {
-            oracle_address: address,
-            last_updated: now,
-            ..oracle_info
-        };
-
-        put_oracle(&e, asset_id, &updated_oracle_info);
-        updated_oracle_info
-    }
-
-    // Sets the oracle guard rails.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `oracle_guard_rails` - The address of the rewards admin.
-    fn set_oracle_decimals(e: Env, admin: Address, asset_id: Symbol, decimals: u32) -> OracleInfo {
-        admin.require_auth();
-
-        if decimals < 0 || decimals > 30 {
-            panic_with_error!(&e, OracleRegistryError::AdminNotSet);
+        if get_oracle_base(&e, &asset_id).is_some() {
+            panic_with_error!(&e, OracleRegistryError::OracleAlreadyRegistered);
         }
 
-        let oracle_info = get_oracle(&e, asset_id.clone());
-        let updated = OracleInfo {
-            decimals,
-            last_updated: e.ledger().timestamp(),
-            ..oracle_info
-        };
-        put_oracle(&e, asset_id, &updated);
-        updated
-    }
-
-    // Sets the oracle guard rails.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `asset_id` - The address of the rewards admin.
-    fn sync_oracle_price(
-        e: Env,
-        admin: Address,
-        asset_id: Symbol,
-        sanitize_clamp_denominator: Option<i64>
-    ) {
-        admin.require_auth();
-
         let now = e.ledger().timestamp();
-        let oracle_info = get_oracle(&e, asset_id.clone());
+        let oracle_price_data = get_oracle_price(&e, &oracle_addr, &asset, now);
 
-        // Pull latest price
-        let oracle_price_data = get_oracle_price(
-            &e,
-            &oracle_info.oracle_address,
-            &oracle_info.asset,
-            now
-        );
+        // Check oracle validity
+        let oracle_is_valid =
+            oracle_validity(&e, oracle_price_data.price, &oracle_price_data) ==
+            OracleValidity::Valid;
 
-        // validate response
-
-        let historical_oracle_data = get_historical_oracle_data(&e, asset_id.clone());
+        if !oracle_is_valid {
+            panic_with_error!(&e, OracleRegistryError::OracleInvalid);
+        }
 
         update_twap(
             &e,
-            asset_id,
-            &historical_oracle_data,
+            &asset_id,
+            &get_historical_oracle_data(&e, &asset_id),
             &oracle_price_data,
             sanitize_clamp_denominator,
-            now
+            now,
+            true
         );
+
+        let oracle = OracleInfo {
+            address: oracle_addr,
+            asset,
+            decimals,
+            frozen: false,
+            sanitize_clamp_denominator,
+            last_updated: now,
+        };
+        put_oracle(&e, &asset_id, &oracle);
+
+        oracle
+    }
+
+    fn update_oracle(
+        e: Env,
+        admin: Address,
+        asset_id: Symbol,
+        params: MutableOracleInfo
+    ) -> OracleInfo {
+        admin.require_auth();
+        require_admin(&e, &admin);
+
+        if let Some(oracle) = get_oracle_base(&e, &asset_id) {
+            let now = e.ledger().timestamp();
+
+            // Address validation
+            if let Some(oracle_addr) = params.address.clone() {
+                let oracle_price_data = get_oracle_price(&e, &oracle_addr, &oracle.asset, now);
+
+                // Check oracle validity
+                let historical_oracle_data = get_historical_oracle_data(&e, &asset_id);
+                let oracle_is_valid =
+                    oracle_validity(
+                        &e,
+                        historical_oracle_data.last_oracle_price_twap,
+                        &oracle_price_data
+                    ) == OracleValidity::Valid;
+
+                if !oracle_is_valid {
+                    panic_with_error!(&e, OracleRegistryError::OracleInvalid);
+                }
+            }
+
+            // Decimal validation
+            if let Some(decimals) = params.decimals {
+                if decimals > 18 {
+                    panic_with_error!(&e, OracleRegistryError::InvalidDecimals);
+                }
+            }
+
+            let updated_oracle = OracleInfo {
+                address: params.address.unwrap_or(oracle.address),
+                decimals: params.decimals.unwrap_or(oracle.decimals),
+                sanitize_clamp_denominator: params.sanitize_clamp_denominator.unwrap_or(
+                    oracle.sanitize_clamp_denominator
+                ),
+                frozen: params.frozen.unwrap_or(oracle.frozen),
+                last_updated: now,
+                ..oracle
+            };
+            put_oracle(&e, &asset_id, &updated_oracle);
+
+            updated_oracle
+        } else {
+            panic_with_error!(&e, OracleRegistryError::OracleNotRegistered);
+        }
     }
 
     // Sets the oracle price manually.
@@ -348,82 +328,72 @@ impl AdminInterface for OracleRegistry {
     // * `admin` - The address of the admin.
     // * `asset_id` - The address of the rewards admin.
     // * `price` - The address of the rewards admin.
-    fn set_oracle_price(
-        e: Env,
-        admin: Address,
-        asset_id: Symbol,
-        oracle_price_twap: u128,
-        price: u128
-    ) {
+    fn set_oracle_price(e: Env, admin: Address, asset_id: Symbol, price: u128) {
         admin.require_auth();
+        require_admin(&e, &admin);
 
         let now = e.ledger().timestamp();
+        let oracle = get_oracle(&e, &asset_id);
 
-        // let oracle_info = get_oracle(&e, &asset_id);
+        // Rate limit
+        let override_threshold = get_price_override_threshold(&e);
+        // @dev The timestamp of the last override is not tracked, meaning any
+        // update to the oracle will reset this counter. May be changed in the future.
+        if now - oracle.last_updated >= override_threshold {
+            panic_with_error!(&e, OracleRegistryError::PriceOverrideTooSoon);
+        }
+
+        // Smooth price updates
         let override_limit = get_price_override_limit(&e);
-        let historical_oracle_data = get_historical_oracle_data(&e, asset_id.clone());
-
-        if historical_oracle_data.last_oracle_price_twap / price > override_limit {
+        let historical_oracle_data = get_historical_oracle_data(&e, &asset_id);
+        let price_delta = historical_oracle_data.last_oracle_price_twap
+            .fixed_div_floor(price, PRICE_PRECISION)
+            .unwrap() as i32;
+        if (price_delta.abs() as u32) >= override_limit {
             panic_with_error!(&e, OracleRegistryError::PriceOverrideLimitExceeded);
         }
 
-        let new_historical_oracle_data = HistoricalOracleData {
-            last_oracle_price_twap: oracle_price_twap,
-            last_oracle_price: price,
-            last_oracle_delay: 0,
-            last_oracle_price_twap_ts: now,
-        };
-        put_historical_oracle_data(&e, asset_id, &new_historical_oracle_data);
+        // Update the price and twap
+        update_twap(
+            &e,
+            &asset_id,
+            &historical_oracle_data,
+            &(OraclePriceData { price: price, delay: 0 }),
+            oracle.sanitize_clamp_denominator,
+            now,
+            false
+        );
     }
 
     // TODO: unregister oracle
 
-    // Sets the oracle status to frozen.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `asset_id` - The oracle to freeze.
-    fn freeze_oracle(e: Env, admin: Address, asset_id: Symbol) -> OracleInfo {
+    //   ________  _______  ___________  ___________  _______   _______    ________
+    //  /"       )/"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
+    // (:   \___/(: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
+    //  \___  \   \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
+    //   __/  \\  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
+    //  /" \   :)(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
+    // (_______/  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
+
+    fn set_oracle_guard_rails(e: Env, admin: Address, oracle_guard_rails: OracleGuardRails) {
         admin.require_auth();
+        require_admin(&e, &admin);
 
-        let oracle_info = get_oracle(&e, asset_id.clone());
-
-        if !oracle_info.frozen {
-            let updated_oracle_info = OracleInfo {
-                frozen: true,
-                last_updated: e.ledger().timestamp(),
-                ..oracle_info.clone()
-            };
-            put_oracle(&e, asset_id, &updated_oracle_info);
-            return updated_oracle_info;
-        }
-
-        oracle_info
+        set_oracle_guard_rails(&e, &oracle_guard_rails);
     }
 
-    // Sets the oracle status to unfrozen.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `asset_id` - The oracle to unfreeze.
-    fn unfreeze_oracle(e: Env, admin: Address, asset_id: Symbol) -> OracleInfo {
+    fn set_price_override_limit(e: Env, admin: Address, limit: u32) {
         admin.require_auth();
+        require_admin(&e, &admin);
 
-        let oracle_info = get_oracle(&e, asset_id.clone());
+        set_price_override_limit(&e, &limit);
+    }
 
-        if oracle_info.frozen {
-            let updated_oracle_info = OracleInfo {
-                frozen: false,
-                last_updated: e.ledger().timestamp(),
-                ..oracle_info.clone()
-            };
-            put_oracle(&e, asset_id, &updated_oracle_info);
-            updated_oracle_info;
-        }
+    fn set_price_override_threshold(e: Env, admin: Address, threshold: u64) {
+        admin.require_auth();
+        require_admin(&e, &admin);
 
-        oracle_info
+        set_price_override_threshold(&e, &threshold);
     }
 }
 

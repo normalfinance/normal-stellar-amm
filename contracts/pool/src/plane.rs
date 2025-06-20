@@ -4,12 +4,13 @@ pub mod pool_plane {
 
 pub use crate::plane::pool_plane::Client as PoolPlaneClient;
 
-use crate::storage::{ get_fee_fraction, get_plane, get_reserve_a, get_reserve_b };
+use crate::storage::{ get_pool, get_plane, get_reserve_a, get_reserve_b };
 use soroban_sdk::{ symbol_short, Env, Vec };
 
 fn get_pool_data(e: &Env) -> (Vec<u128>, Vec<u128>) {
+    let pool = get_pool(e);
     (
-        Vec::from_array(e, [get_fee_fraction(e) as u128]),
+        Vec::from_array(e, [pool.fee_fraction as u128]),
         Vec::from_array(e, [get_reserve_a(e), get_reserve_b(e)]),
     )
 }

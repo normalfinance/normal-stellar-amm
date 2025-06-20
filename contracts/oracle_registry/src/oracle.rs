@@ -3,21 +3,12 @@ use soroban_sdk::{ log, panic_with_error, Address, Env, Symbol };
 use utils::{
     constant::{ FIVE_MINUTE, PERCENTAGE_PRECISION_U64, PRICE_PRECISION_U64 },
     math::{ pool::sanitize_new_price, safe_math::SafeMath, stats::calculate_new_twap },
-    storage::OraclePriceData,
+    state::oracle_registry::OraclePriceData,
 };
 
 use crate::{
-    errors::OracleRegistryError,
     storage::{ get_oracle_guard_rails, put_historical_oracle_data },
-    storage_types::{
-        HistoricalOracleData,
-        NormalAction,
-        OracleGuardRails,
-        OracleStatus,
-        OracleValidity,
-        PriceDivergenceGuardRails,
-        ValidityGuardRails,
-    },
+    storage_types::{ HistoricalOracleData, NormalAction, OracleStatus, OracleValidity },
 };
 
 // Gets the current pool liquidity imbalance.
@@ -38,14 +29,6 @@ pub fn get_oracle_price(e: &Env, oracle: &Address, asset: &Address, now: u64) ->
     let published_ts: u64;
 
     let oracle_price_data = oracle_client.lastprice(&oracle_asset).unwrap();
-    // let decimals = oracle_client.decimals();
-
-    if
-        oracle_price_data.timestamp + 24 * 60 * 60 < e.ledger().timestamp() ||
-        oracle_price_data.price <= 0
-    {
-        panic_with_error!(e, OracleRegistryError::InvalidPrice);
-    }
 
     oracle_price = oracle_price_data.price as u128;
     published_ts = oracle_price_data.timestamp;
@@ -70,11 +53,12 @@ pub fn get_oracle_price(e: &Env, oracle: &Address, asset: &Address, now: u64) ->
 // The liquidity imbalance of the pool as an i128.
 pub fn update_twap(
     e: &Env,
-    asset_id: Symbol,
+    asset_id: &Symbol,
     historical_oracle_data: &HistoricalOracleData,
     oracle_price_data: &OraclePriceData,
-    sanitize_clamp_denominator: Option<i64>,
-    now: u64
+    sanitize_clamp_denominator: i64,
+    now: u64,
+    registering: bool
 ) {
     let capped_oracle_update_price = sanitize_new_price(
         e,
@@ -82,6 +66,7 @@ pub fn update_twap(
         historical_oracle_data.last_oracle_price_twap,
         sanitize_clamp_denominator
     );
+    log!(e, "capped_oracle_update_price", capped_oracle_update_price);
 
     let oracle_price_twap = calculate_new_twap(
         e,
@@ -91,14 +76,19 @@ pub fn update_twap(
         historical_oracle_data.last_oracle_price_twap_ts,
         FIVE_MINUTE as u64
     );
+    log!(e, "oracle_price_twap", oracle_price_twap);
 
     let new_historical_oracle_data = HistoricalOracleData {
-        last_oracle_price_twap: oracle_price_twap,
+        last_oracle_price_twap: if registering {
+            0
+        } else {
+            oracle_price_twap
+        },
         last_oracle_price: oracle_price_data.price,
         last_oracle_delay: oracle_price_data.delay,
         last_oracle_price_twap_ts: now,
     };
-    put_historical_oracle_data(e, asset_id, &new_historical_oracle_data);
+    put_historical_oracle_data(e, &asset_id, &new_historical_oracle_data);
 }
 
 pub fn block_operation(
@@ -107,20 +97,12 @@ pub fn block_operation(
     reserve_price: u128,
     last_oracle_price_twap: u128
 ) -> bool {
-    let oracle_guard_rails = get_oracle_guard_rails(&e);
-
     let OracleStatus {
         oracle_validity,
         price_too_divergent,
         oracle_reserve_price_spread_pct: _,
         ..
-    } = get_oracle_status(
-        e,
-        &oracle_guard_rails,
-        oracle_price_data,
-        reserve_price,
-        last_oracle_price_twap
-    );
+    } = get_oracle_status(e, oracle_price_data, reserve_price, last_oracle_price_twap);
 
     let is_oracle_valid = is_oracle_valid_for_action(
         oracle_validity,
@@ -133,25 +115,19 @@ pub fn block_operation(
 
 pub fn get_oracle_status(
     e: &Env,
-    oracle_guard_rails: &OracleGuardRails,
     oracle_price_data: &OraclePriceData,
     reserve_price: u128,
     last_oracle_price_twap: u128
 ) -> OracleStatus {
-    let oracle_validity = oracle_validity(
-        e,
-        last_oracle_price_twap,
-        oracle_price_data,
-        &oracle_guard_rails.validity
-    );
+    let oracle_validity = oracle_validity(e, last_oracle_price_twap, oracle_price_data);
     let oracle_reserve_price_spread_pct = calculate_oracle_twap_price_spread_pct(
         e,
         reserve_price,
         last_oracle_price_twap
     );
     let is_oracle_price_too_divergent = is_oracle_price_too_divergent(
-        oracle_reserve_price_spread_pct,
-        &oracle_guard_rails.price_divergence
+        e,
+        oracle_reserve_price_spread_pct
     );
 
     OracleStatus {
@@ -184,17 +160,11 @@ pub fn is_oracle_valid_for_action(
                 NormalAction::Rebalance => {
                     matches!(
                         oracle_validity,
-                        OracleValidity::Valid |
-                            OracleValidity::StaleForPool |
-                            OracleValidity::InsufficientDataPoints
+                        OracleValidity::Valid | OracleValidity::StaleForPool
+                        // | OracleValidity::InsufficientDataPoints
                     )
                 }
-                NormalAction::BufferPayout =>
-                    !matches!(
-                        oracle_validity,
-                        OracleValidity::NonPositive | OracleValidity::TooVolatile
-                    ),
-                NormalAction::InsuranceFundClaim =>
+                NormalAction::InsuranceClaim =>
                     !matches!(
                         oracle_validity,
                         OracleValidity::NonPositive | OracleValidity::TooVolatile
@@ -206,11 +176,9 @@ pub fn is_oracle_valid_for_action(
     is_ok
 }
 
-pub fn is_oracle_price_too_divergent(
-    price_spread_pct: i64,
-    oracle_guard_rails: &PriceDivergenceGuardRails
-) -> bool {
-    let max_divergence = oracle_guard_rails.oracle_twap_percent_divergence.max(
+pub fn is_oracle_price_too_divergent(e: &Env, price_spread_pct: i64) -> bool {
+    let oracle_guard_rails = get_oracle_guard_rails(e);
+    let max_divergence = oracle_guard_rails.price_divergence.oracle_twap_percent_divergence.max(
         PERCENTAGE_PRECISION_U64 / 10
     );
     price_spread_pct.unsigned_abs() > max_divergence
@@ -219,19 +187,26 @@ pub fn is_oracle_price_too_divergent(
 pub fn oracle_validity(
     e: &Env,
     last_oracle_twap: u128,
-    oracle_price_data: &OraclePriceData,
-    valid_oracle_guard_rails: &ValidityGuardRails
+    oracle_price_data: &OraclePriceData
 ) -> OracleValidity {
-    let OraclePriceData { price: oracle_price, delay: oracle_delay, .. } = *oracle_price_data;
+    let OraclePriceData { price: oracle_price, delay: oracle_delay } = *oracle_price_data;
+
+    let oracle_guard_rails = get_oracle_guard_rails(e);
 
     let is_oracle_price_nonpositive = oracle_price <= 0;
+    log!(e, "price", oracle_price);
+
+    log!(e, "twap", last_oracle_twap);
 
     let is_oracle_price_too_volatile = oracle_price
         .max(last_oracle_twap)
         .safe_div(e, last_oracle_twap.min(oracle_price).max(1))
-        .gt(&(valid_oracle_guard_rails.too_volatile_ratio as u128));
+        .gt(&(oracle_guard_rails.validity.too_volatile_ratio as u128));
+    log!(e, "is_oracle_price_too_volatile", is_oracle_price_too_volatile);
 
-    let is_stale_for_pool = oracle_delay.gt(&valid_oracle_guard_rails.slots_before_stale_for_pool);
+    let is_stale_for_pool = oracle_delay.gt(
+        &oracle_guard_rails.validity.slots_before_stale_for_pool
+    );
 
     let oracle_validity = if is_oracle_price_nonpositive {
         OracleValidity::NonPositive

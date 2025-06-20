@@ -7,19 +7,22 @@ use soroban_sdk::token::{
     TokenClient as SorobanTokenClient,
 };
 use soroban_sdk::{ Address, Env };
+use utils::constant::ONE_HOUR;
 use utils::test_utils::{ create_token_contract, get_token_admin_client };
 use std::vec;
 
 pub(crate) struct TestConfig {
     pub(crate) users_count: u32,
     pub(crate) min_time_between_payouts: u64,
+    pub(crate) min_reserve_ratio: u32,
 }
 
 impl Default for TestConfig {
     fn default() -> Self {
         TestConfig {
             users_count: 3,
-            min_time_between_payouts: 30, // 30 seconds
+            min_time_between_payouts: ONE_HOUR,
+            min_reserve_ratio: 1000, // 10%
         }
     }
 }
@@ -31,7 +34,7 @@ pub(crate) struct Setup<'a> {
     pub(crate) admin: Address,
     pub(crate) emergency_admin: Address,
     pub(crate) users: vec::Vec<Address>,
-    pub(crate) router: Address,
+    pub(crate) pool_address: Address,
 
     // contracts
     pub(crate) buffer: BufferClient<'a>, // buffer::Client<'a>,
@@ -63,23 +66,27 @@ impl Setup<'_> {
         let users = Self::generate_random_users(&e, config.users_count);
         let admin = users[0].clone();
         let emergency_admin = Address::generate(&e);
-        
+        let pool_address = Address::generate(&e);
+
         let token_a = create_token_contract(&e, &admin);
         let token_a_admin_client = get_token_admin_client(&e, &token_a.address.clone());
 
-        let router = Address::generate(&e);
         let fee_collector = Address::generate(&e);
 
         let buffer = create_buffer_contract(&e);
-        buffer.initialize(&admin, &emergency_admin, &router);
-        buffer.set_fee_collector(&admin, &fee_collector);
+        buffer.initialize(
+            &admin,
+            &emergency_admin,
+            &config.min_time_between_payouts,
+            &config.min_reserve_ratio
+        );
 
         Self {
             env: e,
             admin,
             emergency_admin,
+            pool_address,
             buffer,
-            router,
             users,
             token_a,
             token_a_admin_client,

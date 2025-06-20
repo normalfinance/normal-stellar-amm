@@ -1,17 +1,17 @@
-use soroban_sdk::{contracttype, Env};
+use soroban_sdk::{ contracttype, Env };
 use utils::math::safe_math::SafeMath;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Reserve {
-    pub balance: u128,
-    pub max_balance: u128,
-    pub total_inflow: u128,
-    pub total_outflow: u128,
-    pub total_withdraw: u128,
-    pub last_payout: u128,
-    pub last_payout_ts: u64,
-    pub last_update_ts: u64,
+    pub balance: u128, // the current token balance of the reserve.
+    pub max_balance: u128, // the max token balance the reserve can have.
+    pub total_inflow: u128, // the total amount of deposits made into this reserve.
+    pub total_outflow: u128, // the total amount of payouts made from this reserve.
+    pub total_withdraw: u128, //  the total amount of withdraws made from this reserve.
+    pub last_payout: u128, // the token amount of the last payout.
+    pub last_payout_ts: u64, // the timestamp of the last payout.
+    pub last_update_ts: u64, // the timestamp of the last reserve update.
 }
 
 impl Reserve {

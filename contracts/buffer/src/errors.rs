@@ -5,13 +5,13 @@ use soroban_sdk::contracterror;
 #[repr(u32)]
 pub enum BufferError {
     #[doc = "BufferError"]
-    NotAuthorized = 1,
     ReserveMaxBalanceThreshold = 2,
     PayoutTooSoon = 3,
     InsufficentFunds = 4,
     WithdrawalOverMinimumReserve = 5,
     AlreadyInitialized = 15,
 
+    // Paused Ops
     BufferDepositKilled = 6,
     BufferRequestPayoutKilled = 7,
 }

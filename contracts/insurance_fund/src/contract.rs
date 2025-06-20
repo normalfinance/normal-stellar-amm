@@ -82,10 +82,11 @@ impl InsuranceFundTrait for InsuranceFund {
         admin: Address,
         emergency_admin: Address,
         token: Address,
+        unstaking_period: u64,
         coverage_buffer: u128,
         optimal_utilization: u32,
         base_rate: i32,
-        rate_slopes: (i32, i32)
+        rate_slopes: (u32, u32)
     ) {
         admin.require_auth();
 
@@ -98,6 +99,7 @@ impl InsuranceFundTrait for InsuranceFund {
 
         set_token(&e, &token);
 
+        set_unstaking_period(&e, &unstaking_period);
         set_coverage_buffer(&e, &coverage_buffer);
 
         set_optimal_utilization(&e, &optimal_utilization);
@@ -143,8 +145,6 @@ impl InsuranceFundTrait for InsuranceFund {
             stake.last_withdraw_request_shares == 0 && stake.last_withdraw_request_value == 0,
             InsuranceFundError::IFWithdrawRequestInProgress
         );
-
-        let total_shares = get_total_shares(&e);
 
         apply_rebase_to_insurance_fund(&e, insurance_vault_amount);
         apply_rebase_to_stake(&e, &mut stake);
@@ -212,7 +212,7 @@ impl InsuranceFundTrait for InsuranceFund {
 
         // "Requested lp_shares = 0"
         validate!(&e, n_shares > 0, InsuranceFundError::IFWithdrawRequestTooSmall);
-
+ 
         let user_if_shares = stake.checked_if_shares(&e);
         validate!(&e, user_if_shares >= n_shares, InsuranceFundError::InsufficientIFShares);
 
@@ -486,7 +486,7 @@ impl InsuranceFundTrait for InsuranceFund {
         get_base_rate(&e)
     }
 
-    fn get_rate_slopes(e: Env) -> (i32, i32) {
+    fn get_rate_slopes(e: Env) -> (u32, u32) {
         (get_rate_slope_a(&e), get_rate_slope_b(&e))
     }
 }
@@ -604,8 +604,8 @@ impl AdminInterface for InsuranceFund {
         admin: Address,
         optimal_utilization: u32,
         base_rate: i32,
-        rate_slope_a: i32,
-        rate_slope_b: i32
+        rate_slope_a: u32,
+        rate_slope_b: u32
     ) {
         admin.require_auth();
         require_admin(&e, &admin);
@@ -649,6 +649,8 @@ impl AdminInterface for InsuranceFund {
             // "insurance_fund_vault_amount must remain > 0"
             validate!(&e, new_insurance_vault_amount > 0, InsuranceFundError::InvalidIFDetected);
         }
+
+        // TODO: add event
     }
 
     // Stops the insurance fund deposits instantly.

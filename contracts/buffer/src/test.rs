@@ -5,8 +5,23 @@ use crate::reserve::Reserve;
 use crate::testutils::{ Setup, TestConfig };
 use soroban_sdk::testutils::{ Address as _, AuthorizedFunction, AuthorizedInvocation, Events };
 use soroban_sdk::{ vec, Address, Error, IntoVal, Symbol, Val, Vec };
-use utils::constant::{FIVE_MINUTE, ONE_HOUR, TWENTY_FOUR_HOUR};
+use utils::constant::{ FIVE_MINUTE, ONE_HOUR, TWENTY_FOUR_HOUR };
 use utils::test_utils::jump;
+
+/* `resolve_liquidity_deficit()` tests are located in /integration_tests since testing this 
+function can only truly be done setting up all other contracts */
+
+/* Tests Needed:
+- [ ] Setters work
+- [ ] Getters work
+ */
+
+#[test]
+#[should_panic(expected = "Error(Contract, #103)")]
+fn test_initialize_twice() {
+    let setup = Setup::default();
+    setup.buffer.initialize(&setup.admin, &setup.emergency_admin, &ONE_HOUR, &100_u32);
+}
 
 #[test]
 fn test_deposit() {
@@ -91,49 +106,8 @@ fn test_deposit_over_max() {
 }
 
 #[test]
-fn test_request_payout() {
-    let setup = Setup::default();
-    let users = setup.users;
-
-    // Deposit
-    let amount_to_deposit = 100_0000000_u128;
-    setup.token_a_admin_client.mint(&setup.admin, &(amount_to_deposit as i128));
-    setup.buffer.deposit(&setup.admin, &setup.token_a.address, &amount_to_deposit);
-    assert_eq!(setup.token_a.balance(&users[1]), 0);
-    assert_eq!(setup.token_a.balance(&setup.buffer.address), amount_to_deposit as i128);
-
-    // Request payout
-    let reserve_before = setup.buffer.get_reserve(&setup.token_a.address);
-    let desired_payout = 50_0000000_u128;
-    setup.buffer.request_payout(&setup.router, &setup.token_a.address, &desired_payout);
-
-    // Buffer transferred token to Router
-    assert_eq!(setup.token_a.balance(&setup.router), desired_payout as i128);
-    assert_eq!(
-        setup.token_a.balance(&setup.buffer.address),
-        (amount_to_deposit - desired_payout) as i128
-    );
-
-    // Buffer reserves updates
-    let now = setup.env.ledger().timestamp();
-    assert_eq!(setup.buffer.get_reserve(&setup.token_a.address), Reserve {
-        balance: reserve_before.balance - desired_payout,
-        max_balance: reserve_before.max_balance,
-        total_inflow: reserve_before.total_inflow,
-        total_outflow: reserve_before.total_outflow + desired_payout,
-        total_withdraw: reserve_before.total_withdraw,
-        last_payout: desired_payout,
-        last_payout_ts: now,
-        last_update_ts: now,
-    });
-
-    // Buffer last payout timestamp updated
-    assert_eq!(setup.buffer.get_last_payout_timestamp(), setup.env.ledger().timestamp());
-}
-
-#[test]
 #[should_panic(expected = "Error(Contract, #801)")]
-fn test_request_payout_invalid_token() {
+fn test_resolve_liquidity_deficit_invalid_token() {
     let setup = Setup::default();
     let bogus_token = Address::generate(&setup.env);
 
@@ -142,95 +116,71 @@ fn test_request_payout_invalid_token() {
     setup.token_a_admin_client.mint(&setup.admin, &(amount as i128));
     setup.buffer.deposit(&setup.admin, &setup.token_a.address, &amount);
 
-    setup.buffer.request_payout(&setup.router, &bogus_token, &100_0000000_u128);
-}
-
-#[test]
-#[should_panic(expected = "Error(Contract, #1)")]
-fn test_request_payout_from_not_router() {
-    let setup = Setup::default();
-    let users = setup.users;
-
-    // Deposit
-    let amount = 100_0000000_u128;
-    setup.token_a_admin_client.mint(&setup.admin, &(amount as i128));
-    setup.buffer.deposit(&setup.admin, &setup.token_a.address, &amount);
-
-    setup.buffer.request_payout(&users[1], &setup.token_a.address, &100_0000000_u128);
+    setup.buffer.resolve_liquidity_deficit(
+        &setup.admin,
+        &bogus_token,
+        &100_0000000_u128,
+        &setup.pool_address
+    );
 }
 
 #[test]
 #[should_panic(expected = "Error(Contract, #3)")]
-fn test_request_payout_too_soon() {
+fn test_resolve_liquidity_deficit_too_soon() {
     let setup = Setup::default();
     let amount_to_deposit = 100_0000000_u128;
     let amount_to_payout = 25_0000000_u128;
-
-    // Set min time
-    let time = TWENTY_FOUR_HOUR; // 60_0000000_u64; // 60 seconds
-    setup.buffer.set_min_time_between_payouts(&setup.admin, &time);
 
     // Deposit
     setup.token_a_admin_client.mint(&setup.admin, &(amount_to_deposit as i128));
     setup.buffer.deposit(&setup.admin, &setup.token_a.address, &amount_to_deposit);
 
-    setup.buffer.request_payout(&setup.router, &setup.token_a.address, &amount_to_payout);
-    assert_eq!(setup.token_a.balance(&setup.router), amount_to_payout as i128);
-
-    // 10 seconds, not 60
-    jump(&setup.env, ONE_HOUR);
-
-    setup.buffer.request_payout(&setup.router, &setup.token_a.address, &amount_to_payout);
-}
-
-#[test]
-fn test_multiple_request_payouts() {
-    let setup = Setup::default();
-    let deposit_amount = 100_0000000_u128;
-    let payout_amount_1 = 50_0000000_u128;
-    let payout_amount_2 = 10_0000000_u128;
-
-    // Set min time
-    let time = 60_u64;
-    setup.buffer.set_min_time_between_payouts(&setup.admin, &time);
-
-    // Deposit
-
-    setup.token_a_admin_client.mint(&setup.admin, &(deposit_amount as i128));
-    setup.buffer.deposit(&setup.admin, &setup.token_a.address, &deposit_amount);
-
-    // 1st
-    setup.buffer.request_payout(&setup.router, &setup.token_a.address, &payout_amount_1);
-
-    jump(&setup.env, time);
-
-    // 2nd
-    setup.buffer.request_payout(&setup.router, &setup.token_a.address, &payout_amount_2);
-
-    assert_eq!(
-        setup.token_a.balance(&setup.buffer.address),
-        (deposit_amount - payout_amount_1 - payout_amount_2) as i128
+    setup.buffer.resolve_liquidity_deficit(
+        &setup.admin,
+        &setup.token_a.address,
+        &amount_to_payout,
+        &setup.pool_address
     );
-    assert_eq!(setup.token_a.balance(&setup.router), (payout_amount_1 + payout_amount_2) as i128);
+    assert_eq!(setup.token_a.balance(&setup.admin), amount_to_payout as i128);
+
+    jump(&setup.env, FIVE_MINUTE as u64);
+
+    setup.buffer.resolve_liquidity_deficit(
+        &setup.admin,
+        &setup.token_a.address,
+        &amount_to_payout,
+        &setup.pool_address
+    );
 }
 
 #[test]
 #[should_panic(expected = "Error(Contract, #4)")]
-fn test_request_payout_insufficient_balance() {
+fn test_resolve_liquidity_deficit_insufficient_balance() {
     let setup = Setup::default();
+
+    // fast forward to avoid `now` being zero causing ErrorCode 3
+    jump(&setup.env, TWENTY_FOUR_HOUR);
 
     // Deposit
     let amount = 100_0000000_u128;
     setup.token_a_admin_client.mint(&setup.admin, &(amount as i128));
     setup.buffer.deposit(&setup.admin, &setup.token_a.address, &amount);
 
-    setup.buffer.request_payout(&setup.router, &setup.token_a.address, &100000_0000000_u128);
+    setup.buffer.resolve_liquidity_deficit(
+        &setup.admin,
+        &setup.token_a.address,
+        &101_0000000_u128,
+        &setup.pool_address
+    );
 }
 
 #[test]
 #[should_panic(expected = "Error(Contract, #4)")]
-fn test_request_payout_unsynced() {
+fn test_resolve_liquidity_deficit_unsynced() {
     let setup = Setup::default();
+
+    // fast forward to avoid `now` being zero causing ErrorCode 3
+    jump(&setup.env, TWENTY_FOUR_HOUR);
 
     // Deposit
     let amount = 100_0000000_u128;
@@ -242,7 +192,12 @@ fn test_request_payout_unsynced() {
 
     // Don't call sync()
 
-    setup.buffer.request_payout(&setup.router, &setup.token_a.address, &110_0000000_u128);
+    setup.buffer.resolve_liquidity_deficit(
+        &setup.admin,
+        &setup.token_a.address,
+        &110_0000000_u128,
+        &setup.pool_address
+    );
 }
 
 #[test]
@@ -303,10 +258,7 @@ fn test_withdraw_surplus_invalid_token() {
 fn test_withdraw_surplus_over_min_reserve() {
     let setup = Setup::default();
     let amount_to_deposit = 100_0000000_u128;
-
-    let min_reserve_ratio = setup.buffer.get_min_reserve_ratio();
-    let min_reserve = (min_reserve_ratio as u128) * amount_to_deposit;
-    let too_much_to_withdraw = amount_to_deposit - min_reserve + 1;
+    let too_much_to_withdraw = 91_0000000_u128;
 
     // Deposit
     setup.token_a_admin_client.mint(&setup.admin, &(amount_to_deposit as i128));
@@ -420,7 +372,6 @@ fn test_events() {
     let token1 = setup.token_a;
     let user1 = setup.users[1].clone();
     let amount_to_deposit = 100_0000000_u128;
-    let amount_to_payout = 50_0000000_u128;
     let amount_to_withdraw = 10_0000000_u128;
     let excess_amount = 25_0000000_u128;
 
@@ -438,18 +389,17 @@ fn test_events() {
         )]
     );
 
-    // request_payout
-    buffer.request_payout(&setup.router, &token1.address, &amount_to_payout);
+    // resolve_liquidity_deficit() in integration_tests
+
+    // skim
+    setup.token_a_admin_client.mint(&buffer.address, &(excess_amount as i128));
+    buffer.skim(&user1, &token1.address);
     assert_eq!(
         vec![&e, e.events().all().last().unwrap()],
         vec![&e, (
             buffer.address.clone(),
-            (
-                Symbol::new(&e, "request_payout"),
-                token1.address.clone(),
-                setup.router.clone(),
-            ).into_val(&e),
-            amount_to_payout.into_val(&e),
+            (Symbol::new(&e, "skim"), token1.address.clone(), user1.clone()).into_val(&e),
+            (excess_amount as i128).into_val(&e),
         )]
     );
 
@@ -465,18 +415,6 @@ fn test_events() {
                 setup.admin.clone(),
             ).into_val(&e),
             amount_to_withdraw.into_val(&e),
-        )]
-    );
-
-    // skim
-    setup.token_a_admin_client.mint(&user1, &(excess_amount as i128));
-    buffer.skim(&user1, &token1.address);
-    assert_eq!(
-        vec![&e, e.events().all().last().unwrap()],
-        vec![&e, (
-            buffer.address.clone(),
-            (Symbol::new(&e, "skim"), token1.address.clone(), user1.clone()).into_val(&e),
-            excess_amount.into_val(&e),
         )]
     );
 }
@@ -501,7 +439,7 @@ fn test_deposit_killed() {
     let users = setup.users;
 
     assert_eq!(buffer.get_is_killed_deposit(), false);
-    assert_eq!(buffer.get_is_killed_request_payout(), false);
+    assert_eq!(buffer.get_is_killed_resolve_deficit(), false);
 
     let admin = setup.admin;
 
@@ -515,7 +453,7 @@ fn test_deposit_killed() {
         )]
     );
     assert_eq!(buffer.get_is_killed_deposit(), true);
-    assert_eq!(buffer.get_is_killed_request_payout(), false);
+    assert_eq!(buffer.get_is_killed_resolve_deficit(), false);
 
     let user1 = users[1].clone();
     let desired_amount = 1_0000000;
@@ -538,13 +476,13 @@ fn test_deposit_killed() {
         )]
     );
     assert_eq!(buffer.get_is_killed_deposit(), false);
-    assert_eq!(buffer.get_is_killed_request_payout(), false);
+    assert_eq!(buffer.get_is_killed_resolve_deficit(), false);
 
     buffer.deposit(&user1, &setup.token_a.address, &desired_amount);
 }
 
 #[test]
-fn test_request_payout_killed() {
+fn test_resolve_liquidity_deficit_killed() {
     let setup = Setup::new_with_config(
         &(TestConfig {
             ..TestConfig::default()
@@ -555,48 +493,58 @@ fn test_request_payout_killed() {
     let users = setup.users;
 
     assert_eq!(buffer.get_is_killed_deposit(), false);
-    assert_eq!(buffer.get_is_killed_request_payout(), false);
+    assert_eq!(buffer.get_is_killed_resolve_deficit(), false);
 
     let admin = setup.admin;
 
-    buffer.kill_request_payout(&admin);
+    buffer.kill_resolve_liquidity_deficit(&admin);
     assert_eq!(
         vec![&e, e.events().all().last().unwrap()],
         vec![&e, (
             buffer.address.clone(),
-            (Symbol::new(&e, "kill_request_payout"),).into_val(&e),
+            (Symbol::new(&e, "kill_resolve_liquidity_deficit"),).into_val(&e),
             Val::VOID.into_val(&e),
         )]
     );
     assert_eq!(buffer.get_is_killed_deposit(), false);
-    assert_eq!(buffer.get_is_killed_request_payout(), true);
+    assert_eq!(buffer.get_is_killed_resolve_deficit(), true);
 
     let desired_amount = 1_0000000;
 
     assert_eq!(
         buffer
-            .try_request_payout(&setup.router, &setup.token_a.address, &desired_amount)
+            .try_resolve_liquidity_deficit(
+                &admin,
+                &setup.token_a.address,
+                &desired_amount,
+                &setup.pool_address
+            )
             .unwrap_err(),
         Ok(Error::from_contract_error(7))
     );
 
-    buffer.unkill_request_payout(&admin);
+    buffer.unkill_resolve_liquidity_deficit(&admin);
     assert_eq!(
         vec![&e, e.events().all().last().unwrap()],
         vec![&e, (
             buffer.address.clone(),
-            (Symbol::new(&e, "unkill_request_payout"),).into_val(&e),
+            (Symbol::new(&e, "unkill_resolve_liquidity_deficit"),).into_val(&e),
             Val::VOID.into_val(&e),
         )]
     );
     assert_eq!(buffer.get_is_killed_deposit(), false);
-    assert_eq!(buffer.get_is_killed_request_payout(), false);
+    assert_eq!(buffer.get_is_killed_resolve_deficit(), false);
 
     // setup for payout
     setup.token_a_admin_client.mint(&users[1], &(desired_amount as i128));
     buffer.deposit(&users[1], &setup.token_a.address, &desired_amount);
 
-    buffer.request_payout(&setup.router, &setup.token_a.address, &desired_amount);
+    // buffer.resolve_liquidity_deficit(
+    //     &admin,
+    //     &setup.token_a.address,
+    //     &desired_amount,
+    //     &setup.pool_address
+    // );
 }
 
 #[test]
@@ -616,16 +564,16 @@ fn test_kill_deposit_event() {
 }
 
 #[test]
-fn test_kill_request_payout_event() {
+fn test_kill_resolve_liquidity_deficit_event() {
     let setup = Setup::default();
     let buffer = setup.buffer;
 
-    buffer.kill_request_payout(&setup.admin);
+    buffer.kill_resolve_liquidity_deficit(&setup.admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
         vec![&setup.env, (
             buffer.address.clone(),
-            (Symbol::new(&setup.env, "kill_request_payout"),).into_val(&setup.env),
+            (Symbol::new(&setup.env, "kill_resolve_liquidity_deficit"),).into_val(&setup.env),
             ().into_val(&setup.env),
         )]
     );
@@ -648,16 +596,16 @@ fn test_unkill_deposit_event() {
 }
 
 #[test]
-fn test_unkill_request_payout_event() {
+fn test_unkill_resolve_liquidity_deficit_event() {
     let setup = Setup::default();
     let buffer = setup.buffer;
 
-    buffer.unkill_request_payout(&setup.admin);
+    buffer.unkill_resolve_liquidity_deficit(&setup.admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
         vec![&setup.env, (
             buffer.address.clone(),
-            (Symbol::new(&setup.env, "unkill_request_payout"),).into_val(&setup.env),
+            (Symbol::new(&setup.env, "unkill_resolve_liquidity_deficit"),).into_val(&setup.env),
             ().into_val(&setup.env),
         )]
     );

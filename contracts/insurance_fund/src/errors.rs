@@ -4,7 +4,7 @@ use soroban_sdk::contracterror;
 #[derive(Copy, Clone)]
 #[repr(u32)]
 pub enum InsuranceFundError {
-    #[doc = "InsuranceFundError: MaxIFWithdrawReached"]
+    #[doc = "InsuranceFundError"]
     MaxIFWithdrawReached = 0,
     NoIFWithdrawAvailable = 1,
     InvalidIFUnstake = 2,
@@ -13,7 +13,6 @@ pub enum InsuranceFundError {
     // InvalidIFForNewStakes = 5,
     InvalidIFRebase = 6,
     InvalidInsuranceUnstakeSize = 7,
-    // InsuranceFundOperationPaused = 8,
     IFWithdrawRequestInProgress = 9,
     NoIFWithdrawRequestInProgress = 10,
     IFWithdrawRequestTooSmall = 11,
@@ -29,6 +28,7 @@ pub enum InsuranceFundError {
     
     InvalidOptimalUtilization = 21,
 
+    // paused ops
     FundDepositKilled = 30,
     FundRequestWithdrawKilled = 31,
     FundWithdrawKilled = 32,

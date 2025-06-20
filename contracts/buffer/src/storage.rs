@@ -1,8 +1,8 @@
 use paste::paste;
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
-use soroban_sdk::{ panic_with_error, contracttype, Address, Env, Map };
+use soroban_sdk::{ panic_with_error, contracttype, Address, Env };
 use utils::errors::storage_errors::StorageError;
-use utils::bump::{ bump_instance, bump_persistent, bump_temporary };
+use utils::bump::{ bump_instance, bump_persistent };
 use utils::{
     generate_instance_storage_getter_and_setter,
     generate_instance_storage_getter_and_setter_with_default,
@@ -16,31 +16,15 @@ use crate::reserve::Reserve;
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
-    Router, // The address of the Router contract (only one who can call `request_payout()`).
-    FeeCollector, // The address of the Fee Collector contract (only one who can call `deposit()`).
-    MinTimeBetweenPayouts, // The minimum time between payouts to prevent repeated or too-frequent payouts (rate limiting).
+    Reserve(Address), // map of Buffer reserve state for each token.
+    MinTimeBetweenPayouts, // the minimum time between payouts to prevent repeated or too-frequent payouts (rate limiting).
+    LastPayoutTimestamp, // the last time a payout was executed.
+    MinReserveRatio, // the minimum reserve the Buffer must maintain.
 
-    Reserve(Address), // Map of Buffer reserve state for each token.
-    LastPayoutTimestamp, // The last time a payout was executed.
-    MinReserveRatio, // The minimum reserve the Buffer must maintain
-
+    // Paused Ops
     IsKilledDeposit,
-    IsKilledRequestPayout,
+    IsKilledResolveLiquidityDeficit,
 }
-generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
-generate_instance_storage_getter_and_setter!(fee_collector, DataKey::FeeCollector, Address);
-generate_instance_storage_getter_and_setter_with_default!(
-    is_killed_deposit,
-    DataKey::IsKilledDeposit,
-    bool,
-    false
-);
-generate_instance_storage_getter_and_setter_with_default!(
-    is_killed_request_payout,
-    DataKey::IsKilledRequestPayout,
-    bool,
-    false
-);
 
 pub(crate) fn get_reserve(e: &Env, token: &Address) -> Reserve {
     let key = DataKey::Reserve(token.clone());
@@ -78,6 +62,21 @@ generate_instance_storage_getter_and_setter_with_default!(
     1000 // 10%
 );
 
+// Paused Ops
+generate_instance_storage_getter_and_setter_with_default!(
+    is_killed_deposit,
+    DataKey::IsKilledDeposit,
+    bool,
+    false
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    is_killed_resolve_liquidity_deficit,
+    DataKey::IsKilledResolveLiquidityDeficit,
+    bool,
+    false
+);
+
+// Utils
 pub fn get_buffer_reserve_amount(e: &Env, token: &Address) -> u128 {
     SorobanTokenClient::new(e, token).balance(&e.current_contract_address()) as u128
 }

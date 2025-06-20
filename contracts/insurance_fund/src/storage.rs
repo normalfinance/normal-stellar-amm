@@ -1,7 +1,8 @@
 use paste::paste;
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{ contracttype, panic_with_error, Address, Env };
-use utils::bump::{ bump_instance, bump_persistent, bump_temporary };
+use utils::bump::{ bump_instance };
+use utils::constant::THIRTEEN_DAY;
 use utils::errors::storage_errors::StorageError;
 use utils::{
     generate_instance_storage_getter_and_setter_with_default,
@@ -15,7 +16,7 @@ use utils::{
 #[contracttype]
 enum DataKey {
     Token, // the token address of supported deposits.
-    Router, // The address of the Pool Router.
+    Router, // the address of the Pool Router.
     UnstakingPeriod, // a period of time stakers must wait once requesting withdrawal to actually withdraw.
 
     // insurance
@@ -47,7 +48,7 @@ generate_instance_storage_getter_and_setter_with_default!(
     unstaking_period,
     DataKey::UnstakingPeriod,
     u64,
-    0
+    THIRTEEN_DAY
 );
 
 // Coverage
@@ -64,7 +65,7 @@ generate_instance_storage_getter_and_setter_with_default!(
     0
 );
 
-// Share token
+// Shares
 generate_instance_storage_getter_and_setter_with_default!(
     total_shares,
     DataKey::TotalShares,
@@ -81,10 +82,10 @@ generate_instance_storage_getter_and_setter_with_default!(
 // Interest
 generate_instance_storage_getter_and_setter!(optimal_utilization, DataKey::OptimalUtilization, u32);
 generate_instance_storage_getter_and_setter!(base_rate, DataKey::BaseRate, i32);
-generate_instance_storage_getter_and_setter!(rate_slope_a, DataKey::RateSlopeA, i32);
-generate_instance_storage_getter_and_setter!(rate_slope_b, DataKey::RateSlopeB, i32);
+generate_instance_storage_getter_and_setter!(rate_slope_a, DataKey::RateSlopeA, u32);
+generate_instance_storage_getter_and_setter!(rate_slope_b, DataKey::RateSlopeB, u32);
 
-// Paused ops
+// Paused Ops
 generate_instance_storage_getter_and_setter_with_default!(
     is_killed_deposit,
     DataKey::IsKilledDeposit,
@@ -104,6 +105,7 @@ generate_instance_storage_getter_and_setter_with_default!(
     false
 );
 
+// Utils
 pub fn get_insurance_vault_amount(e: &Env) -> u128 {
     SorobanTokenClient::new(e, &get_token(e)).balance(&e.current_contract_address()) as u128
 }

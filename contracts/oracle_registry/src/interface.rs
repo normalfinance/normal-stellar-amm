@@ -1,69 +1,85 @@
 use soroban_sdk::{ Address, Env, Symbol };
-use utils::storage::{ OracleInfo, OraclePriceData };
+use utils::state::oracle_registry::{ MutableOracleInfo, OracleInfo, OraclePriceData };
 
-use crate::storage_types::OracleGuardRails;
+use crate::storage_types::{ HistoricalOracleData, OracleGuardRails };
 
 pub trait OracleRegistryTrait {
-    // Get the oracle price
-    fn get_price(
-        e: Env,
-        sender: Address,
-        asset_id: Symbol,
-        cached: bool,
-        sanitize_clamp_denominator: Option<i64>
-    ) -> OraclePriceData;
-}
+    fn initialize(e: Env, admin: Address, emergency_admin: Address);
 
-pub trait AdminInterface {
-    // Initialize admin user. Will panic if called twice
-    fn init_admin(e: Env, admin: Address);
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
+
+    // Get the oracle price
+    fn get_price(e: Env, asset_id: Symbol, cached: bool) -> OraclePriceData;
+
+    // Get the historical oracle info
+    fn get_last_price(e: Env, asset_id: Symbol) -> HistoricalOracleData;
+
+    // Get the registered oracle info
+    fn get_oracle(e: Env, asset_id: Symbol) -> OracleInfo;
+
+    //   _______    _______  ___________  ___________  _______   _______    ________
+    //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
+    // (: ( \___) (: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
+    //  \/ \       \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
+    //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
+    // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
+    //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
 
     fn get_oracle_guardrails(e: Env) -> OracleGuardRails;
 
-    fn get_price_override_limit(e: Env) -> u128;
+    fn get_price_override_limit(e: Env) -> u32;
 
-    // Set oracle guardrails
-    fn set_oracle_guardrails(e: Env, admin: Address, oracle_guard_rails: OracleGuardRails);
+    fn get_price_override_threshold(e: Env) -> u64;
+}
 
-    // Set pric override limit
-    fn set_price_override_limit(e: Env, admin: Address, limit: u128);
+pub trait AdminInterface {
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
     // Create a new oracle
     fn register_oracle(
         e: Env,
         admin: Address,
         asset_id: Symbol,
-        oracle: Address,
+        oracle_addr: Address,
         asset: Address,
-        decimals: u32
+        decimals: u32,
+        sanitize_clamp_denominator: i64
     ) -> OracleInfo;
 
-    // Set oracle address
-    fn set_oracle_address(e: Env, admin: Address, asset_id: Symbol, oracle: Address) -> OracleInfo;
-
-    // Set oracle decimals
-    fn set_oracle_decimals(e: Env, admin: Address, asset_id: Symbol, decimals: u32) -> OracleInfo;
-
-    // Sync the oracle price
-    fn sync_oracle_price(
+    // Update oracle info
+    fn update_oracle(
         e: Env,
         admin: Address,
         asset_id: Symbol,
-        sanitize_clamp_denominator: Option<i64>
-    );
+        params: MutableOracleInfo
+    ) -> OracleInfo;
 
     // Admin failsafe to manually set the oracle price
-    fn set_oracle_price(
-        e: Env,
-        admin: Address,
-        asset_id: Symbol,
-        oracle_price_twap: u128,
-        price: u128
-    );
+    fn set_oracle_price(e: Env, admin: Address, asset_id: Symbol, price: u128);
 
-    // Pause price updates
-    fn freeze_oracle(e: Env, admin: Address, asset_id: Symbol) -> OracleInfo;
+    //   ________  _______  ___________  ___________  _______   _______    ________
+    //  /"       )/"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
+    // (:   \___/(: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
+    //  \___  \   \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
+    //   __/  \\  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
+    //  /" \   :)(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
+    // (_______/  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
 
-    // Unpause price updates
-    fn unfreeze_oracle(e: Env, admin: Address, asset_id: Symbol) -> OracleInfo;
+    fn set_oracle_guard_rails(e: Env, admin: Address, oracle_guard_rails: OracleGuardRails);
+
+    fn set_price_override_limit(e: Env, admin: Address, limit: u32);
+
+    fn set_price_override_threshold(e: Env, admin: Address, threshold: u64);
 }

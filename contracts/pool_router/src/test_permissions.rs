@@ -3,8 +3,16 @@
 use crate::testutils::{ Setup };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{ symbol_short, Address, String, Symbol, Vec };
-use utils::test_utils::{ install_dummy_wasm, install_liq_pool_hash, install_token_wasm, jump };
+use soroban_sdk::{ symbol_short, Address, Symbol, Vec };
+use utils::state::pool::PoolTier;
+use utils::test_utils::{
+    get_mock_lp_token_info,
+    get_mock_oracle_registry_ids,
+    install_dummy_wasm,
+    install_liq_pool_hash,
+    install_token_wasm,
+    jump,
+};
 
 // test admin transfer ownership
 #[test]
@@ -501,12 +509,13 @@ fn test_distribute_rewards() {
     setup.reward_token.mint(&router.address, &1_0000000);
     let (pool_hash, _pool_address) = router.init_pool(
         &user,
-        &setup.oracles,
+        &get_mock_oracle_registry_ids(&e),
         &setup.asset,
         &tokens,
-        &String::from_str(&e, "Pool Share Token"),
-        &String::from_str(&e, "Pool Share Token"),
-        &10
+        &get_mock_lp_token_info(&e),
+        &10,
+        &PoolTier::A,
+        &10_000_000_u128
     );
 
     for (addr, is_ok) in [
@@ -557,11 +566,13 @@ fn test_remove_pool() {
     ] {
         let (pool_hash, _pool_address) = router.init_pool(
             &user.clone(),
-            &setup.oracles,
+            &get_mock_oracle_registry_ids(&e),
             &setup.asset,
             &tokens,
-            &(String::from_str(&e, "Pool Share Token"), String::from_str(&e, "Pool Share Token")),
-            &10
+            &get_mock_lp_token_info(&e),
+            &10,
+            &PoolTier::A,
+            &10_000_000_u128
         );
         assert_eq!(router.try_remove_pool(&addr, &tokens, &pool_hash).is_ok(), is_ok);
     }

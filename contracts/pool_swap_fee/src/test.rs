@@ -2,136 +2,43 @@
 extern crate std;
 
 use crate::testutils::Setup;
-use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{ Address, Vec };
+use soroban_sdk::testutils::{ Events };
+use soroban_sdk::{ vec, IntoVal, Symbol };
+use utils::constant::PRICE_PRECISION;
 
-#[test]
-fn test_strict_send() {
-    let setup = Setup::default();
+/* Swap tests are located in /integration_tests since `swap()` can only 
+truly be done setting up all other contracts */
 
-    let tokens = Vec::from_array(&setup.env, [
-        setup.token_a.address.clone(),
-        setup.token_b.address.clone(),
-    ]);
-    let (pool_index, _pool_address) = setup.router.get_pools(&tokens).iter().last().unwrap();
-
-    // Record init Buffer balance
-    let buffer_balance_before = setup.token_b.balance(&setup.buffer.address);
-
-    // Mint user token_b to swap
-    let user = Address::generate(&setup.env);
-    setup.token_b_admin_client.mint(&user, &1_0000000);
-
-    // Swap
-    let result = setup.fee_collector.swap(
-        &user,
-        &tokens,
-        &setup.token_b.address,
-        &setup.token_a.address,
-        &pool_index,
-        &1_0000000,
-        &9870300
-    );
-    assert_eq!(result, 9870300); // (10000000 - .3%) - 1%
-    assert_eq!(setup.token_a.balance(&user), 9870300);
-}
-
-#[test]
-fn test_strict_send_bad_slippage() {
-    let setup = Setup::default();
-
-    let tokens = Vec::from_array(&setup.env, [
-        setup.token_a.address.clone(),
-        setup.token_b.address.clone(),
-    ]);
-    let (pool_index, _pool_address) = setup.router.get_pools(&tokens).iter().last().unwrap();
-
-    let user = Address::generate(&setup.env);
-    setup.token_b_admin_client.mint(&user, &1_0000000);
-
-    assert!(
-        setup.fee_collector
-            .try_swap(
-                &user,
-                &tokens,
-                &setup.token_b.address,
-                &setup.token_a.address,
-                &pool_index,
-                &1_0000000,
-                &9870301 // value is not enough to cover provider fee
-            )
-            .is_err()
-    );
-    assert!(
-        setup.fee_collector
-            .try_swap(&user, &swap_path, &setup.token_a.address, &1_0000000, &9870300)
-            .is_ok()
-    );
-}
+/* Tests Needed:
+- [ ] Init admin cannot call twice
+- [ ] Setters works
+- [ ] Getters work
+ */
 
 #[test]
 fn test_claim_fee() {
     let setup = Setup::default();
+    let e = setup.env;
+    let fee_amount = 100 * PRICE_PRECISION;
 
-    let tokens = Vec::from_array(&setup.env, [
-        setup.token_a.address.clone(),
-        setup.token_b.address.clone(),
-    ]);
-    let (pool_index, _pool_address) = setup.router.get_pools(&tokens).iter().last().unwrap();
+    // Mint tokens to the Fee Collector to simulate collected fees
+    setup.token_b_admin_client.mint(&setup.fee_collector.address, &(fee_amount as i128));
 
-    let user = Address::generate(&setup.env);
-    setup.token_b_admin_client.mint(&user, &1_0000000);
-
-    setup.fee_collector.swap(
-        &user,
-        &tokens,
-        &setup.token_b.address,
-        &setup.token_a.address,
-        &pool_index,
-        &1_0000000,
-        &0
-    );
-    assert_eq!(setup.fee_collector.claim_fees(&setup.admin, &setup.token_b.address), 99699); // ~ (10000000 - .3%) * 1%
+    // [x] Ensure `claim_fee()` on empty token balance does nothing
     assert_eq!(setup.fee_collector.claim_fees(&setup.admin, &setup.token_a.address), 0);
     assert_eq!(setup.token_a.balance(&setup.fee_destination), 0);
-    assert_eq!(setup.token_b.balance(&setup.fee_destination), 99699);
-}
 
-#[test]
-fn test_claim_fee_and_swap() {
-    let setup = Setup::default();
+    // [x] Ensure `claim_fee()` on existing token balance transfers the whole amount to the `fee_destination`
+    assert_eq!(setup.fee_collector.claim_fees(&setup.admin, &setup.token_b.address), fee_amount);
+    assert_eq!(setup.token_b.balance(&setup.fee_destination), fee_amount as i128);
 
-    let tokens = Vec::from_array(&setup.env, [
-        setup.token_a.address.clone(),
-        setup.token_b.address.clone(),
-    ]);
-    let (pool_index, _pool_address) = setup.router.get_pools(&tokens).iter().last().unwrap();
-
-    //
-    let user = Address::generate(&setup.env);
-    setup.token_a_admin_client.mint(&user, &1_0000000);
-
-    // Swap to collect fees
-    setup.fee_collector.swap(
-        &user,
-        &tokens.clone(),
-        &setup.token_b.address,
-        &setup.token_a.address,
-        &pool_index,
-        &1_0000000,
-        &0
-    );
-
+    // [x] Ensure the `withdraw_fee` event is emitted
     assert_eq!(
-        setup.fee_collector.claim_fees_and_swap(
-            &setup.admin,
-            &Vec::from_array(&setup.env, [(tokens, pool_index, setup.token_a.address.clone())]),
-            &setup.token_b.address,
-            &0
-        ),
-        99399
-    ); // ~ (10000000 - .3%) * 1%
-    assert_eq!(setup.fee_collector.claim_fees(&setup.admin, &setup.token_a.address), 0);
-    assert_eq!(setup.token_a.balance(&setup.fee_destination), 99399);
-    assert_eq!(setup.token_b.balance(&setup.fee_destination), 0);
+        vec![&e, e.events().all().last().unwrap()],
+        vec![&e, (
+            setup.fee_collector.address.clone(),
+            (Symbol::new(&e, "withdraw_fee"),).into_val(&e),
+            (setup.token_b.address, fee_amount).into_val(&e),
+        )]
+    );
 }

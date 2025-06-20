@@ -18,9 +18,11 @@ impl Events {
 pub(crate) trait ProviderFeeEvents {
     fn charge_provider_fee(&self, token: Address, amount: u128);
 
-    fn claim_fee(&self, token: Address, amount: u128, swapped_to: Address, swapped_amount: u128);
+    fn claim_fee(&self, token: Address, amount: u128);
 
-    fn settle_revenue(&self, token: Address, amount: u128);
+    fn buffer_deposit(&self, token: Address, amount: u128);
+
+    fn insurance_premium(&self, token: Address, amount: u128);
 }
 
 impl ProviderFeeEvents for Events {
@@ -30,18 +32,21 @@ impl ProviderFeeEvents for Events {
             .publish((Symbol::new(self.env(), "charge_provider_fee"),), (token, amount));
     }
 
-    fn claim_fee(&self, token: Address, amount: u128, swapped_to: Address, swapped_amount: u128) {
+    fn claim_fee(&self, token: Address, amount: u128) {
         self.env()
             .events()
-            .publish(
-                (Symbol::new(self.env(), "withdraw_fee"),),
-                (token, amount, swapped_to, swapped_amount)
-            );
+            .publish((Symbol::new(self.env(), "withdraw_fee"),), (token, amount));
     }
 
-    fn settle_revenue(&self, token: Address, amount: u128) {
+    fn buffer_deposit(&self, token: Address, amount: u128) {
         self.env()
             .events()
-            .publish((Symbol::new(self.env(), "settle_revenue"),), (token, amount));
+            .publish((Symbol::new(self.env(), "buffer_deposit"),), (token, amount));
+    }
+
+    fn insurance_premium(&self, token: Address, amount: u128) {
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "insurance_premium"),), (token, amount));
     }
 }

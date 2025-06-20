@@ -2,4 +2,5 @@
 
 mod contracts;
 mod tests;
+mod test_permissions;
 mod testutils;

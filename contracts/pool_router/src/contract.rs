@@ -19,6 +19,7 @@ use crate::router_interface::AdminInterface;
 use crate::storage::{
     get_liquidity_calculator,
     get_pool,
+    get_pool_plane,
     get_pools_plain,
     get_pools_vec,
     get_reward_tokens,
@@ -30,6 +31,7 @@ use crate::storage::{
     remove_pool,
     set_constant_product_pool_hash,
     set_liquidity_calculator,
+    set_pool_plane,
     set_reward_tokens,
     set_reward_tokens_detailed,
     set_rewards_config,
@@ -46,7 +48,11 @@ use access_control::management::{ MultipleAddressesManagementTrait, SingleAddres
 use access_control::role::Role;
 use access_control::role::SymbolRepresentation;
 use access_control::transfer::TransferOwnershipTrait;
-use access_control::utils::{ require_operations_admin_or_owner, require_rewards_admin_or_owner };
+use access_control::utils::{
+    require_admin,
+    require_operations_admin_or_owner,
+    require_rewards_admin_or_owner,
+};
 use incentives::storage::{ RewardTokenStorageTrait };
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
@@ -68,8 +74,8 @@ use soroban_sdk::{
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
-use utils::constant::CONSTANT_PRODUCT_FEE_AVAILABLE;
-use utils::storage::{ PoolInfo, PoolTier };
+use utils::constant::{ MAX_POOL_FEE };
+use utils::state::pool::{PoolInfo, PoolTier};
 use utils::token::{ transfer_token, transfer_token_from };
 
 #[contract]
@@ -194,6 +200,12 @@ impl PoolInterfaceTrait for PoolRouter {
         assert_tokens_sorted(&e, &tokens);
         let pool_id = get_pool(&e, &tokens, pool_index);
         e.invoke_contract(&pool_id, &Symbol::new(&e, "get_fee_fraction"), Vec::new(&e))
+    }
+
+    fn get_insurance_coverage(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
+        e.invoke_contract(&pool_id, &Symbol::new(&e, "get_insurance_coverage"), Vec::new(&e))
     }
 
     // Deposits tokens into the pool.
@@ -371,7 +383,7 @@ impl PoolInterfaceTrait for PoolRouter {
                 .get(0)
         {
             Some(v) => v,
-            None => panic_with_error!(&e, LiquidityPoolRouterError::LiquidityCalculationError),
+            None => panic_with_error!(&e, PoolRouterError::LiquidityCalculationError),
         }
     }
 
@@ -605,7 +617,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
     //
     // A `Map` where each key is a `Symbol` representing a configuration parameter, and the value is the corresponding value.
     // The keys are "tps" and "expired_at".
-    fn get_rewards_config(e: Env) -> Map<Symbol, i128> {
+    fn get_incentives_config(e: Env) -> Map<Symbol, i128> {
         let rewards_config = get_rewards_config(&e);
         let mut result = Map::new(&e);
         result.set(symbol_short!("tps"), rewards_config.tps as i128);
@@ -826,7 +838,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
         pool_tps
     }
 
-    // Get rewards status for the pool, including amount available for the user
+    // Get incentives status for the pool, including amount available for the user
     //
     // # Arguments
     //
@@ -838,7 +850,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
     // # Returns
     //
     // A map of symbols to integers representing the rewards info.
-    fn get_rewards_info(
+    fn get_incentives_info(
         e: Env,
         user: Address,
         tokens: Vec<Address>,
@@ -849,7 +861,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
 
         e.invoke_contract(
             &pool_id,
-            &Symbol::new(&e, "get_rewards_info"),
+            &Symbol::new(&e, "get_incentives_info"),
             Vec::from_array(&e, [user.clone().into_val(&e)])
         )
     }
@@ -878,6 +890,29 @@ impl IncentivesInterfaceTrait for PoolRouter {
         e.invoke_contract(
             &pool_id,
             &Symbol::new(&e, "get_user_reward"),
+            Vec::from_array(&e, [user.clone().into_val(&e)])
+        )
+    }
+
+    // Get amount of LP fees available for the user to claim.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `user` - The address of the user.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    //
+    // # Returns
+    //
+    // The user LP fee as a u128.
+    fn get_user_fees(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
+
+        e.invoke_contract(
+            &pool_id,
+            &Symbol::new(&e, "get_user_fees"),
             Vec::from_array(&e, [user.clone().into_val(&e)])
         )
     }
@@ -1060,7 +1095,7 @@ impl PoolsManagementTrait for PoolRouter {
     //
     // # Arguments
     //
-    // * `user` - The address of the user initializing the pool.
+    // * `admin` - The address of the admin initializing the pool.
     // * `tokens` - A vector of token addresses that the pool consists of.
     // * `fee_fraction` - The fee fraction for the pool. Should match pre-defined set of values: 0.1%, 0.3%, 1%.
     //
@@ -1071,19 +1106,19 @@ impl PoolsManagementTrait for PoolRouter {
     // * The address of the pool.
     fn init_pool(
         e: Env,
-        user: Address,
+        admin: Address,
         oracle_registry_ids: (Symbol, Symbol),
         asset: Address,
         tokens: Vec<Address>,
         lp_token_info: (String, String),
         fee_fraction: u32,
         tier: PoolTier,
-        quote_max_insurance: u128,
-        oracle_registry: Address
+        quote_max_insurance: u128
     ) -> (BytesN<32>, Address) {
-        user.require_auth();
+        admin.require_auth();
+        require_admin(&e, &admin);
 
-        if !CONSTANT_PRODUCT_FEE_AVAILABLE.contains(&fee_fraction) {
+        if fee_fraction > MAX_POOL_FEE {
             panic_with_error!(&e, PoolRouterError::BadFee);
         }
 
@@ -1104,8 +1139,7 @@ impl PoolsManagementTrait for PoolRouter {
                     &lp_token_info.1,
                     fee_fraction,
                     &tier,
-                    quote_max_insurance,
-                    &oracle_registry
+                    quote_max_insurance
                 ),
         }
     }
@@ -1225,7 +1259,7 @@ impl PoolsManagementTrait for PoolRouter {
 
 // The `PoolPlaneInterface` trait provides the interface for interacting with a pool plane.
 #[contractimpl]
-impl PoolPlaneInterface for LiquidityPoolRouter {
+impl PoolPlaneInterface for PoolRouter {
     // Sets the pool plane.
     // Pool plane is a contract which knows current state of every pool
     // and can be used to estimate swaps without calling pool contracts.

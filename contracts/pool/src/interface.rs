@@ -1,5 +1,5 @@
 use soroban_sdk::{ Address, BytesN, Env, Map, Symbol, Vec };
-use utils::storage::{ InitializeAllParams, InitializeParams, PoolInfo, PoolStatus, PoolTier };
+use utils::state::pool::{ InitializeAllParams, InitializeParams, PoolInfo, PoolStatus, PoolTier };
 
 pub trait PoolCrunch {
     // Initialize pool completely to reduce calculations cost
@@ -7,19 +7,15 @@ pub trait PoolCrunch {
 }
 
 pub trait PoolTrait {
-    // Get symbolic explanation of pool type.
-    fn pool_type(e: Env) -> Symbol;
-
-    // Sets the token contract addresses for this pool
     fn initialize(e: Env, params: InitializeParams);
 
-    // Returns the token contract address for the pool share token
-    fn share_id(e: Env) -> Address;
-
-    // Returns the total amount of shares
-    fn get_total_shares(e: Env) -> u128;
-
-    fn get_tokens(e: Env) -> Vec<Address>;
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
     // Deposits token_b. Also mints pool shares for the "to" Identifier. The amount minted
     // is determined based on the difference between the reserves stored by this contract, and
@@ -42,7 +38,7 @@ pub trait PoolTrait {
     ) -> u128;
 
     // Estimate amount of coins to retrieve using swap function
-    fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: u128) -> u128;
+    fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: u128) -> (u128, i128);
 
     // Perform an exchange between two coins with strict amount to receive.
     // in_idx: Index value for the coin to send
@@ -59,7 +55,12 @@ pub trait PoolTrait {
     ) -> u128;
 
     // Estimate amount of coins to retrieve using swap_strict_receive function
-    fn estimate_swap_strict_receive(e: Env, in_idx: u32, out_idx: u32, out_amount: u128) -> u128;
+    fn estimate_swap_strict_receive(
+        e: Env,
+        in_idx: u32,
+        out_idx: u32,
+        out_amount: u128
+    ) -> (u128, i128);
 
     // Transfers share_amount of pool share tokens to this contract,
     // burns all pools share tokens in this contracts, and sends
@@ -67,18 +68,59 @@ pub trait PoolTrait {
     // Returns amount of tokens withdrawn
     fn withdraw(e: Env, user: Address, share_amount: u128) -> u128;
 
-    // Get pool reserves
+    //   _______    _______  ___________  ___________  _______   _______    ________
+    //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
+    // (: ( \___) (: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
+    //  \/ \       \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
+    //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
+    // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
+    //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
+
+    // Get symbolic explanation of pool type.
+    fn pool_type(e: Env) -> Symbol;
+
+    // Returns the token contract address for the pool share token
+    fn share_id(e: Env) -> Address;
+
+    // Returns the total amount of shares
+    fn get_total_shares(e: Env) -> u128;
+
+    fn get_tokens(e: Env) -> Vec<Address>;
     fn get_reserves(e: Env) -> Vec<u128>;
 
-    // Fee fraction getter. 1 = 0.01%
     fn get_fee_fraction(e: Env) -> u32;
+
+    fn get_insurance_coverage(e: Env) -> u128;
 
     // Get dictionary of basic pool information: type, fee, special parameters if any.
     fn get_info(e: Env) -> PoolInfo;
+
+    fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>>;
 }
 
 pub trait AdminInterfaceTrait {
-    // Set privileged addresses
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
+
+    // Rebalance pool reserves
+    fn rebalance(e: Env, admin: Address);
+
+    //
+    fn pay_insurance_claim(e: Env, sender: Address, insurance_vault_amount: u128) -> u128;
+
+    //   ________  _______  ___________  ___________  _______   _______    ________
+    //  /"       )/"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
+    // (:   \___/(: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
+    //  \___  \   \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
+    //   __/  \\  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
+    //  /" \   :)(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
+    // (_______/  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
+
     fn set_privileged_addrs(
         e: Env,
         admin: Address,
@@ -88,16 +130,10 @@ pub trait AdminInterfaceTrait {
         emergency_pause_admins: Vec<Address>
     );
 
-    // Get map of privileged roles
-    fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>>;
-
-    // Set target asset tier
     fn set_tier(e: Env, admin: Address, tier: PoolTier);
 
-    // Set pool status
     fn set_status(e: Env, admin: Address, status: PoolStatus);
 
-    //
     fn set_max_imbalances(
         e: Env,
         admin: Address,
@@ -105,14 +141,13 @@ pub trait AdminInterfaceTrait {
         quote_max_insurance: u128
     );
 
-    // Rebalance pool reserves
-    fn rebalance(e: Env, admin: Address);
-
-    //
-    fn get_pay_from_insurance(e: Env, sender: Address, insurance_vault_amount: u128) -> u128;
-
-    //
-    fn pay_insurance_claim(e: Env, sender: Address, amount: u128) -> u128;
+    //    _______     __       ____  ____   ________  _______  ________
+    //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\
+    //   (. |__) :) /    \    |   (  ) : |(:   \___/(: ______)(.  ___  :)
+    //   |:  ____/ /' /\  \   (:  |  | . ) \___  \   \/    |  |: \   ) ||
+    //   (|  /    //  __'  \   \\ \__/ //   __/  \\  // ___)_ (| (___\ ||
+    //  /|__/ \  /   /  \\  \  /\\ __ //\  /" \   :)(:      "||:       :)
+    // (_______)(___/    \___)(__________)(_______/  \_______)(________/
 
     // Stop pool instantly
     fn kill_deposit(e: Env, admin: Address);

@@ -4,7 +4,6 @@ pub trait AdminInterface {
     // Initialize admin user. Will panic if called twice
     fn init_admin(e: Env, account: Address);
 
-    // Set privileged addresses
     fn set_privileged_addrs(
         e: Env,
         admin: Address,

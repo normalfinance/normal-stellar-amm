@@ -8,7 +8,7 @@ pub fn sanitize_new_price(
     e: &Env,
     new_price: u128,
     last_price_twap: u128,
-    sanitize_clamp_denominator: Option<i64>,
+    sanitize_clamp_denominator: i64
 ) -> u128 {
     // when/if twap is 0, dont try to normalize new_price
     if last_price_twap == 0 {
@@ -18,12 +18,11 @@ pub fn sanitize_new_price(
     let new_price_spread = new_price.safe_sub(e, last_price_twap);
 
     // cap new oracle update to 100/MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR% delta from twap
-    let sanitize_clamp_denominator =
-        if let Some(sanitize_clamp_denominator) = sanitize_clamp_denominator {
-            sanitize_clamp_denominator
-        } else {
-            DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR
-        };
+    let sanitize_clamp_denominator = if sanitize_clamp_denominator != 0 {
+        sanitize_clamp_denominator
+    } else {
+        DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR
+    };
 
     if sanitize_clamp_denominator == 0 {
         // no need to use price band check

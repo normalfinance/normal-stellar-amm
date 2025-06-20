@@ -3,17 +3,25 @@ use soroban_sdk::{ Address, Env };
 use crate::stake::Stake;
 
 pub trait InsuranceFundTrait {
-    //
     fn initialize(
         e: Env,
         admin: Address,
         emergency_admin: Address,
         token: Address,
+        unstaking_period: u64,
         coverage_buffer: u128,
         optimal_utilization: u32,
         base_rate: i32,
-        rate_slopes: (i32, i32)
+        rate_slopes: (u32, u32)
     );
+
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
     fn deposit(e: Env, user: Address, amount: u128);
 
@@ -55,29 +63,33 @@ pub trait InsuranceFundTrait {
 
     fn get_base_rate(e: Env) -> i32;
 
-    fn get_rate_slopes(e: Env) -> (i32, i32);
+    fn get_rate_slopes(e: Env) -> (u32, u32);
 }
 
 pub trait AdminInterface {
-    // Set unstaking period
+    //   ________  _______  ___________  ___________  _______   _______    ________
+    //  /"       )/"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
+    // (:   \___/(: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
+    //  \___  \   \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
+    //   __/  \\  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
+    //  /" \   :)(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
+    // (_______/  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
+
     fn set_unstaking_period(e: Env, admin: Address, unstaking_period: u64);
 
-    //
     fn set_optimal_coverage(e: Env, admin: Address, optimal_coverage: u128);
 
     fn set_coverage_buffer(e: Env, admin: Address, coverage_buffer: u128);
 
-    //
     fn set_rate_config(
         e: Env,
         admin: Address,
         optimal_utilization: u32,
         base_rate: i32,
-        rate_slope_a: i32,
-        rate_slope_b: i32
+        rate_slope_a: u32,
+        rate_slope_b: u32
     );
 
-    //
     fn resolve_liquidity_deficit(e: Env, admin: Address, pool_address: Address);
 
     //    _______     __       ____  ____   ________  _______  ________

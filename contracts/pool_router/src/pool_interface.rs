@@ -1,5 +1,5 @@
 use soroban_sdk::{ Address, BytesN, Env, Map, String, Symbol, Val, Vec, U256 };
-use utils::{ storage::{ PoolInfo, PoolTier } };
+use utils::state::pool::{ PoolInfo, PoolTier };
 
 pub trait PoolInterfaceTrait {
     // Get symbolic explanation of pool type.
@@ -22,6 +22,9 @@ pub trait PoolInterfaceTrait {
 
     // Fee fraction getter. 1 = 0.01%
     fn get_fee_fraction(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u32;
+
+    // Insurance Claim - Max quote insurance getter.
+    fn get_insurance_coverage(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
 
     // Deposit coins into the pool.
     // desired_amounts: List of amounts of coins to deposit
@@ -91,7 +94,7 @@ pub trait IncentivesInterfaceTrait {
     //
     // A `Map` where each key is a `Symbol` representing a configuration parameter, and the value is the corresponding value.
     // The keys are "tps" and "expired_at".
-    fn get_rewards_config(e: Env) -> Map<Symbol, i128>;
+    fn get_incentives_config(e: Env) -> Map<Symbol, i128>;
 
     // Returns a mapping of token addresses to their respective reward information.
     //
@@ -162,7 +165,7 @@ pub trait IncentivesInterfaceTrait {
 
     // Get rewards status for the pool,
     // including amount available for the user
-    fn get_rewards_info(
+    fn get_incentives_info(
         e: Env,
         user: Address,
         tokens: Vec<Address>,
@@ -171,6 +174,9 @@ pub trait IncentivesInterfaceTrait {
 
     // Get amount of reward tokens available for the user to claim.
     fn get_user_reward(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
+
+    // Get amount of LP fees available for the user to claim.
+    fn get_user_fees(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
 
     // Get total amount of accumulated reward for the pool
     fn get_total_accumulated_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
@@ -201,19 +207,16 @@ pub trait IncentivesInterfaceTrait {
 
 pub trait PoolsManagementTrait {
     // Initialize standard pool with custom arguments.
-    // fee_fraction should match pre-defined set of values: 0.1%, 0.3%, 1%
-    // 10 = 0.1%, 30 = 0.3%, 100 = 1%
     fn init_pool(
         e: Env,
-        user: Address,
+        admin: Address,
         oracle_registry_ids: (Symbol, Symbol),
         asset: Address,
         tokens: Vec<Address>,
         lp_token_info: (String, String),
         fee_fraction: u32,
         tier: PoolTier,
-        quote_max_insurance: u128,
-        oracle_registry: Address
+        quote_max_insurance: u128
     ) -> (BytesN<32>, Address);
 
     // Get all pools addresses

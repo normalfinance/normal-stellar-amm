@@ -26,6 +26,8 @@ soroban contract optimize --wasm buffer.wasm
 soroban contract optimize --wasm insurance_fund.wasm
 soroban contract optimize --wasm oracle_registry.wasm
 soroban contract optimize --wasm pool_swap_fee.wasm
+soroban contract optimize --wasm pool_plane.wasm
+soroban contract optimize --wasm liquidity_calculator.wasm
 
 echo "Contracts optimized."
 
@@ -60,6 +62,16 @@ echo "Token and pool contracts deployed."
 # |__|  \___) \"_____/   (__________)     \__|    \_______)|__|  \___)
 
 echo "Initialize pool router..."
+
+POOL_PLANE_ADDR=$(soroban contract deploy \
+    --wasm pool_plane.optimized.wasm \
+    --source $IDENTITY_STRING \
+    --network $NETWORK)
+
+LIQUIDITY_CALCULATOR_ADDR=$(soroban contract deploy \
+    --wasm liquidity_calculator.optimized.wasm \
+    --source $IDENTITY_STRING \
+    --network $NETWORK)
 
 POOL_ROUTER_ADDR=$(soroban contract deploy \
     --wasm pool_router.optimized.wasm \
@@ -113,6 +125,24 @@ stellar contract invoke \
     --pause_admin $ADMIN_ADDRESS \
     --emergency_pause_admins "[{\"address\":\"$ADMIN_ADDRESS\"}]"
 
+stellar contract invoke \
+    --id $POOL_ROUTER_ADDR \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    -- \
+    set_pools_plane \
+    --admin $ADMIN_ADDRESS \
+    --plane $POOL_PLANE_ADDR
+
+stellar contract invoke \
+    --id $POOL_ROUTER_ADDR \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    -- \
+    set_liquidity_calculator \
+    --admin $ADMIN_ADDRESS \
+    --calculator $LIQUIDITY_CALCULATOR_ADDR
+
 echo "Tokens and pool router deployed."
 
 #     ______     _______        __       ______   ___       _______   ________
@@ -135,15 +165,16 @@ stellar contract invoke \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     -- \
-    init_admin \
-    --account $ADMIN_ADDRESS
+    initialize \
+    --admin $ADMIN_ADDRESS \
+    --emergency_admin $ADMIN_ADDRESS
 
 stellar contract invoke \
     --id $ORACLE_REGISTRY_ADDR \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     -- \
-    set_oracle_guardrails \
+    set_oracle_guard_rails \
     --admin $ADMIN_ADDRESS \
     --oracle_guard_rails '{
         "price_divergence": {
@@ -155,16 +186,6 @@ stellar contract invoke \
             "too_volatile_ratio": 5
         }
     }'
-
-stellar contract invoke \
-    --id $ORACLE_REGISTRY_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    set_price_override_limit \
-    --admin $ADMIN_ADDRESS \
-    --limit 100
-
 #  _______   ____  ____   _______   _______   _______   _______
 # |   _  "\ ("  _||_ " | /"     "| /"     "| /"     "| /"      \
 # (. |_)  :)|   (  ) : |(: ______)(: ______)(: ______)|:        |
@@ -185,17 +206,11 @@ stellar contract invoke \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     -- \
-    init_admin \
-    --account $ADMIN_ADDRESS
-
-stellar contract invoke \
-    --id $BUFFER_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    set_router \
+    initialize \
     --admin $ADMIN_ADDRESS \
-    --router $POOL_ROUTER_ADDR
+    --emergency_admin $ADMIN_ADDRESS \
+    --time_bt_payouts 3600 \
+    --min_reserve_ratio 1000
 
 #   __    _____  ___    ________  ____  ____   _______        __      _____  ___    ______    _______
 #  |" \  (\"   \|"  \  /"       )("  _||_ " | /"      \      /""\    (\"   \|"  \  /" _  "\  /"     "|
@@ -212,6 +227,8 @@ INSURANCE_FUND_ADDR=$(soroban contract deploy \
     --source $IDENTITY_STRING \
     --network $NETWORK)
 
+THIRTEEN_DAYS=$((3600 * 24 * 13))
+
 stellar contract invoke \
     --id $INSURANCE_FUND_ADDR \
     --source $IDENTITY_STRING \
@@ -219,25 +236,12 @@ stellar contract invoke \
     -- \
     initialize \
     --admin $ADMIN_ADDRESS \
-    --token $XLM
-
-stellar contract invoke \
-    --id $INSURANCE_FUND_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    set_unstaking_period \
-    --admin $ADMIN_ADDRESS \
-    --unstaking_period 13
-
-stellar contract invoke \
-    --id $INSURANCE_FUND_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    set_max_shares \
-    --admin $ADMIN_ADDRESS \
-    --max_shares 1000000
+    --token $XLM \
+    --unstaking_period $THIRTEEN_DAYS \
+    --coverage_buffer 0 \
+    --optimal_utilization 8000 \
+    --base_rate 200 \
+    --rate_slopes '[2000, 6000]'
 
 #   _______   _______   _______       ______    ______    ___      ___       _______   ______  ___________  ______     _______
 #  /"     "| /"     "| /"     "|     /" _  "\  /    " \  |"  |    |"  |     /"     "| /" _  "\("     _   ")/    " \   /"      \
@@ -285,20 +289,18 @@ stellar contract invoke \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     -- \
-    set_fee_destination \
+    set_insurance_fund \
     --admin $ADMIN_ADDRESS \
-    --fee_destination $ADMIN_ADDRESS
-
-# Finish setting up Buffer
+    --insurance_fund $INSURANCE_FUND_ADDR
 
 stellar contract invoke \
-    --id $BUFFER_ADDR \
+    --id $FEE_COLLECTOR_ADDR \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     -- \
-    set_fee_collector \
+    set_fee_destination \
     --admin $ADMIN_ADDRESS \
-    --fee_collector $FEE_COLLECTOR_ADDR
+    --fee_destination $ADMIN_ADDRESS
 
 # Pool Initialization process
 # LP token init
@@ -354,8 +356,7 @@ stellar contract invoke \
     --lp_token_info '["Pool Share Token", "POOL"]' \
     --fee_fraction 30 \
     --tier '"A"' \
-    --quote_max_insurance 1000000 \
-    --oracle_registry $ORACLE_REGISTRY_ADDR
+    --quote_max_insurance 1000000
 
 echo "Query nBTC/XLM pool address..."
 

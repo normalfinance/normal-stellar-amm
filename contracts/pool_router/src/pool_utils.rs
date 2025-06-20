@@ -1,11 +1,14 @@
 use crate::errors::PoolRouterError;
 use crate::events::{ Events, PoolRouterEvents };
 use crate::incentives::get_incentives_manager;
+use crate::liquidity_calculator::LiquidityCalculatorClient;
 use crate::storage::{
     add_pool,
     add_tokens_set,
     get_constant_product_pool_hash,
     get_pool_next_counter,
+    get_pool_plane,
+    get_pools_plain,
     get_token_hash,
     PoolType,
 };
@@ -13,9 +16,7 @@ use access_control::access::AccessControl;
 use access_control::management::{ MultipleAddressesManagementTrait, SingleAddressManagementTrait };
 use access_control::role::Role;
 use incentives::storage::{ RewardTokenStorageTrait };
-use sep_40_oracle::Asset;
-use soroban_sdk::token::Client as SorobanTokenClient;
-use soroban_sdk::{ panic_with_error, String };
+use soroban_sdk::{ panic_with_error, Map, String, U256 };
 use soroban_sdk::{
     symbol_short,
     xdr::ToXdr,
@@ -28,13 +29,10 @@ use soroban_sdk::{
     Val,
     Vec,
 };
-use utils::storage::{
-    InitializeAllParams,
-    InitializeParams,
-    PoolTier,
-    PrivilegedAddresses,
-    RewardConfig,
-    TokenInitInfo,
+use utils::state::{
+    pool::{ InitializeAllParams, InitializeParams, PoolTier, RewardConfig },
+    access::PrivilegedAddresses,
+    token::TokenInitInfo,
 };
 
 pub fn get_pool_salt(e: &Env, fee_fraction: &u32) -> BytesN<32> {
@@ -71,8 +69,7 @@ pub fn deploy_pool(
     lp_token_symbol: &String,
     fee_fraction: u32,
     tier: &PoolTier,
-    quote_max_insurance: u128,
-    oracle_registry: &Address
+    quote_max_insurance: u128
 ) -> (BytesN<32>, Address) {
     let tokens_salt = get_tokens_salt(e, tokens);
     let pool_wasm_hash = get_constant_product_pool_hash(e);
@@ -99,8 +96,7 @@ pub fn deploy_pool(
         lp_token_symbol,
         fee_fraction,
         tier,
-        quote_max_insurance,
-        oracle_registry
+        quote_max_insurance
     );
 
     add_tokens_set(e, tokens);
@@ -134,8 +130,7 @@ fn init_pool(
     lp_token_symbol: &String,
     fee_fraction: u32,
     tier: &PoolTier,
-    quote_max_insurance: u128,
-    oracle_registry: &Address
+    quote_max_insurance: u128
 ) {
     let token_wasm_hash = get_token_hash(e);
     let incentives = get_incentives_manager(e);
@@ -179,7 +174,6 @@ fn init_pool(
             fee_fraction,
             tier: tier.clone(),
             quote_max_insurance,
-            oracle_registry: oracle_registry.clone(),
         },
         reward_config: RewardConfig { reward_token },
         plane,
