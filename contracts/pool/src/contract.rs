@@ -892,7 +892,7 @@ impl AdminInterfaceTrait for Pool {
 
         rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
     }
-
+    
     fn pay_insurance_claim(e: Env, sender: Address, insurance_vault_amount: u128) -> u128 {
         // check pool has liquidity deficit
 

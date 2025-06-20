@@ -223,6 +223,8 @@ impl AdminInterface for Buffer {
 
         validate_token_contract(&e, &token);
 
+        // TODO: validate pool_address
+
         // Ensure time since last payout is greater than the minimum time b/t payouts
         let now = e.ledger().timestamp();
         let last_payout_ts = get_last_payout_timestamp(&e);
@@ -241,14 +243,12 @@ impl AdminInterface for Buffer {
         put_reserve(&e, &token, &reserve.payout(&e, amount, now));
         set_last_payout_timestamp(&e, &now);
 
+        // Invoke `pay_insurance_claim()` on the Pool to cover the deficit
         let paid: u128 = e.invoke_contract(
             &pool_address,
             &Symbol::new(&e, "pay_insurance_claim"),
             Vec::from_array(&e, [e.current_contract_address().to_val(), amount.into_val(&e)])
         );
-
-        // Transfer tokens to Pool
-        // transfer_token(&e, &token, &e.current_contract_address(), &sender, &(amount as i128));
 
         Events::new(&e).resolve_liquidity_deficit(token, admin, amount);
 
