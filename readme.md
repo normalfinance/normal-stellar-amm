@@ -35,6 +35,7 @@ Normal is a synthetic asset protocol enabling investors to trade any crypto asse
 - **insurance_fund** - Additional backstop or liquidity deficits. Funded via liquidity provider staking deposits
 - **oracle_registry** - Oracle aggregator, data validator, and
 - **pool_swap_fee** -
+- **pool_plane** - contract designed to store minimum information about any pool: type, parameters, reserves. being updated on every action with the pool (deposit, swap, withdraw, parameters update, etc)
 - **liquidity_calculator** - smart contract containing pools liquidity calculation logic which is capable to compare many pools at once
 
 ## Modules
