@@ -75,10 +75,7 @@ pub trait PoolTrait {
     //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
     // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
     //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
-
-    // Get symbolic explanation of pool type.
-    fn pool_type(e: Env) -> Symbol;
-
+    
     // Returns the token contract address for the pool share token
     fn share_id(e: Env) -> Address;
 

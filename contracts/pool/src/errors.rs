@@ -40,7 +40,6 @@ pub enum PoolValidationError {
     EmptyPool = 2010,
     InvalidDepositAmount = 2011,
     AdminFeeOutOfBounds = 2012,
-    UnknownPoolType = 2013,
     ZeroSharesBurned = 2014,
     TooManySharesBurned = 2015,
     CannotComparePools = 2017,

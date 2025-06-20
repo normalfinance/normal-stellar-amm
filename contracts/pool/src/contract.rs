@@ -786,11 +786,6 @@ impl PoolTrait for Pool {
     // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
     //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
 
-    // Returns the type of the pool.
-    fn pool_type(e: Env) -> Symbol {
-        Symbol::new(&e, "constant_product")
-    }
-
     // Returns the pool's share token address.
     fn share_id(e: Env) -> Address {
         get_token_lp(&e)

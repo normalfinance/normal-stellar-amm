@@ -14,7 +14,6 @@ use soroban_sdk::{
     contract,
     contractimpl,
     panic_with_error,
-    symbol_short,
     Address,
     BytesN,
     Env,
@@ -28,8 +27,6 @@ use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
 
 #[contract]
 pub struct LiquidityCalculator;
-
-const POOL_TYPE_STANDARD: Symbol = symbol_short!("standard");
 
 #[contractimpl]
 impl Calculator for LiquidityCalculator {
@@ -71,7 +68,7 @@ impl Calculator for LiquidityCalculator {
 
     // Calculates and returns the liquidity of the provided pools.
     // It interacts with the `PoolPlaneClient` to get the data for the pools
-    // and then calculates the liquidity based on the pool type (standard or stableswap).
+    // and then calculates the liquidity.
     //
     // # Arguments
     //
@@ -85,20 +82,17 @@ impl Calculator for LiquidityCalculator {
         let data = plane_client.get(&pools);
         let mut result = Vec::new(&e);
         for pool_idx in 0..pools.len() {
-            let (pool_type, init_args, reserves) = data.get(pool_idx).unwrap();
+            let (init_args, reserves) = data.get(pool_idx).unwrap();
 
             let mut out = U256::from_u32(&e, 0);
-            if pool_type == POOL_TYPE_STANDARD {
-                let (fee, reserves) = parse_standard_data(init_args, reserves);
-                out = out.add(
-                    &U256::from_u128(&e, standard_pool::get_liquidity(&e, fee, &reserves, 0, 1))
-                );
-                out = out.add(
-                    &U256::from_u128(&e, standard_pool::get_liquidity(&e, fee, &reserves, 1, 0))
-                );
-            } else {
-                panic!("unknown pool type");
-            }
+
+            let (fee, reserves) = parse_standard_data(init_args, reserves);
+            out = out.add(
+                &U256::from_u128(&e, standard_pool::get_liquidity(&e, fee, &reserves, 0, 1))
+            );
+            out = out.add(
+                &U256::from_u128(&e, standard_pool::get_liquidity(&e, fee, &reserves, 1, 0))
+            );
 
             result.push_back(out);
         }

@@ -49,7 +49,6 @@ pub(crate) trait PoolRouterEvents {
         &self,
         tokens: Vec<Address>,
         pool_address: Address,
-        pool_type: Symbol,
         subpool_salt: BytesN<32>,
         init_args: Vec<Val>,
     );
@@ -121,13 +120,12 @@ impl PoolRouterEvents for Events {
         &self,
         tokens: Vec<Address>,
         pool_address: Address,
-        pool_type: Symbol,
         subpool_salt: BytesN<32>,
         init_args: Vec<Val>,
     ) {
         self.env().events().publish(
             (Symbol::new(self.env(), "add_pool"), tokens),
-            (pool_address, pool_type, subpool_salt, init_args),
+            (pool_address, subpool_salt, init_args),
         );
     }
 

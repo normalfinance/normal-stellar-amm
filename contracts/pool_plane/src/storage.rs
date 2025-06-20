@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol, Vec};
+use soroban_sdk::{ contracttype, Address, Env, Vec };
 
 const DAY_IN_LEDGERS: u32 = 17280;
 pub const MONTH_IN_LEDGERS: u32 = DAY_IN_LEDGERS * 30;
@@ -16,20 +16,16 @@ enum DataKey {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PoolPlaneType {
-    pub pool_type: Symbol,
     pub init_args: Vec<u128>,
     pub reserves: Vec<u128>,
 }
 
 fn bump_persistent(e: &Env, key: &DataKey) {
-    e.storage()
-        .persistent()
-        .extend_ttl(key, PERSISTENT_TTL_THRESHOLD, MAX_PERSISTENT_TTL);
+    e.storage().persistent().extend_ttl(key, PERSISTENT_TTL_THRESHOLD, MAX_PERSISTENT_TTL);
 }
 
 fn get_default_pool(e: &Env) -> PoolPlaneType {
     PoolPlaneType {
-        pool_type: symbol_short!("standard"),
         init_args: Vec::from_array(e, [30_u128]),
         reserves: Vec::from_array(e, [0_u128, 0_u128]),
     }

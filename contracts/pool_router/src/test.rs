@@ -65,13 +65,6 @@ fn test_constant_product_pool() {
         &1_000_000_u128
     );
 
-    assert_eq!(router.pool_type(&tokens, &pool_hash), Symbol::new(&e, "constant_product"));
-    let pool_info = router.get_info(&tokens, &pool_hash);
-    assert_eq!(
-        Symbol::from_val(&e, &pool_info.get(Symbol::new(&e, "pool_type")).unwrap()),
-        Symbol::new(&e, "constant_product")
-    );
-
     let pools = router.get_pools(&tokens);
 
     assert!(pools.contains_key(pool_hash.clone()));

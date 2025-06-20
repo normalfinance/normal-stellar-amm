@@ -10,7 +10,6 @@ use crate::storage::{
     get_pool_plane,
     get_pools_plain,
     get_token_hash,
-    PoolType,
 };
 use access_control::access::AccessControl;
 use access_control::management::{ MultipleAddressesManagementTrait, SingleAddressManagementTrait };
@@ -100,13 +99,7 @@ pub fn deploy_pool(
     );
 
     add_tokens_set(e, tokens);
-    add_pool(
-        e,
-        tokens_salt,
-        subpool_salt.clone(),
-        PoolType::ConstantProduct,
-        pool_contract_id.clone()
-    );
+    add_pool(e, tokens_salt, subpool_salt.clone(), pool_contract_id.clone());
 
     Events::new(e).add_pool(
         tokens.clone(),

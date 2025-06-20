@@ -2,9 +2,6 @@ use soroban_sdk::{ Address, BytesN, Env, Map, String, Symbol, Val, Vec, U256 };
 use utils::state::pool::{ PoolInfo, PoolTier };
 
 pub trait PoolInterfaceTrait {
-    // Get symbolic explanation of pool type.
-    fn pool_type(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Symbol;
-
     // Get dictionary of basic pool information: type, fee, special parameters if any.
     fn get_info(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Map<Symbol, Val>;
 

@@ -75,7 +75,7 @@ use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
 use utils::constant::{ MAX_POOL_FEE };
-use utils::state::pool::{PoolInfo, PoolTier};
+use utils::state::pool::{ PoolInfo, PoolTier };
 use utils::token::{ transfer_token, transfer_token_from };
 
 #[contract]
@@ -84,23 +84,6 @@ pub struct PoolRouter;
 // The `PoolInterfaceTrait` trait provides the interface for interacting with a liquidity pool.
 #[contractimpl]
 impl PoolInterfaceTrait for PoolRouter {
-    // Returns the type of the pool.
-    //
-    // # Arguments
-    //
-    // * `e` - The environment.
-    // * `tokens` - A vector of token addresses.
-    // * `pool_index` - The pool index hash.
-    //
-    // # Returns
-    //
-    // The type of the pool as a Symbol.
-    fn pool_type(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Symbol {
-        assert_tokens_sorted(&e, &tokens);
-        let pool_id = get_pool(&e, &tokens, pool_index);
-        e.invoke_contract(&pool_id, &Symbol::new(&e, "pool_type"), Vec::new(&e))
-    }
-
     // Returns information about the pool.
     //
     // # Arguments

@@ -24,19 +24,8 @@ use utils::{
 };
 
 #[contracttype]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[repr(u32)]
-pub enum PoolType {
-    MissingPool = 0,
-    ConstantProduct = 1,
-    // StableSwap = 2,
-    Custom = 3,
-}
-
-#[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PoolData {
-    pub pool_type: PoolType,
     pub address: Address,
 }
 
@@ -225,16 +214,9 @@ pub fn get_pool(e: &Env, tokens: &Vec<Address>, pool_index: BytesN<32>) -> Addre
     }
 }
 
-pub fn add_pool(
-    e: &Env,
-    salt: BytesN<32>,
-    pool_index: BytesN<32>,
-    pool_type: PoolType,
-    pool_address: Address
-) {
+pub fn add_pool(e: &Env, salt: BytesN<32>, pool_index: BytesN<32>, pool_address: Address) {
     let mut pools = get_pools(e, salt.clone());
     pools.set(pool_index, PoolData {
-        pool_type,
         address: pool_address.clone(),
     });
 
