@@ -16,16 +16,17 @@ use utils::{
 enum DataKey {
     ReserveA, // total token_a amount in the pool (x in the constant product formula)
     ReserveB, // total token_b amount in the pool (y in the constant product formula)
-
     Pool, // struct containing infrequently updated pool data
     Plane, // the address of the pool plane.
     Router, // the Pool Router contract address
-
-    Volume24h, // estimated total of volume in market
+    LastOracleValid, // tracks whether the oracle was considered valid at the last pool update
     LastTradeTs, // the blockchain unix timestamp at the time of the last trade
     LastUpdateTs, // the last blockchain slot the amm was updated
-    LastOracleValid, // tracks whether the oracle was considered valid at the last AMM update
 
+    // metrics
+    Volume30d, // estimated total of volume in market
+
+    // paused ops
     IsKilledSwap,
     IsKilledDeposit,
     IsKilledWithdraw,
@@ -38,7 +39,7 @@ generate_instance_storage_getter_and_setter_with_default!(reserve_a, DataKey::Re
 generate_instance_storage_getter_and_setter_with_default!(reserve_b, DataKey::ReserveB, u128, 0);
 generate_instance_storage_getter_and_setter!(plane, DataKey::Plane, Address);
 generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
-generate_instance_storage_getter_and_setter_with_default!(volume_24h, DataKey::Volume24h, u128, 0);
+generate_instance_storage_getter_and_setter_with_default!(volume_30d, DataKey::Volume30d, u128, 0);
 generate_instance_storage_getter_and_setter_with_default!(
     last_trade_ts,
     DataKey::LastTradeTs,

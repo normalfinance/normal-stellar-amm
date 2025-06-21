@@ -10,7 +10,7 @@ use crate::pool::{
     get_net_liquidity_imbalance,
     get_oracle_price,
     rebalance,
-    update_volume_24h,
+    update_volume_30d,
 };
 use crate::interface::{
     AdminInterfaceTrait,
@@ -98,6 +98,7 @@ use utils::constant::{
     INSURANCE_SPECULATIVE_MAX,
 };
 use utils::math::safe_math::SafeMath;
+use utils::state::oracle_registry::NormalAction;
 use utils::state::pool::InsuranceClaim;
 use utils::state::{
     pool::{
@@ -254,16 +255,35 @@ impl PoolTrait for Pool {
     // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
-    // Deposits tokens into the pool.
+    // Handles a deposit of Token B into the liquidity pool and mints LP tokens to the user.
+    //
+    // This function performs the following:
+    // - Validates that deposits are allowed and the user has authorized the action.
+    // - Transfers Token B from the user to the pool contract.
+    // - Updates the pool's reserves and rebalances the pool using oracle prices.
+    // - Mints new LP tokens proportional to the deposit amount.
+    // - Updates the user's reward tracking through the incentives manager.
+    // - Emits a `deposit_liquidity` event with the deposit details.
     //
     // # Arguments
-    //
-    // * `user` - The address of the user depositing the tokens.
-    // * `token_b_amount` - A desired amount of token B to deposit.
+    // * `e` - Soroban environment reference.
+    // * `user` - The address of the user making the deposit.
+    // * `token_b_amount` - The amount of Token B the user is depositing.
     //
     // # Returns
+    // A tuple `(token_b_amount, shares_to_mint)`:
+    // - `token_b_amount` — the actual amount deposited
+    // - `shares_to_mint` — the amount of LP tokens minted for the user
     //
-    // A tuple containing a vector of actual amounts of each token deposited and a u128 representing the amount of pool tokens minted.
+    // # Panics
+    // - If deposits are currently disabled (`PoolDepositKilled`).
+    // - If the user tries to initialize the pool without providing both tokens (`AllCoinsRequired`).
+    // - If the user fails to authorize the transaction.
+    //
+    // # Side Effects
+    // - Transfers Token B to the pool.
+    // - Mints LP tokens to the user.
+    // - Updates reserves, oracle-based pricing, reward checkpoints, and emits an event.
     fn deposit(e: Env, user: Address, token_b_amount: u128) -> (u128, u128) {
         // Depositor needs to authorize the deposit
         user.require_auth();
@@ -300,8 +320,18 @@ impl PoolTrait for Pool {
         set_reserve_b(&e, &(reserve_b + token_b_amount));
 
         // Rebalance the pool
-        let base_oracle_price_data = get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
-        let quote_oracle_price_data = get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
+        let base_oracle_price_data = get_oracle_price(
+            &e,
+            &pool.base_asset_id,
+            false,
+            NormalAction::AddLiquidity
+        );
+        let quote_oracle_price_data = get_oracle_price(
+            &e,
+            &pool.quote_asset_id,
+            false,
+            NormalAction::AddLiquidity
+        );
 
         rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
 
@@ -332,19 +362,39 @@ impl PoolTrait for Pool {
         (token_b_amount, shares_to_mint)
     }
 
-    // Swaps tokens in the pool.
+    // Swaps tokens in the pool by transferring an input token from the user and returning an output token,
+    // ensuring pool invariants, oracle validity, and slippage constraints are upheld.
+    //
+    // This function performs:
+    // - Authorization and safety checks (e.g., pool not killed, valid token indices, non-zero amounts).
+    // - Oracle-based rebalancing before and after the swap.
+    // - Fee-aware invariant enforcement using residue accounting.
+    // - Slippage protection by enforcing `out_min`.
+    // - State updates for reserves and volume tracking.
+    // - Emits a `trade` event for indexing.
     //
     // # Arguments
-    //
-    // * `user` - The address of the user swapping the tokens.
-    // * `in_idx` - The index of the input token to be swapped.
-    // * `out_idx` - The index of the output token to be received.
-    // * `in_amount` - The amount of the input token to be swapped.
-    // * `out_min` - The minimum amount of the output token to be received.
+    // * `e` - Soroban environment reference.
+    // * `user` - Address of the user initiating the swap.
+    // * `in_idx` - Index of the input token (0 or 1).
+    // * `out_idx` - Index of the output token (0 or 1, must differ from `in_idx`).
+    // * `in_amount` - Amount of the input token being sold.
+    // * `out_min` - Minimum acceptable amount of output token (slippage guard).
     //
     // # Returns
+    // * `u128` — The amount of the output token received by the user.
     //
-    // The amount of the output token received.
+    // # Panics
+    // - If swaps are disabled (`PoolSwapKilled`)
+    // - If input and output indices are the same or out of bounds
+    // - If reserves are empty
+    // - If the resulting output amount is below `out_min`
+    // - If the invariant does not hold post-swap
+    //
+    // # Side Effects
+    // - Transfers `in_amount` from the user and sends `out` to them.
+    // - Updates reserves, oracle TWAPs, and volume.
+    // - Emits a trade event and updates on-chain plane data.
     fn swap(
         e: Env,
         user: Address,
@@ -379,8 +429,18 @@ impl PoolTrait for Pool {
         let now = e.ledger().timestamp();
         let pool = get_pool(&e);
 
-        let base_oracle_price_data = get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
-        let quote_oracle_price_data = get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
+        let base_oracle_price_data = get_oracle_price(
+            &e,
+            &pool.base_asset_id,
+            false,
+            NormalAction::Swap
+        );
+        let quote_oracle_price_data = get_oracle_price(
+            &e,
+            &pool.quote_asset_id,
+            false,
+            NormalAction::Swap
+        );
 
         rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
 
@@ -450,11 +510,11 @@ impl PoolTrait for Pool {
         if out_idx == 0 {
             transfer_a(&e, &user, out_a);
             set_reserve_a(&e, &(reserve_a - out));
-            update_volume_24h(&e, in_amount, now);
+            update_volume_30d(&e, in_amount, now);
         } else {
             transfer_b(&e, &user, out_b);
             set_reserve_b(&e, &(reserve_b - out));
-            update_volume_24h(&e, out_b, now);
+            update_volume_30d(&e, out_b, now);
         }
 
         // After swapping, rebalance the pool
@@ -510,8 +570,18 @@ impl PoolTrait for Pool {
         let out = pool.get_amount_out(&e, in_amount, reserve_sell, reserve_buy).0;
 
         let now = e.ledger().timestamp();
-        let base_oracle_price_data = get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
-        let quote_oracle_price_data = get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
+        let base_oracle_price_data = get_oracle_price(
+            &e,
+            &pool.base_asset_id,
+            true,
+            NormalAction::Swap
+        );
+        let quote_oracle_price_data = get_oracle_price(
+            &e,
+            &pool.quote_asset_id,
+            true,
+            NormalAction::Swap
+        );
         let delta_a = get_delta_a(&e, base_oracle_price_data.price, quote_oracle_price_data.price);
 
         (out, delta_a)
@@ -565,8 +635,18 @@ impl PoolTrait for Pool {
         let now = e.ledger().timestamp();
         let pool = get_pool(&e);
 
-        let base_oracle_price_data = get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
-        let quote_oracle_price_data = get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
+        let base_oracle_price_data = get_oracle_price(
+            &e,
+            &pool.base_asset_id,
+            false,
+            NormalAction::Swap
+        );
+        let quote_oracle_price_data = get_oracle_price(
+            &e,
+            &pool.quote_asset_id,
+            false,
+            NormalAction::Swap
+        );
 
         rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
 
@@ -716,24 +796,53 @@ impl PoolTrait for Pool {
             pool.fee_fraction
         ).0;
 
-        let now = e.ledger().timestamp();
-        let base_oracle_price_data = get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
-        let quote_oracle_price_data = get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
+        let base_oracle_price_data = get_oracle_price(
+            &e,
+            &pool.base_asset_id,
+            true,
+            NormalAction::Swap
+        );
+        let quote_oracle_price_data = get_oracle_price(
+            &e,
+            &pool.quote_asset_id,
+            true,
+            NormalAction::Swap
+        );
         let delta_a = get_delta_a(&e, base_oracle_price_data.price, quote_oracle_price_data.price);
 
         (out, delta_a)
     }
 
-    // Withdraws tokens from the pool.
+    // Withdraws liquidity from the pool by burning the user's LP tokens and transferring back Token B,
+    // while updating rewards, rebalancing the pool, and maintaining invariant and accounting consistency.
+    //
+    // This function performs:
+    // - Authorization and validation checks (e.g., withdrawals enabled).
+    // - Burns LP tokens from the user based on the provided `share_amount`.
+    // - Transfers the corresponding amount of Token B back to the user.
+    // - Rebalances the pool using current oracle prices for base and quote assets.
+    // - Updates the incentive/reward checkpoint and internal state.
+    // - Emits a `withdraw_liquidity` event for tracking.
     //
     // # Arguments
-    //
-    // * `user` - The address of the user withdrawing the tokens.
-    // * `share_amount` - The amount of pool tokens to burn.
+    // * `e` - Soroban environment reference.
+    // * `user` - The address of the user requesting a withdrawal.
+    // * `share_amount` - The number of LP tokens to burn and withdraw.
     //
     // # Returns
+    // * `u128` — The amount of Token B transferred back to the user (equal to `share_amount`).
     //
-    // A vector of actual amounts of each token withdrawn.
+    // # Panics
+    // - If withdrawals are disabled (`PoolWithdrawKilled`)
+    // - If the user is not authorized
+    // - If the reserves are insufficient to fulfill the withdrawal
+    //
+    // # Side Effects
+    // - Burns LP tokens from the user.
+    // - Transfers Token B from the pool to the user.
+    // - Rebalances the pool using oracle data.
+    // - Updates incentive tracking and on-chain accounting.
+    // - Emits a liquidity withdrawal event.
     fn withdraw(e: Env, user: Address, share_amount: u128) -> u128 {
         user.require_auth();
 
@@ -760,8 +869,18 @@ impl PoolTrait for Pool {
         // Rebalance the pool
         let pool = get_pool(&e);
 
-        let base_oracle_price_data = get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
-        let quote_oracle_price_data = get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
+        let base_oracle_price_data = get_oracle_price(
+            &e,
+            &pool.base_asset_id,
+            false,
+            NormalAction::RemoveLiquidity
+        );
+        let quote_oracle_price_data = get_oracle_price(
+            &e,
+            &pool.quote_asset_id,
+            false,
+            NormalAction::RemoveLiquidity
+        );
 
         rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
 
@@ -791,7 +910,6 @@ impl PoolTrait for Pool {
         get_token_lp(&e)
     }
 
-    // Returns the total shares of the pool.
     fn get_total_shares(e: Env) -> u128 {
         get_total_lp_tokens(&e)
     }
@@ -834,11 +952,6 @@ impl PoolTrait for Pool {
         pool.insurance_claim.quote_max_insurance
     }
 
-    // Returns information about the pool.
-    //
-    // # Returns
-    //
-    // A map of Symbols to Vals representing the pool's information.
     fn get_info(e: Env) -> PoolInfo {
         let pool = get_pool(&e);
         let pool_response = PoolResponse {
@@ -874,21 +987,44 @@ impl AdminInterfaceTrait for Pool {
     // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
+    // .
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
     fn rebalance(e: Env, admin: Address) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.assert_address_has_role(&admin, &Role::Admin);
+        require_operations_admin_or_owner(&e, &admin);
 
         let now = e.ledger().timestamp();
         let pool = get_pool(&e);
 
-        let base_oracle_price_data = get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
-        let quote_oracle_price_data = get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
+        let base_oracle_price_data = get_oracle_price(
+            &e,
+            &pool.base_asset_id,
+            false,
+            NormalAction::Rebalance
+        );
+        let quote_oracle_price_data = get_oracle_price(
+            &e,
+            &pool.quote_asset_id,
+            false,
+            NormalAction::Rebalance
+        );
 
         rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
     }
-    
+
+    // Withdraws surplus reservess.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `token` - The address of the token in reserve to withdraw.
+    // * `amount` - The amount to withdraw.
     fn pay_insurance_claim(e: Env, sender: Address, insurance_vault_amount: u128) -> u128 {
+        // TODO: should this function be limited to the Buffer and Insurance Fund?
+
         // check pool has liquidity deficit
 
         let now = e.ledger().timestamp();
@@ -897,14 +1033,20 @@ impl AdminInterfaceTrait for Pool {
         // "Pool is in settlement mode"
         validate!(&e, !pool.is_in_settlement(now), PoolError::PoolActionPaused);
 
-        let base_oracle_price_data = get_oracle_price(e.clone(), pool.base_asset_id.clone(), now);
-        let quote_oracle_price_data = get_oracle_price(e.clone(), pool.quote_asset_id.clone(), now);
-
-        // controller::orders::validate_market_within_price_band(perp_market, state, oracle_price);
+        let base_oracle_price_data = get_oracle_price(
+            &e,
+            &pool.base_asset_id,
+            false,
+            NormalAction::ClaimInsurance
+        );
+        let quote_oracle_price_data = get_oracle_price(
+            &e,
+            &pool.quote_asset_id,
+            false,
+            NormalAction::ClaimInsurance
+        );
 
         // TODO: validate pool balances?
-
-        // update_twap()
 
         let excess_liquidity_imbalance = if pool.liquidity_max_imbalance > 0 {
             let net_liquidity_imbalance = get_net_liquidity_imbalance(
@@ -955,8 +1097,6 @@ impl AdminInterfaceTrait for Pool {
         );
 
         pool.insurance_claim.last_revenue_withdraw_ts = now;
-
-        // DO IT
 
         // Deposit token_b from Insurance Fund to Pool
         transfer_token(
@@ -1066,6 +1206,22 @@ impl AdminInterfaceTrait for Pool {
 
         pool.liquidity_max_imbalance = liquidity_max_imbalance;
         pool.insurance_claim.quote_max_insurance = quote_max_insurance;
+
+        set_pool(&e, &pool);
+    }
+
+      fn set_expiry(e: Env, admin: Address, expiry_ts: u64) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+
+        let now = e.ledger().timestamp();
+        validate!(&e, now < expiry_ts, PoolError::DefaultError);
+
+        let mut pool = get_pool(&e);
+
+        // automatically enter reduce only
+        pool.status = PoolStatus::ReduceOnly;
+        pool.expiry_ts = expiry_ts;
 
         set_pool(&e, &pool);
     }

@@ -1,6 +1,5 @@
 use core::cmp::max;
 
-use crate::errors::PoolError;
 use crate::errors::PoolValidationError;
 use crate::events::Events as LiquidityPoolEvents;
 use crate::events::PoolEvents;
@@ -8,14 +7,13 @@ use crate::storage::get_last_oracle_valid;
 use crate::storage::get_last_trade_ts;
 use crate::storage::get_last_update_ts;
 use crate::storage::get_router;
-use crate::storage::get_volume_24h;
+use crate::storage::get_volume_30d;
 use crate::storage::set_last_trade_ts;
-use crate::storage::set_volume_24h;
+use crate::storage::set_volume_30d;
 use crate::storage::{ get_reserve_a, get_reserve_b, set_reserve_a };
 use pool_tokens::{ burn_synthetic_tokens, get_total_synthetic_tokens, mint_synthetic_tokens };
 use soroban_fixed_point_math::SorobanFixedPoint;
-use soroban_sdk::contracttype;
-use soroban_sdk::Address;
+
 use soroban_sdk::IntoVal;
 use soroban_sdk::Symbol;
 use soroban_sdk::Vec;
@@ -26,29 +24,27 @@ use utils::constant::TWENTY_FOUR_HOUR;
 use utils::constant::{ FEE_MULTIPLIER, PRICE_PRECISION };
 use utils::math::safe_math::SafeMath;
 use utils::math::stats::calculate_rolling_sum;
+use utils::state::oracle_registry::NormalAction;
 use utils::state::oracle_registry::OraclePriceData;
-use utils::state::pool::Pool;
-use utils::token::get_token_balance;
-use utils::validate;
 
-// Gets the current pool liquidity imbalance.
+// Calculates the net liquidity imbalance between base and quote assets in the pool.
+//
+// Computes the value of synthetic base tokens using the base oracle price, and compares it to
+// the value of reserve Token B using the quote oracle price. A positive result means excess
+// quote-side liquidity; negative means excess synthetic base.
 //
 // # Arguments
-//
-// * base_oracle_price - Price of the base token.
-// * quote_oracle_price - Price of the quote token.
+// * `e` - Soroban environment reference.
+// * `base_oracle_price` - Oracle price of the base (synthetic) asset.
+// * `quote_oracle_price` - Oracle price of the quote asset (Token B).
 //
 // # Returns
-//
-// The liquidity imbalance of the pool as an i128.
+// * `i128` — The imbalance: `quote_value - base_value`. Positive means excess quote asset.
 pub fn get_net_liquidity_imbalance(
     e: &Env,
     base_oracle_price: u128,
     quote_oracle_price: u128
 ) -> i128 {
-    validate!(e, base_oracle_price > 0, PoolError::InvalidOracle);
-    validate!(e, quote_oracle_price > 0, PoolError::InvalidOracle);
-
     let base_token_supply = get_total_synthetic_tokens(&e);
     let reserve_b = get_reserve_b(e);
 
@@ -63,19 +59,50 @@ pub fn get_net_liquidity_imbalance(
     net_quote_asset_value.safe_sub(e, net_base_asset_value)
 }
 
-pub fn get_oracle_price(e: Env, asset_id: Symbol, now: u64) -> OraclePriceData {
+// Invokes the external oracle router contract to fetch the current price for a given asset.
+//
+// This performs a cross-contract call to the `get_price` method on the oracle router,
+// passing the calling contract, asset ID, caching preference, and action context.
+//
+// # Arguments
+// * `e` - Soroban environment reference.
+// * `asset_id` - Symbol representing the asset to price.
+// * `cached` - Whether to use cached data from the oracle.
+// * `action` - The context in which the price is being fetched (e.g. Swap, Rebalance).
+//
+// # Returns
+// * `OraclePriceData` — The current oracle price and delay since publication.
+pub fn get_oracle_price(
+    e: &Env,
+    asset_id: &Symbol,
+    cached: bool,
+    action: NormalAction
+) -> OraclePriceData {
     let oracle_price_data: OraclePriceData = e.invoke_contract(
-        &get_router(&e),
-        &Symbol::new(&e, "get_price"),
-        Vec::from_array(&e, [
+        &get_router(e),
+        &Symbol::new(e, "get_price"),
+        Vec::from_array(e, [
             e.current_contract_address().to_val(),
             asset_id.to_val(),
-            now.into_val(&e),
+            cached.into_val(e),
+            action.to_val(),
         ])
     );
     oracle_price_data
 }
 
+// Calculates the peg price between the base and quote assets based on oracle prices.
+//
+// Returns `quote / base` to represent the current price ratio. If either price is zero,
+// returns 0 to indicate an invalid state.
+//
+// # Arguments
+// * `e` - Soroban environment reference.
+// * `base_oracle_price` - Oracle price of the base asset.
+// * `quote_oracle_price` - Oracle price of the quote asset.
+//
+// # Returns
+// * `u128` — The derived peg price (scaled by `PRICE_PRECISION`), or 0 if invalid.
 pub fn peg_price(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -> u128 {
     if base_oracle_price == 0 || quote_oracle_price == 0 {
         return 0;
@@ -84,23 +111,53 @@ pub fn peg_price(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -> 
     quote_oracle_price.fixed_div_floor(e, &base_oracle_price, &PRICE_PRECISION)
 }
 
-pub fn update_volume_24h(e: &Env, quote_asset_amount: u128, now: u64) {
+// Updates the 30 day trading volume metric for the pool using a rolling average.
+//
+// Uses the time since the last trade and the current quote asset volume to update
+// the 30 day volume accumulator. Also updates the last trade timestamp.
+//
+// # Arguments
+// * `e` - Soroban environment reference.
+// * `quote_asset_amount` - Amount of quote asset involved in the trade.
+// * `now` - Current ledger timestamp.
+pub fn update_volume_30d(e: &Env, quote_asset_amount: u128, now: u64) {
     let since_last = max(1_u64, now.safe_sub(e, get_last_trade_ts(e)));
-
-    let volume_24h = get_volume_24h(e);
-
-    set_volume_24h(
+    let volume_30d = get_volume_30d(e);
+    set_volume_30d(
         e,
-        &calculate_rolling_sum(e, volume_24h, quote_asset_amount, since_last, TWENTY_FOUR_HOUR)
+        &calculate_rolling_sum(e, volume_30d, quote_asset_amount, since_last, TWENTY_FOUR_HOUR)
     );
-
     set_last_trade_ts(e, &now);
 }
 
+// Checks whether the most recent oracle update is still valid for use.
+//
+// Compares the current timestamp to the last update timestamp and returns `true`
+// only if they match and the last oracle update was marked valid.
+//
+// # Arguments
+// * `e` - Soroban environment reference.
+// * `current_ts` - The current ledger timestamp.
+//
+// # Returns
+// * `bool` — `true` if the oracle data is recent and marked valid.
 pub fn is_recent_oracle_valid(e: &Env, current_ts: u64) -> bool {
     get_last_oracle_valid(e) && current_ts == get_last_update_ts(e)
 }
 
+// Computes the delta needed to re-peg reserve A (synthetic base token) to match the target peg price.
+//
+// Uses current reserves and oracle prices to calculate the ideal reserve A value,
+// then subtracts the actual reserve A to determine how much must be minted or burned.
+//
+// # Arguments
+// * `e` - Soroban environment reference.
+// * `base_oracle_price` - Oracle price of the base asset.
+// * `quote_oracle_price` - Oracle price of the quote asset.
+//
+// # Returns
+// * `i128` — The difference: `target_reserve_a - actual_reserve_a`.
+// Positive means mint, negative means burn.
 pub fn get_delta_a(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -> i128 {
     let (reserve_a, reserve_b) = (get_reserve_a(e), get_reserve_b(e));
 
@@ -111,11 +168,16 @@ pub fn get_delta_a(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -
     delta_a
 }
 
-// Mints or burns token_a to re-peg the pool's price to it's oracle price.
+// Mints or burns synthetic tokens (reserve A) to restore the peg between base and quote assets.
+//
+// Uses oracle prices to calculate the required change in synthetic token supply to match
+// the peg. Adjusts the pool's reserve A accordingly and emits a rebalance event.
 //
 // # Arguments
-//
-// * `now` - The current timestamp.
+// * `e` - Soroban environment reference.
+// * `base_oracle_price` - Oracle price of the synthetic base asset.
+// * `quote_oracle_price` - Oracle price of the quote asset.
+// * `now` - Current ledger timestamp used in the emitted event.
 pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128, now: u64) {
     let reserve_a = get_reserve_a(&e);
 
@@ -134,6 +196,26 @@ pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128, now
     LiquidityPoolEvents::new(&e).rebalance(delta_a, now);
 }
 
+// Calculates the input amount required to receive a fixed output amount in a swap,
+// factoring in the trading fee.
+//
+// This is used in strict-receive swaps where the output is guaranteed and the input
+// is determined. If the total value with fee exceeds the reserve, the function panics.
+//
+// # Arguments
+// * `e` - Soroban environment reference.
+// * `out_amount` - Desired amount of output token to receive.
+// * `reserve_sell` - Reserve of the token being sold.
+// * `reserve_buy` - Reserve of the token being bought.
+// * `fee_fraction` - Trading fee as a fraction (e.g., 30 = 0.3%).
+//
+// # Returns
+// * `(u128, u128)` — Tuple:
+//   - Input amount required to receive `out_amount`
+//   - Fee charged as the difference between input and output value.
+//
+// # Panics
+// - If the fee-adjusted input exceeds available reserves.
 pub fn get_amount_out_strict_receive(
     e: &Env,
     out_amount: u128,

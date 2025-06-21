@@ -29,7 +29,7 @@ use access_control::utils::{ require_admin };
 use soroban_sdk::{
     contract,
     contractimpl,
-    log,
+    contractmeta,
     panic_with_error,
     Address,
     BytesN,
@@ -43,6 +43,11 @@ use upgrade::interface::UpgradeableContract;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
 use utils::math::safe_math::SafeMath;
 use utils::token::{ transfer_token, validate_token_contract };
+
+contractmeta!(
+    key = "Description",
+    val = "Senior tranche (first payout) backstop fund to cover pool liquidity deficits using protocol revenue"
+);
 
 #[contract]
 pub struct Buffer;
@@ -78,26 +83,51 @@ impl BufferTrait for Buffer {
     // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
+    // Deposit tokens into the Buffer Reserve.
+    //
+    // # Arguments
+    //
+    // * `sender` - The address of the sender.
+    // * `token` - The address of the token to deposit.
+    // * `amount` - The amount of the token to deposit.
     fn deposit(e: Env, sender: Address, token: Address, amount: u128) {
         sender.require_auth();
 
+        /* @Halborn
+        Currently, anyone can deposit into the Buffer. The only structured deposits
+        are from `PoolSwapFee.swap()` when the buffer fraction is removed from the 
+        total fee amount.
+        
+        If a user deposits into the Buffer and later wishes to remove their funds,
+        there is no direct function to do this other than `skim()`. However, timing
+        would be of essence.
+        
+        The Insurance Fund is specifically designed to raise funds from users, whereas
+        the Buffer is for protocol revenue deposits only. 
+        
+        [ ] Would it be reasonable to restrict this function to the PoolSwapFee only?
+        [ ] Are `sync()` and `skim()` necessary functions?
+          */
+
+        // Ensure deposits are active
         if get_is_killed_deposit(&e) {
             panic_with_error!(e, BufferError::BufferDepositKilled);
         }
 
+        // Validations
         validate_token_contract(&e, &token);
 
-        // Ensure the deposit doesn't exceed the reserve max balance
+        // Ensure the deposit does not force the Reserve to exceed its maximum balance
         let reserve = get_reserve(&e, &token);
         if reserve.max_balance > 0 && reserve.balance + amount > reserve.max_balance {
             panic_with_error!(&e, BufferError::ReserveMaxBalanceThreshold);
         }
 
-        // Update the Buffer reserve
+        // Update the Reserve
         let now = e.ledger().timestamp();
         put_reserve(&e, &token, &reserve.deposit(&e, amount, now));
 
-        // Transfer tokens to the Buffer
+        // Transfer the tokens from the sender to the Buffer
         transfer_token(&e, &token, &sender, &e.current_contract_address(), &(amount as i128));
 
         Events::new(&e).deposit(token, sender, amount);
@@ -168,6 +198,111 @@ impl BufferTrait for Buffer {
 // The `AdminInterface` trait provides the interface for administrative actions.
 #[contractimpl]
 impl AdminInterface for Buffer {
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
+
+    // Use a Buffer Reserve to cover a Pool liquidity deficit
+    // (the value of `reserve_b` is lower than the value of all `token_a` in circulation).
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `token` - The address of the token in reserve to withdraw.
+    // * `amount` - The amount to withdraw.
+    // * `pool_address` - The address of the Pool with liquidity deficit.
+    fn resolve_liquidity_deficit(
+        e: Env,
+        admin: Address,
+        token: Address,
+        amount: u128,
+        pool_address: Address
+    ) -> u128 {
+        admin.require_auth();
+        /* Currently, only the Buffer admin may resolve deficits, however, our goal 
+        is to either: a) automate within `Pool.swap()` itself; or b) decentralize via the Normal DAO */
+        require_admin(&e, &admin);
+
+        if get_is_killed_resolve_liquidity_deficit(&e) {
+            panic_with_error!(e, BufferError::BufferRequestPayoutKilled);
+        }
+
+        validate_token_contract(&e, &token);
+
+        // TODO: validate pool_address - probably by checking against `PoolRouter.pools_vec`
+
+        // Enforce the minimum time between payouts
+        let now = e.ledger().timestamp();
+        let last_payout_ts = get_last_payout_timestamp(&e);
+        let min_time_bt_payouts = get_min_time_between_payouts(&e);
+        if now - last_payout_ts <= min_time_bt_payouts {
+            panic_with_error!(&e, BufferError::PayoutTooSoon);
+        }
+
+        // Ensure the Buffer Reserve has a sufficient balance
+        let reserve = get_reserve(&e, &token);
+        if amount > reserve.balance {
+            panic_with_error!(&e, BufferError::InsufficentFunds);
+        }
+
+        // Update the Buffer Reserve
+        put_reserve(&e, &token, &reserve.payout(&e, amount, now));
+        set_last_payout_timestamp(&e, &now);
+
+        // Invoke `pay_insurance_claim()` on the Pool to cover the deficit
+        let paid: u128 = e.invoke_contract(
+            &pool_address,
+            &Symbol::new(&e, "pay_insurance_claim"),
+            Vec::from_array(&e, [e.current_contract_address().to_val(), amount.into_val(&e)])
+        );
+
+        Events::new(&e).resolve_liquidity_deficit(token, admin, amount);
+
+        paid
+    }
+
+    // Withdraws surplus reserves.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `token` - The address of the token in reserve to withdraw.
+    // * `amount` - The amount to withdraw.
+    fn withdraw_surplus(e: Env, admin: Address, token: Address, amount: u128) {
+        admin.require_auth();
+        require_admin(&e, &admin);
+
+        /* Halborn
+         */
+
+        validate_token_contract(&e, &token);
+
+        // Calculate the minimum reserve that must be left in the Buffer
+        let reserve = get_reserve(&e, &token);
+        let min_reserve_ratio = get_min_reserve_ratio(&e);
+        let min_reserve = (reserve.balance * (min_reserve_ratio as u128)) / 10_000;
+        if reserve.balance - amount < min_reserve {
+            panic_with_error!(&e, BufferError::WithdrawalOverMinimumReserve);
+        }
+
+        if amount > reserve.balance {
+            panic_with_error!(&e, BufferError::InsufficentFunds);
+        }
+
+        // Update the Buffer reserve
+        let now = e.ledger().timestamp();
+        put_reserve(&e, &token, &reserve.withdraw(&e, amount, now));
+
+        // Transfer the tokens to the admin
+        transfer_token(&e, &token, &e.current_contract_address(), &admin, &(amount as i128));
+
+        Events::new(&e).withdraw_surplus(token, admin, amount);
+    }
+
     //   ________  _______  ___________  ___________  _______   _______    ________
     //  /"       )/"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
     // (:   \___/(: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
@@ -197,97 +332,6 @@ impl AdminInterface for Buffer {
         let now = e.ledger().timestamp();
         let reserve = get_reserve(&e, &token);
         put_reserve(&e, &token, &reserve.update_max_balance(max_balance, now));
-    }
-
-    //  ___      ___       __        __    _____  ___
-    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
-    //  \   \  //   |    /    \     ||  | |.\\   \    |
-    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
-    // |: \.        |  //  __'  \   |.  | |.  \    \. |
-    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
-    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
-
-    fn resolve_liquidity_deficit(
-        e: Env,
-        admin: Address,
-        token: Address,
-        amount: u128,
-        pool_address: Address
-    ) -> u128 {
-        admin.require_auth();
-        require_admin(&e, &admin);
-
-        if get_is_killed_resolve_liquidity_deficit(&e) {
-            panic_with_error!(e, BufferError::BufferRequestPayoutKilled);
-        }
-
-        validate_token_contract(&e, &token);
-
-        // TODO: validate pool_address
-
-        // Ensure time since last payout is greater than the minimum time b/t payouts
-        let now = e.ledger().timestamp();
-        let last_payout_ts = get_last_payout_timestamp(&e);
-        let min_time_bt_payouts = get_min_time_between_payouts(&e);
-        if now - last_payout_ts <= min_time_bt_payouts {
-            panic_with_error!(&e, BufferError::PayoutTooSoon);
-        }
-
-        // Ensure Buffer reserve has sufficient balance
-        let reserve = get_reserve(&e, &token);
-        if amount > reserve.balance {
-            panic_with_error!(&e, BufferError::InsufficentFunds);
-        }
-
-        // Update the Buffer reserve
-        put_reserve(&e, &token, &reserve.payout(&e, amount, now));
-        set_last_payout_timestamp(&e, &now);
-
-        // Invoke `pay_insurance_claim()` on the Pool to cover the deficit
-        let paid: u128 = e.invoke_contract(
-            &pool_address,
-            &Symbol::new(&e, "pay_insurance_claim"),
-            Vec::from_array(&e, [e.current_contract_address().to_val(), amount.into_val(&e)])
-        );
-
-        Events::new(&e).resolve_liquidity_deficit(token, admin, amount);
-
-        paid
-    }
-
-    // Withdraws surplus reservess.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `token` - The address of the token in reserve to withdraw.
-    // * `amount` - The amount to withdraw.
-    fn withdraw_surplus(e: Env, admin: Address, token: Address, amount: u128) {
-        admin.require_auth();
-        require_admin(&e, &admin);
-
-        validate_token_contract(&e, &token);
-
-        // Calculate the minimum reserve that must be left in the Buffer
-        let reserve = get_reserve(&e, &token);
-        let min_reserve_ratio = get_min_reserve_ratio(&e);
-        let min_reserve = (reserve.balance * (min_reserve_ratio as u128)) / 10_000;
-        if reserve.balance - amount < min_reserve {
-            panic_with_error!(&e, BufferError::WithdrawalOverMinimumReserve);
-        }
-
-        if amount > reserve.balance {
-            panic_with_error!(&e, BufferError::InsufficentFunds);
-        }
-
-        // Update the Buffer reserve
-        let now = e.ledger().timestamp();
-        put_reserve(&e, &token, &reserve.withdraw(&e, amount, now));
-
-        // Transfer the tokens to the admin
-        transfer_token(&e, &token, &e.current_contract_address(), &admin, &(amount as i128));
-
-        Events::new(&e).withdraw_surplus(token, admin, amount);
     }
 
     //    _______     __       ____  ____   ________  _______  ________

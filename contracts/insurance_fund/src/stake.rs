@@ -87,6 +87,28 @@ pub fn save_stake(e: &Env, key: &Address, stake_info: &Stake) {
     bump_persistent(e, &key);
 }
 
+// Applies a rebase to the insurance fund share system to align the total shares
+// with the current insurance vault balance.
+//
+// This function adjusts the total share count and share base exponent if the
+// vault amount has changed, simulating a rebase event. If the insurance vault
+// value is non-zero and less than the total outstanding shares, a rebase is
+// applied to proportionally reduce the total shares. The rebase is computed
+// using exponent and divisor logic via `calculate_rebase_info`.
+//
+// If the vault is non-zero and there are currently zero shares, it initializes
+// the total shares to the vault amount.
+//
+// # Arguments
+// * `e` - The Soroban environment reference.
+// * `insurance_vault_amount` - The current balance of the insurance fund vault.
+//
+// # Behavior
+// - If `insurance_vault_amount < total_shares`, applies a downward rebase.
+// - If `total_shares == 0`, initializes `total_shares` to `insurance_vault_amount`.
+//
+// # Side Effects
+// - Updates `total_shares` and `shares_base` in contract storage.
 pub fn apply_rebase_to_insurance_fund(e: &Env, insurance_vault_amount: u128) {
     let total_shares = get_total_shares(e);
     let shares_base = get_shares_base(e);
@@ -107,6 +129,23 @@ pub fn apply_rebase_to_insurance_fund(e: &Env, insurance_vault_amount: u128) {
     }
 }
 
+// Applies a rebase to an individual stake's insurance fund shares to align with the global share base.
+//
+// This updates a staker’s `if_shares` and `last_withdraw_request_shares` based on the change
+// in `shares_base`. If the base has increased (a rebase has occurred), the staker's shares
+// are scaled down accordingly.
+//
+// # Arguments
+// * `e` - Soroban environment reference.
+// * `stake` - Mutable reference to the user's stake data.
+//
+// # Behavior
+// - Ensures the new base is greater than the previous (`shares_base > stake.if_base`).
+// - Reduces shares by a factor of `10^expo_diff`.
+// - Updates the stake's `if_base` and both share values.
+//
+// # Side Effects
+// - Mutates the `stake` struct in-place.
 pub fn apply_rebase_to_stake(e: &Env, stake: &mut Stake) {
     let shares_base = get_shares_base(e);
 
@@ -132,6 +171,23 @@ pub fn apply_rebase_to_stake(e: &Env, stake: &mut Stake) {
     }
 }
 
+// Converts an insurance vault amount to the equivalent number of insurance fund shares.
+//
+// Used when a user deposits into the insurance fund and receives shares based on the
+// current proportion of total vault value and existing shares.
+//
+// # Arguments
+// * `e` - Soroban environment reference.
+// * `amount` - Vault amount to convert.
+// * `total_if_shares` - Total outstanding insurance fund shares.
+// * `insurance_vault_amount` - Total assets in the insurance vault.
+//
+// # Returns
+// - The number of shares that correspond to the input amount.
+//
+// # Validation
+// - If `insurance_vault_amount == 0`, then `total_if_shares` must also be zero.
+// - Falls back to 1:1 minting when vault is empty.
 pub fn vault_amount_to_if_shares(
     e: &Env,
     amount: u128,
@@ -152,6 +208,22 @@ pub fn vault_amount_to_if_shares(
     n_shares
 }
 
+// Converts a number of insurance fund shares into their equivalent vault value.
+//
+// Used when a user wants to redeem or withdraw from the insurance fund.
+//
+// # Arguments
+// * `e` - Soroban environment reference.
+// * `n_shares` - Number of insurance fund shares to convert.
+// * `total_if_shares` - Total outstanding insurance fund shares.
+// * `insurance_vault_amount` - Total assets in the insurance vault.
+//
+// # Returns
+// - The proportional vault amount corresponding to the shares.
+//
+// # Validation
+// - Ensures `n_shares <= total_if_shares`.
+// - Returns `0` if total shares are zero (vault is empty).
 pub fn if_shares_to_vault_amount(
     e: &Env,
     n_shares: u128,
@@ -169,6 +241,21 @@ pub fn if_shares_to_vault_amount(
     amount
 }
 
+// Calculates the exponent difference and divisor needed to rebase insurance fund shares.
+//
+// This determines how much to scale down total shares so that they match the
+// current vault value when over-issuance has occurred. Uses logarithmic rounding
+// to produce a power-of-ten scaling factor.
+//
+// # Arguments
+// * `e` - Soroban environment reference.
+// * `total_if_shares` - Total outstanding insurance fund shares.
+// * `insurance_vault_amount` - Total assets in the insurance vault.
+//
+// # Returns
+// - A tuple of:
+//   * `expo_diff` — the exponent used to calculate the rebase divisor (as base 10).
+//   * `rebase_divisor` — the divisor to apply to all shares (10^expo_diff).
 pub fn calculate_rebase_info(
     e: &Env,
     total_if_shares: u128,
@@ -182,6 +269,25 @@ pub fn calculate_rebase_info(
     (expo_diff, rebase_divisor)
 }
 
+// Calculates the number of insurance fund shares a staker would lose due to value drop between request and withdrawal.
+//
+// This is used to adjust a staker's shares if the vault value has dropped since their
+// last withdrawal request, accounting for losses in available collateral.
+//
+// # Arguments
+// * `e` - Soroban environment reference.
+// * `stake` - The staker's data, including previous withdrawal request info.
+// * `insurance_vault_amount` - Current total assets in the insurance vault.
+//
+// # Returns
+// - The number of shares to be subtracted from the user's withdrawal due to losses.
+//
+// # Behavior
+// - If vault value dropped since request, calculates what shares would now be needed to
+//   match the original withdrawal amount and subtracts that from originally requested shares.
+//
+// # Validation
+// - Ensures recalculated shares are not greater than the original request.
 pub fn calculate_if_shares_lost(e: &Env, stake: &Stake, insurance_vault_amount: u128) -> u128 {
     let total_shares = get_total_shares(e);
 

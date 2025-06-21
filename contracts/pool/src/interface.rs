@@ -17,9 +17,7 @@ pub trait PoolTrait {
     // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
-    // Deposits token_b. Also mints pool shares for the "to" Identifier. The amount minted
-    // is determined based on the difference between the reserves stored by this contract, and
-    // the actual balance of token_a and token_b for this contract.
+    // Add liquidity
     fn deposit(e: Env, user: Address, token_b_amount: u128) -> (u128, u128);
 
     // Perform an exchange between two coins.
@@ -62,10 +60,7 @@ pub trait PoolTrait {
         out_amount: u128
     ) -> (u128, i128);
 
-    // Transfers share_amount of pool share tokens to this contract,
-    // burns all pools share tokens in this contracts, and sends
-    // the corresponding amount of tokens to user.
-    // Returns amount of tokens withdrawn
+    // Remove liquidity
     fn withdraw(e: Env, user: Address, share_amount: u128) -> u128;
 
     //   _______    _______  ___________  ___________  _______   _______    ________
@@ -75,7 +70,7 @@ pub trait PoolTrait {
     //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
     // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
     //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
-    
+
     // Returns the token contract address for the pool share token
     fn share_id(e: Env) -> Address;
 
@@ -104,10 +99,8 @@ pub trait AdminInterfaceTrait {
     // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
-    // Rebalance pool reserves
     fn rebalance(e: Env, admin: Address);
 
-    //
     fn pay_insurance_claim(e: Env, sender: Address, insurance_vault_amount: u128) -> u128;
 
     //   ________  _______  ___________  ___________  _______   _______    ________
@@ -137,6 +130,8 @@ pub trait AdminInterfaceTrait {
         liquidity_max_imbalance: u128,
         quote_max_insurance: u128
     );
+
+    fn set_expiry(e: Env, admin: Address, expiry_ts: u64);
 
     //    _______     __       ____  ____   ________  _______  ________
     //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\

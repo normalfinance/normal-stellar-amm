@@ -13,7 +13,6 @@ use std::vec;
 pub(crate) struct TestConfig {
     pub(crate) users_count: u32,
     pub(crate) oracle_guard_rails: OracleGuardRails,
-    pub(crate) price_override_limit: u128,
 }
 
 impl Default for TestConfig {
@@ -25,12 +24,10 @@ impl Default for TestConfig {
                     oracle_twap_percent_divergence: PERCENTAGE_PRECISION_U64 / 2,
                 },
                 validity: ValidityGuardRails {
-                    slots_before_stale_for_pool: 10, // ~5 seconds
-                    confidence_interval_max_size: 20_000, // 2% of price
-                    too_volatile_ratio: 5, // 5x or 80% down
+                    seconds_before_stale_for_pool: 5,
+                    too_volatile_ratio: 120, // allow ±20%
                 },
             },
-            price_override_limit: 100,
         }
     }
 }
@@ -42,7 +39,6 @@ pub(crate) struct Setup<'a> {
     pub(crate) admin: Address,
     pub(crate) emergency_admin: Address,
     pub(crate) users: vec::Vec<Address>,
-    pub(crate) USDC: Address,
     pub(crate) oracle: Address,
     pub(crate) eth_addr: Address,
 
@@ -55,7 +51,7 @@ pub(crate) struct Setup<'a> {
     pub(crate) oracle_client: MockPriceOracleClient<'a>,
 
     // state
-    pub(crate) oracle_guardrails: OracleGuardRails,
+    pub(crate) oracle_guard_rails: OracleGuardRails,
     pub(crate) init_btc_price: i128,
     pub(crate) init_eth_price: i128,
 }
@@ -235,12 +231,11 @@ impl Setup<'_> {
             users,
             oracle: oracle_id,
             eth_addr,
-            USDC: usdc_addr,
             registry,
             btc_asset_id,
             eth_asset_id,
             oracle_client,
-            oracle_guardrails: config.oracle_guard_rails,
+            oracle_guard_rails: config.oracle_guard_rails,
             init_btc_price,
             init_eth_price,
         }

@@ -9,7 +9,6 @@ pub trait InsuranceFundTrait {
         emergency_admin: Address,
         token: Address,
         unstaking_period: u64,
-        coverage_buffer: u128,
         optimal_utilization: u32,
         base_rate: i32,
         rate_slopes: (u32, u32)
@@ -45,9 +44,7 @@ pub trait InsuranceFundTrait {
 
     fn get_unstaking_period(e: Env) -> u64;
 
-    fn get_optimal_coverage(e: Env) -> u128;
-
-    fn get_coverage_buffer(e: Env) -> u128;
+    fn get_optimal_insurance(e: Env) -> u128;
 
     fn get_total_shares(e: Env) -> u128;
 
@@ -77,9 +74,7 @@ pub trait AdminInterface {
 
     fn set_unstaking_period(e: Env, admin: Address, unstaking_period: u64);
 
-    fn set_optimal_coverage(e: Env, admin: Address, optimal_coverage: u128);
-
-    fn set_coverage_buffer(e: Env, admin: Address, coverage_buffer: u128);
+    fn set_optimal_insurance(e: Env, admin: Address, optimal_insurance: u128);
 
     fn set_rate_config(
         e: Env,

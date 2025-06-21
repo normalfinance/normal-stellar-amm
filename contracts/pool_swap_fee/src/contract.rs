@@ -60,34 +60,6 @@ pub struct PoolSwapFeeCollector;
 
 #[contractimpl]
 impl PoolSwapFeeInterface for PoolSwapFeeCollector {
-    //   _______    _______  ___________  ___________  _______   _______    ________
-    //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
-    // (: ( \___) (: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
-    //  \/ \       \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
-    //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
-    // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
-    //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
-
-    fn get_router(e: Env) -> Address {
-        get_router(&e)
-    }
-
-    fn get_buffer(e: Env) -> Address {
-        get_buffer(&e)
-    }
-
-    fn get_fee_destination(e: Env) -> Address {
-        get_fee_destination(&e)
-    }
-
-    fn get_buffer_fraction(e: Env) -> u32 {
-        get_buffer_fraction(&e)
-    }
-
-    fn get_lp_revenue_fraction(e: Env) -> u32 {
-        get_lp_revenue_fraction(&e)
-    }
-
     //  ___      ___       __        __    _____  ___
     // |"  \    /"  |     /""\      |" \  (\"   \|"  \
     //  \   \  //   |    /    \     ||  | |.\\   \    |
@@ -321,6 +293,34 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
 
         amount_out_w_fee
     }
+
+    //   _______    _______  ___________  ___________  _______   _______    ________
+    //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
+    // (: ( \___) (: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
+    //  \/ \       \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
+    //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
+    // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
+    //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
+
+    fn get_router(e: Env) -> Address {
+        get_router(&e)
+    }
+
+    fn get_buffer(e: Env) -> Address {
+        get_buffer(&e)
+    }
+
+    fn get_fee_destination(e: Env) -> Address {
+        get_fee_destination(&e)
+    }
+
+    fn get_buffer_fraction(e: Env) -> u32 {
+        get_buffer_fraction(&e)
+    }
+
+    fn get_lp_revenue_fraction(e: Env) -> u32 {
+        get_lp_revenue_fraction(&e)
+    }
 }
 
 // The `AdminInterface` trait provides the interface for administrative actions.
@@ -340,6 +340,42 @@ impl AdminInterface for PoolSwapFeeCollector {
         }
         access_control.set_role_address(&Role::Admin, &admin);
         access_control.set_role_address(&Role::EmergencyAdmin, &emergency_admin);
+    }
+
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
+
+    // claim_fees
+    // Claims all fees held by the contract and transfers them to the specified address.
+    //
+    // Arguments:
+    //   - e: The Soroban environment.
+    //   - admin: The address calling for fee claiming (must match the stored operator).
+    //   - token: The token contract address for which fees are claimed.
+    //
+    // Returns:
+    //   - A u128 value representing the claimed token amount.
+    fn claim_fees(e: Env, admin: Address, token: Address) -> u128 {
+        admin.require_auth();
+        require_admin(&e, &admin);
+
+        let token_client = SorobanTokenClient::new(&e, &token);
+        let amount = token_client.balance(&e.current_contract_address());
+
+        transfer_token(
+            &e,
+            &token,
+            &e.current_contract_address(),
+            &get_fee_destination(&e),
+            &amount
+        );
+        Events::new(&e).claim_fee(token, amount as u128);
+        amount as u128
     }
 
     //   ________  _______  ___________  ___________  _______   _______    ________
@@ -390,42 +426,6 @@ impl AdminInterface for PoolSwapFeeCollector {
         require_admin(&e, &admin);
 
         set_lp_revenue_fraction(&e, &fraction);
-    }
-
-    //  ___      ___       __        __    _____  ___
-    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
-    //  \   \  //   |    /    \     ||  | |.\\   \    |
-    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
-    // |: \.        |  //  __'  \   |.  | |.  \    \. |
-    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
-    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
-
-    // claim_fees
-    // Claims all fees held by the contract and transfers them to the specified address.
-    //
-    // Arguments:
-    //   - e: The Soroban environment.
-    //   - admin: The address calling for fee claiming (must match the stored operator).
-    //   - token: The token contract address for which fees are claimed.
-    //
-    // Returns:
-    //   - A u128 value representing the claimed token amount.
-    fn claim_fees(e: Env, admin: Address, token: Address) -> u128 {
-        admin.require_auth();
-        require_admin(&e, &admin);
-
-        let token_client = SorobanTokenClient::new(&e, &token);
-        let amount = token_client.balance(&e.current_contract_address());
-
-        transfer_token(
-            &e,
-            &token,
-            &e.current_contract_address(),
-            &get_fee_destination(&e),
-            &amount
-        );
-        Events::new(&e).claim_fee(token, amount as u128);
-        amount as u128
     }
 }
 

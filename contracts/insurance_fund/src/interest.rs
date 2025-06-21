@@ -9,20 +9,20 @@ use crate::errors::InsuranceFundError;
 // # Arguments
 //
 // * `insurance_vault_amount` - The current balance in the insurance vault, in fixed-point units.
-// * `optimal_coverage` - The target or optimal coverage amount, in fixed-point units.
+// * `optimal_insurance` - The target or optimal coverage amount, in fixed-point units.
 //
 // # Returns
 //
 // * The utilization percentage as a fixed-point `u32` (e.g. 1_000_000 = 100%).
 //   Returns 0 if either input is zero. The result is scaled by `PERCENTAGE_PRECISION`.
-pub fn calculate_utilization(insurance_vault_amount: u128, optimal_coverage: u128) -> u32 {
-    if insurance_vault_amount == 0 || optimal_coverage == 0 {
+pub fn calculate_utilization(insurance_vault_amount: u128, optimal_insurance: u128) -> u32 {
+    if insurance_vault_amount == 0 || optimal_insurance == 0 {
         return 0;
     }
 
     // is this safe to cast u128 down to i32?
     insurance_vault_amount
-        .fixed_div_floor(optimal_coverage, PERCENTAGE_PRECISION)
+        .fixed_div_floor(optimal_insurance, PERCENTAGE_PRECISION)
         .unwrap_or(0) as u32
     //  result.min(u32::MAX as u128) as u32
 }

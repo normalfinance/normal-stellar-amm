@@ -55,12 +55,11 @@ impl Default for TestConfig {
             reward_token_in_pool: false,
             oracle_guard_rails: OracleGuardRails {
                 price_divergence: PriceDivergenceGuardRails {
-                    oracle_twap_percent_divergence: PERCENTAGE_PRECISION_U64 / 2,
+                    oracle_twap_percent_divergence: PERCENTAGE_PRECISION_U64 / 10, // allows up to ±10%
                 },
                 validity: ValidityGuardRails {
-                    slots_before_stale_for_pool: 10, // ~5 seconds
-                    confidence_interval_max_size: 20_000, // 2% of price
-                    too_volatile_ratio: 5, // 5x or 80% down
+                    seconds_before_stale_for_pool: 5,
+                    too_volatile_ratio: 120, // allows up to ±20%
                 },
             },
         }

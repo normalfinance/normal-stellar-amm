@@ -52,8 +52,7 @@ pub struct PriceDivergenceGuardRails {
 #[contracttype]
 #[derive(Copy, Clone, Default, Debug)]
 pub struct ValidityGuardRails {
-    pub slots_before_stale_for_pool: u64,
-    pub confidence_interval_max_size: u64,
+    pub seconds_before_stale_for_pool: u64,
     pub too_volatile_ratio: i64,
 }
 
@@ -68,12 +67,12 @@ impl Default for OracleGuardRails {
     fn default() -> Self {
         OracleGuardRails {
             price_divergence: PriceDivergenceGuardRails {
-                oracle_twap_percent_divergence: PERCENTAGE_PRECISION_U64 / 2,
+                oracle_twap_percent_divergence: PERCENTAGE_PRECISION_U64 / 10, // 10%
             },
             validity: ValidityGuardRails {
-                slots_before_stale_for_pool: 10, // ~5 seconds
-                confidence_interval_max_size: 20_000, // 2% of price
-                too_volatile_ratio: 5, // 5x or 80% down
+                seconds_before_stale_for_pool: 5,
+                // if price / twap >= 1.10 or twap / price >= 1.10 → too volatile
+                too_volatile_ratio: 120, // allows up to ±20%
             },
         }
     }
@@ -109,14 +108,6 @@ impl OracleValidity {
             OracleValidity::Valid => unreachable!(),
         }
     }
-}
-
-// Actions dependant on oracle prices
-#[derive(Clone, Copy, PartialEq, Debug, Eq)]
-pub enum NormalAction {
-    UpdateTwap, // Save time-weighted average price to historical oracle data
-    Rebalance, // Mint or burn synthetic tokens (token_a) in a Pool to peg its price to an oracle
-    InsuranceClaim, // Cover a pool liquidity deficit with a Buffer reserve and/or Insurance Fund stakes
 }
 
 #[derive(Default, Clone, Copy, Debug)]

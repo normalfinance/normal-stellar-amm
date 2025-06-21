@@ -1,5 +1,5 @@
 use soroban_sdk::{ Address, Env, Symbol };
-use utils::state::oracle_registry::{ MutableOracleInfo, OracleInfo, OraclePriceData };
+use utils::state::oracle_registry::{ MutableOracleInfo, NormalAction, OracleInfo, OraclePriceData };
 
 use crate::storage_types::{ HistoricalOracleData, OracleGuardRails };
 
@@ -15,7 +15,7 @@ pub trait OracleRegistryTrait {
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
     // Get the oracle price
-    fn get_price(e: Env, asset_id: Symbol, cached: bool) -> OraclePriceData;
+    fn get_price(e: Env, asset_id: Symbol, cached: bool, action: NormalAction) -> OraclePriceData;
 
     // Get the historical oracle info
     fn get_last_price(e: Env, asset_id: Symbol) -> HistoricalOracleData;
@@ -31,11 +31,7 @@ pub trait OracleRegistryTrait {
     // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
     //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
 
-    fn get_oracle_guardrails(e: Env) -> OracleGuardRails;
-
-    fn get_price_override_limit(e: Env) -> u32;
-
-    fn get_price_override_threshold(e: Env) -> u64;
+    fn get_oracle_guard_rails(e: Env) -> OracleGuardRails;
 }
 
 pub trait AdminInterface {
@@ -78,8 +74,4 @@ pub trait AdminInterface {
     // (_______/  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
 
     fn set_oracle_guard_rails(e: Env, admin: Address, oracle_guard_rails: OracleGuardRails);
-
-    fn set_price_override_limit(e: Env, admin: Address, limit: u32);
-
-    fn set_price_override_threshold(e: Env, admin: Address, threshold: u64);
 }

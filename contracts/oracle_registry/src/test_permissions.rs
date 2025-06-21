@@ -323,48 +323,16 @@ fn test_set_oracle_guard_rails() {
                     &addr,
                     &(OracleGuardRails {
                         price_divergence: PriceDivergenceGuardRails {
-                            oracle_twap_percent_divergence: PERCENTAGE_PRECISION_U64 / 2,
+                            oracle_twap_percent_divergence: PERCENTAGE_PRECISION_U64 / 2, // ±50%
                         },
                         validity: ValidityGuardRails {
-                            slots_before_stale_for_pool: 10, // ~5 seconds
-                            confidence_interval_max_size: 20_000, // 2% of price
-                            too_volatile_ratio: 5, // 5x or 80% down
+                            seconds_before_stale_for_pool: 8,
+                            too_volatile_ratio: 110, // allow ±10%
                         },
                     })
                 )
                 .is_ok(),
             is_ok
         );
-    }
-}
-
-#[test]
-fn test_set_price_override_limit() {
-    let setup = Setup::default();
-    let registry = setup.registry;
-    let user = Address::generate(&setup.env);
-
-    for (addr, is_ok) in [
-        (user, false),
-        (setup.admin, true),
-    ] {
-        assert_eq!(
-            registry.try_set_price_override_limit(&addr, &(400 * PERCENTAGE_PRECISION_U32)).is_ok(),
-            is_ok
-        );
-    }
-}
-
-#[test]
-fn test_set_price_override_threshold() {
-    let setup = Setup::default();
-    let registry = setup.registry;
-    let user = Address::generate(&setup.env);
-
-    for (addr, is_ok) in [
-        (user, false),
-        (setup.admin, true),
-    ] {
-        assert_eq!(registry.try_set_price_override_threshold(&addr, &THIRTY_DAY).is_ok(), is_ok);
     }
 }

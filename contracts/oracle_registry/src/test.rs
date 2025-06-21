@@ -102,7 +102,7 @@ fn test_get_price() {
 
 //     // Make the price stale
 //     let guardrails = setup.registry.get_oracle_guardrails();
-//     jump(&setup.env, guardrails.validity.slots_before_stale_for_pool + ONE_HOUR);
+//     jump(&setup.env, guardrails.validity.seconds_before_stale_for_pool + ONE_HOUR);
 
 //     setup.registry.get_price(&setup.asset_id, &false);
 // }

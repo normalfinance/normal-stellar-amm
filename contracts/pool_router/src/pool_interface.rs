@@ -2,6 +2,61 @@ use soroban_sdk::{ Address, BytesN, Env, Map, String, Symbol, Val, Vec, U256 };
 use utils::state::pool::{ PoolInfo, PoolTier };
 
 pub trait PoolInterfaceTrait {
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
+
+    fn deposit(
+        e: Env,
+        user: Address,
+        tokens: Vec<Address>,
+        pool_index: BytesN<32>,
+        token_b_amount: u128
+    ) -> (u128, u128);
+
+    fn swap(
+        e: Env,
+        user: Address,
+        tokens: Vec<Address>,
+        token_in: Address,
+        token_out: Address,
+        pool_index: BytesN<32>,
+        in_amount: u128,
+        out_min: u128
+    ) -> u128;
+
+    fn estimate_swap(
+        e: Env,
+        tokens: Vec<Address>,
+        token_in: Address,
+        token_out: Address,
+        pool_index: BytesN<32>,
+        in_amount: u128
+    ) -> (u128, i128);
+
+    fn withdraw(
+        e: Env,
+        user: Address,
+        tokens: Vec<Address>,
+        pool_index: BytesN<32>,
+        share_amount: u128
+    ) -> u128;
+
+    //   _______    _______  ___________  ___________  _______   _______    ________
+    //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
+    // (: ( \___) (: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
+    //  \/ \       \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
+    //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
+    // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
+    //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
+
+    // Get symbolic explanation of pool type.
+    fn pool_type(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Symbol;
+
     // Get dictionary of basic pool information: type, fee, special parameters if any.
     fn get_info(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Map<Symbol, Val>;
 
@@ -23,61 +78,10 @@ pub trait PoolInterfaceTrait {
     // Insurance Claim - Max quote insurance getter.
     fn get_insurance_coverage(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
 
-    // Deposit coins into the pool.
-    // desired_amounts: List of amounts of coins to deposit
-    // Returns amounts deposited and the amount of LP tokens received in exchange for the deposited tokens.
-    fn deposit(
-        e: Env,
-        user: Address,
-        tokens: Vec<Address>,
-        pool_index: BytesN<32>,
-        token_b_amount: u128
-    ) -> (u128, u128);
-
-    // Perform an exchange between two coins.
-    // token_in: token to send
-    // token_out: token to receive
-    // in_amount: Amount of token_in being exchanged
-    // out_min: Minimum amount of token_out to receive
-    // Returns the actual amount of coin out received
-    fn swap(
-        e: Env,
-        user: Address,
-        tokens: Vec<Address>,
-        token_in: Address,
-        token_out: Address,
-        pool_index: BytesN<32>,
-        in_amount: u128,
-        out_min: u128
-    ) -> u128;
-
-    // Estimate amount of coins to retrieve using swap function
-    fn estimate_swap(
-        e: Env,
-        tokens: Vec<Address>,
-        token_in: Address,
-        token_out: Address,
-        pool_index: BytesN<32>,
-        in_amount: u128
-    ) -> (u128, i128);
-
-    // Withdraw coins from the pool.
-    // share_amount: Quantity of LP tokens to burn in the withdrawal
-    // Returns a list of the amounts for each coin that was withdrawn.
-    fn withdraw(
-        e: Env,
-        user: Address,
-        tokens: Vec<Address>,
-        pool_index: BytesN<32>,
-        share_amount: u128
-    ) -> u128;
-
     fn get_liquidity(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> U256;
 
-    // Set liquidity calculator address. it's separate contract optimized to estimate liquidity for multiple pools
     fn set_liquidity_calculator(e: Env, admin: Address, calculator: Address);
 
-    // Get liquidity calculator address
     fn get_liquidity_calculator(e: Env) -> Address;
 }
 

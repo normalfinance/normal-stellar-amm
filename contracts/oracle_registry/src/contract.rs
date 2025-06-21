@@ -1,18 +1,14 @@
 use crate::errors::OracleRegistryError;
 use crate::interface::{ AdminInterface, OracleRegistryTrait };
-use crate::oracle::{ get_oracle_price, oracle_validity, update_twap };
+use crate::oracle::{ block_operation, get_oracle_price, oracle_validity, update_twap };
 use soroban_fixed_point_math::FixedPoint;
 use crate::storage::{
     get_historical_oracle_data,
     get_oracle,
     get_oracle_base,
     get_oracle_guard_rails,
-    get_price_override_limit,
-    get_price_override_threshold,
     put_oracle,
     set_oracle_guard_rails,
-    set_price_override_limit,
-    set_price_override_threshold,
 };
 use crate::storage_types::{ HistoricalOracleData, OracleGuardRails, OracleValidity };
 
@@ -30,8 +26,7 @@ use soroban_sdk::{ contract, contractimpl, panic_with_error, Address, BytesN, En
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
-use utils::constant::{ PRICE_PRECISION };
-use utils::state::oracle_registry::{ MutableOracleInfo, OracleInfo, OraclePriceData };
+use utils::state::oracle_registry::{ MutableOracleInfo, NormalAction, OracleInfo, OraclePriceData };
 
 #[contract]
 pub struct OracleRegistry;
@@ -58,7 +53,13 @@ impl OracleRegistryTrait for OracleRegistry {
     // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
-    fn get_price(e: Env, asset_id: Symbol, cached: bool) -> OraclePriceData {
+    // Sets the max shares the Insurance Fund can have.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `max_shares` - The max number of shares.
+    fn get_price(e: Env, asset_id: Symbol, cached: bool, action: NormalAction) -> OraclePriceData {
         let now = e.ledger().timestamp();
         let oracle = get_oracle(&e, &asset_id);
         let historical_oracle_data = get_historical_oracle_data(&e, &asset_id);
@@ -70,17 +71,9 @@ impl OracleRegistryTrait for OracleRegistry {
             };
         }
 
-        // Fetch a new price
         let oracle_price_data = get_oracle_price(&e, &oracle.address, &oracle.asset, now);
 
-        let oracle_is_valid =
-            oracle_validity(
-                &e,
-                historical_oracle_data.last_oracle_price_twap,
-                &oracle_price_data
-            ) == OracleValidity::Valid;
-
-        if !oracle_is_valid {
+        if block_operation(&e, &oracle_price_data, reserve_price, oracle_price_data.price, action) {
             panic_with_error!(&e, OracleRegistryError::OracleInvalid);
         }
 
@@ -97,10 +90,20 @@ impl OracleRegistryTrait for OracleRegistry {
         oracle_price_data
     }
 
+    // Gets the last historical price of the oracle.
+    //
+    // # Arguments
+    //
+    // * `asset_id` - The symbol of the oracle.
     fn get_last_price(e: Env, asset_id: Symbol) -> HistoricalOracleData {
         get_historical_oracle_data(&e, &asset_id)
     }
 
+    // Gets the info on a registered oracle.
+    //
+    // # Arguments
+    //
+    // * `asset_id` - The symbol of the oracle.
     fn get_oracle(e: Env, asset_id: Symbol) -> OracleInfo {
         get_oracle(&e, &asset_id)
     }
@@ -113,16 +116,8 @@ impl OracleRegistryTrait for OracleRegistry {
     // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
     //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
 
-    fn get_oracle_guardrails(e: Env) -> OracleGuardRails {
+    fn get_oracle_guard_rails(e: Env) -> OracleGuardRails {
         get_oracle_guard_rails(&e)
-    }
-
-    fn get_price_override_limit(e: Env) -> u32 {
-        get_price_override_limit(&e)
-    }
-
-    fn get_price_override_threshold(e: Env) -> u64 {
-        get_price_override_threshold(&e)
     }
 }
 
@@ -215,6 +210,12 @@ impl AdminInterface for OracleRegistry {
     // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
+    // Sets the max shares the Insurance Fund can have.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `max_shares` - The max number of shares.
     fn register_oracle(
         e: Env,
         admin: Address,
@@ -266,6 +267,12 @@ impl AdminInterface for OracleRegistry {
         oracle
     }
 
+    // Sets the max shares the Insurance Fund can have.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `max_shares` - The max number of shares.
     fn update_oracle(
         e: Env,
         admin: Address,
@@ -321,7 +328,12 @@ impl AdminInterface for OracleRegistry {
         }
     }
 
-    // Sets the oracle price manually.
+    // Manually set the oracle price.
+    //
+    // This is an admin failsafe to be used as a last resort to override an oracle
+    // price in the event invalid oracle data prolongs.
+    //
+    //
     //
     // # Arguments
     //
@@ -334,26 +346,22 @@ impl AdminInterface for OracleRegistry {
 
         let now = e.ledger().timestamp();
         let oracle = get_oracle(&e, &asset_id);
+        let oracle_guard_rails = get_oracle_guard_rails(&e);
+
+
+        oracle_validity(&e, last_oracle_twap, oracle_price_data);
 
         // Rate limit
-        let override_threshold = get_price_override_threshold(&e);
         // @dev The timestamp of the last override is not tracked, meaning any
         // update to the oracle will reset this counter. May be changed in the future.
-        if now - oracle.last_updated >= override_threshold {
+        if now - oracle.last_updated <= oracle_guard_rails.validity.seconds_before_stale_for_pool {
             panic_with_error!(&e, OracleRegistryError::PriceOverrideTooSoon);
         }
 
-        // Smooth price updates
-        let override_limit = get_price_override_limit(&e);
+   
         let historical_oracle_data = get_historical_oracle_data(&e, &asset_id);
-        let price_delta = historical_oracle_data.last_oracle_price_twap
-            .fixed_div_floor(price, PRICE_PRECISION)
-            .unwrap() as i32;
-        if (price_delta.abs() as u32) >= override_limit {
-            panic_with_error!(&e, OracleRegistryError::PriceOverrideLimitExceeded);
-        }
+        
 
-        // Update the price and twap
         update_twap(
             &e,
             &asset_id,
@@ -365,7 +373,7 @@ impl AdminInterface for OracleRegistry {
         );
     }
 
-    // TODO: unregister oracle
+    // TODO: Add unregister oracle function - what does this mean for pools using that oracle?
 
     //   ________  _______  ___________  ___________  _______   _______    ________
     //  /"       )/"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
@@ -380,20 +388,6 @@ impl AdminInterface for OracleRegistry {
         require_admin(&e, &admin);
 
         set_oracle_guard_rails(&e, &oracle_guard_rails);
-    }
-
-    fn set_price_override_limit(e: Env, admin: Address, limit: u32) {
-        admin.require_auth();
-        require_admin(&e, &admin);
-
-        set_price_override_limit(&e, &limit);
-    }
-
-    fn set_price_override_threshold(e: Env, admin: Address, threshold: u64) {
-        admin.require_auth();
-        require_admin(&e, &admin);
-
-        set_price_override_threshold(&e, &threshold);
     }
 }
 
