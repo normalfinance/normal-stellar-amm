@@ -349,7 +349,7 @@ impl UpgradeableContract for PoolRouter {
     //
     // The version of the contract as a u32.
     fn version() -> u32 {
-        150
+        100
     }
 
     // Commits a new wasm hash for a future upgrade.
