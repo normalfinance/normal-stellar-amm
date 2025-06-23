@@ -66,7 +66,7 @@ pub fn get_net_liquidity_imbalance(
 //
 // # Arguments
 // * `e` - Soroban environment reference.
-// * `asset_id` - Symbol representing the asset to price.
+// * `asset` - Symbol representing the asset to price.
 // * `cached` - Whether to use cached data from the oracle.
 // * `action` - The context in which the price is being fetched (e.g. Swap, Rebalance).
 //
@@ -74,7 +74,7 @@ pub fn get_net_liquidity_imbalance(
 // * `OraclePriceData` — The current oracle price and delay since publication.
 pub fn get_oracle_price(
     e: &Env,
-    asset_id: &Symbol,
+    asset: &Symbol,
     cached: bool,
     action: NormalAction
 ) -> OraclePriceData {
@@ -83,7 +83,7 @@ pub fn get_oracle_price(
         &Symbol::new(e, "get_price"),
         Vec::from_array(e, [
             e.current_contract_address().to_val(),
-            asset_id.to_val(),
+            asset.to_val(),
             cached.into_val(e),
             action.into_val(e),
         ])

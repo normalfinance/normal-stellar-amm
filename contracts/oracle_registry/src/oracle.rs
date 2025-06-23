@@ -51,7 +51,7 @@ pub fn get_oracle_price(e: &Env, oracle: &Address, asset: &Address, now: u64) ->
 //
 // # Arguments
 // * `e` - Soroban environment reference.
-// * `asset_id` - Symbol of the asset whose TWAP is being updated.
+// * `asset` - Symbol of the asset whose TWAP is being updated.
 // * `historical_oracle_data` - The previously recorded oracle data.
 // * `oracle_price_data` - The newly observed price and timestamp.
 // * `sanitize_clamp_denominator` - Clamp denominator for price sanitization.
@@ -59,7 +59,7 @@ pub fn get_oracle_price(e: &Env, oracle: &Address, asset: &Address, now: u64) ->
 // * `registering` - If true, initializes TWAP to 0 instead of computing it.
 pub fn update_twap(
     e: &Env,
-    asset_id: &Symbol,
+    asset: &Symbol,
     historical_oracle_data: &HistoricalOracleData,
     oracle_price_data: &OraclePriceData,
     sanitize_clamp_denominator: i64,
@@ -92,7 +92,7 @@ pub fn update_twap(
         last_oracle_delay: oracle_price_data.delay,
         last_oracle_price_twap_ts: now,
     };
-    put_historical_oracle_data(e, &asset_id, &new_historical_oracle_data);
+    put_historical_oracle_data(e, &asset, &new_historical_oracle_data);
 }
 
 // Returns a full status summary of the oracle's health and price divergence.

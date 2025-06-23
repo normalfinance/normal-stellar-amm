@@ -94,7 +94,7 @@ impl OracleRegistryTrait for OracleRegistry {
     //
     // # Arguments
     //
-    // * `asset_id` - The symbol of the oracle.
+    // * `asset` - The symbol of the oracle.
     fn get_last_price(e: Env, asset: Symbol) -> HistoricalOracleData {
         get_historical_oracle_data(&e, &asset)
     }
@@ -103,7 +103,7 @@ impl OracleRegistryTrait for OracleRegistry {
     //
     // # Arguments
     //
-    // * `asset_id` - The symbol of the oracle.
+    // * `asset` - The symbol of the oracle.
     fn get_oracle(e: Env, asset: Symbol) -> OracleInfo {
         get_oracle(&e, &asset)
     }
@@ -338,7 +338,7 @@ impl AdminInterface for OracleRegistry {
     // # Arguments
     //
     // * `admin` - The address of the admin.
-    // * `asset_id` - The address of the rewards admin.
+    // * `asset` - The address of the rewards admin.
     // * `price` - The address of the rewards admin.
     fn set_oracle_price(e: Env, admin: Address, asset: Symbol, price: u128) {
         admin.require_auth();
