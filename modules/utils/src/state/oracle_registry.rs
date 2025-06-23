@@ -7,11 +7,19 @@ pub struct OraclePriceData {
     pub delay: u64,
 }
 
+#[derive(Clone, Copy, Eq, PartialEq, Debug, Default)]
+pub enum OracleSource {
+    #[default]
+    Reflector,
+    DIA,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[contracttype]
 pub struct OracleInfo {
     pub address: Address,
-    pub asset: Address,
+    // pub source: OracleSource, // coming soon
+    pub asset_addr: Address,
     pub decimals: u32,
     pub frozen: bool,
     pub sanitize_clamp_denominator: i64, // zero if not set

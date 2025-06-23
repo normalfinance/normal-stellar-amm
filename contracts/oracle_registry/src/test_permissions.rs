@@ -5,7 +5,7 @@ use crate::testutils::Setup;
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{ symbol_short, Address, Symbol };
-use utils::constant::{ PERCENTAGE_PRECISION_U32, PERCENTAGE_PRECISION_U64, THIRTY_DAY };
+use utils::constant::{ PERCENTAGE_PRECISION_U64 };
 use utils::test_utils::{ install_dummy_wasm, jump };
 
 // test admin transfer ownership

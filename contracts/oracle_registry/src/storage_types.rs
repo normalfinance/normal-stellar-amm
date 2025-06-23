@@ -71,7 +71,6 @@ impl Default for OracleGuardRails {
             },
             validity: ValidityGuardRails {
                 seconds_before_stale_for_pool: 5,
-                // if price / twap >= 1.10 or twap / price >= 1.10 → too volatile
                 too_volatile_ratio: 120, // allows up to ±20%
             },
         }

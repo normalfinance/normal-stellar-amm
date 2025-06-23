@@ -1,21 +1,18 @@
-use crate::errors::PoolRouterError;
 use crate::events::{ Events, PoolRouterEvents };
 use crate::incentives::get_incentives_manager;
 use crate::liquidity_calculator::LiquidityCalculatorClient;
 use crate::storage::{
-    add_pool,
-    add_tokens_set,
-    get_constant_product_pool_hash,
-    get_pool_next_counter,
+    get_pool,
+    get_pool_hash,
     get_pool_plane,
-    get_pools_plain,
     get_token_hash,
+    put_pool,
 };
 use access_control::access::AccessControl;
 use access_control::management::{ MultipleAddressesManagementTrait, SingleAddressManagementTrait };
 use access_control::role::Role;
 use incentives::storage::{ RewardTokenStorageTrait };
-use soroban_sdk::{ panic_with_error, Map, String, U256 };
+use soroban_sdk::{ String, U256 };
 use soroban_sdk::{
     symbol_short,
     xdr::ToXdr,
@@ -34,93 +31,101 @@ use utils::state::{
     token::TokenInitInfo,
 };
 
-pub fn get_pool_salt(e: &Env, fee_fraction: &u32) -> BytesN<32> {
-    let mut salt = Bytes::new(e);
-    salt.append(&symbol_short!("standard").to_xdr(e));
-    salt.append(&symbol_short!("0x00").to_xdr(e));
-    salt.append(&fee_fraction.to_xdr(e));
-    salt.append(&symbol_short!("0x00").to_xdr(e));
-    e.crypto().sha256(&salt).to_bytes()
-}
+/* Salt Methodology
 
-pub fn get_pool_counter_salt(e: &Env) -> BytesN<32> {
-    let mut salt = Bytes::new(e);
-    salt.append(&symbol_short!("0x00").to_xdr(e));
-    salt.append(&get_pool_next_counter(e).to_xdr(e));
-    salt.append(&symbol_short!("0x00").to_xdr(e));
-    e.crypto().sha256(&salt).to_bytes()
-}
+Most AMMs use a merged salt consisting of two parts:
+1) A token salt (token_a and token_b)
+2) A fee percentage salt 
 
-pub fn merge_salt(e: &Env, left: BytesN<32>, right: BytesN<32>) -> BytesN<32> {
+This combined salt ensures only a single pool for each fee tier for each token pair
+may be created. This structure works fine for traditional AMMs, but does not satisfy
+our desired requirements.
+
+Instead, the Normal pool salt is solely composed of a base asset symbol (the symbol
+of the asset being synthetically tracked, i.e. "BTC"). This symbol correlates to a
+single oracle registered with the Oracle Registry contract which also enforces the
+same salt. This ensures only a single pool for each synthetically tracked asset
+may be created.
+
+This design is intentional for three reasons:
+1)  There are limited quote assets with sufficient behavior to collateralize a synthetic asset.
+
+    Tokens like XLM have deep liquidity, broad support, and most importantly, similar price 
+    volatility to the assets being synthetically tracked. This volatility correlation is 
+    deeply important to the protocol so that liquidity imbalances do not grow overly large.
+    Assets like USDC (and stablecoins in general) or other more/less volatile assets do not
+    have a reliably similar volatility which creates too much risk of large liquidity imbalance.
+
+2)  To consolidate liquidity into a single, higher quality primary market pool.
+
+    If multiple pools were supported for each synthetic asset, liquidity would naturally be
+    split amongst them all. This may give traders favorable swap paths, but it creates
+    larger slippage and price impact per trade.
+
+3)  To decentralize secondary market creation and promote arbitrage accordingly.
+
+    Normal's only goal is to create and maintain a reliable protocol with pools that have deep
+    liquidity and a secure price peg. 3rd party users are encouraged to create pools for
+    Normal Tokens with their desired quote token(s) on secondary markets such as Aquarius, 
+    Soroswap, Phoenix, and more. This helps achieve more sufficient decentralization and
+    creates better trading access and conditions given the natural arbitrage that follows
+    primary to secondary market dynamics.
+*/
+
+pub fn get_pool_salt(e: &Env, asset: &Symbol) -> BytesN<32> {
     let mut salt = Bytes::new(e);
-    salt.append(&left.to_xdr(e));
-    salt.append(&right.to_xdr(e));
+    salt.append(&symbol_short!("0x00").to_xdr(e));
+    salt.append(&asset.to_xdr(e));
+    salt.append(&symbol_short!("0x00").to_xdr(e));
     e.crypto().sha256(&salt).to_bytes()
 }
 
 pub fn deploy_pool(
     e: &Env,
     tokens: &Vec<Address>,
-    base_oracle_registry_id: &Symbol,
-    quote_oracle_registry_id: &Symbol,
-    asset: &Address,
-    lp_token_name: &String,
-    lp_token_symbol: &String,
+    assets: &(Symbol, Symbol),
+    lp_token_info: &(String, String),
     fee_fraction: u32,
     tier: &PoolTier,
     quote_max_insurance: u128
-) -> (BytesN<32>, Address) {
-    let tokens_salt = get_tokens_salt(e, tokens);
-    let pool_wasm_hash = get_constant_product_pool_hash(e);
-    let subpool_salt = get_pool_salt(e, &fee_fraction);
+) -> Address {
+    let pool_wasm_hash = get_pool_hash(e);
+    let (base_asset, _) = assets;
 
     let pool_contract_id = e
         .deployer()
-        .with_current_contract(
-            merge_salt(
-                e,
-                merge_salt(e, tokens_salt.clone(), subpool_salt.clone()),
-                get_pool_counter_salt(e)
-            )
-        )
+        .with_current_contract(get_pool_salt(e, &base_asset))
         .deploy_v2(pool_wasm_hash, ());
+
     init_pool(
         e,
         tokens,
-        base_oracle_registry_id,
-        quote_oracle_registry_id,
-        asset,
+        assets,
         &pool_contract_id,
-        lp_token_name,
-        lp_token_symbol,
+        lp_token_info,
         fee_fraction,
         tier,
         quote_max_insurance
     );
 
-    add_tokens_set(e, tokens);
-    add_pool(e, tokens_salt, subpool_salt.clone(), pool_contract_id.clone());
+    put_pool(e, base_asset.clone(), &pool_contract_id);
 
     Events::new(e).add_pool(
         tokens.clone(),
         pool_contract_id.clone(),
-        symbol_short!("constant"),
-        subpool_salt.clone(),
+        base_asset.clone(),
         Vec::<Val>::from_array(e, [fee_fraction.into_val(e)])
     );
 
-    (subpool_salt, pool_contract_id)
+    pool_contract_id
 }
 
 fn init_pool(
     e: &Env,
     tokens: &Vec<Address>,
-    base_oracle_registry_id: &Symbol,
-    quote_oracle_registry_id: &Symbol,
-    asset: &Address,
+    assets: &(Symbol, Symbol),
     pool_contract_id: &Address,
-    lp_token_name: &String,
-    lp_token_symbol: &String,
+    lp_token_info: &(String, String),
     fee_fraction: u32,
     tier: &PoolTier,
     quote_max_insurance: u128
@@ -155,14 +160,12 @@ fn init_pool(
                 emergency_pause_admins,
             },
             router: e.current_contract_address(),
-            base_asset_id: base_oracle_registry_id.clone(),
-            quote_asset_id: quote_oracle_registry_id.clone(),
-            asset: asset.clone(),
+            assets: assets.clone(),
             tokens: tokens.clone(),
             lp_token_info: TokenInitInfo {
                 token_wasm_hash: token_wasm_hash.into_val(e),
-                name: lp_token_name.clone(),
-                symbol: lp_token_symbol.clone(),
+                name: lp_token_info.0.clone(),
+                symbol: lp_token_info.1.clone(),
             },
             fee_fraction,
             tier: tier.clone(),
@@ -179,50 +182,12 @@ fn init_pool(
     );
 }
 
-pub fn assert_tokens_sorted(e: &Env, tokens: &Vec<Address>) {
-    for i in 0..tokens.len() - 1 {
-        let left = tokens.get_unchecked(i);
-        let right = tokens.get_unchecked(i + 1);
-        if left > right {
-            panic_with_error!(e, PoolRouterError::TokensNotSorted);
-        }
-        if left == right {
-            panic_with_error!(e, PoolRouterError::DuplicatesNotAllowed);
-        }
-    }
-}
+pub fn get_total_liquidity(e: &Env, asset: Symbol, calculator: Address) -> U256 {
+    let pool = get_pool(e, &asset);
 
-pub fn get_tokens_salt(e: &Env, tokens: &Vec<Address>) -> BytesN<32> {
-    let mut salt = Bytes::new(e);
-    for token in tokens.iter() {
-        salt.append(&token.to_xdr(e));
-    }
-    e.crypto().sha256(&salt).to_bytes()
-}
+    let pools_liquidity = LiquidityCalculatorClient::new(&e, &calculator).get_liquidity(
+        &Vec::from_array(e, [pool])
+    );
 
-pub fn get_total_liquidity(
-    e: &Env,
-    tokens: &Vec<Address>,
-    calculator: Address
-) -> (Map<BytesN<32>, U256>, U256) {
-    let tokens_salt = get_tokens_salt(e, tokens);
-    let pools = get_pools_plain(&e, tokens_salt);
-    let pools_count = pools.len();
-    let mut pools_map: Map<BytesN<32>, U256> = Map::new(&e);
-
-    let mut pools_vec: Vec<Address> = Vec::new(&e);
-    let mut hashes_vec: Vec<BytesN<32>> = Vec::new(&e);
-    for (key, value) in pools {
-        pools_vec.push_back(value.clone());
-        hashes_vec.push_back(key.clone());
-    }
-
-    let pools_liquidity = LiquidityCalculatorClient::new(&e, &calculator).get_liquidity(&pools_vec);
-    let mut result = U256::from_u32(&e, 0);
-    for i in 0..pools_count {
-        let value = pools_liquidity.get(i).unwrap();
-        pools_map.set(hashes_vec.get(i).unwrap(), value.clone());
-        result = result.add(&value);
-    }
-    (pools_map, result)
+    pools_liquidity.get(0).unwrap()
 }

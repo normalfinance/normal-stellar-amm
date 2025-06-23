@@ -59,10 +59,10 @@ impl OracleRegistryTrait for OracleRegistry {
     //
     // * `admin` - The address of the admin.
     // * `max_shares` - The max number of shares.
-    fn get_price(e: Env, asset_id: Symbol, cached: bool, action: NormalAction) -> OraclePriceData {
+    fn get_price(e: Env, asset: Symbol, cached: bool, action: NormalAction) -> OraclePriceData {
         let now = e.ledger().timestamp();
-        let oracle = get_oracle(&e, &asset_id);
-        let historical_oracle_data = get_historical_oracle_data(&e, &asset_id);
+        let oracle = get_oracle(&e, &asset);
+        let historical_oracle_data = get_historical_oracle_data(&e, &asset);
 
         if cached || oracle.frozen {
             return OraclePriceData {
@@ -79,7 +79,7 @@ impl OracleRegistryTrait for OracleRegistry {
 
         update_twap(
             &e,
-            &asset_id,
+            &asset,
             &historical_oracle_data,
             &oracle_price_data,
             oracle.sanitize_clamp_denominator,
@@ -95,8 +95,8 @@ impl OracleRegistryTrait for OracleRegistry {
     // # Arguments
     //
     // * `asset_id` - The symbol of the oracle.
-    fn get_last_price(e: Env, asset_id: Symbol) -> HistoricalOracleData {
-        get_historical_oracle_data(&e, &asset_id)
+    fn get_last_price(e: Env, asset: Symbol) -> HistoricalOracleData {
+        get_historical_oracle_data(&e, &asset)
     }
 
     // Gets the info on a registered oracle.
@@ -104,8 +104,8 @@ impl OracleRegistryTrait for OracleRegistry {
     // # Arguments
     //
     // * `asset_id` - The symbol of the oracle.
-    fn get_oracle(e: Env, asset_id: Symbol) -> OracleInfo {
-        get_oracle(&e, &asset_id)
+    fn get_oracle(e: Env, asset: Symbol) -> OracleInfo {
+        get_oracle(&e, &asset)
     }
 
     //   _______    _______  ___________  ___________  _______   _______    ________
@@ -219,21 +219,21 @@ impl AdminInterface for OracleRegistry {
     fn register_oracle(
         e: Env,
         admin: Address,
-        asset_id: Symbol,
+        asset: Symbol,
         oracle_addr: Address,
-        asset: Address,
+        asset_addr: Address,
         decimals: u32,
         sanitize_clamp_denominator: i64
     ) -> OracleInfo {
         admin.require_auth();
         require_admin(&e, &admin);
 
-        if get_oracle_base(&e, &asset_id).is_some() {
+        if get_oracle_base(&e, &asset).is_some() {
             panic_with_error!(&e, OracleRegistryError::OracleAlreadyRegistered);
         }
 
         let now = e.ledger().timestamp();
-        let oracle_price_data = get_oracle_price(&e, &oracle_addr, &asset, now);
+        let oracle_price_data = get_oracle_price(&e, &oracle_addr, &asset_addr, now);
 
         // Check oracle validity
         let oracle_is_valid =
@@ -246,8 +246,8 @@ impl AdminInterface for OracleRegistry {
 
         update_twap(
             &e,
-            &asset_id,
-            &get_historical_oracle_data(&e, &asset_id),
+            &asset,
+            &get_historical_oracle_data(&e, &asset),
             &oracle_price_data,
             sanitize_clamp_denominator,
             now,
@@ -256,13 +256,13 @@ impl AdminInterface for OracleRegistry {
 
         let oracle = OracleInfo {
             address: oracle_addr,
-            asset,
+            asset_addr,
             decimals,
             frozen: false,
             sanitize_clamp_denominator,
             last_updated: now,
         };
-        put_oracle(&e, &asset_id, &oracle);
+        put_oracle(&e, &asset, &oracle);
 
         oracle
     }
@@ -276,21 +276,21 @@ impl AdminInterface for OracleRegistry {
     fn update_oracle(
         e: Env,
         admin: Address,
-        asset_id: Symbol,
+        asset: Symbol,
         params: MutableOracleInfo
     ) -> OracleInfo {
         admin.require_auth();
         require_admin(&e, &admin);
 
-        if let Some(oracle) = get_oracle_base(&e, &asset_id) {
+        if let Some(oracle) = get_oracle_base(&e, &asset) {
             let now = e.ledger().timestamp();
 
             // Address validation
             if let Some(oracle_addr) = params.address.clone() {
-                let oracle_price_data = get_oracle_price(&e, &oracle_addr, &oracle.asset, now);
+                let oracle_price_data = get_oracle_price(&e, &oracle_addr, &oracle.asset_addr, now);
 
                 // Check oracle validity
-                let historical_oracle_data = get_historical_oracle_data(&e, &asset_id);
+                let historical_oracle_data = get_historical_oracle_data(&e, &asset);
                 let oracle_is_valid =
                     oracle_validity(
                         &e,
@@ -320,7 +320,7 @@ impl AdminInterface for OracleRegistry {
                 last_updated: now,
                 ..oracle
             };
-            put_oracle(&e, &asset_id, &updated_oracle);
+            put_oracle(&e, &asset, &updated_oracle);
 
             updated_oracle
         } else {
@@ -340,14 +340,13 @@ impl AdminInterface for OracleRegistry {
     // * `admin` - The address of the admin.
     // * `asset_id` - The address of the rewards admin.
     // * `price` - The address of the rewards admin.
-    fn set_oracle_price(e: Env, admin: Address, asset_id: Symbol, price: u128) {
+    fn set_oracle_price(e: Env, admin: Address, asset: Symbol, price: u128) {
         admin.require_auth();
         require_admin(&e, &admin);
 
         let now = e.ledger().timestamp();
-        let oracle = get_oracle(&e, &asset_id);
+        let oracle = get_oracle(&e, &asset);
         let oracle_guard_rails = get_oracle_guard_rails(&e);
-
 
         oracle_validity(&e, last_oracle_twap, oracle_price_data);
 
@@ -358,13 +357,11 @@ impl AdminInterface for OracleRegistry {
             panic_with_error!(&e, OracleRegistryError::PriceOverrideTooSoon);
         }
 
-   
-        let historical_oracle_data = get_historical_oracle_data(&e, &asset_id);
-        
+        let historical_oracle_data = get_historical_oracle_data(&e, &asset);
 
         update_twap(
             &e,
-            &asset_id,
+            &asset,
             &historical_oracle_data,
             &(OraclePriceData { price: price, delay: 0 }),
             oracle.sanitize_clamp_denominator,

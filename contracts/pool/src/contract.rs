@@ -1,3 +1,5 @@
+use core::char::MAX;
+
 use crate::errors::{ PoolError, PoolValidationError };
 use crate::events::Events as LiquidityPoolEvents;
 use crate::events::PoolEvents;
@@ -96,6 +98,7 @@ use utils::constant::{
     INSURANCE_B_MAX,
     INSURANCE_C_MAX,
     INSURANCE_SPECULATIVE_MAX,
+    MAX_POOL_FEE,
 };
 use utils::math::safe_math::SafeMath;
 use utils::state::oracle_registry::NormalAction;
@@ -174,14 +177,15 @@ impl PoolTrait for Pool {
 
         set_router(&e, &params.router);
 
-        // validate oracle asset ids
+        // validate oracle assets
         let now = e.ledger().timestamp();
+        let (base_asset, quote_asset) = params.assets;
         let _base_oracle_price_data: OraclePriceData = e.invoke_contract(
             &get_router(&e),
             &Symbol::new(&e, "get_price"),
             Vec::from_array(&e, [
                 e.current_contract_address().to_val(),
-                params.base_asset_id.to_val(),
+                base_asset.to_val(),
                 now.into_val(&e),
             ])
         );
@@ -190,7 +194,7 @@ impl PoolTrait for Pool {
             &Symbol::new(&e, "get_price"),
             Vec::from_array(&e, [
                 e.current_contract_address().to_val(),
-                params.quote_asset_id.to_val(),
+                quote_asset.to_val(),
                 now.into_val(&e),
             ])
         );
@@ -216,8 +220,7 @@ impl PoolTrait for Pool {
             &params.lp_token_info.symbol.into_val(&e)
         );
 
-        // 0.01% = 1; 1% = 100; 0.3% = 30
-        if (params.fee_fraction as u128) > FEE_MULTIPLIER - 1 {
+        if params.fee_fraction > MAX_POOL_FEE {
             panic_with_error!(&e, PoolValidationError::FeeOutOfBounds);
         }
 
@@ -225,13 +228,12 @@ impl PoolTrait for Pool {
         put_token_synthetic(&e, token_a.clone());
 
         let pool = PoolType {
-            asset: params.asset,
             token_b,
             tier: params.tier,
             status: PoolStatus::Initialized,
             fee_fraction: params.fee_fraction,
-            base_asset_id: params.base_asset_id,
-            quote_asset_id: params.quote_asset_id,
+            base_asset,
+            quote_asset,
             insurance_claim: InsuranceClaim {
                 rev_withdraw_since_last_settle: 0,
                 quote_max_insurance: params.quote_max_insurance,
@@ -322,13 +324,13 @@ impl PoolTrait for Pool {
         // Rebalance the pool
         let base_oracle_price_data = get_oracle_price(
             &e,
-            &pool.base_asset_id,
+            &pool.base_asset,
             false,
             NormalAction::AddLiquidity
         );
         let quote_oracle_price_data = get_oracle_price(
             &e,
-            &pool.quote_asset_id,
+            &pool.quote_asset,
             false,
             NormalAction::AddLiquidity
         );
@@ -431,13 +433,13 @@ impl PoolTrait for Pool {
 
         let base_oracle_price_data = get_oracle_price(
             &e,
-            &pool.base_asset_id,
+            &pool.base_asset,
             false,
             NormalAction::Swap
         );
         let quote_oracle_price_data = get_oracle_price(
             &e,
-            &pool.quote_asset_id,
+            &pool.quote_asset,
             false,
             NormalAction::Swap
         );
@@ -569,16 +571,15 @@ impl PoolTrait for Pool {
         let pool = get_pool(&e);
         let out = pool.get_amount_out(&e, in_amount, reserve_sell, reserve_buy).0;
 
-        let now = e.ledger().timestamp();
         let base_oracle_price_data = get_oracle_price(
             &e,
-            &pool.base_asset_id,
+            &pool.base_asset,
             true,
             NormalAction::Swap
         );
         let quote_oracle_price_data = get_oracle_price(
             &e,
-            &pool.quote_asset_id,
+            &pool.quote_asset,
             true,
             NormalAction::Swap
         );
@@ -637,13 +638,13 @@ impl PoolTrait for Pool {
 
         let base_oracle_price_data = get_oracle_price(
             &e,
-            &pool.base_asset_id,
+            &pool.base_asset,
             false,
             NormalAction::Swap
         );
         let quote_oracle_price_data = get_oracle_price(
             &e,
-            &pool.quote_asset_id,
+            &pool.quote_asset,
             false,
             NormalAction::Swap
         );
@@ -798,13 +799,13 @@ impl PoolTrait for Pool {
 
         let base_oracle_price_data = get_oracle_price(
             &e,
-            &pool.base_asset_id,
+            &pool.base_asset,
             true,
             NormalAction::Swap
         );
         let quote_oracle_price_data = get_oracle_price(
             &e,
-            &pool.quote_asset_id,
+            &pool.quote_asset,
             true,
             NormalAction::Swap
         );
@@ -871,13 +872,13 @@ impl PoolTrait for Pool {
 
         let base_oracle_price_data = get_oracle_price(
             &e,
-            &pool.base_asset_id,
+            &pool.base_asset,
             false,
             NormalAction::RemoveLiquidity
         );
         let quote_oracle_price_data = get_oracle_price(
             &e,
-            &pool.quote_asset_id,
+            &pool.quote_asset,
             false,
             NormalAction::RemoveLiquidity
         );
@@ -1001,13 +1002,13 @@ impl AdminInterfaceTrait for Pool {
 
         let base_oracle_price_data = get_oracle_price(
             &e,
-            &pool.base_asset_id,
+            &pool.base_asset,
             false,
             NormalAction::Rebalance
         );
         let quote_oracle_price_data = get_oracle_price(
             &e,
-            &pool.quote_asset_id,
+            &pool.quote_asset,
             false,
             NormalAction::Rebalance
         );
@@ -1035,13 +1036,13 @@ impl AdminInterfaceTrait for Pool {
 
         let base_oracle_price_data = get_oracle_price(
             &e,
-            &pool.base_asset_id,
+            &pool.base_asset,
             false,
             NormalAction::ClaimInsurance
         );
         let quote_oracle_price_data = get_oracle_price(
             &e,
-            &pool.quote_asset_id,
+            &pool.quote_asset,
             false,
             NormalAction::ClaimInsurance
         );
@@ -1149,6 +1150,20 @@ impl AdminInterfaceTrait for Pool {
         );
     }
 
+    fn set_fee(e: Env, admin: Address, fee_fraction: u32) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+
+        if fee_fraction > MAX_POOL_FEE {
+            panic_with_error!(&e, PoolValidationError::FeeOutOfBounds);
+        }
+
+        let mut pool = get_pool(&e);
+        pool.fee_fraction = fee_fraction;
+
+        set_pool(&e, &pool);
+    }
+
     fn set_tier(e: Env, admin: Address, tier: PoolTier) {
         admin.require_auth();
         require_operations_admin_or_owner(&e, &admin);
@@ -1210,7 +1225,7 @@ impl AdminInterfaceTrait for Pool {
         set_pool(&e, &pool);
     }
 
-      fn set_expiry(e: Env, admin: Address, expiry_ts: u64) {
+    fn set_expiry(e: Env, admin: Address, expiry_ts: u64) {
         admin.require_auth();
         require_operations_admin_or_owner(&e, &admin);
 

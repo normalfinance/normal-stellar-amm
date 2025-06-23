@@ -2,7 +2,7 @@ use soroban_sdk::contracttype;
 use soroban_sdk::Address;
 use soroban_sdk::Symbol;
 use soroban_sdk::Vec;
-use soroban_sdk::{ panic_with_error, Env };
+use soroban_sdk::{ Env };
 use soroban_fixed_point_math::SorobanFixedPoint;
 
 use crate::constant::FEE_MULTIPLIER;
@@ -13,12 +13,9 @@ use crate::state::token::TokenInitInfo;
 #[contracttype]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Pool {
-    pub asset: Address,
     pub token_b: Address,
-    // Oracle address for the base (synthetic) asset (i.e. nBTC)
-    pub base_asset_id: Symbol,
-    // Oracle address for the quote asset (TokenB) - usually XLM or USDC
-    pub quote_asset_id: Symbol,
+    pub base_asset: Symbol, // Oracle address for the base (synthetic) asset (i.e. nBTC)
+    pub quote_asset: Symbol, // Oracle address for the quote asset (TokenB) - usually XLM or USDC
     pub tier: PoolTier,
     pub status: PoolStatus,
     pub fee_fraction: u32, // 1 = 0.01%
@@ -194,12 +191,7 @@ pub struct InitializeParams {
     pub privileged_addrs: PrivilegedAddresses,
     // The address of the Router.
     pub router: Address,
-    // The
-    pub base_asset_id: Symbol,
-    //
-    pub quote_asset_id: Symbol,
-    //
-    pub asset: Address,
+    pub assets: (Symbol, Symbol),
     pub lp_token_info: TokenInitInfo,
     // A vector of token addresses.
     pub tokens: Vec<Address>,

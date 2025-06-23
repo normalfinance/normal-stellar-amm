@@ -7,7 +7,7 @@ use soroban_sdk::{ symbol_short, Address, Symbol, Vec };
 use utils::state::pool::PoolTier;
 use utils::test_utils::{
     get_mock_lp_token_info,
-    get_mock_oracle_registry_ids,
+    get_mock_assets,
     install_dummy_wasm,
     install_liq_pool_hash,
     install_token_wasm,
@@ -489,7 +489,7 @@ fn test_config_rewards() {
                     &addr,
                     &1,
                     &setup.env.ledger().timestamp().saturating_add(60),
-                    &Vec::from_array(&setup.env, [(tokens.clone(), 1_0000000)])
+                    &Vec::from_array(&setup.env, [setup.btc_asset.clone()])
                 )
                 .is_ok(),
             is_ok
@@ -507,10 +507,9 @@ fn test_distribute_rewards() {
     let tokens = Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]);
     setup.reward_token.mint(&user, &1_0000000);
     setup.reward_token.mint(&router.address, &1_0000000);
-    let (pool_hash, _pool_address) = router.init_pool(
+    router.init_pool(
         &user,
-        &get_mock_oracle_registry_ids(&e),
-        &setup.asset,
+        &get_mock_assets(&e),
         &tokens,
         &get_mock_lp_token_info(&e),
         &10,
@@ -531,14 +530,14 @@ fn test_distribute_rewards() {
             &setup.admin,
             &1_0000000,
             &e.ledger().timestamp().saturating_add(60),
-            &Vec::from_array(&e, [(tokens.clone(), 1_0000000)])
+            &Vec::from_array(&e, [setup.btc_asset.clone()])
         );
-        // router.fill_liquidity(&tokens);
-        router.config_pool_rewards(&tokens, &pool_hash);
+        router.fill_liquidity(&setup.btc_asset);
+        router.config_pool_rewards(&setup.btc_asset);
 
         assert_eq!(
             router
-                .try_distribute_outstanding_reward(&addr, &router.address, &tokens, &pool_hash)
+                .try_distribute_outstanding_reward(&addr, &router.address, &setup.btc_asset)
                 .is_ok(),
             is_ok
         );
@@ -564,16 +563,15 @@ fn test_remove_pool() {
         (setup.pause_admin, false),
         (setup.emergency_pause_admin, false),
     ] {
-        let (pool_hash, _pool_address) = router.init_pool(
+        router.init_pool(
             &user.clone(),
-            &get_mock_oracle_registry_ids(&e),
-            &setup.asset,
+            &get_mock_assets(&e),
             &tokens,
             &get_mock_lp_token_info(&e),
             &10,
             &PoolTier::A,
             &10_000_000_u128
         );
-        assert_eq!(router.try_remove_pool(&addr, &tokens, &pool_hash).is_ok(), is_ok);
+        assert_eq!(router.try_remove_pool(&addr, &setup.btc_asset).is_ok(), is_ok);
     }
 }

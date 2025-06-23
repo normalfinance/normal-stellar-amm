@@ -14,8 +14,8 @@ use crate::storage_types::{ HistoricalOracleData, OracleGuardRails };
 #[contracttype]
 enum DataKey {
     OracleGuardRails, // a set of oracle price data validations and protections.
-    OraclesSet(Symbol), // map of asset id symbol to OracleInfo.
-    HistoricalOracleData(Symbol), // stores historically witnessed oracle data.
+    OraclesSet(Symbol), // map of asset (i.e. "BTC") > OracleInfo.
+    HistoricalOracleData(Symbol), // map of asset (i.e. "BTC") > HistoricalOracleData (historically witnessed oracle data).
 }
 
 generate_instance_storage_getter_and_setter!(
@@ -24,8 +24,8 @@ generate_instance_storage_getter_and_setter!(
     OracleGuardRails
 );
 
-pub(crate) fn get_oracle_base(e: &Env, asset_id: &Symbol) -> Option<OracleInfo> {
-    let key = DataKey::OraclesSet(asset_id.clone());
+pub(crate) fn get_oracle_base(e: &Env, asset: &Symbol) -> Option<OracleInfo> {
+    let key = DataKey::OraclesSet(asset.clone());
     match e.storage().persistent().get(&key) {
         Some(value) => {
             bump_persistent(e, &key);
@@ -35,29 +35,29 @@ pub(crate) fn get_oracle_base(e: &Env, asset_id: &Symbol) -> Option<OracleInfo> 
     }
 }
 
-pub(crate) fn get_oracle(e: &Env, asset_id: &Symbol) -> OracleInfo {
-    let result = get_oracle_base(e, asset_id);
+pub(crate) fn get_oracle(e: &Env, asset: &Symbol) -> OracleInfo {
+    let result = get_oracle_base(e, asset);
     match result {
         Some(value) => { value }
         None => panic_with_error!(&e, StorageError::ValueNotInitialized),
     }
 }
 
-pub(crate) fn put_oracle(e: &Env, asset_id: &Symbol, info: &OracleInfo) {
-    let key = DataKey::OraclesSet(asset_id.clone());
+pub(crate) fn put_oracle(e: &Env, asset: &Symbol, info: &OracleInfo) {
+    let key = DataKey::OraclesSet(asset.clone());
     e.storage().persistent().set(&key, info);
     bump_persistent(e, &key);
 }
 
-pub fn get_historical_oracle_data(e: &Env, asset_id: &Symbol) -> HistoricalOracleData {
-    let key = DataKey::HistoricalOracleData(asset_id.clone());
+pub fn get_historical_oracle_data(e: &Env, asset: &Symbol) -> HistoricalOracleData {
+    let key = DataKey::HistoricalOracleData(asset.clone());
     match e.storage().persistent().get(&key) {
         Some(data) => data,
         None => HistoricalOracleData::default_quote_oracle(),
     }
 }
 
-pub fn put_historical_oracle_data(e: &Env, asset_id: &Symbol, data: &HistoricalOracleData) {
-    let key = DataKey::HistoricalOracleData(asset_id.clone());
+pub fn put_historical_oracle_data(e: &Env, asset: &Symbol, data: &HistoricalOracleData) {
+    let key = DataKey::HistoricalOracleData(asset.clone());
     e.storage().instance().set(&key, data)
 }

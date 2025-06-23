@@ -15,13 +15,13 @@ pub trait OracleRegistryTrait {
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
     // Get the oracle price
-    fn get_price(e: Env, asset_id: Symbol, cached: bool, action: NormalAction) -> OraclePriceData;
+    fn get_price(e: Env, asset: Symbol, cached: bool, action: NormalAction) -> OraclePriceData;
 
     // Get the historical oracle info
-    fn get_last_price(e: Env, asset_id: Symbol) -> HistoricalOracleData;
+    fn get_last_price(e: Env, asset: Symbol) -> HistoricalOracleData;
 
     // Get the registered oracle info
-    fn get_oracle(e: Env, asset_id: Symbol) -> OracleInfo;
+    fn get_oracle(e: Env, asset: Symbol) -> OracleInfo;
 
     //   _______    _______  ___________  ___________  _______   _______    ________
     //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
@@ -47,9 +47,9 @@ pub trait AdminInterface {
     fn register_oracle(
         e: Env,
         admin: Address,
-        asset_id: Symbol,
+        asset: Symbol,
         oracle_addr: Address,
-        asset: Address,
+        asset_addr: Address,
         decimals: u32,
         sanitize_clamp_denominator: i64
     ) -> OracleInfo;
@@ -58,12 +58,12 @@ pub trait AdminInterface {
     fn update_oracle(
         e: Env,
         admin: Address,
-        asset_id: Symbol,
+        asset: Symbol,
         params: MutableOracleInfo
     ) -> OracleInfo;
 
     // Admin failsafe to manually set the oracle price
-    fn set_oracle_price(e: Env, admin: Address, asset_id: Symbol, price: u128);
+    fn set_oracle_price(e: Env, admin: Address, asset: Symbol, price: u128);
 
     //   ________  _______  ___________  ___________  _______   _______    ________
     //  /"       )/"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )

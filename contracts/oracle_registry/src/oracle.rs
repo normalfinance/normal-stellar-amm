@@ -281,6 +281,7 @@ pub fn oracle_validity(
     let is_oracle_price_nonpositive = oracle_price <= 0;
 
     // Volatility
+    // if price / twap >= 1.10 or twap / price >= 1.10 → too volatile
     let max_ratio = oracle_guard_rails.validity.too_volatile_ratio as u128;
     let ratio_1 = oracle_price.safe_div(e, last_oracle_twap.max(1));
     let ratio_2 = last_oracle_twap.safe_div(e, oracle_price.max(1));

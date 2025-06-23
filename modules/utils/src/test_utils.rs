@@ -68,7 +68,7 @@ pub fn install_dummy_wasm<'a>(e: &Env) -> BytesN<32> {
 // (:   _) \\        /  |    \    \ | /" \   :)     \:  | /   /  \\  \|    \    \ |   \:  |    /" \   :)
 //  \_______)\"_____/    \___|\____\)(_______/       \__|(___/    \___)\___|\____\)    \__|   (_______/
 
-pub fn get_mock_oracle_registry_ids<'a>(e: &Env) -> (Symbol, Symbol) {
+pub fn get_mock_assets<'a>(e: &Env) -> (Symbol, Symbol) {
     (Symbol::new(e, "BTC"), Symbol::new(e, "XLM"))
 }
 

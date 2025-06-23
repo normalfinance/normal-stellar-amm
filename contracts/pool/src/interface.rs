@@ -120,6 +120,8 @@ pub trait AdminInterfaceTrait {
         emergency_pause_admins: Vec<Address>
     );
 
+    fn set_fee(e: Env, admin: Address, fee_fraction: u32);
+
     fn set_tier(e: Env, admin: Address, tier: PoolTier);
 
     fn set_status(e: Env, admin: Address, status: PoolStatus);

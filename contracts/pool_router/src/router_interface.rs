@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Vec};
+use soroban_sdk::{ Address, BytesN, Env, Vec };
 
 pub trait AdminInterface {
     // Initialize admin user. Will panic if called twice
@@ -10,11 +10,8 @@ pub trait AdminInterface {
         rewards_admin: Address,
         operations_admin: Address,
         pause_admin: Address,
-        emergency_pause_admins: Vec<Address>,
+        emergency_pause_admins: Vec<Address>
     );
-
-    // Get map of privileged roles
-    fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>>;
 
     // Set liquidity pool token wasm hash
     fn set_token_hash(e: Env, admin: Address, new_hash: BytesN<32>);
@@ -24,4 +21,6 @@ pub trait AdminInterface {
 
     // Set reward token address
     fn set_reward_token(e: Env, admin: Address, reward_token: Address);
+
+    fn set_liquidity_calculator(e: Env, admin: Address, calculator: Address);
 }

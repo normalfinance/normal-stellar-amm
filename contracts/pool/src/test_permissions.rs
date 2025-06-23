@@ -5,6 +5,8 @@ use access_control::constants::ADMIN_ACTIONS_DELAY;
 use pool_tokens::Client as ShareTokenClient;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{ symbol_short, Address, Symbol, Vec };
+use utils::constant::{ ONE_HOUR, PRICE_PRECISION };
+use utils::state::pool::{ PoolStatus, PoolTier };
 use utils::test_utils::{ install_dummy_wasm, jump };
 
 // test admin transfer ownership
@@ -435,14 +437,15 @@ fn test_set_privileged_addresses() {
         (setup.emergency_pause_admin.clone(), false),
     ] {
         assert_eq!(
-            pool.try_set_privileged_addrs(
-                &addr,
-                &setup.rewards_admin.clone(),
-                &setup.operations_admin.clone(),
-                &setup.pause_admin.clone(),
-                &Vec::from_array(&setup.env, [setup.emergency_pause_admin.clone()])
-            )
-            .is_ok(),
+            pool
+                .try_set_privileged_addrs(
+                    &addr,
+                    &setup.rewards_admin.clone(),
+                    &setup.operations_admin.clone(),
+                    &setup.pause_admin.clone(),
+                    &Vec::from_array(&setup.env, [setup.emergency_pause_admin.clone()])
+                )
+                .is_ok(),
             is_ok
         );
     }
@@ -482,14 +485,116 @@ fn test_set_rewards_config() {
         (setup.emergency_pause_admin, false),
     ] {
         assert_eq!(
-            pool.try_set_incentives_config(
-                &addr,
-                &setup.env.ledger().timestamp().saturating_add(10),
-                &1
-            )
-            .is_ok(),
+            pool
+                .try_set_incentives_config(
+                    &addr,
+                    &setup.env.ledger().timestamp().saturating_add(10),
+                    &1
+                )
+                .is_ok(),
             is_ok
         );
         jump(&setup.env, 10);
+    }
+}
+
+#[test]
+fn test_set_fee() {
+    let setup = Setup::default();
+    let pool = setup.liq_pool;
+    let fee = 90_u32;
+    let user = Address::generate(&setup.env);
+
+    for (addr, is_ok) in [
+        (user, false),
+        (setup.admin, true),
+        (setup.rewards_admin, false),
+        (setup.operations_admin, false),
+        (setup.pause_admin, false),
+        (setup.emergency_pause_admin, false),
+    ] {
+        assert_eq!(pool.try_set_fee(&addr, &fee).is_ok(), is_ok);
+    }
+}
+
+#[test]
+fn test_set_tier() {
+    let setup = Setup::default();
+    let pool = setup.liq_pool;
+    let tier = PoolTier::B;
+    let user = Address::generate(&setup.env);
+
+    for (addr, is_ok) in [
+        (user, false),
+        (setup.admin, true),
+        (setup.rewards_admin, false),
+        (setup.operations_admin, false),
+        (setup.pause_admin, false),
+        (setup.emergency_pause_admin, false),
+    ] {
+        assert_eq!(pool.try_set_tier(&addr, &tier).is_ok(), is_ok);
+    }
+}
+
+#[test]
+fn test_set_status() {
+    let setup = Setup::default();
+    let pool = setup.liq_pool;
+    let status = PoolStatus::ReduceOnly;
+    let user = Address::generate(&setup.env);
+
+    for (addr, is_ok) in [
+        (user, false),
+        (setup.admin, true),
+        (setup.rewards_admin, false),
+        (setup.operations_admin, false),
+        (setup.pause_admin, false),
+        (setup.emergency_pause_admin, false),
+    ] {
+        assert_eq!(pool.try_set_status(&addr, &status).is_ok(), is_ok);
+    }
+}
+
+#[test]
+fn test_set_max_imbalances() {
+    let setup = Setup::default();
+    let pool = setup.liq_pool;
+    let liquidity_max_imbalance = 1_000_000 * PRICE_PRECISION;
+    let quote_max_insurance = 1_000_000 * PRICE_PRECISION;
+    let user = Address::generate(&setup.env);
+
+    for (addr, is_ok) in [
+        (user, false),
+        (setup.admin, true),
+        (setup.rewards_admin, false),
+        (setup.operations_admin, false),
+        (setup.pause_admin, false),
+        (setup.emergency_pause_admin, false),
+    ] {
+        assert_eq!(
+            pool
+                .try_set_max_imbalances(&addr, &liquidity_max_imbalance, &quote_max_insurance)
+                .is_ok(),
+            is_ok
+        );
+    }
+}
+
+#[test]
+fn test_set_expiry() {
+    let setup = Setup::default();
+    let pool = setup.liq_pool;
+    let expiry_ts = setup.env.ledger().timestamp() + ONE_HOUR;
+    let user = Address::generate(&setup.env);
+
+    for (addr, is_ok) in [
+        (user, false),
+        (setup.admin, true),
+        (setup.rewards_admin, false),
+        (setup.operations_admin, false),
+        (setup.pause_admin, false),
+        (setup.emergency_pause_admin, false),
+    ] {
+        assert_eq!(pool.try_set_expiry(&addr, &expiry_ts).is_ok(), is_ok);
     }
 }

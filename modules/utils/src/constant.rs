@@ -54,7 +54,6 @@ pub const FEE_MULTIPLIER: u128 = 10_000;
 pub const DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR: i64 = 3; // '3' here means clamp new data point to 33% (1/3) divergence from current twap (if twap > 0)
 
 // Pool Router
-pub const MAX_POOLS_FOR_PAIR: u32 = 1;
 pub const MAX_POOL_FEE: u32 = 100; // 1%
 
 // Swap Fee

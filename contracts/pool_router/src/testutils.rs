@@ -49,10 +49,10 @@ pub(crate) struct Setup<'a> {
 
     // oracle
     pub(crate) btc_addr: Address,
-    pub(crate) btc_asset_id: Symbol,
+    pub(crate) btc_asset: Symbol,
     pub(crate) btc_asset: MockAsset,
     pub(crate) eth_addr: Address,
-    pub(crate) eth_asset_id: Symbol,
+    pub(crate) eth_asset: Symbol,
     pub(crate) eth_asset: MockAsset,
 }
 
@@ -127,9 +127,9 @@ impl Default for Setup<'_> {
         let btc_addr = Address::generate(&e);
         let eth_addr = Address::generate(&e);
 
-        let btc_asset_id = Symbol::new(&e, "BTC");
-        let eth_asset_id = Symbol::new(&e, "ETH");
-        
+        let btc_asset = Symbol::new(&e, "BTC");
+        let eth_asset = Symbol::new(&e, "ETH");
+
         let btc_asset = MockAsset::Stellar(btc_addr.clone());
         let eth_asset = MockAsset::Stellar(eth_addr.clone());
 
@@ -159,12 +159,11 @@ impl Default for Setup<'_> {
                 },
                 validity: ValidityGuardRails {
                     seconds_before_stale_for_pool: 10, // ~5 seconds
-                    confidence_interval_max_size: 20_000, // 2% of price
                     too_volatile_ratio: 5, // 5x or 80% down
                 },
             })
         );
-        registry.register_oracle(&admin, &btc_asset_id, &oracle_id, &btc_addr, &7, &0);
+        registry.register_oracle(&admin, &btc_asset, &oracle, &btc_addr, &7, &0);
 
         Setup {
             env: e,
@@ -185,10 +184,10 @@ impl Default for Setup<'_> {
 
             // oracle
             btc_addr,
-            btc_asset_id,
+            btc_asset,
             btc_asset,
             eth_addr,
-            eth_asset_id,
+            eth_asset,
             eth_asset,
         }
     }
