@@ -85,7 +85,7 @@ pub fn get_oracle_price(
             e.current_contract_address().to_val(),
             asset_id.to_val(),
             cached.into_val(e),
-            action.to_val(),
+            action.into_val(e),
         ])
     );
     oracle_price_data

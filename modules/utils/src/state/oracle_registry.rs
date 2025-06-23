@@ -48,6 +48,7 @@ impl MutableOracleInfo {
 
 // Actions dependant on oracle prices
 #[derive(Clone, Copy, PartialEq, Debug, Eq)]
+#[contracttype]
 pub enum NormalAction {
     AddLiquidity,
     RemoveLiquidity,
