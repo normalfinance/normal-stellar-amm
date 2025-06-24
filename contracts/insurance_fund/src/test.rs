@@ -5,7 +5,7 @@ use crate::stake::{ Stake, StakeAction };
 use crate::testutils::{ Setup, TestConfig };
 use soroban_sdk::testutils::{ Address as _, Events };
 use soroban_sdk::token::TokenClient;
-use soroban_sdk::{ vec, Address, Error, IntoVal, Symbol, Val, Vec };
+use soroban_sdk::{ vec, Error, IntoVal, Symbol, Val };
 use utils::constant::{ ONE_HOUR, PRICE_PRECISION, THIRTEEN_DAY, THIRTY_DAY };
 // use utils::test_utils::insurance_fund::Stake;
 use utils::test_utils::jump;

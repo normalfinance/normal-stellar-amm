@@ -68,27 +68,45 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
     // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
-    // swap
-    // Executes a token swap with fee deduction.
-    //
-    // Arguments:
-    //   - e: The Soroban environment.
-    //   - user: The user initiating the swap (must be authorized).
-    //   - token_in: The input token address.
-    //   - token_in: The input token address.
-    //   - pool_index: ...
-    //   - in_amount: The amount of token_in provided by the user.
-    //   - out_min: The minimum acceptable output token amount (after fee deduction).
-    //
-    // Returns:
-    //   - A u128 value representing the net output tokens transferred to the user.
+    /// Executes a token swap through a delegated pool contract with integrated fee routing, rewards, and accounting.
+    ///
+    /// This function facilitates the user swapping one token for another using the appropriate pool
+    /// linked to a synthetic asset symbol. It handles:
+    /// - Token transfer from user to router
+    /// - Routing the swap to the pool via the router contract
+    /// - Applying protocol-level fees
+    /// - Distributing LP revenue, buffer reserves, and insurance fund premiums
+    /// - Tracking long-term metrics like volume and incentives
+    ///
+    /// # Arguments
+    /// * `e` - The Soroban environment.
+    /// * `user` - The address of the user performing the swap.
+    /// * `tokens` - A vector of token addresses, typically [Token A, Token B].
+    /// * `token_in` - The address of the input token (sold by the user).
+    /// * `token_out` - The address of the output token (received by the user).
+    /// * `asset` - The synthetic asset symbol tied to the pool.
+    /// * `in_amount` - Amount of the input token being swapped.
+    /// * `out_min` - Minimum acceptable output token amount (slippage protection).
+    ///
+    /// # Returns
+    /// * `u128` - The actual amount of output token received (after all fees).
+    ///
+    /// # Panics
+    /// * If the user is not authorized.
+    /// * If the output after fees is below `out_min`.
+    /// * If cross-contract calls fail (e.g., due to misconfiguration or insufficient balances).
+    ///
+    /// # Side Effects
+    /// * Transfers tokens between user, pool, router, buffer, and insurance fund.
+    /// * Emits swap-related events: trade, buffer deposit, insurance premium, protocol fee charged.
+    /// * Updates rolling volume and LP incentive checkpoints.
     fn swap(
         e: Env,
         user: Address,
         tokens: Vec<Address>,
         token_in: Address,
         token_out: Address,
-        pool_index: BytesN<32>,
+        asset: Symbol,
         in_amount: u128,
         out_min: u128
     ) -> u128 {
@@ -103,11 +121,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         let pool_fee_fraction: u32 = e.invoke_contract(
             &router,
             &Symbol::new(&e, "get_fee_fraction"),
-            Vec::from_array(&e, [
-                e.current_contract_address().to_val(),
-                tokens.clone().to_val(),
-                pool_index.clone().to_val(),
-            ])
+            Vec::from_array(&e, [e.current_contract_address().to_val(), asset.clone().to_val()])
         );
 
         // Always collect the fee in token_b
@@ -147,7 +161,10 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
             Vec::from_array(&e, [
                 e.current_contract_address().to_val(),
                 user.clone().to_val(),
+                tokens.clone().to_val(),
                 token_in.clone().to_val(),
+                token_out.clone().to_val(),
+                asset.clone().to_val(),
                 in_amount_mut.into_val(&e),
                 out_min.into_val(&e),
             ])
@@ -237,11 +254,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         let pool_insurance_coverage: u128 = e.invoke_contract(
             &router,
             &Symbol::new(&e, "get_insurance_coverage"),
-            Vec::from_array(&e, [
-                e.current_contract_address().to_val(),
-                tokens.clone().to_val(),
-                pool_index.clone().to_val(),
-            ])
+            Vec::from_array(&e, [e.current_contract_address().to_val(), asset.clone().to_val()])
         );
 
         if insurance_premium_rate > 0 {
@@ -262,7 +275,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
             if insurance_premium_to_pay > 0 {
                 // TODO: must we also call the Pool to update last_revenue_withdraw_ts and rev_withdraw_since_last_settle?
 
-                let premium_paid: u128 = e.invoke_contract(
+                let _premium_paid: u128 = e.invoke_contract(
                     &insurance_fund,
                     &Symbol::new(&e, "pay_premium"),
                     Vec::from_array(&e, [
@@ -285,11 +298,8 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         let incentives = get_incentives_manager(&e);
         let total_shares = get_total_lp_tokens(&e);
         let user_shares = get_user_balance_lp(&e, &user);
-        let token_a_fee = if out_idx == 0 { lp_fee_amount } else { 0 };
         let token_b_fee = if out_idx == 0 { 0 } else { lp_fee_amount };
-        incentives
-            .manager()
-            .checkpoint_user(&user, total_shares, user_shares, token_a_fee, token_b_fee);
+        incentives.manager().checkpoint_user(&user, total_shares, user_shares, token_b_fee);
 
         amount_out_w_fee
     }
@@ -350,16 +360,25 @@ impl AdminInterface for PoolSwapFeeCollector {
     // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
-    // claim_fees
-    // Claims all fees held by the contract and transfers them to the specified address.
-    //
-    // Arguments:
-    //   - e: The Soroban environment.
-    //   - admin: The address calling for fee claiming (must match the stored operator).
-    //   - token: The token contract address for which fees are claimed.
-    //
-    // Returns:
-    //   - A u128 value representing the claimed token amount.
+    /// Claims and transfers all accumulated protocol fees of a given token to the fee destination.
+    ///
+    /// This function is restricted to the admin and is used to move all collected fees (in `token`)
+    /// from the contract's balance to the designated fee recipient address.
+    ///
+    /// # Arguments
+    /// * `e` - The Soroban environment.
+    /// * `admin` - The admin address authorized to claim fees.
+    /// * `token` - The token address representing the asset whose fees are being claimed.
+    ///
+    /// # Returns
+    /// * `u128` - The total amount of the token transferred to the fee destination.
+    ///
+    /// # Panics
+    /// * If the caller is not authorized as admin.
+    ///
+    /// # Side Effects
+    /// * Transfers the full token balance from the contract to the `fee_destination`.
+    /// * Emits a `claim_fee` event recording the token and amount.
     fn claim_fees(e: Env, admin: Address, token: Address) -> u128 {
         admin.require_auth();
         require_admin(&e, &admin);

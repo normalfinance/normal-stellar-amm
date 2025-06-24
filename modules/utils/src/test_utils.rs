@@ -1,7 +1,7 @@
 #![cfg(any(test, feature = "testutils"))]
 
 use soroban_sdk::testutils::{ Ledger, LedgerInfo };
-use soroban_sdk::{ Address, BytesN, Env, String, Symbol, Vec, U256 };
+use soroban_sdk::{ Address, BytesN, Env, String, Symbol, U256 };
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient,
     TokenClient as SorobanTokenClient,

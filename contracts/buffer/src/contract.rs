@@ -83,13 +83,34 @@ impl BufferTrait for Buffer {
     // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
-    // Deposit tokens into the Buffer Reserve.
+    // Deposits protocol revenue into the Buffer for a specific token.
+    //
+    // This function is typically used by the Pool during `swap()` operations to allocate a portion
+    // of collected fees to the Buffer, which serves as a short-term reserve for liquidity support.
+    // It can also be called externally, though the Buffer is not intended for user fundraising.
     //
     // # Arguments
+    // * `e` - The Soroban environment.
+    // * `sender` - The address initiating the deposit (must be authorized).
+    // * `token` - The token address being deposited.
+    // * `amount` - The amount of tokens to deposit.
     //
-    // * `sender` - The address of the sender.
-    // * `token` - The address of the token to deposit.
-    // * `amount` - The amount of the token to deposit.
+    // # Behavior
+    // * Verifies the `sender` has authorized the call.
+    // * Validates that deposits are not currently disabled (`BufferDepositKilled` flag).
+    // * Checks that the Buffer reserve does not exceed its configured `max_balance`.
+    // * Updates internal Buffer reserve accounting.
+    // * Transfers the tokens from the sender to the Buffer contract address.
+    // * Emits a `deposit` event.
+    //
+    // # Access
+    // * Currently unrestricted; any address may deposit.
+    // * Typically used by `PoolSwapFee.swap()`.
+    // * [Future Consideration]: Restrict to Pool or Router only.
+    //
+    // # Panics / Errors
+    // * `BufferError::BufferDepositKilled` – if deposits are disabled.
+    // * `BufferError::ReserveMaxBalanceThreshold` – if deposit exceeds the reserve’s `max_balance`.
     fn deposit(e: Env, sender: Address, token: Address, amount: u128) {
         sender.require_auth();
 
@@ -206,15 +227,40 @@ impl AdminInterface for Buffer {
     // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
-    // Use a Buffer Reserve to cover a Pool liquidity deficit
-    // (the value of `reserve_b` is lower than the value of all `token_a` in circulation).
+    // Resolves a liquidity deficit in a target Pool by transferring tokens from the Buffer.
+    //
+    // This function is typically triggered by the Buffer admin to manually assist a Pool suffering
+    // from a short-term imbalance or deficit. It transfers funds from the Buffer to the specified
+    // Pool and calls its `pay_insurance_claim()` method to settle the claim.
     //
     // # Arguments
+    // * `e` - The Soroban environment.
+    // * `admin` - The admin authorized to trigger the resolution (must be authenticated).
+    // * `token` - The token address of the reserve used for payout.
+    // * `amount` - The amount of tokens to send to the Pool.
+    // * `pool_address` - The address of the Pool contract requesting liquidity.
     //
-    // * `admin` - The address of the admin.
-    // * `token` - The address of the token in reserve to withdraw.
-    // * `amount` - The amount to withdraw.
-    // * `pool_address` - The address of the Pool with liquidity deficit.
+    // # Behavior
+    // * Verifies that the caller is the authorized Buffer admin.
+    // * Ensures that liquidity resolution is currently enabled.
+    // * Validates the token contract and confirms the reserve balance is sufficient.
+    // * Checks that a minimum interval has passed since the last payout to prevent abuse.
+    // * Deducts the `amount` from the Buffer reserve and updates the timestamp.
+    // * Sends tokens to the Pool and invokes `pay_insurance_claim()` to settle the deficit.
+    // * Emits a `resolve_liquidity_deficit` event.
+    //
+    // # Access
+    // * Currently restricted to Buffer admin only.
+    // * [Future Consideration]: Automate in `Pool.swap()` or decentralize via governance.
+    //
+    // # Panics / Errors
+    // * `BufferError::BufferRequestPayoutKilled` – if payouts are currently disabled.
+    // * `BufferError::PayoutTooSoon` – if not enough time has passed since the last payout.
+    // * `BufferError::InsufficentFunds` – if the reserve balance is insufficient.
+    // * `BufferError::InvalidToken` – if the token is not a valid Soroban token contract.
+    //
+    // # Returns
+    // * `u128` – The amount of tokens successfully paid to the Pool.
     fn resolve_liquidity_deficit(
         e: Env,
         admin: Address,
@@ -265,19 +311,36 @@ impl AdminInterface for Buffer {
         paid
     }
 
-    // Withdraws surplus reserves.
+    // Allows the admin to withdraw surplus tokens from the Buffer reserve, above the required minimum.
+    //
+    // This function ensures that a reserve floor (defined by a minimum reserve ratio) is maintained
+    // in the Buffer while allowing the admin to extract excess funds for protocol use (e.g., revenue).
     //
     // # Arguments
+    // * `e` - The Soroban environment.
+    // * `admin` - The administrator address requesting the withdrawal (must be authenticated).
+    // * `token` - The token address to withdraw from the Buffer.
+    // * `amount` - The amount of tokens to withdraw.
     //
-    // * `admin` - The address of the admin.
-    // * `token` - The address of the token in reserve to withdraw.
-    // * `amount` - The amount to withdraw.
+    // # Behavior
+    // * Authenticates the admin and checks admin permissions.
+    // * Validates the token contract.
+    // * Ensures the withdrawal won't bring the reserve below the minimum reserve ratio.
+    // * Updates the Buffer reserve state.
+    // * Transfers the tokens from the Buffer to the admin address.
+    // * Emits a `withdraw_surplus` event.
+    //
+    // # Errors / Panics
+    // * `BufferError::WithdrawalOverMinimumReserve` – If the withdrawal would violate the min reserve.
+    // * `BufferError::InsufficentFunds` – If trying to withdraw more than the reserve balance.
+    // * Any error from `validate_token_contract()` or `transfer_token()` (e.g. invalid token).
+    //
+    // # Notes
+    // * The minimum reserve ratio is specified in basis points (e.g. 2500 = 25%).
+    // * This function enables revenue extraction while protecting liquidity integrity.
     fn withdraw_surplus(e: Env, admin: Address, token: Address, amount: u128) {
         admin.require_auth();
         require_admin(&e, &admin);
-
-        /* Halborn
-         */
 
         validate_token_contract(&e, &token);
 

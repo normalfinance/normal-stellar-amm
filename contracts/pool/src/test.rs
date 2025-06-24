@@ -4,7 +4,7 @@ extern crate std;
 use rand::rngs::StdRng;
 use rand::{ Rng, SeedableRng };
 use soroban_sdk::symbol_short;
-use utils::constant::{ PERCENTAGE_PRECISION_U64, PRICE_PRECISION, PRICE_PRECISION_I128 };
+use utils::constant::{ PRICE_PRECISION, PRICE_PRECISION_I128 };
 
 use crate::testutils::{ create_pool_contract, Setup, TestConfig };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
@@ -423,9 +423,7 @@ fn initialize_already_initialized() {
             emergency_pause_admins: Vec::from_array(&setup.env, [users[0].clone()]),
         },
         router: users[0].clone(),
-        base_asset_id: setup.btc_asset_id,
-        quote_asset_id: setup.xlm_asset_id,
-        asset: setup.btc_addr.clone(),
+        assets: (setup.btc_asset_id, setup.xlm_asset_id),
         tokens: Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]),
         lp_token_info: TokenInitInfo {
             token_wasm_hash: install_token_wasm(&setup.env),
@@ -460,9 +458,7 @@ fn initialize_already_initialized_plane() {
                 emergency_pause_admins: Vec::from_array(&setup.env, [users[0].clone()]),
             },
             router: users[0].clone(),
-            base_asset_id: setup.btc_asset_id.clone(),
-            quote_asset_id: setup.xlm_asset_id.clone(),
-            asset: setup.btc_addr.clone(),
+            assets: (setup.btc_asset_id.clone(), setup.xlm_asset_id.clone()),
             tokens: Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]),
             lp_token_info: TokenInitInfo {
                 token_wasm_hash: install_token_wasm(&setup.env),
@@ -508,9 +504,7 @@ fn test_custom_fee() {
             &setup.admin,
             &setup.plane.address,
             &setup.router.address,
-            &setup.btc_asset_id,
-            &setup.xlm_asset_id,
-            &setup.btc_addr,
+            &(setup.btc_asset_id.clone(), setup.xlm_asset_id.clone()),
             &install_token_wasm(&setup.env),
             &get_mock_lp_token_info(&setup.env),
             &Vec::from_array(&setup.env, [
@@ -894,7 +888,7 @@ fn test_rewards_many_users(iterations_to_simulate: u32) {
 
     jump(&env, 100);
     env.cost_estimate().budget().reset_default();
-    let (user1_claim, _, _) = liq_pool.claim(&first_user);
+    let (user1_claim, _fees_owed) = liq_pool.claim(&first_user);
     env.cost_estimate().budget().print();
     assert_approx_eq_abs(user1_claim, expected_reward, 10000); // small loss because of rounding is fine
 }
@@ -2047,7 +2041,7 @@ fn test_swap_with_invalid_oracle() {
         &tokens,
         &setup.token1.address,
         &setup.token2.address,
-        &setup.pool_index,
+        &setup.btc_asset_id,
         &10_0000000,
         &2_8952731
     );

@@ -144,7 +144,7 @@ fn test_register_oracle() {
     );
     assert_eq!(setup.registry.get_oracle(&setup.eth_asset_id), OracleInfo {
         address: setup.oracle,
-        asset: setup.eth_addr,
+        asset_addr: setup.eth_addr,
         decimals: 7,
         frozen: false,
         sanitize_clamp_denominator: 0,

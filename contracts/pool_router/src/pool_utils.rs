@@ -1,13 +1,7 @@
 use crate::events::{ Events, PoolRouterEvents };
 use crate::incentives::get_incentives_manager;
 use crate::liquidity_calculator::LiquidityCalculatorClient;
-use crate::storage::{
-    get_pool,
-    get_pool_hash,
-    get_pool_plane,
-    get_token_hash,
-    put_pool,
-};
+use crate::storage::{ get_pool, get_pool_hash, get_pool_plane, get_token_hash, put_pool };
 use access_control::access::AccessControl;
 use access_control::management::{ MultipleAddressesManagementTrait, SingleAddressManagementTrait };
 use access_control::role::Role;
@@ -71,8 +65,7 @@ This design is intentional for three reasons:
     creates better trading access and conditions given the natural arbitrage that follows
     primary to secondary market dynamics.
 */
-
-pub fn get_pool_salt(e: &Env, asset: &Symbol) -> BytesN<32> {
+fn get_pool_salt(e: &Env, asset: &Symbol) -> BytesN<32> {
     let mut salt = Bytes::new(e);
     salt.append(&symbol_short!("0x00").to_xdr(e));
     salt.append(&asset.to_xdr(e));

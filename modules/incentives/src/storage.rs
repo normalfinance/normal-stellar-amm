@@ -188,8 +188,7 @@ impl PoolIncentivesStorageTrait for Storage {
                 accumulated_rewards: 0,
                 claimed_rewards: 0,
                 rewards_last_time: 0,
-                fee_growth_a_per_lp: 0,
-                fee_growth_b_per_lp: 0,
+                fee_growth_per_lp: 0,
             },
         }
     }

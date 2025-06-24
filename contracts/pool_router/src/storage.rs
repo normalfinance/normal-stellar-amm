@@ -1,5 +1,4 @@
 use crate::errors::PoolRouterError;
-use crate::pool_utils::{ get_pool_salt };
 use paste::paste;
 use soroban_sdk::{
     contracterror,
@@ -18,8 +17,6 @@ use utils::errors::storage_errors::StorageError;
 use utils::{
     generate_instance_storage_getter,
     generate_instance_storage_getter_and_setter,
-    generate_instance_storage_getter_and_setter_with_default,
-    generate_instance_storage_getter_with_default,
     generate_instance_storage_setter,
 };
 
@@ -69,11 +66,6 @@ generate_instance_storage_getter_and_setter!(
     BytesN<32>
 );
 generate_instance_storage_getter_and_setter!(token_hash, DataKey::TokenHash, BytesN<32>);
-generate_instance_storage_getter_and_setter!(
-    pools_vec,
-    DataKey::PoolsVec,
-    Vec<Address>
-);
 generate_instance_storage_getter_and_setter!(pool_plane, DataKey::PoolPlane, Address);
 generate_instance_storage_getter_and_setter!(
     liquidity_calculator,

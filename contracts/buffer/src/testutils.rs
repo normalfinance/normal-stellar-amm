@@ -37,7 +37,7 @@ pub(crate) struct Setup<'a> {
     pub(crate) pool_address: Address,
 
     // contracts
-    pub(crate) buffer: BufferClient<'a>, // buffer::Client<'a>,
+    pub(crate) buffer: BufferClient<'a>,
 
     // tokens
     pub(crate) token_a: SorobanTokenClient<'a>,
@@ -70,8 +70,6 @@ impl Setup<'_> {
 
         let token_a = create_token_contract(&e, &admin);
         let token_a_admin_client = get_token_admin_client(&e, &token_a.address.clone());
-
-        let fee_collector = Address::generate(&e);
 
         let buffer = create_buffer_contract(&e);
         buffer.initialize(

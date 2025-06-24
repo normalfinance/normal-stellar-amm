@@ -9,8 +9,6 @@ pub enum InsuranceFundError {
     NoIFWithdrawAvailable = 1,
     InvalidIFUnstake = 2,
     InvalidIFUnstakeSize = 3,
-    // InvalidIFUnstakeCancel = 4,
-    // InvalidIFForNewStakes = 5,
     InvalidIFRebase = 6,
     InvalidInsuranceUnstakeSize = 7,
     IFWithdrawRequestInProgress = 9,

@@ -5,7 +5,7 @@ use crate::testutils::{ Setup };
 use crate::{ contract::LiquidityCalculator, LiquidityCalculatorClient };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::{ Address as _, Events };
-use soroban_sdk::{ symbol_short, vec, Address, Bytes, Env, IntoVal, Symbol, Vec, U256 };
+use soroban_sdk::{ symbol_short, vec, Address, Env, IntoVal, Symbol, Vec, U256 };
 use utils::test_utils::{ install_dummy_wasm, jump };
 
 fn create_contract<'a>(e: &Env) -> LiquidityCalculatorClient<'a> {

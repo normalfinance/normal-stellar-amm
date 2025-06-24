@@ -1,4 +1,4 @@
-use soroban_sdk::{ Address, BytesN, Env, Map, String, Symbol, Val, Vec, U256 };
+use soroban_sdk::{ Address, Env, Map, String, Symbol, Val, Vec, U256 };
 use utils::state::pool::{ PoolInfo, PoolTier };
 
 pub trait PoolInterfaceTrait {

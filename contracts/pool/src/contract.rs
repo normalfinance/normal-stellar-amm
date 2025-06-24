@@ -73,7 +73,6 @@ use pool_tokens::{
     put_token_synthetic,
     Client as LPTokenClient,
 };
-use soroban_fixed_point_math::FixedPoint;
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{
     contract,
@@ -99,7 +98,6 @@ use utils::constant::{
     INSURANCE_C_MAX,
     INSURANCE_SPECULATIVE_MAX,
     MAX_POOL_FEE,
-    PRICE_PRECISION,
 };
 use utils::math::safe_math::SafeMath;
 use utils::state::oracle_registry::NormalAction;
@@ -1612,13 +1610,11 @@ impl IncentivesTrait for Pool {
         result.set(symbol_short!("last_time"), pool_data.rewards_last_time as i128);
         result.set(symbol_short!("pool_acc"), user_data.pool_accumulated_rewards as i128);
         result.set(symbol_short!("block"), pool_data.block as i128);
-        result.set(symbol_short!("fee_a"), pool_data.fee_growth_a_per_lp as i128);
-        result.set(symbol_short!("fee_b"), pool_data.fee_growth_b_per_lp as i128);
+        result.set(symbol_short!("fees_owed"), pool_data.fee_growth_per_lp as i128);
 
         result.set(symbol_short!("usr_block"), user_data.last_block as i128);
         result.set(symbol_short!("to_claim"), user_data.rewards_to_claim as i128);
-        result.set(symbol_short!("check_a"), user_data.fee_checkpoint_a as i128);
-        result.set(symbol_short!("check_b"), user_data.fee_checkpoint_b as i128);
+        result.set(symbol_short!("fee_check"), user_data.fee_checkpoint as i128);
 
         // provide updated working balance information. if working_balance_new is bigger
         // than working_balance, it means that user has locked some tokens
@@ -1651,7 +1647,8 @@ impl IncentivesTrait for Pool {
         incentives.manager().get_reward_amount_to_claim(&user, total_shares, user_shares)
     }
 
-    fn get_user_fees(e: Env, user: Address) -> (u128, u128) {
+    // Get amount of LP fees available for the user to claim.
+    fn get_user_fees(e: Env, user: Address) -> u128 {
         let incentives = get_incentives_manager(&e);
         let total_shares = get_total_lp_tokens(&e);
         let user_shares = get_user_balance_lp(&e, &user);
@@ -1777,13 +1774,7 @@ impl IncentivesTrait for Pool {
             }
         }
 
-        RewardEvents::new(&e).claim(
-            user,
-            reward_token,
-            reward,
-            tokens.get(1).unwrap(),
-            fees_owed
-        );
+        RewardEvents::new(&e).claim(user, reward_token, reward, tokens.get(1).unwrap(), fees_owed);
 
         (reward, fees_owed)
     }

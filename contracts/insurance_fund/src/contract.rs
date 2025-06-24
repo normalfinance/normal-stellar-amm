@@ -116,12 +116,34 @@ impl InsuranceFundTrait for InsuranceFund {
     // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
-    // Stake funds into the Insurance Fund.
+    // Deposits tokens into the Insurance Fund in exchange for share tokens representing stake ownership.
+    //
+    // This function allows a user to contribute liquidity to the Insurance Fund, which can be used to
+    // cover deficits in associated pools. The user receives fund shares proportional to the deposit amount.
     //
     // # Arguments
+    // * `e` - The Soroban environment.
+    // * `user` - The address of the user making the deposit.
+    // * `amount` - The number of tokens to deposit into the fund.
     //
-    // * `user` - The address of the user.
-    // * `amount` - The amount to stake.
+    // # Behavior
+    // * Validates that deposits are not paused (`PoolDepositKilled`).
+    // * Ensures no outstanding withdrawal request is in progress for the user.
+    // * Applies rebasing logic to sync fund and stake accounting with vault state.
+    // * Prevents deposits that would push the fund beyond its optimal insurance target.
+    // * Mints new share tokens to the user proportional to the deposit.
+    // * Records the updated cost basis and share amount for the user’s stake.
+    // * Emits an `if_stake_record` event documenting the deposit action.
+    //
+    // # Side Effects
+    // * Updates total shares in the fund.
+    // * Transfers `amount` tokens from the user to the Insurance Fund vault.
+    // * Saves the updated stake record to storage.
+    //
+    // # Panics
+    // * If deposits are currently disabled (`FundDepositKilled`).
+    // * If user has a pending withdrawal request.
+    // * If the deposit exceeds the configured optimal insurance capacity.
     fn deposit(e: Env, user: Address, amount: u128) {
         user.require_auth();
 
@@ -196,12 +218,38 @@ impl InsuranceFundTrait for InsuranceFund {
         transfer_token(&e, &get_token(&e), &user, &e.current_contract_address(), &(amount as i128));
     }
 
-    // Request to unstake funds.
+    // Initiates a withdrawal request from the Insurance Fund by locking a portion of the user's shares.
+    //
+    // This function allows a user to signal intent to withdraw a specific amount of tokens from the fund.
+    // The request must later be settled through a separate withdrawal execution mechanism.
     //
     // # Arguments
+    // * `e` - The Soroban environment.
+    // * `user` - The address of the user making the withdrawal request.
+    // * `amount` - The token-denominated amount the user wishes to withdraw.
     //
-    // * `user` - The address of the user.
-    // * `amount` - The amount to unstake.
+    // # Behavior
+    // * Ensures withdrawals are not currently disabled (`FundRequestWithdrawKilled`).
+    // * Validates that no other withdrawal request is already pending for the user.
+    // * Converts the requested token amount into fund shares (`n_shares`) based on the current vault state.
+    // * Verifies the user has enough shares to fulfill the withdrawal.
+    // * Rebases both the global insurance fund and the individual stake to reflect up-to-date state.
+    // * Computes the withdrawable vault value from the requested shares.
+    // * Records the withdrawal request and timestamp in the user’s stake.
+    // * Emits a `WithdrawRequest` event to signal the pending unstake.
+    //
+    // # Side Effects
+    // * Locks `n_shares` in the user’s stake as a withdrawal request.
+    // * Updates the value of the withdrawal in vault token terms.
+    // * Rebases internal accounting to ensure accurate conversion between shares and vault assets.
+    //
+    // # Panics / Errors
+    // * If withdrawals are disabled via kill switch.
+    // * If the user already has a pending withdrawal request.
+    // * If the requested amount is too small to result in shares.
+    // * If the user has insufficient shares to cover the request.
+    // * If rebase information is inconsistent or invalid (e.g., mismatched base).
+    // * If calculated withdrawal value exceeds the vault balance.
     fn request_withdraw(e: Env, user: Address, amount: u128) {
         user.require_auth();
 
@@ -286,11 +334,32 @@ impl InsuranceFundTrait for InsuranceFund {
         save_stake(&e, &user, &stake);
     }
 
-    // Cancel an unstake request.
+    // Cancels a pending withdrawal request from the Insurance Fund for a given user.
+    //
+    // This function allows a user to cancel their previously initiated withdrawal request.
+    // The shares previously marked for withdrawal are burned (i.e., forfeited) to discourage misuse.
     //
     // # Arguments
+    // * `e` - The Soroban environment.
+    // * `user` - The address of the user cancelling their withdrawal request.
     //
-    // * `user` - The address of the user.
+    // # Behavior
+    // * Requires the caller to be authorized as `user`.
+    // * Verifies that a withdrawal request is currently active.
+    // * Applies any pending rebases to both the global Insurance Fund and the user’s stake.
+    // * Validates consistency between the stake's internal rebase base and the global base.
+    // * Calculates the number of shares to be forfeited due to cancellation (i.e., `if_shares_lost`).
+    // * Burns these shares from the user and adjusts the total share supply accordingly.
+    // * Clears the withdrawal request metadata (shares, value, and timestamp).
+    // * Emits a `WithdrawCancelRequest` event to log the forfeiture and updated state.
+    //
+    // # Side Effects
+    // * Reduces user’s stake and total share supply by the calculated penalty (`if_shares_lost`).
+    // * Resets withdrawal request fields on the user’s stake.
+    //
+    // # Panics / Errors
+    // * If no withdrawal request is currently in progress.
+    // * If rebase metadata is inconsistent (e.g., base mismatch).
     fn cancel_request_withdraw(e: Env, user: Address) {
         user.require_auth();
 
@@ -345,11 +414,39 @@ impl InsuranceFundTrait for InsuranceFund {
         save_stake(&e, &user, &stake);
     }
 
-    // Complete an unstake request after the unstaking period.
+    // Completes a pending Insurance Fund withdrawal request after the unstaking period has elapsed.
+    //
+    // This function finalizes a user's withdrawal request by transferring the corresponding
+    // token amount from the Insurance Fund to the user. The user must have previously submitted
+    // a withdrawal request and waited the required escrow duration.
     //
     // # Arguments
+    // * `e` - The Soroban environment.
+    // * `user` - The address initiating the withdrawal.
     //
-    // * `user` - The address of the user.
+    // # Behavior
+    // * Requires authorization from the `user`.
+    // * Ensures the Insurance Fund is not currently paused for withdrawals.
+    // * Validates that the required unstaking period has passed since the withdrawal request.
+    // * Applies pending rebases to both the global fund and the user's stake.
+    // * Confirms the user has enough IF shares to satisfy the request.
+    // * Calculates the corresponding withdrawal amount, applying loss penalties if applicable.
+    // * Reduces the user’s IF shares and the global share count accordingly.
+    // * Resets the user's withdrawal request state.
+    // * Emits a `Withdraw` event recording the withdrawal details.
+    // * Transfers the calculated amount to the user’s address.
+    // * Ensures the vault still retains a non-zero balance after withdrawal.
+    //
+    // # Side Effects
+    // * Decreases user’s stake and cost basis.
+    // * Reduces the total IF shares in circulation.
+    // * Resets the withdrawal request metadata on the stake.
+    //
+    // # Panics / Errors
+    // * If withdrawal operations are currently disabled.
+    // * If no withdrawal request exists or the waiting period hasn't passed.
+    // * If stake state or rebase base is invalid.
+    // * If the vault balance would be zero after withdrawal.
     fn withdraw(e: Env, user: Address) {
         user.require_auth();
 
@@ -357,7 +454,8 @@ impl InsuranceFundTrait for InsuranceFund {
             panic_with_error!(e, InsuranceFundError::FundWithdrawKilled);
         }
 
-        // TODO: Check if
+        // TODO: Do we need to check IF utilization and/or overall pool liquidity imbalance for edge
+        // cases before authorizing a withdrawal?
 
         let now = e.ledger().timestamp();
         let mut stake = get_stake(&e, &user);
@@ -434,12 +532,34 @@ impl InsuranceFundTrait for InsuranceFund {
         validate!(&e, insurance_vault_amount > 0, InsuranceFundError::InvalidIFDetected);
     }
 
-    // Pay interest in exchange for Insurance Fund coverage.
+    // Collects a premium payment from a pool or protocol participant into the Insurance Fund.
+    //
+    // This function is typically called by a liquidity pool when a swap occurs and a portion of
+    // the collected swap fee is directed to the Insurance Fund as an insurance premium.
+    // However, it remains open to calls from other authorized protocol components to support
+    // future use cases such as protocol fee sharing or external revenue streams.
     //
     // # Arguments
+    // * `e` - The Soroban environment.
+    // * `sender` - The address paying the premium.
+    // * `amount` - The amount of tokens to be transferred as a premium payment.
     //
-    // * `sender` - The address of the sender.
-    // * `amount` - The amount of premium to pay.
+    // # Behavior
+    // * Requires authorization from the `sender`.
+    // * Transfers the specified `amount` of tokens from the `sender` to the Insurance Fund.
+    // * Emits a `collect_premium` event recording the payment details.
+    //
+    // # Security
+    // * This function is intentionally left unrestricted to allow multiple protocol actors
+    //   to contribute to the Insurance Fund's premium pool. Callers must still authenticate
+    //   as the `sender` to authorize the transfer.
+    //
+    // # Use Cases
+    // * Primary usage is by Pools via `PoolSwapFee::swap()` to remit premium.
+    // * Future protocol-level functions or treasury logic may also call this directly.
+    //
+    // # Panics / Errors
+    // * If the `sender` fails to authenticate.
     fn pay_premium(e: Env, sender: Address, amount: u128) {
         sender.require_auth();
 
@@ -630,13 +750,31 @@ impl AdminInterface for InsuranceFund {
     // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
-    // Use user stakes to cover a Pool liquidity deficit.
-    // (the value of `reserve_b` is lower than the value of all `token_a` in circulation).
+    // Resolves a liquidity deficit in a pool by transferring insurance coverage from the Insurance Fund.
+    //
+    // This function is invoked by the Insurance Fund admin when a liquidity pool reports a deficit
+    // (e.g. due to under-collateralization or volatile price movements). It calls into the pool
+    // contract’s `pay_insurance_claim` method, which computes and deducts the insurance coverage needed.
     //
     // # Arguments
+    // * `e` - The Soroban environment.
+    // * `admin` - The address authorized to trigger the resolution.
+    // * `pool_address` - The contract address of the affected pool requesting coverage.
     //
-    // * `admin` - The address of the admin.
-    // * `pool_address` - The address of the pool .
+    // # Behavior
+    // * Requires admin authentication.
+    // * Queries the current balance of the Insurance Fund (`insurance_vault_amount`).
+    // * Invokes `pay_insurance_claim()` on the target pool, passing the available vault amount.
+    // * Validates that the claim does not exceed the available balance.
+    // * Validates that the Insurance Fund retains a non-zero balance after the payout.
+    //
+    // # Security
+    // * Restricted to the Insurance Fund admin (currently centralized control).
+    // * Future roadmap: automate via `Pool::swap()` or delegate authority to a DAO.
+    //
+    // # Panics / Errors
+    // * `InsuranceFundError::InsufficientCollateral` if the claim exceeds vault balance.
+    // * `InsuranceFundError::InvalidIFDetected` if the payout fully depletes the Insurance Fund.
     fn resolve_liquidity_deficit(e: Env, admin: Address, pool_address: Address) {
         admin.require_auth();
         /* Currently, only the Insurance Fund admin may resolve deficits, however, our goal 

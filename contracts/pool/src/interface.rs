@@ -208,8 +208,8 @@ pub trait IncentivesTrait {
     // Get amount of reward tokens available for the user to claim.
     fn get_user_reward(e: Env, user: Address) -> u128;
 
-    //
-    fn get_user_fees(e: Env, user: Address) -> (u128, u128);
+    // Get amount of LP fees available for the user to claim.
+    fn get_user_fees(e: Env, user: Address) -> u128;
 
     // Checkpoints the LP fees and reward for the user.
     // Useful when user moves funds by itself to avoid re-entrancy issue.

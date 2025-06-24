@@ -1,7 +1,6 @@
 use crate::errors::OracleRegistryError;
 use crate::interface::{ AdminInterface, OracleRegistryTrait };
 use crate::oracle::{ block_operation, get_oracle_price, oracle_validity, update_twap };
-use soroban_fixed_point_math::FixedPoint;
 use crate::storage::{
     get_historical_oracle_data,
     get_oracle,
@@ -53,12 +52,24 @@ impl OracleRegistryTrait for OracleRegistry {
     // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
-    // Sets the max shares the Insurance Fund can have.
+    // Retrieves the current oracle price for a given asset.
+    //
+    // If `cached` is true or the oracle is frozen, it returns the last cached TWAP price.
+    // Otherwise, it fetches a fresh price from the oracle, validates it, updates the TWAP,
+    // and returns the latest data. If the fetched data fails safety checks, the function
+    // will panic with an error.
     //
     // # Arguments
+    // * `e` - The Soroban environment.
+    // * `asset` - The asset symbol (e.g., "BTC") whose price is being requested.
+    // * `cached` - Whether to use the cached TWAP price instead of fetching a fresh one.
+    // * `action` - The context for which the price is being retrieved (e.g., Swap, Rebalance).
     //
-    // * `admin` - The address of the admin.
-    // * `max_shares` - The max number of shares.
+    // # Returns
+    // * `OraclePriceData` - The price and the delay (age) of the price data.
+    //
+    // # Panics
+    // Panics with `OracleRegistryError::OracleInvalid` if the live price data fails validation.
     fn get_price(e: Env, asset: Symbol, cached: bool, action: NormalAction) -> OraclePriceData {
         let now = e.ledger().timestamp();
         let oracle = get_oracle(&e, &asset);
@@ -71,9 +82,16 @@ impl OracleRegistryTrait for OracleRegistry {
             };
         }
 
-        let oracle_price_data = get_oracle_price(&e, &oracle.address, &oracle.asset, now);
+        let oracle_price_data = get_oracle_price(&e, &oracle.address, &oracle.asset_addr, now);
 
-        if block_operation(&e, &oracle_price_data, reserve_price, oracle_price_data.price, action) {
+        let block = block_operation(
+            &e,
+            &oracle_price_data,
+            historical_oracle_data.last_oracle_price_twap,
+            oracle_price_data.price,
+            action
+        );
+        if block {
             panic_with_error!(&e, OracleRegistryError::OracleInvalid);
         }
 
@@ -210,12 +228,28 @@ impl AdminInterface for OracleRegistry {
     // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
-    // Sets the max shares the Insurance Fund can have.
+    // Registers a new oracle for a given asset symbol.
+    //
+    // This function allows an authorized admin to register an oracle source for an asset.
+    // It verifies that the oracle isn't already registered, fetches a live price from the
+    // provided oracle address, validates the price data, and stores the oracle configuration
+    // if valid.
     //
     // # Arguments
+    // * `e` - The Soroban environment.
+    // * `admin` - The address of the authorized admin performing the registration.
+    // * `asset` - The symbol for the asset being registered.
+    // * `oracle_addr` - The address of the external oracle contract providing the price.
+    // * `asset_addr` - The address of the asset this oracle tracks (e.g., XLM).
+    // * `decimals` - Decimal precision of the asset prices returned by the oracle.
+    // * `sanitize_clamp_denominator` - Clamp denominator used for sanitizing price updates.
     //
-    // * `admin` - The address of the admin.
-    // * `max_shares` - The max number of shares.
+    // # Returns
+    // * `OracleInfo` - The successfully registered oracle metadata.
+    //
+    // # Panics
+    // * `OracleRegistryError::OracleAlreadyRegistered` if the asset already has an oracle.
+    // * `OracleRegistryError::OracleInvalid` if the provided oracle fails validation (e.g. non-positive, too stale, or volatile).
     fn register_oracle(
         e: Env,
         admin: Address,
@@ -267,12 +301,26 @@ impl AdminInterface for OracleRegistry {
         oracle
     }
 
-    // Sets the max shares the Insurance Fund can have.
+    // Updates the oracle configuration for a given asset.
+    //
+    // Allows the contract admin to modify fields of an existing oracle, such as its address,
+    // decimal precision, clamping settings, or frozen status. Before updating, the function
+    // validates any new address by fetching its price and ensuring it meets validity checks.
+    // Decimal precision is also validated to be within safe bounds.
     //
     // # Arguments
+    // * `e` - The Soroban environment.
+    // * `admin` - The authorized admin address initiating the update.
+    // * `asset` - The symbol representing the asset whose oracle should be updated.
+    // * `params` - A set of optional update parameters (e.g., address, decimals, frozen status).
     //
-    // * `admin` - The address of the admin.
-    // * `max_shares` - The max number of shares.
+    // # Returns
+    // * `OracleInfo` - The newly updated oracle configuration.
+    //
+    // # Panics
+    // * `OracleRegistryError::OracleInvalid` if the new address returns an invalid price.
+    // * `OracleRegistryError::InvalidDecimals` if provided decimals exceed safe limits.
+    // * `OracleRegistryError::OracleNotRegistered` if the asset does not have a registered oracle.
     fn update_oracle(
         e: Env,
         admin: Address,
@@ -328,18 +376,31 @@ impl AdminInterface for OracleRegistry {
         }
     }
 
-    // Manually set the oracle price.
+    // Manually sets a new oracle price for a given asset.
     //
-    // This is an admin failsafe to be used as a last resort to override an oracle
-    // price in the event invalid oracle data prolongs.
-    //
-    //
+    // This function is intended for administrative overrides of oracle prices, with safeguards
+    // to ensure integrity and temporal spacing between updates. It verifies that the price is valid
+    // in the context of recent TWAP history and enforces a minimum interval since the last update
+    // before allowing a new override.
     //
     // # Arguments
+    // * `e` - The current Soroban environment.
+    // * `admin` - The authorized admin address initiating the override.
+    // * `asset` - The asset symbol whose oracle price is being set.
+    // * `price` - The new price to set as the oracle value (must be valid and positive).
     //
-    // * `admin` - The address of the admin.
-    // * `asset` - The address of the rewards admin.
-    // * `price` - The address of the rewards admin.
+    // # Behavior
+    // * Validates the price against current TWAP to ensure it's not too volatile or stale.
+    // * Enforces a cooldown period defined by `oracle_guard_rails.validity.seconds_before_stale_for_pool`.
+    // * Updates TWAP with the new price and a `delay` of 0 to indicate immediate override.
+    //
+    // # Panics
+    // * `OracleRegistryError::NotAuthorized` if the caller is not an admin.
+    // * `OracleRegistryError::OracleInvalid` if the provided price fails volatility or freshness checks.
+    // * `OracleRegistryError::PriceOverrideTooSoon` if the override is attempted too soon after the last one.
+    //
+    // # Notes
+    // - This method does not track override timestamps separately; it uses `last_updated` for cooldown logic.
     fn set_oracle_price(e: Env, admin: Address, asset: Symbol, price: u128) {
         admin.require_auth();
         require_admin(&e, &admin);
@@ -347,8 +408,21 @@ impl AdminInterface for OracleRegistry {
         let now = e.ledger().timestamp();
         let oracle = get_oracle(&e, &asset);
         let oracle_guard_rails = get_oracle_guard_rails(&e);
+        let historical_oracle_data = get_historical_oracle_data(&e, &asset);
 
-        oracle_validity(&e, last_oracle_twap, oracle_price_data);
+        let oracle_is_valid =
+            oracle_validity(
+                &e,
+                historical_oracle_data.last_oracle_price_twap,
+                &(OraclePriceData {
+                    price,
+                    delay: now - historical_oracle_data.last_oracle_price_twap_ts,
+                })
+            ) == OracleValidity::Valid;
+
+        if !oracle_is_valid {
+            panic_with_error!(&e, OracleRegistryError::OracleInvalid);
+        }
 
         // Rate limit
         // @dev The timestamp of the last override is not tracked, meaning any
@@ -356,8 +430,6 @@ impl AdminInterface for OracleRegistry {
         if now - oracle.last_updated <= oracle_guard_rails.validity.seconds_before_stale_for_pool {
             panic_with_error!(&e, OracleRegistryError::PriceOverrideTooSoon);
         }
-
-        let historical_oracle_data = get_historical_oracle_data(&e, &asset);
 
         update_twap(
             &e,

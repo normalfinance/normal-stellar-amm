@@ -1,6 +1,6 @@
 #![no_std]
 
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{Env};
 
 pub mod errors;
 pub mod events;

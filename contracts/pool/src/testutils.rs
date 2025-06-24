@@ -22,12 +22,11 @@ use utils::state::{
     token::TokenInitInfo,
 };
 
-use pool_tokens::token_contract::{ Client as PoolTokenClient, WASM };
+use pool_tokens::token_contract::{ Client as PoolTokenClient };
 use std::vec;
 use utils::test_utils::{
     create_token_contract,
     get_mock_lp_token_info,
-    get_mock_oracle_registry_ids,
     get_token_admin_client,
     install_liq_pool_hash,
     install_token_wasm,
@@ -248,9 +247,7 @@ impl Setup<'_> {
             &admin,
             &plane.address,
             &router.address,
-            &btc_asset_id,
-            &xlm_asset_id,
-            &btc_addr,
+            &(btc_asset_id.clone(), xlm_asset_id.clone()),
             &install_token_wasm(&e),
             &get_mock_lp_token_info(&e),
             &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
@@ -415,9 +412,7 @@ pub fn create_pool_contract<'a>(
     admin: &Address,
     plane: &Address,
     router: &Address,
-    base_asset_id: &Symbol,
-    quote_asset_id: &Symbol,
-    asset: &Address,
+    assets: &(Symbol, Symbol),
     token_wasm_hash: &BytesN<32>,
     lp_token_info: &(String, String),
     tokens: &Vec<Address>,
@@ -438,9 +433,7 @@ pub fn create_pool_contract<'a>(
                 emergency_pause_admins: Vec::from_array(e, [admin.clone()]),
             },
             router: router.clone(),
-            base_asset_id: base_asset_id.clone(),
-            quote_asset_id: quote_asset_id.clone(),
-            asset: asset.clone(),
+            assets: assets.clone(),
             tokens: tokens.clone(),
             lp_token_info: TokenInitInfo {
                 token_wasm_hash: token_wasm_hash.clone(),

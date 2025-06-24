@@ -1,6 +1,6 @@
 use soroban_fixed_point_math::FixedPoint;
 use soroban_sdk::{ panic_with_error, Env };
-use utils::{ constant::{ PERCENTAGE_PRECISION }, math::safe_math::SafeMath };
+use utils::{ constant::{ PERCENTAGE_PRECISION } };
 
 use crate::errors::InsuranceFundError;
 

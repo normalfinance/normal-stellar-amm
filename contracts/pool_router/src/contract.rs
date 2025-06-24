@@ -83,20 +83,32 @@ impl PoolInterfaceTrait for PoolRouter {
     // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
-    // Deposits tokens into the pool.
+    // Deposits Token B into the liquidity pool associated with a given synthetic asset.
+    //
+    // This function is called through the pool router to forward user deposits to the
+    // correct pool contract. It performs authentication, retrieves the pool address for
+    // the specified asset, and invokes the pool's `deposit` method.
     //
     // # Arguments
-    //
-    // * `e` - The environment.
-    // * `user` - The address of the user depositing the tokens.
-    // * `tokens` - A vector of token addresses.
-    // * `pool_index` - The pool index hash.
-    // * `amounts` - A vector of u128s representing the amounts of each token to deposit.
-    // * `min_mint_amount` - The minimum amount of pool tokens to mint.
+    // * `e` - The current Soroban environment.
+    // * `user` - The address of the user initiating the deposit (must authorize the call).
+    // * `asset` - The symbol representing the synthetic asset the pool is tied to.
+    // * `token_b_amount` - The amount of Token B to deposit.
     //
     // # Returns
+    // * `(u128, u128)` - A tuple containing:
+    //     - The amount of Token B deposited.
+    //     - The number of liquidity provider (LP) shares minted to the user.
     //
-    // A tuple containing a vector of u128s representing the amounts of each token deposited and a u128 representing the amount of pool tokens minted.
+    // # Behavior
+    // * Calls `get_pool` to fetch the associated pool contract for the asset.
+    // * Forwards the deposit call to the underlying pool contract via cross-contract invocation.
+    // * Emits a `deposit` event with the asset, user, pool address, and deposit details.
+    //
+    // # Panics
+    // * If the user does not authorize the operation.
+    // * If the asset has no associated pool registered.
+
     fn deposit(e: Env, user: Address, asset: Symbol, token_b_amount: u128) -> (u128, u128) {
         user.require_auth();
 
@@ -111,22 +123,36 @@ impl PoolInterfaceTrait for PoolRouter {
         (amount, share_amount)
     }
 
-    // Swaps tokens in the pool.
+    // Executes a token swap within the liquidity pool associated with a synthetic asset.
+    //
+    // This router function locates the pool for the given asset and forwards the swap request
+    // to that pool contract. It supports flexible token indexing using the `tokens` vector to
+    // determine input and output indices.
     //
     // # Arguments
-    //
-    // * `e` - The environment.
-    // * `user` - The address of the user swapping the tokens.
-    // * `tokens` - A vector of token addresses.
-    // * `pool_index` - The pool index hash.
-    // * `token_in` - The address of the input token to be swapped.
-    // * `token_out` - The address of the output token to be received.
-    // * `in_amount` - The amount of the input token to be swapped.
-    // * `min_out_amount` - The minimum amount of the output token to be received.
+    // * `e` - The current Soroban environment.
+    // * `user` - The address of the user performing the swap (must authorize the call).
+    // * `tokens` - A vector of token addresses, used to determine index positions in the pool.
+    // * `token_in` - The token address being sold (input).
+    // * `token_out` - The token address being bought (output).
+    // * `asset` - The synthetic asset symbol identifying the pool to use.
+    // * `in_amount` - The amount of the input token to swap.
+    // * `out_min` - The minimum acceptable amount of the output token.
     //
     // # Returns
+    // * `u128` - The amount of output token received from the swap.
     //
-    // The amount of the output token received.
+    // # Behavior
+    // * Validates the user's authorization.
+    // * Resolves the correct pool for the given asset using `get_pool`.
+    // * Determines `in_idx` and `out_idx` from the `tokens` vector.
+    // * Forwards the swap call to the identified pool contract.
+    // * Emits a `swap` event with full context of the operation.
+    //
+    // # Panics
+    // * If the user does not authorize the transaction.
+    // * If the token addresses are not found in the `tokens` vector.
+    // * If the pool contract is not registered for the given asset.
     fn swap(
         e: Env,
         user: Address,
@@ -157,20 +183,32 @@ impl PoolInterfaceTrait for PoolRouter {
         out_amt
     }
 
-    // Estimates the result of a swap operation.
+    // Estimates the output amount and fee for a token swap without executing it.
+    //
+    // This function queries the associated pool contract for a synthetic asset to simulate a swap
+    // from `token_in` to `token_out`, based on the provided input amount. It is useful for frontend
+    // price discovery, slippage estimation, and swap previews.
     //
     // # Arguments
-    //
-    // * `e` - The environment.
-    // * `tokens` - A vector of token addresses.
-    // * `pool_index` - The pool index hash.
-    // * `token_in` - The address of the input token to be swapped.
-    // * `token_out` - The address of the output token to be received.
-    // * `in_amount` - The amount of the input token to be swapped.
+    // * `e` - The current Soroban environment.
+    // * `tokens` - A vector of token addresses used to map input/output tokens to pool indices.
+    // * `token_in` - The address of the token to be sold.
+    // * `token_out` - The address of the token to be received.
+    // * `asset` - The synthetic asset symbol representing the target liquidity pool.
+    // * `in_amount` - The amount of input token to simulate a swap for.
     //
     // # Returns
+    // * `(u128, i128)` - A tuple containing:
+    //     - The estimated amount of output token received.
+    //     - The estimated fee (can be negative or positive depending on implementation).
     //
-    // A tuple containing the estimated amount of the output token that would be received and the amount of token_a to mint/burn.
+    // # Panics
+    // * If `token_in` or `token_out` are not found in the `tokens` vector.
+    // * If no pool is registered for the provided `asset`.
+    //
+    // # Notes
+    // * This call does not mutate state and is intended for off-chain estimation.
+    // * Token ordering must match the pool's internal ordering for index lookups to work correctly.
     fn estimate_swap(
         e: Env,
         tokens: Vec<Address>,
@@ -192,20 +230,26 @@ impl PoolInterfaceTrait for PoolRouter {
         )
     }
 
-    // Withdraws tokens from the pool.
+    // Withdraws liquidity from the pool associated with a synthetic asset.
+    //
+    // This function delegates the withdrawal request to the pool contract linked with the specified `asset`,
+    // burning the user's share tokens and transferring the corresponding amount of underlying tokens back to the user.
     //
     // # Arguments
-    //
-    // * `e` - The environment.
-    // * `user` - The address of the user withdrawing the tokens.
-    // * `tokens` - A vector of token addresses.
-    // * `pool_index` - The pool index hash.
-    // * `burn_amount` - The amount of pool tokens to burn.
-    // * `min_amounts` - A vector of u128s representing the minimum amounts of each token to be received.
+    // * `e` - The current Soroban environment.
+    // * `user` - The address of the user initiating the withdrawal.
+    // * `asset` - The symbol of the synthetic asset tied to the pool.
+    // * `share_amount` - The number of LP (liquidity provider) shares the user wishes to redeem.
     //
     // # Returns
+    // * `u128` - The amount of underlying token (usually Token B) returned to the user upon withdrawal.
     //
-    // A vector of u128s representing the amounts of each token withdrawn.
+    // # Panics
+    // * If the `user` is not authorized.
+    // * If no pool is registered for the specified `asset`.
+    //
+    // # Emits
+    // * A `withdraw` event recording the asset, user, pool, withdrawn amount, and share amount.
     fn withdraw(e: Env, user: Address, asset: Symbol, share_amount: u128) -> u128 {
         user.require_auth();
 

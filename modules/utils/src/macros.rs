@@ -1,4 +1,4 @@
-use soroban_sdk::{ panic_with_error, log };
+use soroban_sdk::{ panic_with_error };
 
 use crate::errors::math_errors::MathError;
 

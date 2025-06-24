@@ -1,4 +1,4 @@
-use soroban_sdk::{ Address, BytesN, Env, Vec };
+use soroban_sdk::{ Address, BytesN, Env, Symbol, Vec };
 
 pub trait PoolSwapFeeInterface {
     //   _______    _______  ___________  ___________  _______   _______    ________
@@ -36,7 +36,7 @@ pub trait PoolSwapFeeInterface {
     //   - tokens: A vector of token addresses.
     //   - token_in: The input token address.
     //   - token_in: The output token address.
-    //   - pool_index: The index of the pool to swap with.
+    //   - asset: The index of the pool to swap with.
     //   - in_amount: The amount of token_in provided by the user.
     //   - out_min: The minimum acceptable output token amount (after fee deduction).
     //
@@ -48,7 +48,7 @@ pub trait PoolSwapFeeInterface {
         tokens: Vec<Address>,
         token_in: Address,
         token_out: Address,
-        pool_index: BytesN<32>,
+        asset: Symbol,
         in_amount: u128,
         out_min: u128
     ) -> u128;
