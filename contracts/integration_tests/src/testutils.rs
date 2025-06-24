@@ -1,28 +1,21 @@
 #![cfg(test)]
 extern crate std;
 use crate::contracts;
-use sep_40_oracle::testutils::{ Asset, MockPriceOracleWASM };
-use soroban_sdk::testutils::{ Address as _, BytesN };
-use soroban_sdk::token::{
-    StellarAssetClient as SorobanTokenAdminClient,
-    TokenClient as SorobanTokenClient,
-};
 use crate::testutils::oracle_registry::{
-    OracleGuardRails,
-    PriceDivergenceGuardRails,
-    ValidityGuardRails,
+    OracleGuardRails, PriceDivergenceGuardRails, ValidityGuardRails,
 };
-use sep_40_oracle::testutils::{ Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM };
-use soroban_sdk::{ Address, BytesN, Env, String, Symbol, Vec };
+use sep_40_oracle::testutils::{Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM};
+use sep_40_oracle::testutils::{Asset, MockPriceOracleWASM};
+use soroban_sdk::testutils::{Address as _, BytesN};
+use soroban_sdk::token::{
+    StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
+};
+use soroban_sdk::{Address, BytesN, Env, String, Symbol, Vec};
 use utils::constant::PERCENTAGE_PRECISION_U64;
-use utils::state::oracle_registry::{ PoolTier };
+use utils::state::oracle_registry::PoolTier;
 use utils::test_utils::{
-    create_token_contract,
-    get_mock_lp_token_info,
-    get_mock_oracle_registry_ids,
-    get_token_admin_client,
-    install_liq_pool_hash,
-    install_token_wasm,
+    create_token_contract, get_mock_lp_token_info, get_mock_oracle_registry_ids,
+    get_token_admin_client, install_liq_pool_hash, install_token_wasm,
 };
 
 pub(crate) struct TestConfig {
@@ -142,7 +135,7 @@ impl Setup<'_> {
             &rewards_admin,
             &operations_admin,
             &pause_admin,
-            &Vec::from_array(&e, [emergency_pause_admin.clone()])
+            &Vec::from_array(&e, [emergency_pause_admin.clone()]),
         );
         router.set_pool_hash(&admin, &pool_hash);
         router.set_token_hash(&admin, &token_hash);
@@ -152,7 +145,7 @@ impl Setup<'_> {
         router.commit_transfer_ownership(
             &admin,
             &Symbol::new(&e, "EmergencyAdmin"),
-            &emergency_admin
+            &emergency_admin,
         );
         router.apply_transfer_ownership(&admin, &Symbol::new(&e, "EmergencyAdmin"));
 
@@ -182,7 +175,7 @@ impl Setup<'_> {
             &MockAsset::Other(Symbol::new(&e, "USD")),
             &Vec::from_array(&e, [btc_asset.clone(), xlm_asset.clone()]),
             7,
-            300
+            300,
         );
 
         // prices
@@ -200,11 +193,11 @@ impl Setup<'_> {
                     oracle_twap_percent_divergence: PERCENTAGE_PRECISION_U64 / 2,
                 },
                 validity: ValidityGuardRails {
-                    seconds_before_stale_for_pool: 10, // ~5 seconds
+                    seconds_before_stale_for_pool: 10,    // ~5 seconds
                     confidence_interval_max_size: 20_000, // 2% of price
-                    too_volatile_ratio: 5, // 5x or 80% down
+                    too_volatile_ratio: 5,                // 5x or 80% down
                 },
-            })
+            }),
         );
         registry.register_oracle(&admin, &btc_asset_id, &oracle_id, &btc_addr, &7, &0);
 
@@ -220,9 +213,9 @@ impl Setup<'_> {
             &emergency_admin,
             &token2.address,
             &0,
-            &80_00000_u32, // 80%
-            &2_00000_i32, // 2%
-            &(10_00000_i32, 60_00000_i32) // 10% and 60%
+            &80_00000_u32,                 // 80%
+            &2_00000_i32,                  // 2%
+            &(10_00000_i32, 60_00000_i32), // 10% and 60%
         );
 
         // Deploy a Pool
@@ -234,7 +227,7 @@ impl Setup<'_> {
             &get_mock_lp_token_info(&e),
             &30,
             &PoolTier::A,
-            &1_000_000_u128
+            &1_000_000_u128,
         );
 
         Self {
@@ -305,11 +298,11 @@ fn create_oracle_registry_contract<'a>(e: Env) -> contracts::oracle_registry::Cl
 }
 
 fn create_liquidity_calculator_contract<'a>(
-    e: &Env
+    e: &Env,
 ) -> contracts::liquidity_calculator::Client<'a> {
     contracts::liquidity_calculator::Client::new(
         e,
-        &e.register(contracts::liquidity_calculator::WASM, ())
+        &e.register(contracts::liquidity_calculator::WASM, ()),
     )
 }
 
@@ -344,7 +337,7 @@ fn setup_price_feed_oracle<'a>(
     base: &MockAsset,
     assets: &Vec<MockAsset>,
     decimals: u32,
-    resolution: u32
+    resolution: u32,
 ) -> (Address, MockPriceOracleClient<'a>) {
     let oracle_id = env.register(MockPriceOracleWASM, ());
     let oracle_client = MockPriceOracleClient::new(env, &oracle_id);

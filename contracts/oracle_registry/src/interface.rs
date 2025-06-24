@@ -1,7 +1,7 @@
-use soroban_sdk::{ Address, Env, Symbol };
-use utils::state::oracle_registry::{ MutableOracleInfo, NormalAction, OracleInfo, OraclePriceData };
+use soroban_sdk::{Address, Env, Symbol};
+use utils::state::oracle_registry::{MutableOracleInfo, NormalAction, OracleInfo, OraclePriceData};
 
-use crate::storage_types::{ HistoricalOracleData, OracleGuardRails };
+use crate::storage_types::{HistoricalOracleData, OracleGuardRails};
 
 pub trait OracleRegistryTrait {
     fn initialize(e: Env, admin: Address, emergency_admin: Address);
@@ -50,7 +50,7 @@ pub trait AdminInterface {
         asset: Symbol,
         oracle_addr: Address,
         decimals: u32,
-        sanitize_clamp_denominator: i64
+        sanitize_clamp_denominator: i64,
     ) -> OracleInfo;
 
     // Update oracle info
@@ -58,7 +58,7 @@ pub trait AdminInterface {
         e: Env,
         admin: Address,
         asset: Symbol,
-        params: MutableOracleInfo
+        params: MutableOracleInfo,
     ) -> OracleInfo;
 
     // Admin failsafe to manually set the oracle price

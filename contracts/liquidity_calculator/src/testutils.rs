@@ -1,14 +1,12 @@
 #![cfg(test)]
 
 use crate::LiquidityCalculatorClient;
-use soroban_sdk::testutils::{ Address as _, Ledger, LedgerInfo };
-use soroban_sdk::{ Address, Env, Symbol };
+use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
+use soroban_sdk::{Address, Env, Symbol};
 
 pub fn create_contract<'a>(e: &Env) -> LiquidityCalculatorClient<'a> {
-    let client = LiquidityCalculatorClient::new(
-        e,
-        &e.register(crate::contract::LiquidityCalculator {}, ())
-    );
+    let client =
+        LiquidityCalculatorClient::new(e, &e.register(crate::contract::LiquidityCalculator {}, ()));
     client
 }
 
@@ -48,7 +46,7 @@ impl Default for Setup<'_> {
         calculator.commit_transfer_ownership(
             &admin,
             &Symbol::new(&env, "EmergencyAdmin"),
-            &emergency_admin
+            &emergency_admin,
         );
         calculator.apply_transfer_ownership(&admin, &Symbol::new(&env, "EmergencyAdmin"));
 

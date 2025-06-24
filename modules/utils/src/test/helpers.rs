@@ -1,6 +1,6 @@
 #[test]
 pub fn log_test() {
-    use crate::helpers::{ log10, log10_iter };
+    use crate::helpers::{log10, log10_iter};
 
     assert_eq!(log10_iter(0), 0);
     assert_eq!(log10(0), 0);

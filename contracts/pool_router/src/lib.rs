@@ -3,8 +3,8 @@
 mod contract;
 pub mod errors;
 mod events;
-mod liquidity_calculator;
 mod incentives;
+mod liquidity_calculator;
 mod pool_interface;
 mod pool_utils;
 mod router_interface;

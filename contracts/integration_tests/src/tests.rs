@@ -3,95 +3,95 @@ extern crate std;
 
 use crate::contracts::buffer::Reserve;
 use crate::contracts::pool::InsuranceClaim;
-use crate::testutils::{ Setup };
+use crate::testutils::Setup;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::TokenClient;
-use soroban_sdk::{ vec, Address, IntoVal, Symbol, Vec };
+use soroban_sdk::{vec, Address, IntoVal, Symbol, Vec};
 use utils::constant::ONE_MINUTE;
 use utils::test_utils::jump;
 
 /**
- * Swap Test Scenarios
- * 
- * 🟢 1. Price Movement Scenarios (Oracle-driven)
-        Test how the pool reacts to changes in the oracle price, since this affects the amount of synthetic asset minted/burned and swap behavior.
+* Swap Test Scenarios
+*
+* 🟢 1. Price Movement Scenarios (Oracle-driven)
+       Test how the pool reacts to changes in the oracle price, since this affects the amount of synthetic asset minted/burned and swap behavior.
 
-        Normal Conditions
-        Gradual price increase
+       Normal Conditions
+       Gradual price increase
 
-        Gradual price decrease
+       Gradual price decrease
 
-        Flat price for extended periods
+       Flat price for extended periods
 
-        Volatile/Edge Cases
-        Sudden large upward spike (e.g. +50% in a minute)
+       Volatile/Edge Cases
+       Sudden large upward spike (e.g. +50% in a minute)
 
-        Sudden crash (e.g. -80%)
+       Sudden crash (e.g. -80%)
 
-        Flash crash and recovery (drop + full recovery in a short span)
+       Flash crash and recovery (drop + full recovery in a short span)
 
-        Oscillating/choppy prices (high-frequency changes within a narrow range)
+       Oscillating/choppy prices (high-frequency changes within a narrow range)
 
-        🟠 2. Swap Activity Scenarios
-        Swap behavior impacts LP value, insurance fund utilization, and fee accumulation.
+       🟠 2. Swap Activity Scenarios
+       Swap behavior impacts LP value, insurance fund utilization, and fee accumulation.
 
-        Regular Activity
-        Steady buy/sell volume matching market demand
+       Regular Activity
+       Steady buy/sell volume matching market demand
 
-        Alternating buys and sells near NAV
+       Alternating buys and sells near NAV
 
-        Imbalanced Pressure
-        Consistent one-sided buys (e.g. tracking token demand outpaces base)
+       Imbalanced Pressure
+       Consistent one-sided buys (e.g. tracking token demand outpaces base)
 
-        Consistent one-sided sells (tracking token being dumped)
+       Consistent one-sided sells (tracking token being dumped)
 
-        Stress Activity
-        Massive arbitrage attempts from NAV drift
+       Stress Activity
+       Massive arbitrage attempts from NAV drift
 
-        Back-to-back large swaps (e.g. whale trades)
+       Back-to-back large swaps (e.g. whale trades)
 
-        High-frequency micro-swaps (test fee accounting and rounding behavior)
+       High-frequency micro-swaps (test fee accounting and rounding behavior)
 
-        🔵 3. Liquidity Scenarios
-        Liquidity conditions affect slippage, solvency, and pool health.
+       🔵 3. Liquidity Scenarios
+       Liquidity conditions affect slippage, solvency, and pool health.
 
-        Normal Liquidity
-        Full initial pool deposit
+       Normal Liquidity
+       Full initial pool deposit
 
-        Moderate swap fees relative to volume
+       Moderate swap fees relative to volume
 
-        Low Liquidity
-        Minimal LP capital
+       Low Liquidity
+       Minimal LP capital
 
-        Few/no swaps for a long time, then sudden large swap
+       Few/no swaps for a long time, then sudden large swap
 
-        Liquidity Churn
-        LPs frequently enter and exit
+       Liquidity Churn
+       LPs frequently enter and exit
 
-        Partial withdrawal after each major price movement
+       Partial withdrawal after each major price movement
 
-        🔴 4. Synthetic Price Divergence Scenarios
-        Since the token is synthetic and trades on AMMs like Uniswap, test how deviations from NAV are corrected.
+       🔴 4. Synthetic Price Divergence Scenarios
+       Since the token is synthetic and trades on AMMs like Uniswap, test how deviations from NAV are corrected.
 
-        Token price > NAV (arbitrage opportunity to mint and sell)
+       Token price > NAV (arbitrage opportunity to mint and sell)
 
-        Token price < NAV (arbitrage to buy and redeem/burn)
+       Token price < NAV (arbitrage to buy and redeem/burn)
 
-        NAV shifts sharply while market price lags
+       NAV shifts sharply while market price lags
 
-        Broken peg not corrected (e.g. during oracle outage)
+       Broken peg not corrected (e.g. during oracle outage)
 
-        🟣 5. Oracle Anomalies
-        Your pool depends on oracles — simulate misbehavior.
+       🟣 5. Oracle Anomalies
+       Your pool depends on oracles — simulate misbehavior.
 
-        Delayed updates (oracle price stale)
+       Delayed updates (oracle price stale)
 
-        Erroneous price (1,000x spike due to bad data)
+       Erroneous price (1,000x spike due to bad data)
 
-        Oracle downtime (no updates for X blocks)
+       Oracle downtime (no updates for X blocks)
 
-        Oracle switching (change data sources mid-operation)
- */
+       Oracle switching (change data sources mid-operation)
+*/
 
 /**
  * Integration Tests needed
@@ -134,12 +134,14 @@ fn full_simulation() {
         // Update oracle prices
         let btc_price = btc_prices.get(i).unwrap();
         let xlm_price = xlm_prices.get(i).unwrap();
-        setup.oracle_client.set_price(&Vec::from_array(&setup.env, [btc_price, xlm_price]), &now);
+        setup
+            .oracle_client
+            .set_price(&Vec::from_array(&setup.env, [btc_price, xlm_price]), &now);
 
         // ...
 
         // Execute swaps
-         setup.fee_collector.swap();
+        setup.fee_collector.swap();
 
         // Move time forward
         jump(&setup.env, &epoch_length);
@@ -174,18 +176,14 @@ fn test_swap() {
     let incentives_info = setup.router.get_rewards_info(user, tokens, pool_index);
     let pool_reserves = setup.router.get_reserves(tokens, &setup.pool_index);
     let pool_info = setup.router.get_info(tokens, pool_index);
-    let btc_price = setup.oracle_registry.get_price(
-        &setup.admin,
-        &setup.btc_asset_id,
-        &false,
-        &None
-    );
-    let xlm_price = setup.oracle_registry.get_price(
-        &setup.admin,
-        &setup.xlm_asset_id,
-        &false,
-        &None
-    );
+    let btc_price =
+        setup
+            .oracle_registry
+            .get_price(&setup.admin, &setup.btc_asset_id, &false, &None);
+    let xlm_price =
+        setup
+            .oracle_registry
+            .get_price(&setup.admin, &setup.xlm_asset_id, &false, &None);
     let target_price = btc_price.price / xlm_price.price;
 
     // Swap
@@ -196,7 +194,7 @@ fn test_swap() {
         &setup.token1.address,
         &setup.pool_index,
         &in_amount,
-        &out_min
+        &out_min,
     );
 
     /* Pool */
@@ -216,31 +214,44 @@ fn test_swap() {
     /* Buffer */
 
     // [x] Ensure the Buffer received a deposit() of token2
-    assert_eq!(setup.token2.balance(&setup.buffer.address), buffer_balance + buffer_fee);
-    assert_eq!(setup.buffer.get_reserve(&setup.token2), Reserve {
-        balance: buffer_reserve + buffer_fee,
-        last_update_ts: now,
-        total_inflow: buffer_reserve.total_inflow + buffer_fee,
-        ..buffer_reserve
-    });
+    assert_eq!(
+        setup.token2.balance(&setup.buffer.address),
+        buffer_balance + buffer_fee
+    );
+    assert_eq!(
+        setup.buffer.get_reserve(&setup.token2),
+        Reserve {
+            balance: buffer_reserve + buffer_fee,
+            last_update_ts: now,
+            total_inflow: buffer_reserve.total_inflow + buffer_fee,
+            ..buffer_reserve
+        }
+    );
 
     // [x] Ensure Buffer `resolve_deficit` event is emitted
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            setup.buffer.address.clone(),
+        vec![
+            &setup.env,
             (
-                Symbol::new(&setup.env, "resolve_deficit"),
-                setup.fee_collector.address.clone(),
-            ).into_val(&e),
-            buffer_fee.into_val(&e),
-        )]
+                setup.buffer.address.clone(),
+                (
+                    Symbol::new(&setup.env, "resolve_deficit"),
+                    setup.fee_collector.address.clone(),
+                )
+                    .into_val(&e),
+                buffer_fee.into_val(&e),
+            )
+        ]
     );
 
     /* Insurance Fund */
 
     // [x] Ensure the IF received a pay_premium() of token2
-    assert_eq!(setup.token2.balance(&setup.insurance_fund.address), if_balance + if_fee);
+    assert_eq!(
+        setup.token2.balance(&setup.insurance_fund.address),
+        if_balance + if_fee
+    );
 
     // [x] Ensure IF total shares remains unchanged
     assert_eq!(setup.insurance_fund.get_total_shares(), if_total_shares);
@@ -248,14 +259,18 @@ fn test_swap() {
     // [x] Ensure IF `collect_premium` event is emitted
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            setup.insurance_fund.address.clone(),
+        vec![
+            &setup.env,
             (
-                Symbol::new(&setup.env, "collect_premium"),
-                setup.fee_collector.address.clone(),
-            ).into_val(&e),
-            if_fee.into_val(&e),
-        )]
+                setup.insurance_fund.address.clone(),
+                (
+                    Symbol::new(&setup.env, "collect_premium"),
+                    setup.fee_collector.address.clone(),
+                )
+                    .into_val(&e),
+                if_fee.into_val(&e),
+            )
+        ]
     );
 
     /* Incentives */
@@ -264,7 +279,11 @@ fn test_swap() {
     let fee_growth_b = lp_fee / pool_tokens::get_total_lp_tokens(&setup.env);
     let new_fee_growth_b = incentives_info.get("fee_b").unwrap() + fee_growth_b;
     assert_eq!(
-        setup.router.get_rewards_info(user, tokens, pool_index).get("fee_b").unwrap(),
+        setup
+            .router
+            .get_rewards_info(user, tokens, pool_index)
+            .get("fee_b")
+            .unwrap(),
         new_fee_growth_b
     );
 
@@ -279,13 +298,18 @@ fn test_swap() {
     // [x] Ensure Fee Collector `charge_provider_fee` event is emitted
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            setup.fee_collector.address.clone(),
-            (Symbol::new(&setup.env, "charge_provider_fee"), setup.token1.address.clone()).into_val(
-                &e
-            ),
-            protocol_fee.into_val(&e),
-        )]
+        vec![
+            &setup.env,
+            (
+                setup.fee_collector.address.clone(),
+                (
+                    Symbol::new(&setup.env, "charge_provider_fee"),
+                    setup.token1.address.clone()
+                )
+                    .into_val(&e),
+                protocol_fee.into_val(&e),
+            )
+        ]
     );
 }
 
@@ -304,26 +328,32 @@ fn test_buffer_resolve_liquidity_deficit_event() {
     let claim_amount = 100_0000000_u128;
 
     // Setup Buffer with more then enough reserves
-    setup.buffer.deposit(&setup.admin, &setup.token2.address, &(claim_amount * 2));
+    setup
+        .buffer
+        .deposit(&setup.admin, &setup.token2.address, &(claim_amount * 2));
 
     // request_payout
     setup.buffer.resolve_liquidity_deficit(
         &setup.admin,
         &setup.token2.address,
         &claim_amount,
-        &setup.pool_address
+        &setup.pool_address,
     );
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            setup.buffer.address.clone(),
+        vec![
+            &setup.env,
             (
-                Symbol::new(&setup.env, "resolve_liquidity_deficit"),
-                setup.token2.address.clone(),
-                setup.admin.clone(),
-            ).into_val(&setup.env),
-            claim_amount.into_val(&setup.env),
-        )]
+                setup.buffer.address.clone(),
+                (
+                    Symbol::new(&setup.env, "resolve_liquidity_deficit"),
+                    setup.token2.address.clone(),
+                    setup.admin.clone(),
+                )
+                    .into_val(&setup.env),
+                claim_amount.into_val(&setup.env),
+            )
+        ]
     );
 }
 
@@ -334,7 +364,9 @@ fn test_resolve_deficit_with_buffer_with_enough_funds() {
     let claim_amount = 100_0000000_u128;
 
     // Setup Buffer with more then enough reserves
-    setup.buffer.deposit(&setup.admin, &setup.token2.address, &(claim_amount * 2));
+    setup
+        .buffer
+        .deposit(&setup.admin, &setup.token2.address, &(claim_amount * 2));
 
     // Collect pre-claim values
     let buffer_reserve = setup.buffer.get_reserve(&setup.token2.address);
@@ -344,18 +376,14 @@ fn test_resolve_deficit_with_buffer_with_enough_funds() {
     let pool_reserves = setup.router.get_reserves(&setup.tokens, &setup.pool_index);
     let pool_info = setup.router.get_info(tokens, pool_index);
 
-    let btc_price = setup.oracle_registry.get_price(
-        &setup.admin,
-        &setup.btc_asset_id,
-        &false,
-        &None
-    );
-    let xlm_price = setup.oracle_registry.get_price(
-        &setup.admin,
-        &setup.xlm_asset_id,
-        &false,
-        &None
-    );
+    let btc_price =
+        setup
+            .oracle_registry
+            .get_price(&setup.admin, &setup.btc_asset_id, &false, &None);
+    let xlm_price =
+        setup
+            .oracle_registry
+            .get_price(&setup.admin, &setup.xlm_asset_id, &false, &None);
     let target_price = btc_price.price / xlm_price.price;
 
     // File a claim
@@ -363,35 +391,45 @@ fn test_resolve_deficit_with_buffer_with_enough_funds() {
         &setup.admin,
         &setup.token2.address,
         &claim_amount,
-        &setup.pool_address
+        &setup.pool_address,
     );
 
     // [x] Ensure Buffer reserve is updated
     let now = setup.env.ledger().timestamp();
-    assert_eq!(setup.buffer.get_reserve(&setup.token2.address), Reserve {
-        balance: buffer_reserve - paid,
-        last_payout: paid,
-        last_payout_ts: now,
-        last_update_ts: now,
-        total_outflow: buffer_reserve.total_outflow + paid,
-        ..buffer_reserve
-    });
+    assert_eq!(
+        setup.buffer.get_reserve(&setup.token2.address),
+        Reserve {
+            balance: buffer_reserve - paid,
+            last_payout: paid,
+            last_payout_ts: now,
+            last_update_ts: now,
+            total_outflow: buffer_reserve.total_outflow + paid,
+            ..buffer_reserve
+        }
+    );
 
     // [x] Ensure Buffer token2 balance is decreased
-    assert_eq!(setup.token2.balance(&setup.buffer.address), buffer_balance - paid);
+    assert_eq!(
+        setup.token2.balance(&setup.buffer.address),
+        buffer_balance - paid
+    );
 
     // [ ] Ensure Claim event is emitted
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            setup.buffer.address.clone(),
+        vec![
+            &setup.env,
             (
-                Symbol::new(&setup.env, "resolve_deficit"),
-                user1.clone(),
-                StakeAction::Deposit,
-            ).into_val(&e),
-            amount_to_deposit.into_val(&e),
-        )]
+                setup.buffer.address.clone(),
+                (
+                    Symbol::new(&setup.env, "resolve_deficit"),
+                    user1.clone(),
+                    StakeAction::Deposit,
+                )
+                    .into_val(&e),
+                amount_to_deposit.into_val(&e),
+            )
+        ]
     );
 
     // TODO: compute expected min/burn token1 amount
@@ -399,20 +437,35 @@ fn test_resolve_deficit_with_buffer_with_enough_funds() {
 
     // [x] Ensure Pool reserves are updated
     let reserves = setup.router.get_reserves(&setup.tokens, &setup.pool_index);
-    assert_eq!(reserves.get(0).unwrap(), pool_reserves.get(0).unwrap() + token1_delta);
-    assert_eq!(reserves.get(1).unwrap(), pool_reserves.get(1).unwrap() + paid);
+    assert_eq!(
+        reserves.get(0).unwrap(),
+        pool_reserves.get(0).unwrap() + token1_delta
+    );
+    assert_eq!(
+        reserves.get(1).unwrap(),
+        pool_reserves.get(1).unwrap() + paid
+    );
 
     // [x] Ensure Pool price peg is maintained
     let pool_price = reserves.get(1).unwrap() / reserves.get(0).unwrap();
     assert_eq!(pool_price, target_price);
 
     // [x] Ensure Pool token balances match
-    assert_eq!(setup.token1.balance(&setup.pool_address), pool_token1_balance + token1_delta);
-    assert_eq!(setup.token2.balance(&setup.pool_address), pool_token2_balance + paid);
+    assert_eq!(
+        setup.token1.balance(&setup.pool_address),
+        pool_token1_balance + token1_delta
+    );
+    assert_eq!(
+        setup.token2.balance(&setup.pool_address),
+        pool_token2_balance + paid
+    );
 
     // [ ] Ensure Pool insurance claim is updated
     assert_eq!(
-        setup.router.get_info(&setup.tokens, &setup.pool_index).insurance_claim,
+        setup
+            .router
+            .get_info(&setup.tokens, &setup.pool_index)
+            .insurance_claim,
         InsuranceClaim {
             last_revenue_withdraw_ts: now,
             quote_max_insurance: pool_info.insurance_claim.quote_max_insurance,
@@ -424,11 +477,14 @@ fn test_resolve_deficit_with_buffer_with_enough_funds() {
     // [ ] Ensure Pool rebalance event is emitted
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            setup.pool_address.clone(),
-            (Symbol::new(&setup.env, "rebalance"), user1.clone()).into_val(&e),
-            amount_to_deposit.into_val(&e),
-        )]
+        vec![
+            &setup.env,
+            (
+                setup.pool_address.clone(),
+                (Symbol::new(&setup.env, "rebalance"), user1.clone()).into_val(&e),
+                amount_to_deposit.into_val(&e),
+            )
+        ]
     );
 }
 
@@ -463,22 +519,20 @@ fn test_resolve_deficit_with_insurance_fund_with_enough_funds() {
     let pool_reserves = setup.router.get_reserves(&setup.tokens, &setup.pool_index);
     let pool_info = setup.router.get_info(tokens, pool_index);
 
-    let btc_price = setup.oracle_registry.get_price(
-        &setup.admin,
-        &setup.btc_asset_id,
-        &false,
-        &None
-    );
-    let xlm_price = setup.oracle_registry.get_price(
-        &setup.admin,
-        &setup.xlm_asset_id,
-        &false,
-        &None
-    );
+    let btc_price =
+        setup
+            .oracle_registry
+            .get_price(&setup.admin, &setup.btc_asset_id, &false, &None);
+    let xlm_price =
+        setup
+            .oracle_registry
+            .get_price(&setup.admin, &setup.xlm_asset_id, &false, &None);
     let target_price = btc_price.price / xlm_price.price;
 
     // File a claim
-    let paid = setup.insurance_fund.resolve_liquidity_deficit(&setup.admin, &setup.pool_address);
+    let paid = setup
+        .insurance_fund
+        .resolve_liquidity_deficit(&setup.admin, &setup.pool_address);
 
     // [x] Ensure IF total shares is unchanged
     assert_eq!(setup.insurance_fund.get_total_shares(), if_total_shares);
@@ -488,23 +542,33 @@ fn test_resolve_deficit_with_insurance_fund_with_enough_funds() {
     assert_ne!(setup.insurance_fund.get_rate(), if_rate);
 
     // [x] Ensure IF optimal utilization is updated
-    assert_ne!(setup.insurance_fund.get_optimal_utilization(), if_optimal_utilization);
+    assert_ne!(
+        setup.insurance_fund.get_optimal_utilization(),
+        if_optimal_utilization
+    );
 
     // [x] Ensure IF token2 balance is decreased
-    assert_eq!(setup.token2.balance(&setup.insurance_fund.address), if_balance - paid);
+    assert_eq!(
+        setup.token2.balance(&setup.insurance_fund.address),
+        if_balance - paid
+    );
 
     // [ ] Ensure Claim event is emitted
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            setup.insurance_fund.address.clone(),
+        vec![
+            &setup.env,
             (
-                Symbol::new(&setup.env, "resolve_deficit"),
-                user1.clone(),
-                StakeAction::Deposit,
-            ).into_val(&e),
-            amount_to_deposit.into_val(&e),
-        )]
+                setup.insurance_fund.address.clone(),
+                (
+                    Symbol::new(&setup.env, "resolve_deficit"),
+                    user1.clone(),
+                    StakeAction::Deposit,
+                )
+                    .into_val(&e),
+                amount_to_deposit.into_val(&e),
+            )
+        ]
     );
 
     // TODO: compute expected min/burn token1 amount
@@ -512,20 +576,35 @@ fn test_resolve_deficit_with_insurance_fund_with_enough_funds() {
 
     // [x] Ensure Pool reserves are updated
     let reserves = setup.router.get_reserves(&setup.tokens, &setup.pool_index);
-    assert_eq!(reserves.get(0).unwrap(), pool_reserves.get(0).unwrap() + token1_delta);
-    assert_eq!(reserves.get(1).unwrap(), pool_reserves.get(1).unwrap() + paid);
+    assert_eq!(
+        reserves.get(0).unwrap(),
+        pool_reserves.get(0).unwrap() + token1_delta
+    );
+    assert_eq!(
+        reserves.get(1).unwrap(),
+        pool_reserves.get(1).unwrap() + paid
+    );
 
     // [x] Ensure Pool price peg is maintained
     let pool_price = reserves.get(1).unwrap() / reserves.get(0).unwrap();
     assert_eq!(pool_price, target_price);
 
     // [x] Ensure Pool token balances match
-    assert_eq!(setup.token1.balance(&setup.pool_address), pool_token1_balance + token1_delta);
-    assert_eq!(setup.token2.balance(&setup.pool_address), pool_token2_balance + paid);
+    assert_eq!(
+        setup.token1.balance(&setup.pool_address),
+        pool_token1_balance + token1_delta
+    );
+    assert_eq!(
+        setup.token2.balance(&setup.pool_address),
+        pool_token2_balance + paid
+    );
 
     // [ ] Ensure Pool insurance claim is updated
     assert_eq!(
-        setup.router.get_info(&setup.tokens, &setup.pool_index).insurance_claim,
+        setup
+            .router
+            .get_info(&setup.tokens, &setup.pool_index)
+            .insurance_claim,
         InsuranceClaim {
             last_revenue_withdraw_ts: now,
             quote_max_insurance: pool_info.insurance_claim.quote_max_insurance,
@@ -537,11 +616,14 @@ fn test_resolve_deficit_with_insurance_fund_with_enough_funds() {
     // [ ] Ensure Pool rebalance event is emitted
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            setup.pool_address.clone(),
-            (Symbol::new(&setup.env, "rebalance"), user1.clone()).into_val(&e),
-            amount_to_deposit.into_val(&e),
-        )]
+        vec![
+            &setup.env,
+            (
+                setup.pool_address.clone(),
+                (Symbol::new(&setup.env, "rebalance"), user1.clone()).into_val(&e),
+                amount_to_deposit.into_val(&e),
+            )
+        ]
     );
 }
 

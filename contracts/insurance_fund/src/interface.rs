@@ -1,4 +1,4 @@
-use soroban_sdk::{ Address, Env };
+use soroban_sdk::{Address, Env};
 
 use crate::stake::Stake;
 
@@ -11,7 +11,7 @@ pub trait InsuranceFundTrait {
         unstaking_period: u64,
         optimal_utilization: u32,
         base_rate: i32,
-        rate_slopes: (u32, u32)
+        rate_slopes: (u32, u32),
     );
 
     //  ___      ___       __        __    _____  ___
@@ -82,7 +82,7 @@ pub trait AdminInterface {
         optimal_utilization: u32,
         base_rate: i32,
         rate_slope_a: u32,
-        rate_slope_b: u32
+        rate_slope_b: u32,
     );
 
     fn resolve_liquidity_deficit(e: Env, admin: Address, pool_address: Address);

@@ -1,36 +1,29 @@
 #![cfg(test)]
 extern crate std;
 use crate::testutils::oracle_registry::{
-    OracleGuardRails,
-    PriceDivergenceGuardRails,
-    ValidityGuardRails,
+    OracleGuardRails, PriceDivergenceGuardRails, ValidityGuardRails,
 };
-use soroban_fixed_point_math::FixedPoint;
 use crate::PoolClient;
 use access_control::constants::ADMIN_ACTIONS_DELAY;
-use sep_40_oracle::testutils::{ Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM };
+use sep_40_oracle::testutils::{Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM};
+use soroban_fixed_point_math::FixedPoint;
 use soroban_sdk::token::{
-    StellarAssetClient as SorobanTokenAdminClient,
-    TokenClient as SorobanTokenClient,
+    StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
 use soroban_sdk::String;
-use soroban_sdk::{ testutils::Address as _, Address, BytesN, Env, Symbol, Vec };
-use utils::constant::{ PERCENTAGE_PRECISION_U64, PRICE_PRECISION_I128 };
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Symbol, Vec};
+use utils::constant::{PERCENTAGE_PRECISION_U64, PRICE_PRECISION_I128};
 use utils::state::{
-    pool::{ InitializeAllParams, InitializeParams, PoolTier, RewardConfig },
     access::PrivilegedAddresses,
+    pool::{InitializeAllParams, InitializeParams, PoolTier, RewardConfig},
     token::TokenInitInfo,
 };
 
-use pool_tokens::token_contract::{ Client as PoolTokenClient };
+use pool_tokens::token_contract::Client as PoolTokenClient;
 use std::vec;
 use utils::test_utils::{
-    create_token_contract,
-    get_mock_lp_token_info,
-    get_token_admin_client,
-    install_liq_pool_hash,
-    install_token_wasm,
-    jump,
+    create_token_contract, get_mock_lp_token_info, get_token_admin_client, install_liq_pool_hash,
+    install_token_wasm, jump,
 };
 
 pub(crate) struct TestConfig {
@@ -174,7 +167,7 @@ impl Setup<'_> {
             &rewards_admin,
             &operations_admin,
             &pause_admin,
-            &Vec::from_array(&e, [emergency_pause_admin.clone()])
+            &Vec::from_array(&e, [emergency_pause_admin.clone()]),
         );
         router.set_pool_hash(&admin, &pool_hash);
         router.set_token_hash(&admin, &token_hash);
@@ -184,7 +177,7 @@ impl Setup<'_> {
         router.commit_transfer_ownership(
             &admin,
             &Symbol::new(&e, "EmergencyAdmin"),
-            &emergency_admin
+            &emergency_admin,
         );
         router.apply_transfer_ownership(&admin, &Symbol::new(&e, "EmergencyAdmin"));
 
@@ -218,9 +211,12 @@ impl Setup<'_> {
             &e,
             &admin,
             &base,
-            &Vec::from_array(&e, [btc_asset.clone(), eth_asset.clone(), xlm_asset.clone()]),
+            &Vec::from_array(
+                &e,
+                [btc_asset.clone(), eth_asset.clone(), xlm_asset.clone()],
+            ),
             7,
-            300
+            300,
         );
 
         // prices
@@ -228,11 +224,8 @@ impl Setup<'_> {
         let init_btc_price = 50000_0000000_i128; // $50,000
         let init_eth_price = 3000_0000000_i128; // $3,000
         let init_xlm_price = 0_5000000_i128; // $0.50
-        let prices: Vec<i128> = Vec::from_array(&e, [
-            init_btc_price,
-            init_eth_price,
-            init_xlm_price,
-        ]);
+        let prices: Vec<i128> =
+            Vec::from_array(&e, [init_btc_price, init_eth_price, init_xlm_price]);
         oracle_client.set_price(&prices, &start_time);
 
         let registry = create_oracle_registry_contract(&e);
@@ -254,7 +247,7 @@ impl Setup<'_> {
             &reward_token.address,
             config.liq_pool_fee,
             &PoolTier::A,
-            1_000_000_u128
+            1_000_000_u128,
         );
         token_reward_admin_client.mint(&liq_pool.address, &config.rewards_count);
 
@@ -263,14 +256,14 @@ impl Setup<'_> {
             &rewards_admin.clone(),
             &operations_admin.clone(),
             &pause_admin.clone(),
-            &Vec::from_array(&e, [emergency_pause_admin.clone()])
+            &Vec::from_array(&e, [emergency_pause_admin.clone()]),
         );
 
         let emergency_admin = Address::generate(&e);
         liq_pool.commit_transfer_ownership(
             &admin,
             &Symbol::new(&e, "EmergencyAdmin"),
-            &emergency_admin
+            &emergency_admin,
         );
         jump(&e, ADMIN_ACTIONS_DELAY + 1); // delay is mandatory since emergency admin was set during initialization
         liq_pool.apply_transfer_ownership(&admin, &Symbol::new(&e, "EmergencyAdmin"));
@@ -329,7 +322,10 @@ impl Setup<'_> {
         let btc_price = setup.oracle_client.lastprice(&setup.btc_asset).unwrap();
         let xlm_price = setup.oracle_client.lastprice(&setup.xlm_asset).unwrap();
 
-        xlm_price.price.fixed_div_floor(btc_price.price, PRICE_PRECISION_I128).unwrap()
+        xlm_price
+            .price
+            .fixed_div_floor(btc_price.price, PRICE_PRECISION_I128)
+            .unwrap()
     }
 
     pub(crate) fn generate_random_users(e: &Env, users_count: u32) -> vec::Vec<Address> {
@@ -352,7 +348,7 @@ impl Setup<'_> {
             self.liq_pool.set_incentives_config(
                 &self.users[0],
                 &self.env.ledger().timestamp().saturating_add(60),
-                &reward_tps
+                &reward_tps,
             );
         }
     }
@@ -383,7 +379,7 @@ fn setup_price_feed_oracle<'a>(
     base: &MockAsset,
     assets: &Vec<MockAsset>,
     decimals: u32,
-    resolution: u32
+    resolution: u32,
 ) -> (Address, MockPriceOracleClient<'a>) {
     let oracle_id = env.register(MockPriceOracleWASM, ());
     let oracle_client = MockPriceOracleClient::new(env, &oracle_id);
@@ -419,7 +415,7 @@ pub fn create_pool_contract<'a>(
     reward_token: &Address,
     fee_fraction: u32,
     tier: &PoolTier,
-    quote_max_insurance: u128
+    quote_max_insurance: u128,
 ) -> PoolClient<'a> {
     let pool = PoolClient::new(e, &e.register(crate::Pool {}, ()));
     let params = InitializeAllParams {

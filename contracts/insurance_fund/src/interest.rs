@@ -1,6 +1,6 @@
 use soroban_fixed_point_math::FixedPoint;
-use soroban_sdk::{ panic_with_error, Env };
-use utils::{ constant::{ PERCENTAGE_PRECISION } };
+use soroban_sdk::{panic_with_error, Env};
+use utils::constant::PERCENTAGE_PRECISION;
 
 use crate::errors::InsuranceFundError;
 
@@ -47,7 +47,7 @@ pub fn calculate_rate(
     optimal_utilization: u32,
     base_rate: i32,
     slope1: u32,
-    slope2: u32
+    slope2: u32,
 ) -> i32 {
     if utilization == 0 {
         return base_rate;
@@ -65,7 +65,9 @@ pub fn calculate_rate(
 
     let rate = if utilization <= optimal_utilization {
         // rate = base + (utilization * slope1 / optimal_utilization)
-        let variable_rate = utilization.fixed_mul_floor(slope1, optimal_utilization).unwrap();
+        let variable_rate = utilization
+            .fixed_mul_floor(slope1, optimal_utilization)
+            .unwrap();
         base_rate + variable_rate
     } else {
         // rate = base + slope1 + ((utilization - optimal_utilization) * slope2 / (10_000 - optimal_utilization))
@@ -82,7 +84,7 @@ pub fn calculate_rate(
 
 #[cfg(test)]
 mod tests {
-    use utils::constant::{ PERCENTAGE_PRECISION_U32, PRICE_PRECISION };
+    use utils::constant::{PERCENTAGE_PRECISION_U32, PRICE_PRECISION};
 
     use super::*;
 
@@ -90,28 +92,22 @@ mod tests {
 
     #[test]
     fn test_utilization_100_percent() {
-        let utilization = calculate_utilization(
-            1_000_000 * PRICE_PRECISION,
-            1_000_000 * PRICE_PRECISION
-        );
+        let utilization =
+            calculate_utilization(1_000_000 * PRICE_PRECISION, 1_000_000 * PRICE_PRECISION);
         assert_eq!(utilization, 1 * PERCENTAGE_PRECISION_U32);
     }
 
     #[test]
     fn test_utilization_50_percent() {
-        let utilization = calculate_utilization(
-            500_000 * PRICE_PRECISION,
-            1_000_000 * PRICE_PRECISION
-        );
+        let utilization =
+            calculate_utilization(500_000 * PRICE_PRECISION, 1_000_000 * PRICE_PRECISION);
         assert_eq!(utilization, 5_000_000); // 0.5%
     }
 
     #[test]
     fn test_utilization_above_100_percent() {
-        let utilization = calculate_utilization(
-            2_000_000 * PRICE_PRECISION,
-            1_000_000 * PRICE_PRECISION
-        );
+        let utilization =
+            calculate_utilization(2_000_000 * PRICE_PRECISION, 1_000_000 * PRICE_PRECISION);
         assert_eq!(utilization, 2 * PERCENTAGE_PRECISION_U32);
     }
 

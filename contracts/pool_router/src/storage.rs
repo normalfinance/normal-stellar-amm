@@ -1,22 +1,12 @@
 use crate::errors::PoolRouterError;
 use paste::paste;
 use soroban_sdk::{
-    contracterror,
-    contracttype,
-    panic_with_error,
-    Address,
-    BytesN,
-    Env,
-    Map,
-    Symbol,
-    Vec,
-    U256,
+    contracterror, contracttype, panic_with_error, Address, BytesN, Env, Map, Symbol, Vec, U256,
 };
-use utils::bump::{ bump_instance, bump_persistent, bump_temporary };
+use utils::bump::{bump_instance, bump_persistent, bump_temporary};
 use utils::errors::storage_errors::StorageError;
 use utils::{
-    generate_instance_storage_getter,
-    generate_instance_storage_getter_and_setter,
+    generate_instance_storage_getter, generate_instance_storage_getter_and_setter,
     generate_instance_storage_setter,
 };
 
@@ -46,8 +36,8 @@ enum DataKey {
     OracleRegistry, // the address of the Oracle Registry contract.
 
     // Temporary storage
-    RewardsConfig, // Global reward config
-    RewardTokensList, // Tokens for reward - Map of oracle_id > PoolRewardInfo
+    RewardsConfig,                      // Global reward config
+    RewardTokensList,                   // Tokens for reward - Map of oracle_id > PoolRewardInfo
     RewardTokensPoolsLiquidity(Symbol), // Per pool liquidity - Map of pool salt > (U256, bool)
 }
 
@@ -60,11 +50,7 @@ pub enum PoolError {
     PoolNotFound = 404,
 }
 
-generate_instance_storage_getter_and_setter!(
-    pool_hash,
-    DataKey::PoolHash,
-    BytesN<32>
-);
+generate_instance_storage_getter_and_setter!(pool_hash, DataKey::PoolHash, BytesN<32>);
 generate_instance_storage_getter_and_setter!(token_hash, DataKey::TokenHash, BytesN<32>);
 generate_instance_storage_getter_and_setter!(pool_plane, DataKey::PoolPlane, Address);
 generate_instance_storage_getter_and_setter!(
@@ -78,7 +64,7 @@ generate_instance_storage_getter_and_setter!(oracle_registry, DataKey::OracleReg
 pub fn get_pool(e: &Env, asset: &Symbol) -> Address {
     let result = get_pool_base(e, asset.clone());
     match result {
-        Some(value) => { value }
+        Some(value) => value,
         None => panic_with_error!(&e, PoolError::PoolNotFound),
     }
 }
@@ -128,11 +114,10 @@ pub fn get_rewards_config(e: &Env) -> GlobalRewardsConfig {
             bump_temporary(e, &DataKey::RewardsConfig);
             v
         }
-        None =>
-            GlobalRewardsConfig {
-                tps: 0,
-                expired_at: 0,
-            },
+        None => GlobalRewardsConfig {
+            tps: 0,
+            expired_at: 0,
+        },
     }
 }
 

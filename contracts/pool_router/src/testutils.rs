@@ -2,20 +2,15 @@
 extern crate std;
 
 use crate::testutils::oracle_registry::{
-    OracleGuardRails,
-    PriceDivergenceGuardRails,
-    ValidityGuardRails,
+    OracleGuardRails, PriceDivergenceGuardRails, ValidityGuardRails,
 };
 use crate::PoolRouterClient;
-use sep_40_oracle::testutils::{ Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM };
+use sep_40_oracle::testutils::{Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM};
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{ Address, Env, Symbol, Vec };
+use soroban_sdk::{Address, Env, Symbol, Vec};
 use utils::constant::PERCENTAGE_PRECISION_U64;
 use utils::test_utils::{
-    get_mock_lp_token_info,
-    get_mock_oracle_registry_ids,
-    install_liq_pool_hash,
-    install_token_wasm,
+    get_mock_lp_token_info, get_mock_oracle_registry_ids, install_liq_pool_hash, install_token_wasm,
 };
 
 pub(crate) mod test_token {
@@ -24,7 +19,11 @@ pub(crate) mod test_token {
 }
 
 pub fn create_token_contract<'a>(e: &Env, admin: &Address) -> test_token::Client<'a> {
-    test_token::Client::new(e, &e.register_stellar_asset_contract_v2(admin.clone()).address())
+    test_token::Client::new(
+        e,
+        &e.register_stellar_asset_contract_v2(admin.clone())
+            .address(),
+    )
 }
 
 pub(crate) struct Setup<'a> {
@@ -99,7 +98,7 @@ impl Default for Setup<'_> {
             &rewards_admin,
             &operations_admin,
             &pause_admin,
-            &Vec::from_array(&e, [emergency_pause_admin.clone()])
+            &Vec::from_array(&e, [emergency_pause_admin.clone()]),
         );
         router.set_pool_hash(&admin, &pool_hash);
         router.set_token_hash(&admin, &token_hash);
@@ -109,7 +108,7 @@ impl Default for Setup<'_> {
         router.commit_transfer_ownership(
             &admin,
             &Symbol::new(&e, "EmergencyAdmin"),
-            &emergency_admin
+            &emergency_admin,
         );
         router.apply_transfer_ownership(&admin, &Symbol::new(&e, "EmergencyAdmin"));
 
@@ -139,7 +138,7 @@ impl Default for Setup<'_> {
             &MockAsset::Other(Symbol::new(&e, "USD")),
             &Vec::from_array(&e, [btc_asset.clone(), eth_asset.clone()]),
             7,
-            300
+            300,
         );
 
         // prices
@@ -159,9 +158,9 @@ impl Default for Setup<'_> {
                 },
                 validity: ValidityGuardRails {
                     seconds_before_stale_for_pool: 10, // ~5 seconds
-                    too_volatile_ratio: 5, // 5x or 80% down
+                    too_volatile_ratio: 5,             // 5x or 80% down
                 },
-            })
+            }),
         );
         registry.register_oracle(&admin, &btc_asset, &oracle, &btc_addr, &7, &0);
 
@@ -222,7 +221,7 @@ fn setup_price_feed_oracle<'a>(
     base: &MockAsset,
     assets: &Vec<MockAsset>,
     decimals: u32,
-    resolution: u32
+    resolution: u32,
 ) -> (Address, MockPriceOracleClient<'a>) {
     let oracle_id = env.register(MockPriceOracleWASM, ());
     let oracle_client = MockPriceOracleClient::new(env, &oracle_id);

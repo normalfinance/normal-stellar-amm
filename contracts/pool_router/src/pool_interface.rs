@@ -1,5 +1,5 @@
-use soroban_sdk::{ Address, Env, Map, String, Symbol, Val, Vec, U256 };
-use utils::state::pool::{ PoolInfo, PoolTier };
+use soroban_sdk::{Address, Env, Map, String, Symbol, Val, Vec, U256};
+use utils::state::pool::{PoolInfo, PoolTier};
 
 pub trait PoolInterfaceTrait {
     //  ___      ___       __        __    _____  ___
@@ -20,7 +20,7 @@ pub trait PoolInterfaceTrait {
         token_out: Address,
         asset: Symbol,
         in_amount: u128,
-        out_min: u128
+        out_min: u128,
     ) -> u128;
 
     fn estimate_swap(
@@ -29,7 +29,7 @@ pub trait PoolInterfaceTrait {
         token_in: Address,
         token_out: Address,
         asset: Symbol,
-        in_amount: u128
+        in_amount: u128,
     ) -> (u128, i128);
 
     fn withdraw(e: Env, user: Address, asset: Symbol, share_amount: u128) -> u128;
@@ -113,7 +113,7 @@ pub trait IncentivesInterfaceTrait {
         user: Address,
         reward_tps: u128,
         expired_at: u64,
-        assets: Vec<Symbol>
+        assets: Vec<Symbol>,
     );
 
     // Fills the aggregated liquidity information for a given set of tokens.
@@ -166,12 +166,7 @@ pub trait IncentivesInterfaceTrait {
     fn get_total_outstanding_reward(e: Env, asset: Symbol) -> u128;
 
     // Transfer outstanding reward to the pool
-    fn distribute_outstanding_reward(
-        e: Env,
-        user: Address,
-        from: Address,
-        asset: Symbol
-    ) -> u128;
+    fn distribute_outstanding_reward(e: Env, user: Address, from: Address, asset: Symbol) -> u128;
 
     // Claim reward as a user.
     // returns amount of tokens rewarded to the user
@@ -195,7 +190,7 @@ pub trait PoolsManagementTrait {
         lp_token_info: (String, String),
         fee_fraction: u32,
         tier: PoolTier,
-        quote_max_insurance: u128
+        quote_max_insurance: u128,
     ) -> Address;
 
     fn remove_pool(e: Env, user: Address, asset: Symbol);

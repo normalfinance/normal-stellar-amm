@@ -1,4 +1,4 @@
-use soroban_sdk::{ Address, BytesN, Env, Vec };
+use soroban_sdk::{Address, BytesN, Env, Vec};
 
 pub trait AdminInterface {
     // Initialize admin user. Will panic if called twice
@@ -10,7 +10,7 @@ pub trait AdminInterface {
         rewards_admin: Address,
         operations_admin: Address,
         pause_admin: Address,
-        emergency_pause_admins: Vec<Address>
+        emergency_pause_admins: Vec<Address>,
     );
 
     // Set liquidity pool token wasm hash

@@ -1,14 +1,14 @@
 #![cfg(test)]
 extern crate std;
-use crate::storage_types::{ OracleGuardRails, PriceDivergenceGuardRails, ValidityGuardRails };
+use crate::storage_types::{OracleGuardRails, PriceDivergenceGuardRails, ValidityGuardRails};
 use crate::OracleRegistryClient;
-use sep_40_oracle::testutils::{ Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM };
+use sep_40_oracle::testutils::{Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM};
 use soroban_sdk::testutils::Address as _;
 
-use soroban_sdk::{ Address, Env, Symbol, Vec };
+use soroban_sdk::{Address, Env, Symbol, Vec};
+use std::vec;
 use utils::constant::PERCENTAGE_PRECISION_U64;
 use utils::test_utils::jump;
-use std::vec;
 
 pub(crate) struct TestConfig {
     pub(crate) users_count: u32,
@@ -98,7 +98,7 @@ impl Setup<'_> {
             &base,
             &Vec::from_array(&e, [btc_asset.clone(), eth_asset.clone()]),
             7,
-            300
+            300,
         );
 
         // prices
@@ -174,11 +174,15 @@ impl Setup<'_> {
 
         // verify timestamp is normalized to the most recent price
         // older than the requested timestamp
-        let result_1 = oracle_client.price(&btc_asset, &(100 + start_time)).unwrap();
+        let result_1 = oracle_client
+            .price(&btc_asset, &(100 + start_time))
+            .unwrap();
         assert_eq!(result_1.price, prices.get_unchecked(0));
         assert_eq!(result_1.timestamp, start_time);
 
-        let result_2 = oracle_client.price(&eth_asset, &(250 + start_time)).unwrap();
+        let result_2 = oracle_client
+            .price(&eth_asset, &(250 + start_time))
+            .unwrap();
         assert_eq!(result_2.price, prices.get_unchecked(1));
         assert_eq!(result_2.timestamp, start_time);
 
@@ -257,7 +261,7 @@ fn setup_price_feed_oracle<'a>(
     base: &MockAsset,
     assets: &Vec<MockAsset>,
     decimals: u32,
-    resolution: u32
+    resolution: u32,
 ) -> (Address, MockPriceOracleClient<'a>) {
     let oracle_id = env.register(MockPriceOracleWASM, ());
     let oracle_client = MockPriceOracleClient::new(env, &oracle_id);

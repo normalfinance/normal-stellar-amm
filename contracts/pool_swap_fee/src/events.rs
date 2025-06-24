@@ -1,4 +1,4 @@
-use soroban_sdk::{ Address, Env, Symbol };
+use soroban_sdk::{Address, Env, Symbol};
 
 #[derive(Clone)]
 pub(crate) struct Events(Env);
@@ -27,9 +27,10 @@ pub(crate) trait ProviderFeeEvents {
 
 impl ProviderFeeEvents for Events {
     fn charge_provider_fee(&self, token: Address, amount: u128) {
-        self.env()
-            .events()
-            .publish((Symbol::new(self.env(), "charge_provider_fee"),), (token, amount));
+        self.env().events().publish(
+            (Symbol::new(self.env(), "charge_provider_fee"),),
+            (token, amount),
+        );
     }
 
     fn claim_fee(&self, token: Address, amount: u128) {
@@ -39,14 +40,16 @@ impl ProviderFeeEvents for Events {
     }
 
     fn buffer_deposit(&self, token: Address, amount: u128) {
-        self.env()
-            .events()
-            .publish((Symbol::new(self.env(), "buffer_deposit"),), (token, amount));
+        self.env().events().publish(
+            (Symbol::new(self.env(), "buffer_deposit"),),
+            (token, amount),
+        );
     }
 
     fn insurance_premium(&self, token: Address, amount: u128) {
-        self.env()
-            .events()
-            .publish((Symbol::new(self.env(), "insurance_premium"),), (token, amount));
+        self.env().events().publish(
+            (Symbol::new(self.env(), "insurance_premium"),),
+            (token, amount),
+        );
     }
 }

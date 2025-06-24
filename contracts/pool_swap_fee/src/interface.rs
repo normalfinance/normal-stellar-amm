@@ -1,4 +1,4 @@
-use soroban_sdk::{ Address, BytesN, Env, Symbol, Vec };
+use soroban_sdk::{Address, BytesN, Env, Symbol, Vec};
 
 pub trait PoolSwapFeeInterface {
     //   _______    _______  ___________  ___________  _______   _______    ________
@@ -50,7 +50,7 @@ pub trait PoolSwapFeeInterface {
         token_out: Address,
         asset: Symbol,
         in_amount: u128,
-        out_min: u128
+        out_min: u128,
     ) -> u128;
 }
 

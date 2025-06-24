@@ -1,29 +1,21 @@
 use crate::interface::Calculator;
-use crate::plane::{ parse_standard_data, PoolPlaneClient };
-use crate::storage::{ get_plane, set_plane };
-use crate::{ standard_pool };
-use access_control::access::{ AccessControl, AccessControlTrait };
-use access_control::emergency::{ get_emergency_mode, set_emergency_mode };
+use crate::plane::{parse_standard_data, PoolPlaneClient};
+use crate::standard_pool;
+use crate::storage::{get_plane, set_plane};
+use access_control::access::{AccessControl, AccessControlTrait};
+use access_control::emergency::{get_emergency_mode, set_emergency_mode};
 use access_control::errors::AccessControlError;
 use access_control::events::Events as AccessControlEvents;
 use access_control::interface::TransferableContract;
 use access_control::management::SingleAddressManagementTrait;
-use access_control::role::{ Role, SymbolRepresentation };
+use access_control::role::{Role, SymbolRepresentation};
 use access_control::transfer::TransferOwnershipTrait;
 use soroban_sdk::{
-    contract,
-    contractimpl,
-    panic_with_error,
-    Address,
-    BytesN,
-    Env,
-    Symbol,
-    Vec,
-    U256,
+    contract, contractimpl, panic_with_error, Address, BytesN, Env, Symbol, Vec, U256,
 };
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
-use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
+use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 
 #[contract]
 pub struct LiquidityCalculator;
@@ -87,12 +79,14 @@ impl Calculator for LiquidityCalculator {
             let mut out = U256::from_u32(&e, 0);
 
             let (fee, reserves) = parse_standard_data(init_args, reserves);
-            out = out.add(
-                &U256::from_u128(&e, standard_pool::get_liquidity(&e, fee, &reserves, 0, 1))
-            );
-            out = out.add(
-                &U256::from_u128(&e, standard_pool::get_liquidity(&e, fee, &reserves, 1, 0))
-            );
+            out = out.add(&U256::from_u128(
+                &e,
+                standard_pool::get_liquidity(&e, fee, &reserves, 0, 1),
+            ));
+            out = out.add(&U256::from_u128(
+                &e,
+                standard_pool::get_liquidity(&e, fee, &reserves, 1, 0),
+            ));
 
             result.push_back(out);
         }
@@ -250,11 +244,10 @@ impl TransferableContract for LiquidityCalculator {
         let access_control = AccessControl::new(&e);
         let role = Role::from_symbol(&e, role_name);
         match access_control.get_transfer_ownership_deadline(&role) {
-            0 =>
-                match access_control.get_role_safe(&role) {
-                    Some(address) => address,
-                    None => panic_with_error!(&e, AccessControlError::RoleNotFound),
-                }
+            0 => match access_control.get_role_safe(&role) {
+                Some(address) => address,
+                None => panic_with_error!(&e, AccessControlError::RoleNotFound),
+            },
             _ => access_control.get_future_address(&role),
         }
     }

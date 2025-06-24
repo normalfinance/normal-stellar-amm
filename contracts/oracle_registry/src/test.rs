@@ -1,19 +1,21 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::storage_types::{ HistoricalOracleData, OracleGuardRails, PriceDivergenceGuardRails };
-use crate::testutils::{ Setup, TestConfig };
+use crate::storage_types::{HistoricalOracleData, OracleGuardRails, PriceDivergenceGuardRails};
+use crate::testutils::{Setup, TestConfig};
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{ Address, Vec };
-use utils::constant::{ FIVE_MINUTE, ONE_HOUR, ONE_MINUTE, TWENTY_FOUR_HOUR };
-use utils::state::oracle_registry::{ MutableOracleInfo, OracleInfo };
+use soroban_sdk::{Address, Vec};
+use utils::constant::{FIVE_MINUTE, ONE_HOUR, ONE_MINUTE, TWENTY_FOUR_HOUR};
+use utils::state::oracle_registry::{MutableOracleInfo, OracleInfo};
 use utils::test_utils::jump;
 
 #[test]
 #[should_panic(expected = "Error(Contract, #103)")]
 fn test_initialize_twice() {
     let setup = Setup::default();
-    setup.registry.initialize(&setup.admin, &setup.emergency_admin);
+    setup
+        .registry
+        .initialize(&setup.admin, &setup.emergency_admin);
 }
 
 // get price
@@ -29,7 +31,9 @@ fn test_get_price() {
 
     jump(&setup.env, TWENTY_FOUR_HOUR as u64);
     // Set mock price
-    setup.oracle_client.set_price(&Vec::from_array(&setup.env, [new_oracle_price]), &now);
+    setup
+        .oracle_client
+        .set_price(&Vec::from_array(&setup.env, [new_oracle_price]), &now);
 
     // Fetch price from registry
     let oracle_price_data = setup.registry.get_price(&setup.btc_asset_id, &false);
@@ -134,14 +138,19 @@ fn test_get_price() {
 #[test]
 fn test_register_oracle() {
     let setup = Setup::default();
-    setup.registry.register_oracle(&setup.admin, &setup.eth_asset_id, &setup.oracle, &7, &0);
-    assert_eq!(setup.registry.get_oracle(&setup.eth_asset_id), OracleInfo {
-        address: setup.oracle,
-        decimals: 7,
-        frozen: false,
-        sanitize_clamp_denominator: 0,
-        last_updated: setup.env.ledger().timestamp(),
-    });
+    setup
+        .registry
+        .register_oracle(&setup.admin, &setup.eth_asset_id, &setup.oracle, &7, &0);
+    assert_eq!(
+        setup.registry.get_oracle(&setup.eth_asset_id),
+        OracleInfo {
+            address: setup.oracle,
+            decimals: 7,
+            frozen: false,
+            sanitize_clamp_denominator: 0,
+            last_updated: setup.env.ledger().timestamp(),
+        }
+    );
 }
 
 // #[test]

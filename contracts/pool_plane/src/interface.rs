@@ -1,4 +1,4 @@
-use soroban_sdk::{ Address, Env, Vec };
+use soroban_sdk::{Address, Env, Vec};
 
 pub trait PlaneInterface {
     // Initializes the admin user.
