@@ -118,10 +118,9 @@ use utils::state::{
 use utils::token::transfer_token;
 use utils::validate;
 
-// Metadata that is added on to the WASM custom section
 contractmeta!(
     key = "Description",
-    val = "Synthetic asset AMM tracking an oracle price with each swap"
+    val = "Constant product AMM for synthetic assets automatically minting/burning the synthetic asset to maintain an oracle price peg"
 );
 
 #[contract]
