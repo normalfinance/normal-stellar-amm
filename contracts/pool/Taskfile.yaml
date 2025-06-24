@@ -16,6 +16,7 @@ tasks:
       - soroban contract build --package pool
       - soroban contract optimize --wasm ../../target/wasm32v1-none/release/pool.wasm --wasm-out ../../target/wasm32v1-none/release/pool.wasm
       - ls -l ../../target/wasm32v1-none/release/*.wasm
+      - cp ../../target/wasm32v1-none/release/pool.wasm ../../wasm/pool.wasm
 
   test:
     deps:
