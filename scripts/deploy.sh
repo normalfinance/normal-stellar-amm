@@ -178,12 +178,11 @@ stellar contract invoke \
     --admin $ADMIN_ADDRESS \
     --oracle_guard_rails '{
         "price_divergence": {
-            "oracle_twap_percent_divergence": 50000
+            "oracle_twap_percent_divergence": 120
         },
         "validity": {
-            "slots_before_stale_for_pool": 10,
-            "confidence_interval_max_size": 20000,
-            "too_volatile_ratio": 5
+            "slots_before_stale_for_pool": 5,
+            "too_volatile_ratio": 120
         }
     }'
 #  _______   ____  ____   _______   _______   _______   _______
@@ -238,7 +237,6 @@ stellar contract invoke \
     --admin $ADMIN_ADDRESS \
     --token $XLM \
     --unstaking_period $THIRTEEN_DAYS \
-    --coverage_buffer 0 \
     --optimal_utilization 8000 \
     --base_rate 200 \
     --rate_slopes '[2000, 6000]'
@@ -350,10 +348,9 @@ stellar contract invoke \
     -- \
     init_pool \
     --user $ADMIN_ADDRESS \
-    --oracle_registry_ids '["BTC", "XLM"]' \
-    --asset CAVLP5DH2GJPZMVO7IJY4CVOD5MWEFTJFVPD2YY2FQXOQHRGHK4D6HLP \
+    --assets '["BTC", "XLM"]' \
     --tokens "[\"$nBTC_TOKEN_ADDR\", \"$XLM\"]" \
-    --lp_token_info '["Pool Share Token", "POOL"]' \
+    --lp_token_info '["nBTC Share Token", "nBTC-POOL"]' \
     --fee_fraction 30 \
     --tier '"A"' \
     --quote_max_insurance 1000000
@@ -365,7 +362,7 @@ POOL_ADDR=$(soroban contract invoke \
     --source $IDENTITY_STRING \
     --network $NETWORK --fee 100 \
     -- \
-    query_pools | jq -r '.[0]')
+    get_pools | jq -r '.[0]')
 
 echo "Pool contract initialized."
 
@@ -384,7 +381,7 @@ soroban contract invoke \
     --source $IDENTITY_STRING \
     --network $NETWORK --fee 10000000 \
     -- \
-    deposit --user $ADMIN_ADDRESS --desired_amount 6000000000 --min_shares 0
+    deposit --user $ADMIN_ADDRESS --token_b_amount 6000000000
 
 echo "Liquidity provided."
 
@@ -399,5 +396,7 @@ echo "Oracle Registry Contract address: $ORACLE_REGISTRY_ADDR"
 echo "Buffer Contract address: $BUFFER_ADDR"
 echo "Insurance Fund Contract address: $INSURANCE_FUND_ADDR"
 echo "Fee Collector Contract address: $FEE_COLLECTOR_ADDR"
+echo "Pool Plane Contract address: $POOL_PLANE_ADDR"
+echo "Liq. Calculator Contract address: $LIQUIDITY_CALCULATOR_ADDR"
 
 echo "nBTC/XLM Pool Contract address: $POOL_ADDR"
