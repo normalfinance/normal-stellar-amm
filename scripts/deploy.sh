@@ -36,7 +36,9 @@ ADMIN_ADDRESS=$(soroban keys address $IDENTITY_STRING)
 
 echo "Deploy the soroban_token_contract and capture its contract ID hash..."
 
-XLM="CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
+# XLM="CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
+XLM_TESTNET="CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
+XLM_MAINNET="CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA"
 
 echo "Install the soroban_token and pool contracts..."
 
@@ -181,10 +183,40 @@ stellar contract invoke \
             "oracle_twap_percent_divergence": 120
         },
         "validity": {
-            "slots_before_stale_for_pool": 5,
+            "seconds_before_stale_for_pool": 5,
             "too_volatile_ratio": 120
         }
     }'
+
+echo "Registering a BTC and a XLM oracle..."
+
+REFLECTOR_TESTNET_ORACLE=CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63
+REFLECTOR_MAINNET_ORACLE=CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63
+
+stellar contract invoke \
+    --id $ORACLE_REGISTRY_ADDR \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    -- \
+    register_oracle \
+    --admin $ADMIN_ADDRESS \
+    --asset "BTC" \
+    --oracle_addr $REFLECTOR_TESTNET_ORACLE \
+    --decimals 14 \
+    --sanitize_clamp_denominator 0 \
+
+stellar contract invoke \
+    --id $ORACLE_REGISTRY_ADDR \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    -- \
+    register_oracle \
+    --admin $ADMIN_ADDRESS \
+    --asset "XLM" \
+    --oracle_addr $REFLECTOR_TESTNET_ORACLE \
+    --decimals 14 \
+    --sanitize_clamp_denominator 0 \
+
 #  _______   ____  ____   _______   _______   _______   _______
 # |   _  "\ ("  _||_ " | /"     "| /"     "| /"     "| /"      \
 # (. |_)  :)|   (  ) : |(: ______)(: ______)(: ______)|:        |
@@ -200,6 +232,8 @@ BUFFER_ADDR=$(soroban contract deploy \
     --source $IDENTITY_STRING \
     --network $NETWORK)
 
+ONE_HOUR=$((3600))
+
 stellar contract invoke \
     --id $BUFFER_ADDR \
     --source $IDENTITY_STRING \
@@ -208,7 +242,7 @@ stellar contract invoke \
     initialize \
     --admin $ADMIN_ADDRESS \
     --emergency_admin $ADMIN_ADDRESS \
-    --time_bt_payouts 3600 \
+    --time_bt_payouts $ONE_HOUR \
     --min_reserve_ratio 1000
 
 #   __    _____  ___    ________  ____  ____   _______        __      _____  ___    ______    _______
@@ -226,7 +260,7 @@ INSURANCE_FUND_ADDR=$(soroban contract deploy \
     --source $IDENTITY_STRING \
     --network $NETWORK)
 
-THIRTEEN_DAYS=$((3600 * 24 * 13))
+THIRTEEN_DAYS=$((ONE_HOUR * 24 * 13))
 
 stellar contract invoke \
     --id $INSURANCE_FUND_ADDR \
