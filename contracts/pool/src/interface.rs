@@ -237,5 +237,5 @@ pub trait IncentivesTrait {
 
     // Claim LP fees and reward as a user.
     // returns amount of tokens rewarded to the user
-    fn claim(e: Env, user: Address) -> (u128, u128, u128);
+    fn claim(e: Env, user: Address) -> (u128, u128);
 }

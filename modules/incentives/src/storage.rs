@@ -25,9 +25,8 @@ pub struct PoolIncentiveData {
     pub accumulated_rewards: u128,
     pub claimed_rewards: u128,
     pub rewards_last_time: u64,
-    // lp fees - Tracks how much of each token has been collected as fees per unit of LP token, cumulatively.
-    pub fee_growth_a_per_lp: u128,
-    pub fee_growth_b_per_lp: u128,
+    // lp fees - Tracks how much of token_b has been collected as fees per unit of LP token, cumulatively.
+    pub fee_growth_per_lp: u128,
 }
 
 // Per-user incentive data.
@@ -39,8 +38,7 @@ pub struct UserIncentiveData {
     pub rewards_to_claim: u128,
     pub last_block: u64,
     // lp fees
-    pub fee_checkpoint_a: u128,
-    pub fee_checkpoint_b: u128,
+    pub fee_checkpoint: u128,
 }
 
 #[derive(Clone)]

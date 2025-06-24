@@ -45,7 +45,6 @@ fn test_initialize_twice() {
         &setup.emergency_admin,
         &setup.token_a.address,
         &THIRTEEN_DAY,
-        &0,
         &80_00000_u32, // 80%
         &2_00000_i32, // 2%
         &(10_00000_u32, 60_00000_u32) // 10% and 60%);
@@ -161,7 +160,7 @@ fn test_deposit_from_multiple_users() {
 
 #[test]
 #[should_panic(expected = "Error(Contract, #20)")]
-fn test_deposit_over_optimal_coverage() {
+fn test_deposit_over_optimal_insurance() {
     let setup = Setup::new_with_config(
         &(TestConfig {
             mint_to_user: i128::MAX,
@@ -170,11 +169,11 @@ fn test_deposit_over_optimal_coverage() {
     );
 
     let users = setup.users;
-    let optimal_coverage = 100_0000000_u128;
+    let optimal_insurance = 100_0000000_u128;
     let amount_to_deposit = 101_0000000_u128;
 
-    // Update the optimal coverage
-    setup.insurance_fund.set_optimal_coverage(&setup.admin, &optimal_coverage);
+    // Update the optimal insurance
+    setup.insurance_fund.set_optimal_insurance(&setup.admin, &optimal_insurance);
 
     // Attempt the deposit
     setup.insurance_fund.deposit(&users[1], &amount_to_deposit);

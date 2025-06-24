@@ -36,19 +36,16 @@ fn test() {
     let plane = create_plane_contract(&e);
     plane.update(
         &address1,
-        &symbol_short!("standard"),
         &Vec::from_array(&e, [30_u128]),
         &Vec::from_array(&e, [1000_0000000_u128, 1000_0000000_u128])
     );
     plane.update(
         &address2,
-        &symbol_short!("standard"),
         &Vec::from_array(&e, [10_u128]),
         &Vec::from_array(&e, [1500_0000000_u128, 1500_0000000_u128])
     );
     plane.update(
         &address3,
-        &symbol_short!("standard"),
         &Vec::from_array(&e, [100_u128]),
         &Vec::from_array(&e, [150_0000000_u128, 150_0000000_u128])
     );
@@ -91,22 +88,15 @@ fn test_bad_math() {
     jump(&e, 1813808460);
 
     let plane = create_plane_contract(&e);
-    plane.update(
-        &address1,
-        &symbol_short!("standard"),
-        &Vec::from_array(&e, [100]),
-        &Vec::from_array(&e, [0, 0])
-    );
+    plane.update(&address1, &Vec::from_array(&e, [100]), &Vec::from_array(&e, [0, 0]));
 
     plane.update(
         &address2, //4
-        &symbol_short!("standard"),
         &Vec::from_array(&e, [30]),
         &Vec::from_array(&e, [0, 0])
     );
     plane.update(
         &address3, //5
-        &symbol_short!("standard"),
         &Vec::from_array(&e, [10]),
         &Vec::from_array(&e, [485714287, 210000000000000])
     );
@@ -149,7 +139,6 @@ fn test_bad_math_2() {
 
     plane.update(
         &address2,
-        &symbol_short!("standard"),
         &Vec::from_array(&e, [30]),
         &Vec::from_array(&e, [107478636, 222947860089606])
     );
@@ -186,13 +175,11 @@ fn test_bad_math_big_tokens_value_difference() {
     let plane = create_plane_contract(&e);
     plane.update(
         &address1,
-        &symbol_short!("standard"),
         &Vec::from_array(&e, [30]),
         &Vec::from_array(&e, [43388242405299_u128, 18833770_u128])
     );
     plane.update(
         &address2,
-        &symbol_short!("standard"),
         &Vec::from_array(&e, [30]),
         &Vec::from_array(&e, [107478636, 222947860089606])
     );
@@ -265,19 +252,16 @@ fn test_norm() {
     let plane = create_plane_contract(&e);
     plane.update(
         &address1,
-        &symbol_short!("standard"),
         &Vec::from_array(&e, [30_u128]),
         &Vec::from_array(&e, [250_500_000_0000_u128, 50_000_000_0000_u128])
     );
     plane.update(
         &address2,
-        &symbol_short!("standard"),
         &Vec::from_array(&e, [30_u128]),
         &Vec::from_array(&e, [25_000_000_0000_u128, 5_000_000_0000_u128])
     );
     plane.update(
         &address3,
-        &symbol_short!("standard"),
         &Vec::from_array(&e, [300_u128]),
         &Vec::from_array(&e, [2_500_000_0000_u128, 0_500_000_0000_u128])
     );
@@ -320,19 +304,16 @@ fn test_small() {
     let plane = create_plane_contract(&e);
     plane.update(
         &address1,
-        &symbol_short!("standard"),
         &Vec::from_array(&e, [30_u128]),
         &Vec::from_array(&e, [10_u128, 10_u128])
     );
     plane.update(
         &address2,
-        &symbol_short!("standard"),
         &Vec::from_array(&e, [30_u128]),
         &Vec::from_array(&e, [100_u128, 100_u128])
     );
     plane.update(
         &address3,
-        &symbol_short!("standard"),
         &Vec::from_array(&e, [300_u128]),
         &Vec::from_array(&e, [1000_u128, 1000_u128])
     );
@@ -370,13 +351,11 @@ fn test_reversed() {
     let plane = create_plane_contract(&e);
     plane.update(
         &address1,
-        &symbol_short!("standard"),
         &Vec::from_array(&e, [30_u128]),
         &Vec::from_array(&e, [1000_u128, 3000_u128])
     );
     plane.update(
         &address2,
-        &symbol_short!("standard"),
         &Vec::from_array(&e, [30_u128]),
         &Vec::from_array(&e, [3000_u128, 1000_u128])
     );
@@ -407,7 +386,6 @@ fn test_liquidity_overflow() {
     let plane = create_plane_contract(&e);
     plane.update(
         &address1,
-        &symbol_short!("standard"),
         &Vec::from_array(&e, [30_u128]),
         &Vec::from_array(&e, [u128::MAX, u128::MAX])
     );
@@ -527,7 +505,6 @@ fn test_empty_pool() {
     let plane = create_plane_contract(&e);
     plane.update(
         &address1,
-        &symbol_short!("standard"),
         &Vec::from_array(&e, [30_u128]),
         &Vec::from_array(&e, [0_u128, 0_u128])
     );
@@ -559,7 +536,6 @@ fn test_bad_address() {
     let plane = create_plane_contract(&e);
     plane.update(
         &address2,
-        &symbol_short!("standard"),
         &Vec::from_array(&e, [30_u128]),
         &Vec::from_array(&e, [0_u128, 0_u128])
     );

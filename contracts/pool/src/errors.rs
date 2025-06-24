@@ -22,6 +22,8 @@ pub enum PoolError {
     MaxIFWithdrawReached = 214,
     NoIFWithdrawAvailable = 215,
     DefaultError = 216,
+    // other
+    SwapReduceOnly = 217,
 }
 
 #[contracterror]

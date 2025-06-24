@@ -1,5 +1,3 @@
-use core::char::MAX;
-
 use crate::errors::{ PoolError, PoolValidationError };
 use crate::events::Events as LiquidityPoolEvents;
 use crate::events::PoolEvents;
@@ -11,6 +9,7 @@ use crate::pool::{
     get_delta_a,
     get_net_liquidity_imbalance,
     get_oracle_price,
+    peg_price,
     rebalance,
     update_volume_30d,
 };
@@ -74,6 +73,7 @@ use pool_tokens::{
     put_token_synthetic,
     Client as LPTokenClient,
 };
+use soroban_fixed_point_math::FixedPoint;
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{
     contract,
@@ -99,6 +99,7 @@ use utils::constant::{
     INSURANCE_C_MAX,
     INSURANCE_SPECULATIVE_MAX,
     MAX_POOL_FEE,
+    PRICE_PRECISION,
 };
 use utils::math::safe_math::SafeMath;
 use utils::state::oracle_registry::NormalAction;
@@ -242,6 +243,7 @@ impl PoolTrait for Pool {
             },
             liquidity_max_imbalance: 0,
             expiry_ts: 0,
+            expiry_price: 0,
         };
         set_pool(&e, &pool);
 
@@ -300,7 +302,7 @@ impl PoolTrait for Pool {
         let incentives = get_incentives_manager(&e);
         let total_shares = get_total_lp_tokens(&e);
         let user_shares = get_user_balance_lp(&e, &user);
-        incentives.manager().checkpoint_user(&user, total_shares, user_shares, 0, 0);
+        incentives.manager().checkpoint_user(&user, total_shares, user_shares, 0);
 
         if reserve_a == 0 && reserve_b == 0 && token_b_amount == 0 {
             panic_with_error!(&e, PoolValidationError::AllCoinsRequired);
@@ -427,9 +429,17 @@ impl PoolTrait for Pool {
             panic_with_error!(e, PoolValidationError::ZeroAmount);
         }
 
+        let pool = get_pool(&e);
+
+        // Error if Pool is in reduce only status and swap is attempting to buy
+        // TODO: should this be the implementation of ReduceOnly, or should
+        // token_a being minted be considered "increasing risk"?
+        if pool.is_reduce_only() && in_idx == 1 {
+            panic_with_error!(&e, PoolError::SwapReduceOnly);
+        }
+
         // Rebalance the pool before swapping
         let now = e.ledger().timestamp();
-        let pool = get_pool(&e);
 
         let base_oracle_price_data = get_oracle_price(
             &e,
@@ -457,6 +467,7 @@ impl PoolTrait for Pool {
             panic_with_error!(&e, PoolValidationError::EmptyPool);
         }
 
+        // TODO: how do we augment the amount_out when in ReduceOnly mode?
         let (out, fee) = pool.get_amount_out(&e, in_amount, reserve_sell, reserve_buy);
 
         if out < out_min {
@@ -857,7 +868,7 @@ impl PoolTrait for Pool {
         let incentives = get_incentives_manager(&e);
         let total_shares = get_total_lp_tokens(&e);
         let user_shares = get_user_balance_lp(&e, &user);
-        incentives.manager().checkpoint_user(&user, total_shares, user_shares, 0, 0);
+        incentives.manager().checkpoint_user(&user, total_shares, user_shares, 0);
 
         burn_lp_tokens(&e, &user, share_amount);
 
@@ -1234,6 +1245,25 @@ impl AdminInterfaceTrait for Pool {
 
         let mut pool = get_pool(&e);
 
+        // set the price from last price of oracle registry
+        let base_oracle_price_data = get_oracle_price(
+            &e,
+            &pool.base_asset,
+            false,
+            NormalAction::UpdateTwap
+        );
+        let quote_oracle_price_data = get_oracle_price(
+            &e,
+            &pool.quote_asset,
+            false,
+            NormalAction::UpdateTwap
+        );
+        pool.expiry_price = peg_price(
+            &e,
+            base_oracle_price_data.price,
+            quote_oracle_price_data.price
+        );
+
         // automatically enter reduce only
         pool.status = PoolStatus::ReduceOnly;
         pool.expiry_ts = expiry_ts;
@@ -1575,7 +1605,7 @@ impl IncentivesTrait for Pool {
         ]);
 
         // display actual values
-        let user_data = manager.checkpoint_user(&user, total_shares, user_shares, 0, 0);
+        let user_data = manager.checkpoint_user(&user, total_shares, user_shares, 0);
         let pool_data = storage.get_pool_incentive_data();
 
         result.set(symbol_short!("acc"), pool_data.accumulated_rewards as i128);
@@ -1636,7 +1666,7 @@ impl IncentivesTrait for Pool {
         }
         let incentives = get_incentives_manager(&e);
         let total_lp_tokens = get_total_lp_tokens(&e);
-        incentives.manager().checkpoint_user(&user, total_lp_tokens, user_shares, 0, 0);
+        incentives.manager().checkpoint_user(&user, total_lp_tokens, user_shares, 0);
     }
 
     fn checkpoint_working_balance(
@@ -1710,7 +1740,7 @@ impl IncentivesTrait for Pool {
     // # Returns
     //
     // The amount of tokens rewarded to the user as a u128.
-    fn claim(e: Env, user: Address) -> (u128, u128, u128) {
+    fn claim(e: Env, user: Address) -> (u128, u128) {
         if get_is_killed_claim(&e) {
             panic_with_error!(e, PoolError::PoolClaimKilled);
         }
@@ -1722,11 +1752,10 @@ impl IncentivesTrait for Pool {
         let user_shares = get_user_balance_lp(&e, &user);
         let mut incentives_manager = incentives.manager();
         let incentives_storage = incentives.storage();
-        let (reward, fee_a, fee_b) = incentives_manager.claim_incentives(
+        let (reward, fees_owed) = incentives_manager.claim_incentives(
             &user,
             total_shares,
             user_shares,
-            &tokens.get(0).unwrap(),
             &tokens.get(1).unwrap()
         );
 
@@ -1752,13 +1781,11 @@ impl IncentivesTrait for Pool {
             user,
             reward_token,
             reward,
-            tokens.get(0).unwrap(),
-            fee_a,
             tokens.get(1).unwrap(),
-            fee_b
+            fees_owed
         );
 
-        (reward, fee_a, fee_b)
+        (reward, fees_owed)
     }
 }
 
