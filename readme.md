@@ -22,31 +22,41 @@ Normal is a synthetic asset protocol enabling investors to trade any crypto asse
 
 ## Features
 
-- Earn $NORM by providing $XLM as liquidity to pools
-- Buy and sell Normal Tokens (i.e. nBTC - Normal Bitcoin)
-- Permissionlessly create synthetic tokens (coming soon...)
+- Buy and sell any Top 100 crypto from a single DEX on Stellar using Normal Tokens (i.e. nBTC - Normal Bitcoin)
+- Earn yield by providing XLM as liquidity to Normal Token pools
+- Stake and earn yield from the Insurance Fund by helping cover liquidity deficits
+- Earn reward tokens by using the Normal Protocol to swap and provide liquidity
 
 ## Smart Contracts
 
-- **pool** - Exchange liquidity pool based on constant product formula (xy=k)
-- **token** - [SEP-0041](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0041.md) compatible token smart contract designed for liquidity pool share management
+- **pool** - A constant product AMM for synthetic assets that automatically mints/burns the synthetic asset to maintain an oracle price peg
 - **pool_router** - entry point and catalogue of liquidity pools which is capable to deploy new pools if necessary
 - **buffer** - Initial backstop to cover pool liquidity deficits. Receives a portion of all protocol revenue
-- **insurance_fund** - Additional backstop or liquidity deficits. Funded via liquidity provider staking deposits
-- **oracle_registry** - Oracle aggregator, data validator, and
-- **pool_swap_fee** -
+- **insurance_fund** - Additional backstop for liquidity deficits. Funded via liquidity provider staking deposits
+- **oracle_registry** - Oracle aggegation and price validation making it easier for pools to source reliable oracle prices
+- **pool_swap_fee** - A proxy for the `PoolRouter` that handles swap fee collection and distribution.
 - **pool_plane** - contract designed to store minimum information about any pool: type, parameters, reserves. being updated on every action with the pool (deposit, swap, withdraw, parameters update, etc)
 - **liquidity_calculator** - smart contract containing pools liquidity calculation logic which is capable to compare many pools at once
+- **token** - [SEP-0041](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0041.md) compatible token smart contract designed for liquidity pool share management
 
 ## Modules
 
 - **access_control** - Handles permissioned access to contracts using role-based authentication
 - **incentives** - Handles how liquidity provider fees and pool rewards are calculated and claimed
-- **pool_tokens** - Handles LP token utilities
+- **pool_tokens** - Handles LP token and synthetic token (`Pool.token_a`) utilities
 - **upgrade** - Handles contract upgrades
 - **utils** - Handles shared types, utils, constants, errors, macros, and more
 
 ![Normal AMM Swap Flow](./docs/images/swap.png "Swap Flow")
+
+## Todo
+
+- [ ] Finish integration tests
+- [ ] Finish contract tests
+- [ ] Add `OracleSource` to the `OracleRegistry` contract to support various oracles such as Reflector and DIA
+- [ ] Create the `Index` and `IndexFactory` contracts for on-chain index funds
+- [ ] Convert the `Pool` into a concentrated liquidity pool
+- [ ] ...
 
 ## Built With
 
