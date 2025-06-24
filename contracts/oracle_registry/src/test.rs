@@ -134,17 +134,9 @@ fn test_get_price() {
 #[test]
 fn test_register_oracle() {
     let setup = Setup::default();
-    setup.registry.register_oracle(
-        &setup.admin,
-        &setup.eth_asset_id,
-        &setup.oracle,
-        &setup.eth_addr,
-        &7,
-        &0
-    );
+    setup.registry.register_oracle(&setup.admin, &setup.eth_asset_id, &setup.oracle, &7, &0);
     assert_eq!(setup.registry.get_oracle(&setup.eth_asset_id), OracleInfo {
         address: setup.oracle,
-        asset_addr: setup.eth_addr,
         decimals: 7,
         frozen: false,
         sanitize_clamp_denominator: 0,

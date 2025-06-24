@@ -19,7 +19,6 @@ pub enum OracleSource {
 pub struct OracleInfo {
     pub address: Address,
     // pub source: OracleSource, // coming soon
-    pub asset_addr: Address,
     pub decimals: u32,
     pub frozen: bool,
     pub sanitize_clamp_denominator: i64, // zero if not set

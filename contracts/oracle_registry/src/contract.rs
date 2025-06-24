@@ -82,7 +82,7 @@ impl OracleRegistryTrait for OracleRegistry {
             };
         }
 
-        let oracle_price_data = get_oracle_price(&e, &oracle.address, &oracle.asset_addr, now);
+        let oracle_price_data = get_oracle_price(&e, &oracle.address, &asset, now);
 
         let block = block_operation(
             &e,
@@ -240,7 +240,6 @@ impl AdminInterface for OracleRegistry {
     // * `admin` - The address of the authorized admin performing the registration.
     // * `asset` - The symbol for the asset being registered.
     // * `oracle_addr` - The address of the external oracle contract providing the price.
-    // * `asset_addr` - The address of the asset this oracle tracks (e.g., XLM).
     // * `decimals` - Decimal precision of the asset prices returned by the oracle.
     // * `sanitize_clamp_denominator` - Clamp denominator used for sanitizing price updates.
     //
@@ -255,7 +254,6 @@ impl AdminInterface for OracleRegistry {
         admin: Address,
         asset: Symbol,
         oracle_addr: Address,
-        asset_addr: Address,
         decimals: u32,
         sanitize_clamp_denominator: i64
     ) -> OracleInfo {
@@ -267,7 +265,7 @@ impl AdminInterface for OracleRegistry {
         }
 
         let now = e.ledger().timestamp();
-        let oracle_price_data = get_oracle_price(&e, &oracle_addr, &asset_addr, now);
+        let oracle_price_data = get_oracle_price(&e, &oracle_addr, &asset, now);
 
         // Check oracle validity
         let oracle_is_valid =
@@ -290,7 +288,6 @@ impl AdminInterface for OracleRegistry {
 
         let oracle = OracleInfo {
             address: oracle_addr,
-            asset_addr,
             decimals,
             frozen: false,
             sanitize_clamp_denominator,
@@ -335,7 +332,7 @@ impl AdminInterface for OracleRegistry {
 
             // Address validation
             if let Some(oracle_addr) = params.address.clone() {
-                let oracle_price_data = get_oracle_price(&e, &oracle_addr, &oracle.asset_addr, now);
+                let oracle_price_data = get_oracle_price(&e, &oracle_addr, &asset, now);
 
                 // Check oracle validity
                 let historical_oracle_data = get_historical_oracle_data(&e, &asset);

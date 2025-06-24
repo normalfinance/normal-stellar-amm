@@ -24,9 +24,9 @@ use crate::{
 //
 // # Returns
 // - `OraclePriceData` containing the price and delay since last update.
-pub fn get_oracle_price(e: &Env, oracle: &Address, asset: &Address, now: u64) -> OraclePriceData {
+pub fn get_oracle_price(e: &Env, oracle: &Address, asset: &Symbol, now: u64) -> OraclePriceData {
     let oracle_client = PriceFeedClient::new(e, oracle);
-    let oracle_asset = Asset::Stellar(asset.clone());
+    let oracle_asset = Asset::Other(asset.clone());
 
     let oracle_price: u128;
     let published_ts: u64;
