@@ -55,6 +55,76 @@ POOL_WASM_HASH=$(soroban contract upload \
 
 echo "Token and pool contracts deployed."
 
+#     ______     _______        __       ______   ___       _______   ________
+#    /    " \   /"      \      /""\     /" _  "\ |"  |     /"     "| /"       )
+#   // ____  \ |:        |    /    \   (: ( \___)||  |    (: ______)(:   \___/
+#  /  /    ) :)|_____/   )   /' /\  \   \/ \     |:  |     \/    |   \___  \
+# (: (____/ //  //      /   //  __'  \  //  \ _   \  |___  // ___)_   __/  \\
+#  \        /  |:  __   \  /   /  \\  \(:   _) \ ( \_|:  \(:      "| /" \   :)
+#   \"_____/   |__|  \___)(___/    \___)\_______) \_______)\_______)(_______/
+
+echo "Initialize oracle registry..."
+
+ORACLE_REGISTRY_ADDR=$(soroban contract deploy \
+    --wasm oracle_registry.optimized.wasm \
+    --source $IDENTITY_STRING \
+    --network $NETWORK)
+
+stellar contract invoke \
+    --id $ORACLE_REGISTRY_ADDR \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    -- \
+    initialize \
+    --admin $ADMIN_ADDRESS \
+    --emergency_admin $ADMIN_ADDRESS
+
+stellar contract invoke \
+    --id $ORACLE_REGISTRY_ADDR \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    -- \
+    set_oracle_guard_rails \
+    --admin $ADMIN_ADDRESS \
+    --oracle_guard_rails '{
+        "price_divergence": {
+            "oracle_twap_percent_divergence": 120
+        },
+        "validity": {
+            "seconds_before_stale_for_pool": 5,
+            "too_volatile_ratio": 120
+        }
+    }'
+
+echo "Registering a BTC and a XLM oracle..."
+
+REFLECTOR_TESTNET_ORACLE=CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63
+REFLECTOR_MAINNET_ORACLE=CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63
+
+stellar contract invoke \
+    --id $ORACLE_REGISTRY_ADDR \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    -- \
+    register_oracle \
+    --admin $ADMIN_ADDRESS \
+    --asset "BTC" \
+    --oracle_addr $REFLECTOR_TESTNET_ORACLE \
+    --decimals 14 \
+    --sanitize_clamp_denominator 0
+
+stellar contract invoke \
+    --id $ORACLE_REGISTRY_ADDR \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    -- \
+    register_oracle \
+    --admin $ADMIN_ADDRESS \
+    --asset "XLM" \
+    --oracle_addr $REFLECTOR_TESTNET_ORACLE \
+    --decimals 14 \
+    --sanitize_clamp_denominator 0
+
 #   _______     ______    ____  ____  ___________  _______   _______
 #  /"      \   /    " \  ("  _||_ " |("     _   ")/"     "| /"      \
 # |:        | // ____  \ |   (  ) : | )__/  \\__/(: ______)|:        |
@@ -120,6 +190,15 @@ stellar contract invoke \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     -- \
+    set_oracle_registry \
+    --admin $ADMIN_ADDRESS \
+    --oracle_registry $ORACLE_REGISTRY_ADDR
+
+stellar contract invoke \
+    --id $POOL_ROUTER_ADDR \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    -- \
     set_privileged_addrs \
     --admin $ADMIN_ADDRESS \
     --rewards_admin $ADMIN_ADDRESS \
@@ -146,76 +225,6 @@ stellar contract invoke \
     --calculator $LIQUIDITY_CALCULATOR_ADDR
 
 echo "Tokens and pool router deployed."
-
-#     ______     _______        __       ______   ___       _______   ________
-#    /    " \   /"      \      /""\     /" _  "\ |"  |     /"     "| /"       )
-#   // ____  \ |:        |    /    \   (: ( \___)||  |    (: ______)(:   \___/
-#  /  /    ) :)|_____/   )   /' /\  \   \/ \     |:  |     \/    |   \___  \
-# (: (____/ //  //      /   //  __'  \  //  \ _   \  |___  // ___)_   __/  \\
-#  \        /  |:  __   \  /   /  \\  \(:   _) \ ( \_|:  \(:      "| /" \   :)
-#   \"_____/   |__|  \___)(___/    \___)\_______) \_______)\_______)(_______/
-
-echo "Initialize oracle registry..."
-
-ORACLE_REGISTRY_ADDR=$(soroban contract deploy \
-    --wasm oracle_registry.optimized.wasm \
-    --source $IDENTITY_STRING \
-    --network $NETWORK)
-
-stellar contract invoke \
-    --id $ORACLE_REGISTRY_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    initialize \
-    --admin $ADMIN_ADDRESS \
-    --emergency_admin $ADMIN_ADDRESS
-
-stellar contract invoke \
-    --id $ORACLE_REGISTRY_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    set_oracle_guard_rails \
-    --admin $ADMIN_ADDRESS \
-    --oracle_guard_rails '{
-        "price_divergence": {
-            "oracle_twap_percent_divergence": 120
-        },
-        "validity": {
-            "seconds_before_stale_for_pool": 5,
-            "too_volatile_ratio": 120
-        }
-    }'
-
-echo "Registering a BTC and a XLM oracle..."
-
-REFLECTOR_TESTNET_ORACLE=CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63
-REFLECTOR_MAINNET_ORACLE=CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63
-
-stellar contract invoke \
-    --id $ORACLE_REGISTRY_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    register_oracle \
-    --admin $ADMIN_ADDRESS \
-    --asset "BTC" \
-    --oracle_addr $REFLECTOR_TESTNET_ORACLE \
-    --decimals 14 \
-    --sanitize_clamp_denominator 0 \
-
-stellar contract invoke \
-    --id $ORACLE_REGISTRY_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    register_oracle \
-    --admin $ADMIN_ADDRESS \
-    --asset "XLM" \
-    --oracle_addr $REFLECTOR_TESTNET_ORACLE \
-    --decimals 14 \
-    --sanitize_clamp_denominator 0 \
 
 #  _______   ____  ____   _______   _______   _______   _______
 # |   _  "\ ("  _||_ " | /"     "| /"     "| /"     "| /"      \
