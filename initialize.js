@@ -79,21 +79,11 @@ function filenameNoExtension(filename) {
  * @param {string} wasm path to the compiled Wasm file
  */
 function deploy(wasm) {
-  if (wasm.includes("locker")) {
-    exe(
-      `stellar contract deploy --wasm ${wasm} --ignore-checks --alias ${filenameNoExtension(
-        wasm
-      )} -- --admin=${process.env.PUBLIC_STELLAR_ADMIN} --operations_admin=${
-        process.env.PUBLIC_STELLAR_ADMIN
-      } --emergency_admin=${process.env.PUBLIC_STELLAR_ADMIN}`
-    );
-  } else {
-    exe(
-      `stellar contract deploy --wasm ${wasm} --ignore-checks --alias ${filenameNoExtension(
-        wasm
-      )}`
-    );
-  }
+  exe(
+    `stellar contract deploy --wasm ${wasm} --ignore-checks --alias ${filenameNoExtension(
+      wasm
+    )}`
+  );
 }
 
 /**
@@ -106,9 +96,7 @@ function deployAll() {
   mkdirSync(contractsDir, { recursive: true });
 
   // search for all compiled Wasm files
-  const wasmFiles = glob(
-    `${dirname}/target/wasm32v1-none/release/*.wasm`
-  );
+  const wasmFiles = glob(`${dirname}/target/wasm32v1-none/release/*.wasm`);
 
   // run the `deploy()` function for each compiled Wasm file found
   wasmFiles.forEach(deploy);
