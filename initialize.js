@@ -61,7 +61,7 @@ function removeFiles(pattern) {
 function buildAll() {
   removeFiles(`${dirname}/target/wasm32v1-none/release/*.wasm`);
   removeFiles(`${dirname}/target/wasm32v1-none/release/*.d`);
-  exe(`stellar contract build`);
+  exe(`task build`);
 }
 
 /**
