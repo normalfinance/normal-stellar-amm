@@ -17,6 +17,7 @@ enum DataKey {
     Pool,            // struct containing infrequently updated pool data
     Plane,           // the address of the pool plane.
     Router,          // the Pool Router contract address
+    OracleRegistry,  // the Oracle Registry contract address
     LastOracleValid, // tracks whether the oracle was considered valid at the last pool update
     LastTradeTs,     // the blockchain unix timestamp at the time of the last trade
     LastUpdateTs,    // the last blockchain slot the amm was updated
@@ -37,6 +38,7 @@ generate_instance_storage_getter_and_setter_with_default!(reserve_a, DataKey::Re
 generate_instance_storage_getter_and_setter_with_default!(reserve_b, DataKey::ReserveB, u128, 0);
 generate_instance_storage_getter_and_setter!(plane, DataKey::Plane, Address);
 generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
+generate_instance_storage_getter_and_setter!(oracle_registry, DataKey::OracleRegistry, Address);
 generate_instance_storage_getter_and_setter_with_default!(volume_30d, DataKey::Volume30d, u128, 0);
 generate_instance_storage_getter_and_setter_with_default!(
     last_trade_ts,

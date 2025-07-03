@@ -1,43 +1,74 @@
 use crate::errors::PoolRouterError;
-use crate::events::{Events, PoolRouterEvents};
+use crate::events::{ Events, PoolRouterEvents };
 use crate::incentives::get_incentives_manager;
 use crate::liquidity_calculator::LiquidityCalculatorClient;
 use crate::pool_interface::{
-    IncentivesInterfaceTrait, PoolInterfaceTrait, PoolPlaneInterface, PoolsManagementTrait,
+    IncentivesInterfaceTrait,
+    PoolInterfaceTrait,
+    PoolPlaneInterface,
+    PoolsManagementTrait,
 };
-use crate::pool_utils::{deploy_pool, get_total_liquidity};
+use crate::pool_utils::{ deploy_pool, get_total_liquidity };
 use crate::router_interface::AdminInterface;
 use crate::storage::{
-    get_liquidity_calculator, get_pool, get_pool_base, get_pool_plane, get_pools_vec,
-    get_reward_tokens, get_reward_tokens_detailed, get_rewards_config, remove_pool,
-    set_liquidity_calculator, set_pool_hash, set_pool_plane, set_reward_tokens,
-    set_reward_tokens_detailed, set_rewards_config, set_token_hash, GlobalRewardsConfig,
+    get_liquidity_calculator,
+    get_pool,
+    get_pool_base,
+    get_pool_plane,
+    get_pools_vec,
+    get_reward_tokens,
+    get_reward_tokens_detailed,
+    get_rewards_config,
+    remove_pool,
+    set_liquidity_calculator,
+    set_oracle_registry,
+    set_pool_hash,
+    set_pool_plane,
+    set_reward_tokens,
+    set_reward_tokens_detailed,
+    set_rewards_config,
+    set_token_hash,
+    GlobalRewardsConfig,
     PoolRewardInfo,
 };
-use access_control::access::{AccessControl, AccessControlTrait};
-use access_control::emergency::{get_emergency_mode, set_emergency_mode};
+use access_control::access::{ AccessControl, AccessControlTrait };
+use access_control::emergency::{ get_emergency_mode, set_emergency_mode };
 use access_control::errors::AccessControlError;
 use access_control::events::Events as AccessControlEvents;
 use access_control::interface::TransferableContract;
-use access_control::management::{MultipleAddressesManagementTrait, SingleAddressManagementTrait};
+use access_control::management::{ MultipleAddressesManagementTrait, SingleAddressManagementTrait };
 use access_control::role::Role;
 use access_control::role::SymbolRepresentation;
 use access_control::transfer::TransferOwnershipTrait;
 use access_control::utils::{
-    require_admin, require_operations_admin_or_owner, require_rewards_admin_or_owner,
+    require_admin,
+    require_operations_admin_or_owner,
+    require_rewards_admin_or_owner,
 };
 use incentives::storage::RewardTokenStorageTrait;
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
-    contract, contractimpl, panic_with_error, symbol_short, Address, BytesN, Env, IntoVal, Map,
-    String, Symbol, Val, Vec, U256,
+    contract,
+    contractimpl,
+    panic_with_error,
+    symbol_short,
+    Address,
+    BytesN,
+    Env,
+    IntoVal,
+    Map,
+    String,
+    Symbol,
+    Val,
+    Vec,
+    U256,
 };
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
-use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
+use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
 use utils::constant::MAX_POOL_FEE;
-use utils::state::pool::{PoolInfo, PoolTier};
-use utils::token::{transfer_token, transfer_token_from};
+use utils::state::pool::{ PoolInfo, PoolTier };
+use utils::token::{ transfer_token, transfer_token_from };
 
 #[contract]
 pub struct PoolRouter;
@@ -87,7 +118,7 @@ impl PoolInterfaceTrait for PoolRouter {
         let (amount, share_amount): (u128, u128) = e.invoke_contract(
             &pool_id,
             &symbol_short!("deposit"),
-            Vec::from_array(&e, [user.clone().into_val(&e), token_b_amount.into_val(&e)]),
+            Vec::from_array(&e, [user.clone().into_val(&e), token_b_amount.into_val(&e)])
         );
         Events::new(&e).deposit(asset, user, pool_id, amount, share_amount);
         (amount, share_amount)
@@ -131,7 +162,7 @@ impl PoolInterfaceTrait for PoolRouter {
         token_out: Address,
         asset: Symbol,
         in_amount: u128,
-        out_min: u128,
+        out_min: u128
     ) -> u128 {
         user.require_auth();
 
@@ -140,27 +171,16 @@ impl PoolInterfaceTrait for PoolRouter {
         let out_amt = e.invoke_contract(
             &pool_id,
             &symbol_short!("swap"),
-            Vec::from_array(
-                &e,
-                [
-                    user.clone().into_val(&e),
-                    tokens
-                        .first_index_of(token_in.clone())
-                        .unwrap()
-                        .into_val(&e),
-                    tokens
-                        .first_index_of(token_out.clone())
-                        .unwrap()
-                        .into_val(&e),
-                    in_amount.into_val(&e),
-                    out_min.into_val(&e),
-                ],
-            ),
+            Vec::from_array(&e, [
+                user.clone().into_val(&e),
+                tokens.first_index_of(token_in.clone()).unwrap().into_val(&e),
+                tokens.first_index_of(token_out.clone()).unwrap().into_val(&e),
+                in_amount.into_val(&e),
+                out_min.into_val(&e),
+            ])
         );
 
-        Events::new(&e).swap(
-            tokens, user, pool_id, token_in, token_out, in_amount, out_amt,
-        );
+        Events::new(&e).swap(tokens, user, pool_id, token_in, token_out, in_amount, out_amt);
         out_amt
     }
 
@@ -196,27 +216,18 @@ impl PoolInterfaceTrait for PoolRouter {
         token_in: Address,
         token_out: Address,
         asset: Symbol,
-        in_amount: u128,
+        in_amount: u128
     ) -> (u128, i128) {
         let pool_id = get_pool(&e, &asset);
 
         e.invoke_contract(
             &pool_id,
             &Symbol::new(&e, "estimate_swap"),
-            Vec::from_array(
-                &e,
-                [
-                    tokens
-                        .first_index_of(token_in.clone())
-                        .unwrap()
-                        .into_val(&e),
-                    tokens
-                        .first_index_of(token_out.clone())
-                        .unwrap()
-                        .into_val(&e),
-                    in_amount.into_val(&e),
-                ],
-            ),
+            Vec::from_array(&e, [
+                tokens.first_index_of(token_in.clone()).unwrap().into_val(&e),
+                tokens.first_index_of(token_out.clone()).unwrap().into_val(&e),
+                in_amount.into_val(&e),
+            ])
         )
     }
 
@@ -248,7 +259,7 @@ impl PoolInterfaceTrait for PoolRouter {
         let amount: u128 = e.invoke_contract(
             &pool_id,
             &symbol_short!("withdraw"),
-            Vec::from_array(&e, [user.clone().into_val(&e), share_amount.into_val(&e)]),
+            Vec::from_array(&e, [user.clone().into_val(&e), share_amount.into_val(&e)])
         );
 
         Events::new(&e).withdraw(asset, user, pool_id, amount, share_amount);
@@ -274,18 +285,15 @@ impl PoolInterfaceTrait for PoolRouter {
             Role::OperationsAdmin,
             Role::PauseAdmin,
         ] {
-            result.set(
-                role.as_symbol(&e),
-                match access_control.get_role_safe(&role) {
-                    Some(v) => Vec::from_array(&e, [v]),
-                    None => Vec::new(&e),
-                },
-            );
+            result.set(role.as_symbol(&e), match access_control.get_role_safe(&role) {
+                Some(v) => Vec::from_array(&e, [v]),
+                None => Vec::new(&e),
+            });
         }
 
         result.set(
             Role::EmergencyPauseAdmin.as_symbol(&e),
-            access_control.get_role_addresses(&Role::EmergencyPauseAdmin),
+            access_control.get_role_addresses(&Role::EmergencyPauseAdmin)
         );
 
         result
@@ -322,11 +330,7 @@ impl PoolInterfaceTrait for PoolRouter {
 
     fn get_insurance_coverage(e: Env, asset: Symbol) -> u128 {
         let pool_id = get_pool(&e, &asset);
-        e.invoke_contract(
-            &pool_id,
-            &Symbol::new(&e, "get_insurance_coverage"),
-            Vec::new(&e),
-        )
+        e.invoke_contract(&pool_id, &Symbol::new(&e, "get_insurance_coverage"), Vec::new(&e))
     }
 
     // Returns the total liquidity of the pool.
@@ -334,9 +338,10 @@ impl PoolInterfaceTrait for PoolRouter {
         let pool_id = get_pool(&e, &asset);
 
         let calculator = get_liquidity_calculator(&e);
-        match LiquidityCalculatorClient::new(&e, &calculator)
-            .get_liquidity(&Vec::from_array(&e, [pool_id]))
-            .get(0)
+        match
+            LiquidityCalculatorClient::new(&e, &calculator)
+                .get_liquidity(&Vec::from_array(&e, [pool_id]))
+                .get(0)
         {
             Some(v) => v,
             None => panic_with_error!(&e, PoolRouterError::LiquidityCalculationError),
@@ -456,7 +461,7 @@ impl AdminInterface for PoolRouter {
         rewards_admin: Address,
         operations_admin: Address,
         pause_admin: Address,
-        emergency_pause_admins: Vec<Address>,
+        emergency_pause_admins: Vec<Address>
     ) {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
@@ -470,7 +475,7 @@ impl AdminInterface for PoolRouter {
             rewards_admin,
             operations_admin,
             pause_admin,
-            emergency_pause_admins,
+            emergency_pause_admins
         );
     }
 
@@ -481,27 +486,28 @@ impl AdminInterface for PoolRouter {
         set_liquidity_calculator(&e, &calculator);
     }
 
-    // Sets the liquidity pool share token wasm hash.
     fn set_token_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
         set_token_hash(&e, &new_hash);
     }
 
-    // Sets the pool wasm hash.
     fn set_pool_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
         set_pool_hash(&e, &new_hash);
     }
 
-    // Sets the reward token.
     fn set_reward_token(e: Env, admin: Address, reward_token: Address) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-        get_incentives_manager(&e)
-            .storage()
-            .put_reward_token(reward_token);
+        get_incentives_manager(&e).storage().put_reward_token(reward_token);
+    }
+
+    fn set_oracle_registry(e: Env, admin: Address, oracle_registry: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        set_oracle_registry(&e, &oracle_registry);
     }
 }
 
@@ -553,8 +559,9 @@ impl IncentivesInterfaceTrait for PoolRouter {
         let mut pools_vec: Vec<Address> = Vec::new(&e);
         pools_vec.push_back(pool.clone());
 
-        let pools_liquidity =
-            LiquidityCalculatorClient::new(&e, &calculator).get_liquidity(&pools_vec);
+        let pools_liquidity = LiquidityCalculatorClient::new(&e, &calculator).get_liquidity(
+            &pools_vec
+        );
         let mut result = U256::from_u32(&e, 0);
         for liquidity in pools_liquidity {
             result = result.add(&liquidity);
@@ -586,21 +593,18 @@ impl IncentivesInterfaceTrait for PoolRouter {
         e: Env,
         user: Address,
         reward_tps: u128, // value with 7 decimal places. example: 600_0000000
-        expired_at: u64,  // timestamp
-        assets: Vec<Symbol>,
+        expired_at: u64, // timestamp
+        assets: Vec<Symbol>
     ) {
         user.require_auth();
         require_rewards_admin_or_owner(&e, &user);
 
         let mut tokens_with_liquidity = Map::new(&e);
         for asset in assets {
-            tokens_with_liquidity.set(
-                asset,
-                PoolRewardInfo {
-                    processed: false,
-                    total_liquidity: U256::from_u32(&e, 0),
-                },
-            );
+            tokens_with_liquidity.set(asset, PoolRewardInfo {
+                processed: false,
+                total_liquidity: U256::from_u32(&e, 0),
+            });
         }
 
         set_reward_tokens(&e, &tokens_with_liquidity);
@@ -609,7 +613,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
             &(GlobalRewardsConfig {
                 tps: reward_tps,
                 expired_at,
-            }),
+            })
         )
     }
 
@@ -680,10 +684,11 @@ impl IncentivesInterfaceTrait for PoolRouter {
         let reward_info = match tokens_reward_info {
             Some(v) => v,
             // if tokens not found in current config, deactivate them
-            None => PoolRewardInfo {
-                processed: true,
-                total_liquidity: U256::from_u32(&e, 0),
-            },
+            None =>
+                PoolRewardInfo {
+                    processed: true,
+                    total_liquidity: U256::from_u32(&e, 0),
+                },
         };
 
         if !reward_info.processed {
@@ -705,14 +710,11 @@ impl IncentivesInterfaceTrait for PoolRouter {
         e.invoke_contract::<Val>(
             &pool_id,
             &Symbol::new(&e, "set_incentives_config"),
-            Vec::from_array(
-                &e,
-                [
-                    e.current_contract_address().to_val(),
-                    rewards_config.expired_at.into_val(&e),
-                    pool_tps.into_val(&e),
-                ],
-            ),
+            Vec::from_array(&e, [
+                e.current_contract_address().to_val(),
+                rewards_config.expired_at.into_val(&e),
+                pool_tps.into_val(&e),
+            ])
         );
 
         if pool_tps > 0 {
@@ -742,7 +744,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
         e.invoke_contract(
             &pool_id,
             &Symbol::new(&e, "get_incentives_info"),
-            Vec::from_array(&e, [user.clone().into_val(&e)]),
+            Vec::from_array(&e, [user.clone().into_val(&e)])
         )
     }
 
@@ -764,7 +766,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
         e.invoke_contract(
             &pool_id,
             &Symbol::new(&e, "get_user_reward"),
-            Vec::from_array(&e, [user.clone().into_val(&e)]),
+            Vec::from_array(&e, [user.clone().into_val(&e)])
         )
     }
 
@@ -786,7 +788,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
         e.invoke_contract(
             &pool_id,
             &Symbol::new(&e, "get_user_fees"),
-            Vec::from_array(&e, [user.clone().into_val(&e)]),
+            Vec::from_array(&e, [user.clone().into_val(&e)])
         )
     }
 
@@ -804,11 +806,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
     fn get_total_accumulated_reward(e: Env, asset: Symbol) -> u128 {
         let pool_id = get_pool(&e, &asset);
 
-        e.invoke_contract(
-            &pool_id,
-            &Symbol::new(&e, "get_total_accumulated_reward"),
-            Vec::new(&e),
-        )
+        e.invoke_contract(&pool_id, &Symbol::new(&e, "get_total_accumulated_reward"), Vec::new(&e))
     }
 
     // Returns the total configured reward.
@@ -825,11 +823,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
     fn get_total_configured_reward(e: Env, asset: Symbol) -> u128 {
         let pool_id = get_pool(&e, &asset);
 
-        e.invoke_contract(
-            &pool_id,
-            &Symbol::new(&e, "get_total_configured_reward"),
-            Vec::new(&e),
-        )
+        e.invoke_contract(&pool_id, &Symbol::new(&e, "get_total_configured_reward"), Vec::new(&e))
     }
 
     // Returns the total claimed reward.
@@ -846,11 +840,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
     fn get_total_claimed_reward(e: Env, asset: Symbol) -> u128 {
         let pool_id = get_pool(&e, &asset);
 
-        e.invoke_contract(
-            &pool_id,
-            &Symbol::new(&e, "get_total_claimed_reward"),
-            Vec::new(&e),
-        )
+        e.invoke_contract(&pool_id, &Symbol::new(&e, "get_total_claimed_reward"), Vec::new(&e))
     }
 
     // Calculate difference between total configured reward and total claimed reward.
@@ -861,12 +851,12 @@ impl IncentivesInterfaceTrait for PoolRouter {
         let configured_reward: u128 = e.invoke_contract(
             &pool_id,
             &Symbol::new(&e, "get_total_configured_reward"),
-            Vec::new(&e),
+            Vec::new(&e)
         );
         let claimed_reward: u128 = e.invoke_contract(
             &pool_id,
             &Symbol::new(&e, "get_total_claimed_reward"),
-            Vec::new(&e),
+            Vec::new(&e)
         );
 
         let incentives = get_incentives_manager(&e);
@@ -895,7 +885,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
                 &e.current_contract_address(),
                 &from,
                 &pool_id,
-                &(outstanding_reward as i128),
+                &(outstanding_reward as i128)
             );
         } else {
             transfer_token(
@@ -903,7 +893,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
                 &reward_token,
                 &e.current_contract_address(),
                 &pool_id,
-                &(outstanding_reward as i128),
+                &(outstanding_reward as i128)
             );
         }
         outstanding_reward
@@ -929,7 +919,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
         let amount = e.invoke_contract(
             &pool_id,
             &symbol_short!("claim"),
-            Vec::from_array(&e, [user.clone().into_val(&e)]),
+            Vec::from_array(&e, [user.clone().into_val(&e)])
         );
 
         Events::new(&e).claim(
@@ -937,7 +927,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
             user,
             pool_id,
             get_incentives_manager(&e).storage().get_reward_token(),
-            amount,
+            amount
         );
 
         amount
@@ -980,7 +970,7 @@ impl PoolsManagementTrait for PoolRouter {
         lp_token_info: (String, String),
         fee_fraction: u32,
         tier: PoolTier,
-        quote_max_insurance: u128,
+        quote_max_insurance: u128
     ) -> Address {
         admin.require_auth();
         require_admin(&e, &admin);
@@ -993,15 +983,16 @@ impl PoolsManagementTrait for PoolRouter {
 
         match get_pool_base(&e, base_asset.clone()) {
             Some(pool_address) => pool_address,
-            None => deploy_pool(
-                &e,
-                &tokens,
-                &assets,
-                &lp_token_info,
-                fee_fraction,
-                &tier,
-                quote_max_insurance,
-            ),
+            None =>
+                deploy_pool(
+                    &e,
+                    &tokens,
+                    &assets,
+                    &lp_token_info,
+                    fee_fraction,
+                    &tier,
+                    quote_max_insurance
+                ),
         }
     }
 
@@ -1026,7 +1017,7 @@ impl PoolsManagementTrait for PoolRouter {
         let pool_response: PoolInfo = env.invoke_contract(
             &pool_address,
             &Symbol::new(&env, "get_info"),
-            Vec::new(&env),
+            Vec::new(&env)
         );
         pool_response
     }
@@ -1036,8 +1027,11 @@ impl PoolsManagementTrait for PoolRouter {
 
         let mut result = Vec::new(&env);
         for pool in pools_vec {
-            let pool_response: PoolInfo =
-                env.invoke_contract(&pool, &Symbol::new(&env, "get_info"), Vec::new(&env));
+            let pool_response: PoolInfo = env.invoke_contract(
+                &pool,
+                &Symbol::new(&env, "get_info"),
+                Vec::new(&env)
+            );
 
             result.push_back(pool_response);
         }
@@ -1146,10 +1140,11 @@ impl TransferableContract for PoolRouter {
         let access_control = AccessControl::new(&e);
         let role = Role::from_symbol(&e, role_name);
         match access_control.get_transfer_ownership_deadline(&role) {
-            0 => match access_control.get_role_safe(&role) {
-                Some(address) => address,
-                None => panic_with_error!(&e, AccessControlError::RoleNotFound),
-            },
+            0 =>
+                match access_control.get_role_safe(&role) {
+                    Some(address) => address,
+                    None => panic_with_error!(&e, AccessControlError::RoleNotFound),
+                }
             _ => access_control.get_future_address(&role),
         }
     }
