@@ -6,7 +6,7 @@ use crate::events::PoolEvents;
 use crate::storage::get_last_oracle_valid;
 use crate::storage::get_last_trade_ts;
 use crate::storage::get_last_update_ts;
-use crate::storage::get_router;
+use crate::storage::get_oracle_registry;
 use crate::storage::get_volume_30d;
 use crate::storage::set_last_trade_ts;
 use crate::storage::set_volume_30d;
@@ -59,10 +59,10 @@ pub fn get_net_liquidity_imbalance(
     net_quote_asset_value.safe_sub(e, net_base_asset_value)
 }
 
-// Invokes the external oracle router contract to fetch the current price for a given asset.
+// Invokes the external Oracle Registry contract to fetch the current price for a given asset.
 //
-// This performs a cross-contract call to the `get_price` method on the oracle router,
-// passing the calling contract, asset ID, caching preference, and action context.
+// This performs a cross-contract call to the `get_price` method on the Oracle Registry,
+// passing the calling contract, asset, caching preference, and action context.
 //
 // # Arguments
 // * `e` - Soroban environment reference.
@@ -79,7 +79,7 @@ pub fn get_oracle_price(
     action: NormalAction,
 ) -> OraclePriceData {
     let oracle_price_data: OraclePriceData = e.invoke_contract(
-        &get_router(e),
+        &get_oracle_registry(e),
         &Symbol::new(e, "get_price"),
         Vec::from_array(
             e,

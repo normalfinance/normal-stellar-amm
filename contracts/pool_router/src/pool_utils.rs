@@ -1,7 +1,7 @@
 use crate::events::{Events, PoolRouterEvents};
 use crate::incentives::get_incentives_manager;
 use crate::liquidity_calculator::LiquidityCalculatorClient;
-use crate::storage::{get_pool, get_pool_hash, get_pool_plane, get_token_hash, put_pool};
+use crate::storage::{get_oracle_registry, get_pool, get_pool_hash, get_pool_plane, get_token_hash, put_pool};
 use access_control::access::AccessControl;
 use access_control::management::{MultipleAddressesManagementTrait, SingleAddressManagementTrait};
 use access_control::role::Role;
@@ -148,6 +148,7 @@ fn init_pool(
                 emergency_pause_admins,
             },
             router: e.current_contract_address(),
+            oracle_registry: get_oracle_registry(e),
             assets: assets.clone(),
             tokens: tokens.clone(),
             lp_token_info: TokenInitInfo {

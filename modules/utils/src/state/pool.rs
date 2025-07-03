@@ -164,6 +164,7 @@ pub struct InitializeParams {
     pub admin: Address,
     pub privileged_addrs: PrivilegedAddresses,
     pub router: Address,
+    pub oracle_registry: Address,
     pub assets: (Symbol, Symbol),
     pub lp_token_info: TokenInitInfo,
     // A vector of token addresses.
