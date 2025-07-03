@@ -15,7 +15,7 @@ jobs:
     with:
       release_name: ${{ github.ref_name }} # use git tag as unique release name
       release_description: "Contract release" # some boring placeholder text to attach
-      relative_path: '["contracts/pool_router"]' # relative path to your really awesome contract
+      relative_path: "contracts/pool_router" # relative path to your really awesome contract
       package: "pool-router-contract" # package name to build
     secrets: # the authentication token will be automatically created by GitHub
       release_token: ${{ secrets.GITHUB_TOKEN }} # don't modify this line
@@ -25,7 +25,7 @@ jobs:
     with:
       release_name: ${{ github.ref_name }}
       release_description: "Contract release"
-      relative_path: '["contracts/pool_swap_fee"]'
+      relative_path: "contracts/pool_swap_fee"
     secrets:
       release_token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -34,7 +34,7 @@ jobs:
     with:
       release_name: ${{ github.ref_name }}
       release_description: "Contract release"
-      relative_path: '["contracts/buffer"]'
+      relative_path: "contracts/buffer"
     secrets:
       release_token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -43,7 +43,7 @@ jobs:
     with:
       release_name: ${{ github.ref_name }}
       release_description: "Contract release"
-      relative_path: '["contracts/insurance_fund"]'
+      relative_path: "contracts/insurance_fund"
     secrets:
       release_token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -52,7 +52,7 @@ jobs:
     with:
       release_name: ${{ github.ref_name }}
       release_description: "Contract release"
-      relative_path: '["contracts/oracle_registry"]'
+      relative_path: "contracts/oracle_registry"
     secrets:
       release_token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -61,7 +61,7 @@ jobs:
     with:
       release_name: ${{ github.ref_name }}
       release_description: "Contract release"
-      relative_path: '["contracts/pool_plane"]'
+      relative_path: "contracts/pool_plane"
     secrets:
       release_token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -70,6 +70,6 @@ jobs:
     with:
       release_name: ${{ github.ref_name }}
       release_description: "Contract release"
-      relative_path: '["contracts/liquidity_calculator"]'
+      relative_path: "contracts/liquidity_calculator"
     secrets:
       release_token: ${{ secrets.GITHUB_TOKEN }}
