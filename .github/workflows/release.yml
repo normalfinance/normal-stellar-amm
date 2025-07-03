@@ -1,0 +1,69 @@
+name: Build and Release
+on:
+  push:
+    tags:
+      - "v*" # triggered whenever a new tag (prefixed with "v") is pushed to the repository
+jobs:
+  release-contract-pool-router:
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
+    with:
+      release_name: ${{ github.ref_name }} # use git tag as unique release name
+      release_description: "Contract release" # some boring placeholder text to attach
+      relative_path: '["contracts/pool_router"]' # relative path to your really awesome contract
+      package: "pool-router-contract" # package name to build
+    secrets: # the authentication token will be automatically created by GitHub
+      release_token: ${{ secrets.GITHUB_TOKEN }} # don't modify this line
+
+  release-contract-pool-swap-fee:
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
+    with:
+      release_name: ${{ github.ref_name }}
+      release_description: "Contract release"
+      relative_path: '["contracts/pool_swap_fee"]'
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
+
+  release-contract-buffer:
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
+    with:
+      release_name: ${{ github.ref_name }}
+      release_description: "Contract release"
+      relative_path: '["contracts/buffer"]'
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
+
+  release-contract-insurance-fund:
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
+    with:
+      release_name: ${{ github.ref_name }}
+      release_description: "Contract release"
+      relative_path: '["contracts/insurance_fund"]'
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
+
+  release-contract-oracle-registry:
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
+    with:
+      release_name: ${{ github.ref_name }}
+      release_description: "Contract release"
+      relative_path: '["contracts/oracle_registry"]'
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
+
+  release-contract-pool-plane:
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
+    with:
+      release_name: ${{ github.ref_name }}
+      release_description: "Contract release"
+      relative_path: '["contracts/pool_plane"]'
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
+
+  release-contract-liquidity_calculator:
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
+    with:
+      release_name: ${{ github.ref_name }}
+      release_description: "Contract release"
+      relative_path: '["contracts/liquidity_calculator"]'
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
