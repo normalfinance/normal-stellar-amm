@@ -150,7 +150,7 @@ function installAndBuild({ alias }) {
  */
 function bindAll() {
   contracts().forEach(bind);
-  exe("./scripts/run_prefix_all.sh");
+  exe("./scripts/build/run_prefix_all.sh");
   contracts().forEach(installAndBuild);
 }
 
