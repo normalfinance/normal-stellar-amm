@@ -31,14 +31,19 @@ soroban contract optimize --wasm liquidity_calculator.wasm
 
 echo "Contracts optimized."
 
-# # Fetch the admin's address
+# Fetch the admin's address
 ADMIN_ADDRESS=$(soroban keys address $IDENTITY_STRING)
 
 echo "Deploy the soroban_token_contract and capture its contract ID hash..."
 
-# XLM="CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
-XLM_TESTNET="CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
-XLM_MAINNET="CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA"
+XLM="CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC" # mainnet = "CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA"
+
+# setup
+# POOL_ROUTER_ADDR="CDEL762LIBSZVA2QKQAZG4D7LL5CTXDSJEB2TBV7BY56LRPMVK3Z52N7"
+# ORACLE_REGISTRY_ADDR="CCZYYJH7BF2AUL2EDMRJEPOJBEMDGMZGDNQJGRGCLOUCT6TZDD4ZGPTB"
+# nBTC_TOKEN_ADDR="CCJGYGCN54FGGR46IKLKN3UP24JMABBV2DLV2VEE5E7OXOSJJ5LOJKNK"
+
+# end setup
 
 echo "Install the soroban_token and pool contracts..."
 
@@ -54,6 +59,76 @@ POOL_WASM_HASH=$(soroban contract upload \
     --network $NETWORK)
 
 echo "Token and pool contracts deployed."
+
+#     ______     _______        __       ______   ___       _______   ________
+#    /    " \   /"      \      /""\     /" _  "\ |"  |     /"     "| /"       )
+#   // ____  \ |:        |    /    \   (: ( \___)||  |    (: ______)(:   \___/
+#  /  /    ) :)|_____/   )   /' /\  \   \/ \     |:  |     \/    |   \___  \
+# (: (____/ //  //      /   //  __'  \  //  \ _   \  |___  // ___)_   __/  \\
+#  \        /  |:  __   \  /   /  \\  \(:   _) \ ( \_|:  \(:      "| /" \   :)
+#   \"_____/   |__|  \___)(___/    \___)\_______) \_______)\_______)(_______/
+
+echo "Initialize oracle registry..."
+
+ORACLE_REGISTRY_ADDR=$(soroban contract deploy \
+    --wasm oracle_registry.optimized.wasm \
+    --source $IDENTITY_STRING \
+    --network $NETWORK)
+
+stellar contract invoke \
+    --id $ORACLE_REGISTRY_ADDR \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    -- \
+    initialize \
+    --admin $ADMIN_ADDRESS \
+    --emergency_admin $ADMIN_ADDRESS
+
+stellar contract invoke \
+    --id $ORACLE_REGISTRY_ADDR \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    -- \
+    set_oracle_guard_rails \
+    --admin $ADMIN_ADDRESS \
+    --oracle_guard_rails '{
+        "price_divergence": {
+            "oracle_twap_percent_divergence": 1200000000
+        },
+        "validity": {
+            "seconds_before_stale_for_pool": 300,
+            "too_volatile_ratio": 1200000000
+        }
+    }'
+
+echo "Registering a BTC and a XLM oracle..."
+
+REFLECTOR_TESTNET_ORACLE=CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63
+REFLECTOR_MAINNET_ORACLE=CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63
+
+stellar contract invoke \
+    --id $ORACLE_REGISTRY_ADDR \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    -- \
+    register_oracle \
+    --admin $ADMIN_ADDRESS \
+    --asset "BTC" \
+    --oracle_addr $REFLECTOR_TESTNET_ORACLE \
+    --decimals 14 \
+    --sanitize_clamp_denominator 0
+
+stellar contract invoke \
+    --id $ORACLE_REGISTRY_ADDR \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    -- \
+    register_oracle \
+    --admin $ADMIN_ADDRESS \
+    --asset "XLM" \
+    --oracle_addr $REFLECTOR_TESTNET_ORACLE \
+    --decimals 14 \
+    --sanitize_clamp_denominator 0
 
 #   _______     ______    ____  ____  ___________  _______   _______
 #  /"      \   /    " \  ("  _||_ " |("     _   ")/"     "| /"      \
@@ -269,6 +344,7 @@ stellar contract invoke \
     -- \
     initialize \
     --admin $ADMIN_ADDRESS \
+    --emergency_admin $ADMIN_ADDRESS \
     --token $XLM \
     --unstaking_period $THIRTEEN_DAYS \
     --optimal_utilization 8000 \
@@ -296,7 +372,8 @@ stellar contract invoke \
     --network $NETWORK \
     -- \
     init_admin \
-    --account $ADMIN_ADDRESS
+    --admin $ADMIN_ADDRESS \
+    --emergency_admin $ADMIN_ADDRESS
 
 stellar contract invoke \
     --id $FEE_COLLECTOR_ADDR \
@@ -334,91 +411,6 @@ stellar contract invoke \
     --admin $ADMIN_ADDRESS \
     --fee_destination $ADMIN_ADDRESS
 
-# Pool Initialization process
-# LP token init
-LP_TOKEN_ADDR=$(soroban contract deploy \
-    --wasm soroban_token_contract.optimized.wasm \
-    --source $IDENTITY_STRING \
-    --network $NETWORK)
-
-soroban contract invoke \
-    --id $LP_TOKEN_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    initialize \
-    --admin $ADMIN_ADDRESS \
-    --decimal 7 \
-    --name '"Pool Share Token"' \
-    --symbol '"POOL"'
-
-echo "POOL Token initialized."
-
-# nBTC token init
-nBTC_TOKEN_ADDR=$(soroban contract deploy \
-    --wasm soroban_token_contract.optimized.wasm \
-    --source $IDENTITY_STRING \
-    --network $NETWORK)
-
-soroban contract invoke \
-    --id $nBTC_TOKEN_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    initialize \
-    --admin $ADMIN_ADDRESS \
-    --decimal 7 \
-    --name '"Normal Bitcoin"' \
-    --symbol '"nBTC"'
-
-echo "nBTC Token initialized."
-
-echo "Initialize pool through router..."
-
-stellar contract invoke \
-    --id $POOL_ROUTER_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    init_pool \
-    --user $ADMIN_ADDRESS \
-    --assets '["BTC", "XLM"]' \
-    --tokens "[\"$nBTC_TOKEN_ADDR\", \"$XLM\"]" \
-    --lp_token_info '["nBTC Share Token", "nBTC-POOL"]' \
-    --fee_fraction 30 \
-    --tier '"A"' \
-    --quote_max_insurance 1000000
-
-echo "Query nBTC/XLM pool address..."
-
-POOL_ADDR=$(soroban contract invoke \
-    --id $POOL_ROUTER_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK --fee 100 \
-    -- \
-    get_pools | jq -r '.[0]')
-
-echo "Pool contract initialized."
-
-echo "Mint XLM token to the admin and provide liquidity..."
-
-soroban contract invoke \
-    --id $XLM \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    mint --to $ADMIN_ADDRESS --amount 10000000000 # 7 decimals, 10k tokens
-
-# Provide liquidity to the pool
-soroban contract invoke \
-    --id $POOL_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK --fee 10000000 \
-    -- \
-    deposit --user $ADMIN_ADDRESS --token_b_amount 6000000000
-
-echo "Liquidity provided."
-
 echo "#############################"
 
 echo "Initialization complete!"
@@ -432,5 +424,3 @@ echo "Insurance Fund Contract address: $INSURANCE_FUND_ADDR"
 echo "Fee Collector Contract address: $FEE_COLLECTOR_ADDR"
 echo "Pool Plane Contract address: $POOL_PLANE_ADDR"
 echo "Liq. Calculator Contract address: $LIQUIDITY_CALCULATOR_ADDR"
-
-echo "nBTC/XLM Pool Contract address: $POOL_ADDR"
