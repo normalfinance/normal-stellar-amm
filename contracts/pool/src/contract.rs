@@ -117,6 +117,7 @@ use utils::state::{
 };
 use utils::token::transfer_token;
 use utils::validate;
+use utils::validation::check_positive_amount;
 
 contractmeta!(
     key = "Description",
@@ -286,8 +287,9 @@ impl PoolTrait for Pool {
     // - Mints LP tokens to the user.
     // - Updates reserves, oracle-based pricing, reward checkpoints, and emits an event.
     fn deposit(e: Env, user: Address, token_b_amount: u128) -> (u128, u128) {
-        // Depositor needs to authorize the deposit
         user.require_auth();
+
+        check_positive_amount(&e, token_b_amount);
 
         if get_is_killed_deposit(&e) {
             panic_with_error!(e, PoolError::PoolDepositKilled);

@@ -68,6 +68,7 @@ use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
 use utils::constant::{ MAX_POOL_FEE };
 use utils::state::pool::{ PoolInfo, PoolTier };
 use utils::token::{ transfer_token, transfer_token_from };
+use utils::validation::check_positive_amount;
 
 #[contract]
 pub struct PoolRouter;
@@ -111,6 +112,8 @@ impl PoolInterfaceTrait for PoolRouter {
 
     fn deposit(e: Env, user: Address, asset: Symbol, token_b_amount: u128) -> (u128, u128) {
         user.require_auth();
+
+        check_positive_amount(&e, token_b_amount);
 
         let pool_id = get_pool(&e, &asset);
 
