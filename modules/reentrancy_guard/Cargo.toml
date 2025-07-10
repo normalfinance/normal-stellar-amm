@@ -1,21 +1,17 @@
 [package]
-name = "insurance-fund"
+name = "reentrancy_guard"
 version.workspace = true
 edition = "2021"
 publish = false
 rust-version.workspace = true
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["rlib"]
+doctest = false
 
 [dependencies]
 soroban-sdk = { workspace = true }
-paste = { workspace = true }
-access_control = { workspace = true }
 utils = { workspace = true }
-upgrade = { workspace = true }
-reentrancy_guard = { workspace = true }
-soroban-fixed-point-math = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

@@ -1,48 +1,32 @@
 use crate::errors::BufferError;
-use crate::events::{ BufferEvents, Events };
-use crate::interface::{ AdminInterface, BufferTrait };
+use crate::events::{BufferEvents, Events};
+use crate::interface::{AdminInterface, BufferTrait};
 use crate::reserve::Reserve;
 use crate::storage::{
-    get_buffer_reserve_amount,
-    get_is_killed_deposit,
-    get_is_killed_resolve_liquidity_deficit,
-    get_last_payout_timestamp,
-    get_min_reserve_ratio,
-    get_min_time_between_payouts,
-    get_reserve,
-    put_reserve,
-    set_is_killed_deposit,
-    set_is_killed_resolve_liquidity_deficit,
-    set_last_payout_timestamp,
-    set_min_reserve_ratio,
-    set_min_time_between_payouts,
+    get_buffer_reserve_amount, get_is_killed_deposit, get_is_killed_resolve_liquidity_deficit,
+    get_last_payout_timestamp, get_min_reserve_ratio, get_min_time_between_payouts, get_reserve,
+    put_reserve, set_is_killed_deposit, set_is_killed_resolve_liquidity_deficit,
+    set_last_payout_timestamp, set_min_reserve_ratio, set_min_time_between_payouts,
 };
-use access_control::access::{ AccessControl, AccessControlTrait };
-use access_control::emergency::{ get_emergency_mode, set_emergency_mode };
+use access_control::access::{AccessControl, AccessControlTrait};
+use access_control::emergency::{get_emergency_mode, set_emergency_mode};
 use access_control::errors::AccessControlError;
 use access_control::events::Events as AccessControlEvents;
 use access_control::interface::TransferableContract;
 use access_control::management::SingleAddressManagementTrait;
-use access_control::role::{ Role, SymbolRepresentation };
+use access_control::role::{Role, SymbolRepresentation};
 use access_control::transfer::TransferOwnershipTrait;
-use access_control::utils::{ require_admin };
+use access_control::utils::require_admin;
+use reentrancy_guard::{enter, exit};
 use soroban_sdk::{
-    contract,
-    contractimpl,
-    contractmeta,
-    panic_with_error,
-    Address,
-    BytesN,
-    Env,
-    IntoVal,
-    Symbol,
+    contract, contractimpl, contractmeta, panic_with_error, Address, BytesN, Env, IntoVal, Symbol,
     Vec,
 };
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
-use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
+use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::math::safe_math::SafeMath;
-use utils::token::{ transfer_token, validate_token_contract };
+use utils::token::{transfer_token, validate_token_contract};
 
 contractmeta!(
     key = "Description",
@@ -60,7 +44,7 @@ impl BufferTrait for Buffer {
         admin: Address,
         emergency_admin: Address,
         time_bt_payouts: u64,
-        min_reserve_ratio: u32
+        min_reserve_ratio: u32,
     ) {
         admin.require_auth();
 
@@ -114,18 +98,20 @@ impl BufferTrait for Buffer {
     fn deposit(e: Env, sender: Address, token: Address, amount: u128) {
         sender.require_auth();
 
+        enter(&e);
+
         /* @Halborn
         Currently, anyone can deposit into the Buffer. The only structured deposits
-        are from `PoolSwapFee.swap()` when the buffer fraction is removed from the 
+        are from `PoolSwapFee.swap()` when the buffer fraction is removed from the
         total fee amount.
-        
+
         If a user deposits into the Buffer and later wishes to remove their funds,
         there is no direct function to do this other than `skim()`. However, timing
         would be of essence.
-        
+
         The Insurance Fund is specifically designed to raise funds from users, whereas
-        the Buffer is for protocol revenue deposits only. 
-        
+        the Buffer is for protocol revenue deposits only.
+
         [ ] Would it be reasonable to restrict this function to the PoolSwapFee only?
         [ ] Are `sync()` and `skim()` necessary functions?
           */
@@ -149,9 +135,17 @@ impl BufferTrait for Buffer {
         put_reserve(&e, &token, &reserve.deposit(&e, amount, now));
 
         // Transfer the tokens from the sender to the Buffer
-        transfer_token(&e, &token, &sender, &e.current_contract_address(), &(amount as i128));
+        transfer_token(
+            &e,
+            &token,
+            &sender,
+            &e.current_contract_address(),
+            &(amount as i128),
+        );
 
         Events::new(&e).deposit(token, sender, amount);
+
+        exit(&e);
     }
 
     // Sync token balances with reserves.
@@ -163,12 +157,16 @@ impl BufferTrait for Buffer {
     fn sync(e: Env, sender: Address, token: Address) {
         sender.require_auth();
 
+        enter(&e);
+
         validate_token_contract(&e, &token);
 
         let now = e.ledger().timestamp();
         let reserve = get_reserve(&e, &token);
         let balance = get_buffer_reserve_amount(&e, &token);
         put_reserve(&e, &token, &reserve.update_balance(balance, now));
+
+        exit(&e);
     }
 
     // Skim excess token balances.
@@ -180,6 +178,8 @@ impl BufferTrait for Buffer {
     fn skim(e: Env, sender: Address, token: Address) {
         sender.require_auth();
 
+        enter(&e);
+
         validate_token_contract(&e, &token);
 
         let reserve = get_reserve(&e, &token);
@@ -189,6 +189,8 @@ impl BufferTrait for Buffer {
             transfer_token(&e, &token, &e.current_contract_address(), &sender, &skimmed);
             Events::new(&e).skim(token, sender, skimmed);
         }
+
+        exit(&e);
     }
 
     //   _______    _______  ___________  ___________  _______   _______    ________
@@ -266,12 +268,14 @@ impl AdminInterface for Buffer {
         admin: Address,
         token: Address,
         amount: u128,
-        pool_address: Address
+        pool_address: Address,
     ) -> u128 {
         admin.require_auth();
-        /* Currently, only the Buffer admin may resolve deficits, however, our goal 
+        /* Currently, only the Buffer admin may resolve deficits, however, our goal
         is to either: a) automate within `Pool.swap()` itself; or b) decentralize via the Normal DAO */
         require_admin(&e, &admin);
+
+        enter(&e);
 
         if get_is_killed_resolve_liquidity_deficit(&e) {
             panic_with_error!(e, BufferError::BufferRequestPayoutKilled);
@@ -303,10 +307,15 @@ impl AdminInterface for Buffer {
         let paid: u128 = e.invoke_contract(
             &pool_address,
             &Symbol::new(&e, "pay_insurance_claim"),
-            Vec::from_array(&e, [e.current_contract_address().to_val(), amount.into_val(&e)])
+            Vec::from_array(
+                &e,
+                [e.current_contract_address().to_val(), amount.into_val(&e)],
+            ),
         );
 
         Events::new(&e).resolve_liquidity_deficit(token, admin, amount);
+
+        exit(&e);
 
         paid
     }
@@ -342,6 +351,8 @@ impl AdminInterface for Buffer {
         admin.require_auth();
         require_admin(&e, &admin);
 
+        enter(&e);
+
         validate_token_contract(&e, &token);
 
         // Calculate the minimum reserve that must be left in the Buffer
@@ -361,9 +372,17 @@ impl AdminInterface for Buffer {
         put_reserve(&e, &token, &reserve.withdraw(&e, amount, now));
 
         // Transfer the tokens to the admin
-        transfer_token(&e, &token, &e.current_contract_address(), &admin, &(amount as i128));
+        transfer_token(
+            &e,
+            &token,
+            &e.current_contract_address(),
+            &admin,
+            &(amount as i128),
+        );
 
         Events::new(&e).withdraw_surplus(token, admin, amount);
+
+        exit(&e);
     }
 
     //   ________  _______  ___________  ___________  _______   _______    ________
@@ -618,11 +637,10 @@ impl TransferableContract for Buffer {
         let access_control = AccessControl::new(&e);
         let role = Role::from_symbol(&e, role_name);
         match access_control.get_transfer_ownership_deadline(&role) {
-            0 =>
-                match access_control.get_role_safe(&role) {
-                    Some(address) => address,
-                    None => panic_with_error!(&e, AccessControlError::RoleNotFound),
-                }
+            0 => match access_control.get_role_safe(&role) {
+                Some(address) => address,
+                None => panic_with_error!(&e, AccessControlError::RoleNotFound),
+            },
             _ => access_control.get_future_address(&role),
         }
     }
