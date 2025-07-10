@@ -196,6 +196,12 @@ impl TransferableContract for LiquidityCalculator {
         access_control.assert_address_has_role(&admin, &Role::Admin);
 
         let role = Role::from_symbol(&e, role_name);
+        let current_address = access_control.get_role(&role);
+
+        if current_address == new_address {
+            panic_with_error!(&e, AccessControlError::MustBeNewAddress);
+        }
+
         access_control.commit_transfer_ownership(&role, &new_address);
         AccessControlEvents::new(&e).commit_transfer_ownership(role, new_address);
     }

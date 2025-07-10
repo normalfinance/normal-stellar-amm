@@ -9,6 +9,7 @@ pub enum AccessControlError {
     Unauthorized = 102,
     AdminAlreadySet = 103,
     BadRoleUsage = 104,
+    MustBeNewAddress = 105,
 
     // transfer ownership errors
     AnotherActionActive = 2906,

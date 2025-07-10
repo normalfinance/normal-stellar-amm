@@ -22,7 +22,7 @@ use access_control::emergency::{ get_emergency_mode, set_emergency_mode };
 use access_control::errors::AccessControlError;
 use access_control::events::Events as AccessControlEvents;
 use access_control::interface::TransferableContract;
-use access_control::management::SingleAddressManagementTrait;
+use access_control::management::{ MultipleAddressesManagementTrait, SingleAddressManagementTrait };
 use access_control::role::{ Role, SymbolRepresentation };
 use access_control::transfer::TransferOwnershipTrait;
 use access_control::utils::{ require_admin };
@@ -564,6 +564,12 @@ impl TransferableContract for Buffer {
         access_control.assert_address_has_role(&admin, &Role::Admin);
 
         let role = Role::from_symbol(&e, role_name);
+        let current_address = access_control.get_role(&role);
+
+        if current_address == new_address {
+            panic_with_error!(&e, AccessControlError::MustBeNewAddress);
+        }
+
         access_control.commit_transfer_ownership(&role, &new_address);
         AccessControlEvents::new(&e).commit_transfer_ownership(role, new_address);
     }
