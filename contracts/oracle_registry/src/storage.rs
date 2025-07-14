@@ -1,18 +1,19 @@
-use crate::storage_types::{HistoricalOracleData, OracleGuardRails};
+use crate::storage_types::{ OracleGuardRails };
 use paste::paste;
-use soroban_sdk::{contracttype, panic_with_error, Env, Symbol};
-use utils::bump::{bump_instance, bump_persistent};
+use soroban_sdk::{ contracttype, panic_with_error, Env, Symbol };
+use utils::bump::{ bump_instance, bump_persistent };
 use utils::errors::storage_errors::StorageError;
-use utils::state::oracle_registry::OracleInfo;
+use utils::state::oracle_registry::{ HistoricalOracleData, OracleInfo };
 use utils::{
-    generate_instance_storage_getter, generate_instance_storage_getter_and_setter,
+    generate_instance_storage_getter,
+    generate_instance_storage_getter_and_setter,
     generate_instance_storage_setter,
 };
 
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
-    OracleGuardRails,   // a set of oracle price data validations and protections.
+    OracleGuardRails, // a set of oracle price data validations and protections.
     OraclesSet(Symbol), // map of asset (i.e. "BTC") > OracleInfo.
     HistoricalOracleData(Symbol), // map of asset (i.e. "BTC") > HistoricalOracleData (historically witnessed oracle data).
 }
