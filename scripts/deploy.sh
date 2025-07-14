@@ -38,13 +38,6 @@ echo "Deploy the soroban_token_contract and capture its contract ID hash..."
 
 XLM="CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC" # mainnet = "CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA"
 
-# setup
-# POOL_ROUTER_ADDR="CDEL762LIBSZVA2QKQAZG4D7LL5CTXDSJEB2TBV7BY56LRPMVK3Z52N7"
-# ORACLE_REGISTRY_ADDR="CCZYYJH7BF2AUL2EDMRJEPOJBEMDGMZGDNQJGRGCLOUCT6TZDD4ZGPTB"
-# nBTC_TOKEN_ADDR="CCJGYGCN54FGGR46IKLKN3UP24JMABBV2DLV2VEE5E7OXOSJJ5LOJKNK"
-
-# end setup
-
 echo "Install the soroban_token and pool contracts..."
 
 TOKEN_WASM_HASH=$(soroban contract upload \
@@ -96,15 +89,14 @@ stellar contract invoke \
             "oracle_twap_percent_divergence": 1200000000
         },
         "validity": {
-            "seconds_before_stale_for_pool": 300,
+            "seconds_before_stale_for_pool": 3000,
             "too_volatile_ratio": 1200000000
         }
     }'
 
 echo "Registering a BTC and a XLM oracle..."
 
-REFLECTOR_TESTNET_ORACLE=CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63
-REFLECTOR_MAINNET_ORACLE=CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63
+REFLECTOR_ORACLE=CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63
 
 stellar contract invoke \
     --id $ORACLE_REGISTRY_ADDR \
@@ -114,7 +106,7 @@ stellar contract invoke \
     register_oracle \
     --admin $ADMIN_ADDRESS \
     --asset "BTC" \
-    --oracle_addr $REFLECTOR_TESTNET_ORACLE \
+    --oracle_addr $REFLECTOR_ORACLE \
     --decimals 14 \
     --sanitize_clamp_denominator 0
 
@@ -126,7 +118,7 @@ stellar contract invoke \
     register_oracle \
     --admin $ADMIN_ADDRESS \
     --asset "XLM" \
-    --oracle_addr $REFLECTOR_TESTNET_ORACLE \
+    --oracle_addr $REFLECTOR_ORACLE \
     --decimals 14 \
     --sanitize_clamp_denominator 0
 
@@ -278,7 +270,7 @@ stellar contract invoke \
     --asset "BTC" \
     --oracle_addr $REFLECTOR_TESTNET_ORACLE \
     --decimals 14 \
-    --sanitize_clamp_denominator 0 \
+    --sanitize_clamp_denominator 0
 
 stellar contract invoke \
     --id $ORACLE_REGISTRY_ADDR \
@@ -290,7 +282,7 @@ stellar contract invoke \
     --asset "XLM" \
     --oracle_addr $REFLECTOR_TESTNET_ORACLE \
     --decimals 14 \
-    --sanitize_clamp_denominator 0 \
+    --sanitize_clamp_denominator 0
 
 #  _______   ____  ____   _______   _______   _______   _______
 # |   _  "\ ("  _||_ " | /"     "| /"     "| /"     "| /"      \

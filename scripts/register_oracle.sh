@@ -3,19 +3,22 @@ set -e
 
 # Check if the argument is provided
 if [ -z "$1" ]; then
-    echo "Usage: $0 <identity_string>"
+    echo "Usage: $0 <identity_string> <oracle_registry_address> <asset> <decimals> <clamp>"
     exit 1
 fi
 
-IDENTITY_STRING=$1
+IDENTITY_STRING="$1"
 NETWORK="testnet"
 
 # Config
 REFLECTOR_ORACLE="CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63"
-ORACLE_REGISTRY_ADDR="..."
-ASSET="BTC"
-DECIMALS=14
-CLAMP=0
+ORACLE_REGISTRY_ADDR="$2"
+ASSET="$3"
+DECIMALS="$4"
+CLAMP="$5"
+
+# Get admin address
+ADMIN_ADDRESS=$(soroban keys address "$IDENTITY_STRING")
 
 # Oracle registration
 echo "Registering a $ASSET oracle..."

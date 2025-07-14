@@ -34,14 +34,17 @@ XLM="CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
 LP_TOKEN_NAME="$NORMAL_TOKEN_SYMBOL-XLM LP Token"
 LP_TOKEN_SYMBOL="$NORMAL_TOKEN_SYMBOL-XLM-LP"
 
+cd target/wasm32v1-none/release
+
 # Get admin address
 ADMIN_ADDRESS=$(soroban keys address "$IDENTITY_STRING")
-
+echo $IDENTITY_STRING
+echo $NETWORK
 # Deploy synth token
 NORMAL_TOKEN_ADDR=$(soroban contract deploy \
     --wasm soroban_token_contract.optimized.wasm \
-    --source "$IDENTITY_STRING" \
-    --network "$NETWORK")
+    --source $IDENTITY_STRING \
+    --network $NETWORK)
 
 # Initialize synth token
 soroban contract invoke \
