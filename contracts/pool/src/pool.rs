@@ -84,7 +84,6 @@ pub fn get_oracle_price(
         Vec::from_array(
             e,
             [
-                e.current_contract_address().to_val(),
                 asset.to_val(),
                 cached.into_val(e),
                 action.into_val(e),

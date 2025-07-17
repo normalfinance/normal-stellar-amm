@@ -26,6 +26,7 @@ use crate::storage::{
     get_is_killed_deposit,
     get_is_killed_swap,
     get_is_killed_withdraw,
+    get_oracle_registry,
     get_plane,
     get_pool,
     get_reserve_a,
@@ -101,7 +102,7 @@ use utils::constant::{
     MAX_POOL_FEE,
 };
 use utils::math::safe_math::SafeMath;
-use utils::state::oracle_registry::NormalAction;
+use utils::state::oracle_registry::{ HistoricalOracleData, NormalAction };
 use utils::state::pool::InsuranceClaim;
 use utils::state::{
     pool::{
@@ -178,9 +179,16 @@ impl PoolTrait for Pool {
 
         // validate oracle assets
         let (base_asset, quote_asset) = params.assets;
-
-        get_oracle_price(&e, &base_asset, true, NormalAction::Swap);
-        get_oracle_price(&e, &quote_asset, true, NormalAction::Swap);
+        let _base_oracle_price_data: HistoricalOracleData = e.invoke_contract(
+            &get_oracle_registry(&e),
+            &Symbol::new(&e, "get_last_price"),
+            Vec::from_array(&e, [base_asset.to_val()])
+        );
+        let _quote_oracle_price_data: HistoricalOracleData = e.invoke_contract(
+            &get_oracle_registry(&e),
+            &Symbol::new(&e, "get_last_price"),
+            Vec::from_array(&e, [quote_asset.to_val()])
+        );
 
         if params.tokens.len() != 2 {
             panic_with_error!(&e, PoolValidationError::WrongInputVecSize);
@@ -950,15 +958,15 @@ impl PoolTrait for Pool {
         let pool = get_pool(&e);
         let pool_response = PoolResponse {
             pool: pool.clone(),
-            asset_a: AddressAndAmount {
+            token_a: AddressAndAmount {
                 address: get_token_synthetic(&e),
                 amount: get_reserve_a(&e),
             },
-            asset_b: AddressAndAmount {
+            token_b: AddressAndAmount {
                 address: pool.token_b,
                 amount: get_reserve_b(&e),
             },
-            asset_lp_share: AddressAndAmount {
+            token_share: AddressAndAmount {
                 address: get_token_lp(&e),
                 amount: get_total_lp_tokens(&e),
             },
