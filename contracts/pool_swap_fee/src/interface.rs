@@ -1,4 +1,5 @@
-use soroban_sdk::{Address, BytesN, Env, Symbol, Vec};
+use soroban_sdk::{ Address, Env, Symbol };
+use utils::state::pool::SwapDirection;
 
 pub trait PoolSwapFeeInterface {
     //   _______    _______  ___________  ___________  _______   _______    ________
@@ -45,12 +46,10 @@ pub trait PoolSwapFeeInterface {
     fn swap(
         e: Env,
         user: Address,
-        tokens: Vec<Address>,
-        token_in: Address,
-        token_out: Address,
         asset: Symbol,
+        direction: SwapDirection,
         in_amount: u128,
-        out_min: u128,
+        out_min: u128
     ) -> u128;
 }
 

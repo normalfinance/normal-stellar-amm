@@ -298,7 +298,7 @@ impl AdminInterface for Buffer {
             ),
         );
 
-        Events::new(&e).resolve_liquidity_deficit(token, admin, amount);
+        Events::new(&e).resolve_liquidity_deficit(pool_address, token, admin, amount, paid);
 
         paid
     }

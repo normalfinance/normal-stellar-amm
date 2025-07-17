@@ -24,7 +24,6 @@ use crate::storage::{
     set_oracle_registry,
     set_pool_hash,
     set_pool_plane,
-    set_pools_vec,
     set_reward_tokens,
     set_reward_tokens_detailed,
     set_rewards_config,
@@ -67,8 +66,8 @@ use soroban_sdk::{
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
-use utils::constant::{ MAX_POOL_FEE, TEMPORARY_TTL_THRESHOLD, WEEK_IN_LEDGERS };
-use utils::state::pool::{ PoolInfo, PoolTier };
+use utils::constant::MAX_POOL_FEE;
+use utils::state::pool::{ PoolInfo, PoolTier, SwapDirection };
 use utils::token::{ transfer_token, transfer_token_from };
 
 #[contract]
@@ -114,14 +113,14 @@ impl PoolInterfaceTrait for PoolRouter {
     fn deposit(e: Env, user: Address, asset: Symbol, token_b_amount: u128) -> (u128, u128) {
         user.require_auth();
 
-        let pool_id = get_pool(&e, &asset);
+        let pool = get_pool(&e, &asset);
 
         let (amount, share_amount): (u128, u128) = e.invoke_contract(
-            &pool_id,
+            &pool,
             &symbol_short!("deposit"),
             Vec::from_array(&e, [user.clone().into_val(&e), token_b_amount.into_val(&e)])
         );
-        Events::new(&e).deposit(asset, user, pool_id, amount, share_amount);
+        Events::new(&e).deposit_liquidity(asset, pool, user, amount, share_amount);
         (amount, share_amount)
     }
 
@@ -134,10 +133,9 @@ impl PoolInterfaceTrait for PoolRouter {
     // # Arguments
     // * `e` - The current Soroban environment.
     // * `user` - The address of the user performing the swap (must authorize the call).
-    // * `tokens` - A vector of token addresses, used to determine index positions in the pool.
+    // * `asset` - The synthetic asset symbol identifying the pool to use.
     // * `token_in` - The token address being sold (input).
     // * `token_out` - The token address being bought (output).
-    // * `asset` - The synthetic asset symbol identifying the pool to use.
     // * `in_amount` - The amount of the input token to swap.
     // * `out_min` - The minimum acceptable amount of the output token.
     //
@@ -158,31 +156,28 @@ impl PoolInterfaceTrait for PoolRouter {
     fn swap(
         e: Env,
         user: Address,
-        tokens: Vec<Address>,
-        token_in: Address,
-        token_out: Address,
         asset: Symbol,
+        direction: SwapDirection,
         in_amount: u128,
         out_min: u128
     ) -> u128 {
         user.require_auth();
 
-        let pool_id = get_pool(&e, &asset);
+        let pool = get_pool(&e, &asset);
 
-        let out_amt = e.invoke_contract(
-            &pool_id,
+        let out_amount = e.invoke_contract(
+            &pool,
             &symbol_short!("swap"),
             Vec::from_array(&e, [
                 user.clone().into_val(&e),
-                tokens.first_index_of(token_in.clone()).unwrap().into_val(&e),
-                tokens.first_index_of(token_out.clone()).unwrap().into_val(&e),
+                direction.into_val(&e),
                 in_amount.into_val(&e),
                 out_min.into_val(&e),
             ])
         );
 
-        Events::new(&e).swap(tokens, user, pool_id, token_in, token_out, in_amount, out_amt);
-        out_amt
+        Events::new(&e).swap(asset, pool, user, direction, in_amount, out_amount);
+        out_amount
     }
 
     // Estimates the output amount and fee for a token swap without executing it.
@@ -193,9 +188,6 @@ impl PoolInterfaceTrait for PoolRouter {
     //
     // # Arguments
     // * `e` - The current Soroban environment.
-    // * `tokens` - A vector of token addresses used to map input/output tokens to pool indices.
-    // * `token_in` - The address of the token to be sold.
-    // * `token_out` - The address of the token to be received.
     // * `asset` - The synthetic asset symbol representing the target liquidity pool.
     // * `in_amount` - The amount of input token to simulate a swap for.
     //
@@ -213,10 +205,8 @@ impl PoolInterfaceTrait for PoolRouter {
     // * Token ordering must match the pool's internal ordering for index lookups to work correctly.
     fn estimate_swap(
         e: Env,
-        tokens: Vec<Address>,
-        token_in: Address,
-        token_out: Address,
         asset: Symbol,
+        direction: SwapDirection,
         in_amount: u128
     ) -> (u128, i128) {
         let pool_id = get_pool(&e, &asset);
@@ -224,11 +214,7 @@ impl PoolInterfaceTrait for PoolRouter {
         e.invoke_contract(
             &pool_id,
             &Symbol::new(&e, "estimate_swap"),
-            Vec::from_array(&e, [
-                tokens.first_index_of(token_in.clone()).unwrap().into_val(&e),
-                tokens.first_index_of(token_out.clone()).unwrap().into_val(&e),
-                in_amount.into_val(&e),
-            ])
+            Vec::from_array(&e, [direction.into_val(&e), in_amount.into_val(&e)])
         )
     }
 
@@ -255,15 +241,15 @@ impl PoolInterfaceTrait for PoolRouter {
     fn withdraw(e: Env, user: Address, asset: Symbol, share_amount: u128) -> u128 {
         user.require_auth();
 
-        let pool_id = get_pool(&e, &asset);
+        let pool = get_pool(&e, &asset);
 
         let amount: u128 = e.invoke_contract(
-            &pool_id,
+            &pool,
             &symbol_short!("withdraw"),
             Vec::from_array(&e, [user.clone().into_val(&e), share_amount.into_val(&e)])
         );
 
-        Events::new(&e).withdraw(asset, user, pool_id, amount, share_amount);
+        Events::new(&e).withdraw_liquidity(asset, pool, user, share_amount, amount);
         amount
     }
 
@@ -446,8 +432,6 @@ impl AdminInterface for PoolRouter {
             panic_with_error!(&e, AccessControlError::AdminAlreadySet);
         }
         access_control.set_role_address(&Role::Admin, &account);
-
-        set_pools_vec(&e, &Vec::new(&e));
     }
 
     //   ________  _______  ___________  ___________  _______   _______    ________
@@ -489,18 +473,21 @@ impl AdminInterface for PoolRouter {
         set_liquidity_calculator(&e, &calculator);
     }
 
+    // Sets the liquidity pool share token wasm hash.
     fn set_token_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
         set_token_hash(&e, &new_hash);
     }
 
+    // Sets the pool wasm hash.
     fn set_pool_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
         set_pool_hash(&e, &new_hash);
     }
 
+    // Sets the reward token.
     fn set_reward_token(e: Env, admin: Address, reward_token: Address) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
@@ -865,7 +852,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
         let incentives = get_incentives_manager(&e);
         let reward_token = incentives.storage().get_reward_token();
         let reward_token_client = SorobanTokenClient::new(&e, &reward_token);
-        let mut pool_reward_balance = reward_token_client.balance(&pool_id) as u128;
+        let pool_reward_balance = reward_token_client.balance(&pool_id) as u128;
 
         configured_reward.saturating_sub(claimed_reward + pool_reward_balance)
     }
