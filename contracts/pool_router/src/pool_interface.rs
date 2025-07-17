@@ -203,9 +203,9 @@ pub trait PoolsManagementTrait {
     // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
     //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
 
-    fn query_pool_details(env: Env, pool_address: Address) -> PoolInfo;
+    fn query_pool_details(e: Env, asset: Symbol) -> PoolInfo;
 
-    fn query_all_pools_details(env: Env) -> Vec<PoolInfo>;
+    fn query_all_pools_details(e: Env) -> Vec<PoolInfo>;
 
     fn get_pools(e: Env) -> Vec<Address>;
 }

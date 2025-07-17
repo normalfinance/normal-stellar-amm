@@ -24,6 +24,7 @@ use crate::storage::{
     set_oracle_registry,
     set_pool_hash,
     set_pool_plane,
+    set_pools_vec,
     set_reward_tokens,
     set_reward_tokens_detailed,
     set_rewards_config,
@@ -66,7 +67,7 @@ use soroban_sdk::{
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
-use utils::constant::MAX_POOL_FEE;
+use utils::constant::{ MAX_POOL_FEE, TEMPORARY_TTL_THRESHOLD, WEEK_IN_LEDGERS };
 use utils::state::pool::{ PoolInfo, PoolTier };
 use utils::token::{ transfer_token, transfer_token_from };
 
@@ -445,6 +446,8 @@ impl AdminInterface for PoolRouter {
             panic_with_error!(&e, AccessControlError::AdminAlreadySet);
         }
         access_control.set_role_address(&Role::Admin, &account);
+
+        set_pools_vec(&e, &Vec::new(&e));
     }
 
     //   ________  _______  ___________  ___________  _______   _______    ________
@@ -1013,24 +1016,26 @@ impl PoolsManagementTrait for PoolRouter {
     // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
     //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
 
-    fn query_pool_details(env: Env, pool_address: Address) -> PoolInfo {
-        let pool_response: PoolInfo = env.invoke_contract(
-            &pool_address,
-            &Symbol::new(&env, "get_info"),
-            Vec::new(&env)
+    fn query_pool_details(e: Env, asset: Symbol) -> PoolInfo {
+        let pool_id = get_pool(&e, &asset);
+
+        let pool_response: PoolInfo = e.invoke_contract(
+            &pool_id,
+            &Symbol::new(&e, "get_info"),
+            Vec::new(&e)
         );
         pool_response
     }
 
-    fn query_all_pools_details(env: Env) -> Vec<PoolInfo> {
-        let pools_vec = get_pools_vec(&env);
+    fn query_all_pools_details(e: Env) -> Vec<PoolInfo> {
+        let pools_vec = get_pools_vec(&e);
 
-        let mut result = Vec::new(&env);
+        let mut result = Vec::new(&e);
         for pool in pools_vec {
-            let pool_response: PoolInfo = env.invoke_contract(
+            let pool_response: PoolInfo = e.invoke_contract(
                 &pool,
-                &Symbol::new(&env, "get_info"),
-                Vec::new(&env)
+                &Symbol::new(&e, "get_info"),
+                Vec::new(&e)
             );
 
             result.push_back(pool_response);

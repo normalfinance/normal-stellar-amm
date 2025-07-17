@@ -1,18 +1,36 @@
-use crate::events::{Events, PoolRouterEvents};
+use crate::events::{ Events, PoolRouterEvents };
 use crate::incentives::get_incentives_manager;
 use crate::liquidity_calculator::LiquidityCalculatorClient;
-use crate::storage::{get_oracle_registry, get_pool, get_pool_hash, get_pool_plane, get_token_hash, put_pool};
+use crate::storage::{
+    get_oracle_registry,
+    get_pool,
+    get_pool_hash,
+    get_pool_plane,
+    get_pools_vec,
+    get_token_hash,
+    put_pool,
+    set_pools_vec,
+};
 use access_control::access::AccessControl;
-use access_control::management::{MultipleAddressesManagementTrait, SingleAddressManagementTrait};
+use access_control::management::{ MultipleAddressesManagementTrait, SingleAddressManagementTrait };
 use access_control::role::Role;
 use incentives::storage::RewardTokenStorageTrait;
 use soroban_sdk::{
-    symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Symbol, Val, Vec,
+    symbol_short,
+    xdr::ToXdr,
+    Address,
+    Bytes,
+    BytesN,
+    Env,
+    IntoVal,
+    Symbol,
+    Val,
+    Vec,
 };
-use soroban_sdk::{String, U256};
+use soroban_sdk::{ String, U256 };
 use utils::state::{
     access::PrivilegedAddresses,
-    pool::{InitializeAllParams, InitializeParams, PoolTier, RewardConfig},
+    pool::{ InitializeAllParams, InitializeParams, PoolTier, RewardConfig },
     token::TokenInitInfo,
 };
 
@@ -71,7 +89,7 @@ pub fn deploy_pool(
     lp_token_info: &(String, String),
     fee_fraction: u32,
     tier: &PoolTier,
-    quote_max_insurance: u128,
+    quote_max_insurance: u128
 ) -> Address {
     let pool_wasm_hash = get_pool_hash(e);
     let (base_asset, _) = assets;
@@ -89,16 +107,22 @@ pub fn deploy_pool(
         lp_token_info,
         fee_fraction,
         tier,
-        quote_max_insurance,
+        quote_max_insurance
     );
 
-    put_pool(e, base_asset.clone(), &pool_contract_id);
+    // Add pool contract address to Map<Symbol, Address>
+    put_pool(e, base_asset.clone(), &pool_contract_id.clone());
+
+    // Add pool contract address to Vec<Address>
+    let mut pools_vec = get_pools_vec(&e);
+    pools_vec.push_back(pool_contract_id.clone());
+    set_pools_vec(&e, &pools_vec);
 
     Events::new(e).add_pool(
         tokens.clone(),
         pool_contract_id.clone(),
         base_asset.clone(),
-        Vec::<Val>::from_array(e, [fee_fraction.into_val(e)]),
+        Vec::<Val>::from_array(e, [fee_fraction.into_val(e)])
     );
 
     pool_contract_id
@@ -112,7 +136,7 @@ fn init_pool(
     lp_token_info: &(String, String),
     fee_fraction: u32,
     tier: &PoolTier,
-    quote_max_insurance: u128,
+    quote_max_insurance: u128
 ) {
     let token_wasm_hash = get_token_hash(e);
     let incentives = get_incentives_manager(e);
@@ -124,15 +148,11 @@ fn init_pool(
     let emergency_admin = access_control
         .get_role_safe(&Role::EmergencyAdmin)
         .unwrap_or(admin.clone());
-    let rewards_admin = access_control
-        .get_role_safe(&Role::RewardsAdmin)
-        .unwrap_or(admin.clone());
+    let rewards_admin = access_control.get_role_safe(&Role::RewardsAdmin).unwrap_or(admin.clone());
     let operations_admin = access_control
         .get_role_safe(&Role::OperationsAdmin)
         .unwrap_or(admin.clone());
-    let pause_admin = access_control
-        .get_role_safe(&Role::PauseAdmin)
-        .unwrap_or(admin.clone());
+    let pause_admin = access_control.get_role_safe(&Role::PauseAdmin).unwrap_or(admin.clone());
     let emergency_pause_admins = access_control.get_role_addresses(&Role::EmergencyPauseAdmin);
 
     let plane = get_pool_plane(e);
@@ -167,15 +187,16 @@ fn init_pool(
     e.invoke_contract::<()>(
         pool_contract_id,
         &Symbol::new(e, "initialize_all"),
-        Vec::from_array(e, [params.into_val(e)]),
+        Vec::from_array(e, [params.into_val(e)])
     );
 }
 
 pub fn get_total_liquidity(e: &Env, asset: Symbol, calculator: Address) -> U256 {
     let pool = get_pool(e, &asset);
 
-    let pools_liquidity =
-        LiquidityCalculatorClient::new(&e, &calculator).get_liquidity(&Vec::from_array(e, [pool]));
+    let pools_liquidity = LiquidityCalculatorClient::new(&e, &calculator).get_liquidity(
+        &Vec::from_array(e, [pool])
+    );
 
     pools_liquidity.get(0).unwrap()
 }
