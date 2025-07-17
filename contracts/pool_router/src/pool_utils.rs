@@ -119,10 +119,14 @@ pub fn deploy_pool(
     set_pools_vec(&e, &pools_vec);
 
     Events::new(e).add_pool(
+        base_asset.clone(),
         tokens.clone(),
         pool_contract_id.clone(),
-        base_asset.clone(),
-        Vec::<Val>::from_array(e, [fee_fraction.into_val(e)])
+        Vec::<Val>::from_array(e, [
+            fee_fraction.into_val(e),
+            tier.into_val(e),
+            quote_max_insurance.into_val(e),
+        ])
     );
 
     pool_contract_id

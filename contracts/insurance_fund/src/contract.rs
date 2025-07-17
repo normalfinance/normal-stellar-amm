@@ -171,7 +171,6 @@ impl InsuranceFundTrait for InsuranceFund {
         let new_total_shares = get_total_shares(&e);
 
         FundEvents::new(&e).if_stake_record(
-            now,
             user.clone(),
             StakeAction::Deposit,
             amount,
@@ -306,7 +305,6 @@ impl InsuranceFundTrait for InsuranceFund {
         let if_shares_after = stake.checked_if_shares(&e);
 
         FundEvents::new(&e).if_stake_record(
-            now,
             user.clone(),
             StakeAction::WithdrawRequest,
             stake.last_withdraw_request_value,
@@ -388,7 +386,6 @@ impl InsuranceFundTrait for InsuranceFund {
         let if_shares_after = stake.checked_if_shares(&e);
 
         FundEvents::new(&e).if_stake_record(
-            now,
             user.clone(),
             StakeAction::WithdrawCancelRequest,
             0,
@@ -502,7 +499,6 @@ impl InsuranceFundTrait for InsuranceFund {
         let if_shares_after = stake.checked_if_shares(&e);
 
         FundEvents::new(&e).if_stake_record(
-            now,
             user.clone(),
             StakeAction::Withdraw,
             withdraw_amount,

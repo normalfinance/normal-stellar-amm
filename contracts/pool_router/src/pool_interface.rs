@@ -1,5 +1,5 @@
-use soroban_sdk::{Address, Env, Map, String, Symbol, Val, Vec, U256};
-use utils::state::pool::{PoolInfo, PoolTier};
+use soroban_sdk::{ Address, Env, Map, String, Symbol, Val, Vec, U256 };
+use utils::state::pool::{ PoolInfo, PoolTier, SwapDirection };
 
 pub trait PoolInterfaceTrait {
     //  ___      ___       __        __    _____  ___
@@ -15,21 +15,17 @@ pub trait PoolInterfaceTrait {
     fn swap(
         e: Env,
         user: Address,
-        tokens: Vec<Address>,
-        token_in: Address,
-        token_out: Address,
         asset: Symbol,
+        direction: SwapDirection,
         in_amount: u128,
-        out_min: u128,
+        out_min: u128
     ) -> u128;
 
     fn estimate_swap(
         e: Env,
-        tokens: Vec<Address>,
-        token_in: Address,
-        token_out: Address,
         asset: Symbol,
-        in_amount: u128,
+        direction: SwapDirection,
+        in_amount: u128
     ) -> (u128, i128);
 
     fn withdraw(e: Env, user: Address, asset: Symbol, share_amount: u128) -> u128;
@@ -113,7 +109,7 @@ pub trait IncentivesInterfaceTrait {
         user: Address,
         reward_tps: u128,
         expired_at: u64,
-        assets: Vec<Symbol>,
+        assets: Vec<Symbol>
     );
 
     // Fills the aggregated liquidity information for a given set of tokens.
@@ -190,7 +186,7 @@ pub trait PoolsManagementTrait {
         lp_token_info: (String, String),
         fee_fraction: u32,
         tier: PoolTier,
-        quote_max_insurance: u128,
+        quote_max_insurance: u128
     ) -> Address;
 
     fn remove_pool(e: Env, user: Address, asset: Symbol);
