@@ -4,7 +4,7 @@ set -e
 # Usage
 usage() {
     echo "Usage:"
-    echo "  $0 <identity_string> <pool_router_address> <token_target> <token_name> <token_symbol> <fee_fraction> <pool_tier> <max_insurance>"
+    echo "  $0 <identity_string> <network> <pool_router_address> <token_target> <token_name> <token_symbol> <fee_fraction> <pool_tier> <max_insurance>"
     echo ""
     echo "Example:"
     echo "  $0 josh CAS123 BTC 'Normal Bitcoin' nBTC 30 A 1000000"
@@ -12,22 +12,22 @@ usage() {
 }
 
 # Validate args
-if [ "$#" -ne 8 ]; then
+if [ "$#" -ne 9 ]; then
     usage
 fi
 
 # Parse arguments
 IDENTITY_STRING="$1"
-POOL_ROUTER_ADDR="$2"
-NORMAL_TOKEN_TARGET="$3"
-NORMAL_TOKEN_NAME="$4"
-NORMAL_TOKEN_SYMBOL="$5"
-FEE_FRACTION="$6"
-POOL_TIER="$7"
-MAX_INSURANCE="$8"
+NETWORK=$2
+POOL_ROUTER_ADDR="$3"
+NORMAL_TOKEN_TARGET="$4"
+NORMAL_TOKEN_NAME="$5"
+NORMAL_TOKEN_SYMBOL="$6"
+FEE_FRACTION="$7"
+POOL_TIER="$8"
+MAX_INSURANCE="$9"
 
 # Fixed config
-NETWORK="testnet"
 XLM="CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
 
 # Derive LP token info

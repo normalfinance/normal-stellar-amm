@@ -3,12 +3,12 @@ set -e
 
 # Check if the argument is provided
 if [ -z "$1" ]; then
-    echo "Usage: $0 <identity_string>"
+    echo "Usage: $0 <identity_string> <network>"
     exit 1
 fi
 
 IDENTITY_STRING=$1
-NETWORK="testnet"
+NETWORK=$2
 
 echo "Build and optimize the contracts..."
 
@@ -36,20 +36,20 @@ ADMIN_ADDRESS=$(soroban keys address $IDENTITY_STRING)
 
 echo "Deploy the soroban_token_contract and capture its contract ID hash..."
 
-XLM="CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC" # mainnet = "CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA"
+XLM="CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA"
 
 echo "Install the soroban_token and pool contracts..."
 
 TOKEN_WASM_HASH=$(soroban contract upload \
     --wasm soroban_token_contract.optimized.wasm \
     --source $IDENTITY_STRING \
-    --network $NETWORK)
+--network $NETWORK)
 
 # Continue with the rest of the deployments
 POOL_WASM_HASH=$(soroban contract upload \
     --wasm pool.optimized.wasm \
     --source $IDENTITY_STRING \
-    --network $NETWORK)
+--network $NETWORK)
 
 echo "Token and pool contracts deployed."
 
@@ -66,61 +66,7 @@ echo "Initialize oracle registry..."
 ORACLE_REGISTRY_ADDR=$(soroban contract deploy \
     --wasm oracle_registry.optimized.wasm \
     --source $IDENTITY_STRING \
-    --network $NETWORK)
-
-stellar contract invoke \
-    --id $ORACLE_REGISTRY_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    initialize \
-    --admin $ADMIN_ADDRESS \
-    --emergency_admin $ADMIN_ADDRESS
-
-stellar contract invoke \
-    --id $ORACLE_REGISTRY_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    set_oracle_guard_rails \
-    --admin $ADMIN_ADDRESS \
-    --oracle_guard_rails '{
-        "price_divergence": {
-            "oracle_twap_percent_divergence": 1200000000
-        },
-        "validity": {
-            "seconds_before_stale_for_pool": 3000,
-            "too_volatile_ratio": 1200000000
-        }
-    }'
-
-echo "Registering a BTC and a XLM oracle..."
-
-REFLECTOR_ORACLE=CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63
-
-stellar contract invoke \
-    --id $ORACLE_REGISTRY_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    register_oracle \
-    --admin $ADMIN_ADDRESS \
-    --asset "BTC" \
-    --oracle_addr $REFLECTOR_ORACLE \
-    --decimals 14 \
-    --sanitize_clamp_denominator 0
-
-stellar contract invoke \
-    --id $ORACLE_REGISTRY_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    register_oracle \
-    --admin $ADMIN_ADDRESS \
-    --asset "XLM" \
-    --oracle_addr $REFLECTOR_ORACLE \
-    --decimals 14 \
-    --sanitize_clamp_denominator 0
+--network $NETWORK)
 
 #   _______     ______    ____  ____  ___________  _______   _______
 #  /"      \   /    " \  ("  _||_ " |("     _   ")/"     "| /"      \
@@ -135,91 +81,17 @@ echo "Initialize pool router..."
 POOL_PLANE_ADDR=$(soroban contract deploy \
     --wasm pool_plane.optimized.wasm \
     --source $IDENTITY_STRING \
-    --network $NETWORK)
+--network $NETWORK)
 
 LIQUIDITY_CALCULATOR_ADDR=$(soroban contract deploy \
     --wasm liquidity_calculator.optimized.wasm \
     --source $IDENTITY_STRING \
-    --network $NETWORK)
+--network $NETWORK)
 
 POOL_ROUTER_ADDR=$(soroban contract deploy \
     --wasm pool_router.optimized.wasm \
     --source $IDENTITY_STRING \
-    --network $NETWORK)
-
-stellar contract invoke \
-    --id $POOL_ROUTER_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    init_admin \
-    --account $ADMIN_ADDRESS
-
-stellar contract invoke \
-    --id $POOL_ROUTER_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    set_pool_hash \
-    --admin $ADMIN_ADDRESS \
-    --new_hash $POOL_WASM_HASH
-
-stellar contract invoke \
-    --id $POOL_ROUTER_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    set_token_hash \
-    --admin $ADMIN_ADDRESS \
-    --new_hash $TOKEN_WASM_HASH
-
-stellar contract invoke \
-    --id $POOL_ROUTER_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    set_reward_token \
-    --admin $ADMIN_ADDRESS \
-    --reward_token $XLM
-
-stellar contract invoke \
-    --id $POOL_ROUTER_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    set_privileged_addrs \
-    --admin $ADMIN_ADDRESS \
-    --rewards_admin $ADMIN_ADDRESS \
-    --operations_admin $ADMIN_ADDRESS \
-    --pause_admin $ADMIN_ADDRESS \
-    --emergency_pause_admins "[{\"address\":\"$ADMIN_ADDRESS\"}]"
-
-stellar contract invoke \
-    --id $POOL_ROUTER_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    set_pools_plane \
-    --admin $ADMIN_ADDRESS \
-    --plane $POOL_PLANE_ADDR
-
-stellar contract invoke \
-    --id $POOL_ROUTER_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    set_liquidity_calculator \
-    --admin $ADMIN_ADDRESS \
-    --calculator $LIQUIDITY_CALCULATOR_ADDR
-
-stellar contract invoke \
-    --id $POOL_ROUTER_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    set_oracle_registry \
-    --admin $ADMIN_ADDRESS \
-    --oracle_registry $ORACLE_REGISTRY_ADDR
+--network $NETWORK)
 
 echo "Tokens and pool router deployed."
 
@@ -236,20 +108,10 @@ echo "Initialize buffer..."
 BUFFER_ADDR=$(soroban contract deploy \
     --wasm buffer.optimized.wasm \
     --source $IDENTITY_STRING \
-    --network $NETWORK)
+--network $NETWORK)
 
 ONE_HOUR=$((3600))
 
-stellar contract invoke \
-    --id $BUFFER_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    initialize \
-    --admin $ADMIN_ADDRESS \
-    --emergency_admin $ADMIN_ADDRESS \
-    --time_bt_payouts $ONE_HOUR \
-    --min_reserve_ratio 1000
 
 #   __    _____  ___    ________  ____  ____   _______        __      _____  ___    ______    _______
 #  |" \  (\"   \|"  \  /"       )("  _||_ " | /"      \      /""\    (\"   \|"  \  /" _  "\  /"     "|
@@ -264,23 +126,8 @@ echo "Initialize insurance fund..."
 INSURANCE_FUND_ADDR=$(soroban contract deploy \
     --wasm insurance_fund.optimized.wasm \
     --source $IDENTITY_STRING \
-    --network $NETWORK)
+--network $NETWORK)
 
-THIRTEEN_DAYS=$((ONE_HOUR * 24 * 13))
-
-stellar contract invoke \
-    --id $INSURANCE_FUND_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    initialize \
-    --admin $ADMIN_ADDRESS \
-    --emergency_admin $ADMIN_ADDRESS \
-    --token $XLM \
-    --unstaking_period $THIRTEEN_DAYS \
-    --optimal_utilization 8000 \
-    --base_rate 200 \
-    --rate_slopes '[2000, 6000]'
 
 #   _______   _______   _______       ______    ______    ___      ___       _______   ______  ___________  ______     _______
 #  /"     "| /"     "| /"     "|     /" _  "\  /    " \  |"  |    |"  |     /"     "| /" _  "\("     _   ")/    " \   /"      \
@@ -295,52 +142,7 @@ echo "Initialize fee collector..."
 FEE_COLLECTOR_ADDR=$(soroban contract deploy \
     --wasm pool_swap_fee.optimized.wasm \
     --source $IDENTITY_STRING \
-    --network $NETWORK)
-
-stellar contract invoke \
-    --id $FEE_COLLECTOR_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    init_admin \
-    --admin $ADMIN_ADDRESS \
-    --emergency_admin $ADMIN_ADDRESS
-
-stellar contract invoke \
-    --id $FEE_COLLECTOR_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    set_router \
-    --admin $ADMIN_ADDRESS \
-    --router $POOL_ROUTER_ADDR
-
-stellar contract invoke \
-    --id $FEE_COLLECTOR_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    set_buffer \
-    --admin $ADMIN_ADDRESS \
-    --buffer $BUFFER_ADDR
-
-stellar contract invoke \
-    --id $FEE_COLLECTOR_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    set_insurance_fund \
-    --admin $ADMIN_ADDRESS \
-    --insurance_fund $INSURANCE_FUND_ADDR
-
-stellar contract invoke \
-    --id $FEE_COLLECTOR_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
-    set_fee_destination \
-    --admin $ADMIN_ADDRESS \
-    --fee_destination $ADMIN_ADDRESS
+--network $NETWORK)
 
 echo "#############################"
 

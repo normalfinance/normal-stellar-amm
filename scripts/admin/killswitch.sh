@@ -2,12 +2,12 @@
 set -e
 
 IDENTITY_STRING=$1
-NETWORK="testnet"
+NETWORK=$2
 ADMIN_ADDRESS=$(soroban keys address $IDENTITY_STRING)
 
 usage() {
     echo "Usage:"
-    echo "  $0 <identity_string> <contract_id> <kill|unkill|status> <target>"
+    echo "  $0 <identity_string> <network> <contract_id> <kill|unkill|status> <target>"
     echo ""
     echo "Supported targets:"
     echo "  deposit"
@@ -20,13 +20,13 @@ usage() {
 }
 
 # Validate inputs
-if [ "$#" -ne 4 ]; then
+if [ "$#" -ne 5 ]; then
     usage
 fi
 
-CONTRACT_ID="$2"
-ACTION="$3"
-TARGET="$4"
+CONTRACT_ID="$3"
+ACTION="$4"
+TARGET="$5"
 
 # Map target to function names
 case "$TARGET" in
