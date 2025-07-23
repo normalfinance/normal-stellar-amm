@@ -122,9 +122,9 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         );
 
         let (token_in, token_out) = if direction == SwapDirection::Buy {
-            (pool_info.pool_response.asset_b.address, pool_info.pool_response.asset_a.address)
+            (pool_info.pool_response.token_b.address, pool_info.pool_response.token_a.address)
         } else {
-            (pool_info.pool_response.asset_a.address, pool_info.pool_response.asset_b.address)
+            (pool_info.pool_response.token_a.address, pool_info.pool_response.token_b.address)
         };
 
         transfer_token(&e, &token_in, &user, &e.current_contract_address(), &(in_amount as i128));

@@ -140,9 +140,9 @@ pub struct InsuranceClaim {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PoolResponse {
     pub pool: Pool,
-    pub asset_a: AddressAndAmount,
-    pub asset_b: AddressAndAmount,
-    pub asset_lp_share: AddressAndAmount,
+    pub token_a: AddressAndAmount,
+    pub token_b: AddressAndAmount,
+    pub token_share: AddressAndAmount,
 }
 
 #[contracttype]
