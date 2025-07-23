@@ -37,6 +37,7 @@ use crate::storage::{
     set_is_killed_deposit,
     set_is_killed_swap,
     set_is_killed_withdraw,
+    set_oracle_registry,
     set_plane,
     set_pool,
     set_reserve_a,
@@ -174,28 +175,12 @@ impl PoolTrait for Pool {
         );
 
         set_router(&e, &params.router);
+        set_oracle_registry(&e, &params.oracle_registry);
 
         // validate oracle assets
-        let now = e.ledger().timestamp();
         let (base_asset, quote_asset) = params.assets;
-        let _base_oracle_price_data: OraclePriceData = e.invoke_contract(
-            &get_router(&e),
-            &Symbol::new(&e, "get_price"),
-            Vec::from_array(&e, [
-                e.current_contract_address().to_val(),
-                base_asset.to_val(),
-                now.into_val(&e),
-            ])
-        );
-        let _quote_oracle_price_data: OraclePriceData = e.invoke_contract(
-            &get_router(&e),
-            &Symbol::new(&e, "get_price"),
-            Vec::from_array(&e, [
-                e.current_contract_address().to_val(),
-                quote_asset.to_val(),
-                now.into_val(&e),
-            ])
-        );
+        get_oracle_price(&e, &base_asset, false, NormalAction::AddLiquidity);
+        get_oracle_price(&e, &quote_asset, false, NormalAction::AddLiquidity);
 
         if params.tokens.len() != 2 {
             panic_with_error!(&e, PoolValidationError::WrongInputVecSize);
@@ -851,7 +836,12 @@ impl PoolTrait for Pool {
         // update plane data for every pool update
         update_plane(&e);
 
-        LiquidityPoolEvents::new(&e).withdraw_liquidity(pool.token_b, user, share_amount, share_amount);
+        LiquidityPoolEvents::new(&e).withdraw_liquidity(
+            pool.token_b,
+            user,
+            share_amount,
+            share_amount
+        );
 
         share_amount
     }
@@ -915,15 +905,15 @@ impl PoolTrait for Pool {
         let pool = get_pool(&e);
         let pool_response = PoolResponse {
             pool: pool.clone(),
-            asset_a: AddressAndAmount {
+            token_a: AddressAndAmount {
                 address: get_token_synthetic(&e),
                 amount: get_reserve_a(&e),
             },
-            asset_b: AddressAndAmount {
+            token_b: AddressAndAmount {
                 address: pool.token_b,
                 amount: get_reserve_b(&e),
             },
-            asset_lp_share: AddressAndAmount {
+            token_share: AddressAndAmount {
                 address: get_token_lp(&e),
                 amount: get_total_lp_tokens(&e),
             },
