@@ -179,9 +179,13 @@ pub fn is_recent_oracle_valid(e: &Env, current_ts: u64) -> bool {
 // # Returns
 // * `i128` — The difference: `target_reserve_a - actual_reserve_a`.
 // Positive means mint, negative means burn.
-pub fn get_delta_a(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -> i128 {
-    let (reserve_a, reserve_b) = (get_reserve_a(e), get_reserve_b(e));
-
+pub fn get_delta_a(
+    e: &Env,
+    reserve_a: u128,
+    reserve_b: u128,
+    base_oracle_price: u128,
+    quote_oracle_price: u128
+) -> i128 {
     let peg_price = peg_price(e, base_oracle_price, quote_oracle_price);
     let target_reserve_a = reserve_b.fixed_div_floor(e, &peg_price, &PRICE_PRECISION);
     let delta_a = (target_reserve_a as i128).checked_sub(reserve_a as i128).unwrap();
@@ -203,26 +207,28 @@ pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) {
     let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
 
     // Find the ideal reserve_a amount such that the pool's price is equal to the oracle price
-    let delta_a = get_delta_a(&e, base_oracle_price, quote_oracle_price);
+    let delta_a = get_delta_a(&e, reserve_a, reserve_b, base_oracle_price, quote_oracle_price);
+   
+    if delta_a != 0 {
+        if delta_a > 0 {
+            mint_synthetic_tokens(&e, &e.current_contract_address(), delta_a);
+            set_reserve_a(&e, &(reserve_a + (delta_a as u128)));
+        }
+        if delta_a < 0 {
+            burn_synthetic_tokens(&e, &e.current_contract_address(), delta_a.abs() as u128);
+            set_reserve_a(&e, &(reserve_a - (delta_a.abs() as u128)));
+        }
 
-    if delta_a > 0 {
-        mint_synthetic_tokens(&e, &e.current_contract_address(), delta_a);
-        set_reserve_a(&e, &(reserve_a + (delta_a as u128)));
+        let (new_reserve_a, new_reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
+
+        LiquidityPoolEvents::new(&e).rebalance(
+            reserve_a,
+            reserve_b,
+            new_reserve_a,
+            new_reserve_b,
+            delta_a
+        );
     }
-    if delta_a < 0 {
-        burn_synthetic_tokens(&e, &e.current_contract_address(), delta_a.abs() as u128);
-        set_reserve_a(&e, &(reserve_a - (delta_a.abs() as u128)));
-    }
-
-    let (new_reserve_a, new_reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
-
-    LiquidityPoolEvents::new(&e).rebalance(
-        reserve_a,
-        reserve_b,
-        new_reserve_a,
-        new_reserve_b,
-        delta_a
-    );
 }
 
 // Calculates the input amount required to receive a fixed output amount in a swap,

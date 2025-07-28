@@ -553,7 +553,13 @@ impl PoolTrait for Pool {
             true,
             NormalAction::Swap
         );
-        let delta_a = get_delta_a(&e, base_oracle_price_data.price, quote_oracle_price_data.price);
+        let delta_a = get_delta_a(
+            &e,
+            reserve_a,
+            reserve_b,
+            base_oracle_price_data.price,
+            quote_oracle_price_data.price
+        );
 
         (out, delta_a)
     }
@@ -754,7 +760,13 @@ impl PoolTrait for Pool {
             true,
             NormalAction::Swap
         );
-        let delta_a = get_delta_a(&e, base_oracle_price_data.price, quote_oracle_price_data.price);
+        let delta_a = get_delta_a(
+            &e,
+            reserve_a,
+            reserve_b,
+            base_oracle_price_data.price,
+            quote_oracle_price_data.price
+        );
 
         (out, delta_a)
     }
