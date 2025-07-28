@@ -38,8 +38,7 @@ cd target/wasm32v1-none/release
 
 # Get admin address
 ADMIN_ADDRESS=$(soroban keys address "$IDENTITY_STRING")
-echo $IDENTITY_STRING
-echo $NETWORK
+
 # Deploy synth token
 NORMAL_TOKEN_ADDR=$(soroban contract deploy \
     --wasm soroban_token_contract.optimized.wasm \
