@@ -179,8 +179,6 @@ impl PoolTrait for Pool {
 
         // validate oracle assets
         let (base_asset, quote_asset) = params.assets;
-        get_oracle_price(&e, &base_asset, false, NormalAction::AddLiquidity);
-        get_oracle_price(&e, &quote_asset, false, NormalAction::AddLiquidity);
 
         if params.tokens.len() != 2 {
             panic_with_error!(&e, PoolValidationError::WrongInputVecSize);
