@@ -78,12 +78,25 @@ pub fn get_oracle_price(
     cached: bool,
     action: NormalAction
 ) -> OraclePriceData {
-    let oracle_price_data: OraclePriceData = e.invoke_contract(
+    let skip = true;
+    e.invoke_contract(
         &get_oracle_registry(e),
         &Symbol::new(e, "get_price"),
-        Vec::from_array(e, [asset.to_val(), cached.into_val(e), action.into_val(e)])
-    );
-    oracle_price_data
+        Vec::from_array(e, [
+            asset.to_val(),
+            cached.into_val(e),
+            action.into_val(e),
+            skip.into_val(e),
+        ])
+    )
+}
+
+pub fn get_last_oracle_price(e: &Env, asset: &Symbol) -> HistoricalOracleData {
+    e.invoke_contract(
+        &get_oracle_registry(e),
+        &Symbol::new(e, "get_last_price"),
+        Vec::from_array(e, [asset.to_val()])
+    )
 }
 
 // Calculates the peg price between the base and quote assets based on oracle prices.

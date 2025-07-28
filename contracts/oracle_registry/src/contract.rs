@@ -86,9 +86,20 @@ impl OracleRegistryTrait for OracleRegistry {
     //
     // # Panics
     // Panics with `OracleRegistryError::OracleInvalid` if the live price data fails validation.
-    fn get_price(e: Env, asset: Symbol, cached: bool, action: NormalAction) -> OraclePriceData {
+    fn get_price(
+        e: Env,
+        asset: Symbol,
+        cached: bool,
+        action: NormalAction,
+        skip_validation: bool
+    ) -> OraclePriceData {
         let now = e.ledger().timestamp();
         let oracle = get_oracle(&e, &asset);
+
+        if skip_validation {
+            return get_oracle_price(&e, &oracle.address, &asset, now);
+        }
+
         let historical_oracle_data = get_historical_oracle_data(&e, &asset);
 
         if cached || oracle.frozen {
