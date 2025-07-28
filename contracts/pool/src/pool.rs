@@ -133,10 +133,21 @@ pub fn peg_price(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -> 
 pub fn update_volume_30d(e: &Env, quote_asset_amount: u128, now: u64) {
     let since_last = max(1_u64, now.safe_sub(e, get_last_trade_ts(e)));
     let volume_30d = get_volume_30d(e);
-    set_volume_30d(
-        e,
-        &calculate_rolling_sum(e, volume_30d, quote_asset_amount, since_last, TWENTY_FOUR_HOUR)
-    );
+
+    if volume_30d == 0 {
+        set_volume_30d(e, &quote_asset_amount);
+    } else {
+        let sum = calculate_rolling_sum(
+            e,
+            volume_30d,
+            quote_asset_amount,
+            since_last,
+            TWENTY_FOUR_HOUR
+        );
+
+        set_volume_30d(e, &sum);
+    }
+
     set_last_trade_ts(e, &now);
 }
 
