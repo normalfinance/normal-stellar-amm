@@ -116,7 +116,9 @@ pub fn peg_price(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -> 
         return 0;
     }
 
-    quote_oracle_price.fixed_div_floor(e, &base_oracle_price, &PRICE_PRECISION)
+    base_oracle_price.fixed_div_floor(e, &quote_oracle_price, &PRICE_PRECISION)
+    // quote_oracle_price.checked_div(base_oracle_price).unwrap_or(0)
+    // quote_oracle_price.safe_div(e, base_oracle_price)
 }
 
 // Updates the 30 day trading volume metric for the pool using a rolling average.
