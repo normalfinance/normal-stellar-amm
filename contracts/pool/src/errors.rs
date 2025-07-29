@@ -25,6 +25,7 @@ pub enum PoolError {
     // other
     SwapReduceOnly = 217,
     PoolNotDelisted = 218,
+    WithdrawExceedsMinLiquidity = 219,
 }
 
 #[contracterror]

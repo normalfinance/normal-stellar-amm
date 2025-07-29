@@ -343,6 +343,10 @@ impl PoolTrait for Pool {
         // First deposit: mint MIN_LIQUIDITY to contract itself to prevent dust attacks
         if total_shares == 0 {
             mint_lp_tokens(&e, &e.current_contract_address(), MIN_LIQUIDITY as i128);
+            
+            let events = LiquidityPoolEvents::new(&e);
+            events.permanently_locked_liquidity(MIN_LIQUIDITY);
+            
             shares_to_mint = shares_to_mint.saturating_sub(MIN_LIQUIDITY);
         }
 
@@ -827,6 +831,10 @@ impl PoolTrait for Pool {
         burn_lp_tokens(&e, &user, share_amount);
 
         let (_, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
+
+        if total_shares - share_amount < MIN_LIQUIDITY {
+            panic_with_error!(e, PoolError::WithdrawExceedsMinLiquidity);
+        }
 
         // Transfer any remaining to the user
         transfer_b(&e, &user, share_amount);
