@@ -38,6 +38,7 @@ use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::math::safe_math::SafeMath;
 use utils::token::transfer_token;
 use utils::validate;
+use utils::validation::validate_percentages;
 
 contractmeta!(
     key = "Description",
@@ -58,7 +59,7 @@ impl InsuranceFundTrait for InsuranceFund {
         unstaking_period: u64,
         optimal_utilization: u32,
         base_rate: i32,
-        rate_slopes: (u32, u32),
+        rate_slopes: (u32, u32)
     ) {
         admin.require_auth();
 
@@ -645,14 +646,7 @@ impl InsuranceFundTrait for InsuranceFund {
 
         let (slope1, slope2) = (get_rate_slope_a(&e), get_rate_slope_b(&e));
 
-        calculate_rate(
-            &e,
-            utilization,
-            optimal_utilization,
-            base_rate,
-            slope1,
-            slope2,
-        )
+        calculate_rate(utilization, optimal_utilization, base_rate, slope1, slope2)
     }
 
     fn get_base_rate(e: Env) -> i32 {
@@ -846,10 +840,20 @@ impl AdminInterface for InsuranceFund {
         optimal_utilization: u32,
         base_rate: i32,
         rate_slope_a: u32,
-        rate_slope_b: u32,
+        rate_slope_b: u32
     ) {
         admin.require_auth();
         require_admin(&e, &admin);
+
+        validate_percentages(
+            &e,
+            &Vec::from_array(&e, [
+                optimal_utilization as i32,
+                base_rate,
+                rate_slope_a as i32,
+                rate_slope_b as i32,
+            ])
+        );
 
         set_optimal_utilization(&e, &optimal_utilization);
         set_base_rate(&e, &base_rate);
