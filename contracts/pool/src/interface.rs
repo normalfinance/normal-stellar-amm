@@ -139,6 +139,9 @@ pub trait AdminInterfaceTrait {
 
     fn set_expiry(e: Env, admin: Address, expiry_ts: u64);
 
+    // Recover minimum liquidity locked tokens when pool is delisted
+    fn recover_minimum_liquidity(e: Env, admin: Address) -> u128;
+
     //    _______     __       ____  ____   ________  _______  ________
     //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\
     //   (. |__) :) /    \    |   (  ) : |(:   \___/(: ______)(.  ___  :)

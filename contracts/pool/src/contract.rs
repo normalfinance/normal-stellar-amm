@@ -98,6 +98,7 @@ use utils::constant::{
     INSURANCE_C_MAX,
     INSURANCE_SPECULATIVE_MAX,
     MAX_POOL_FEE,
+    MIN_LIQUIDITY,
 };
 use utils::math::safe_math::SafeMath;
 use utils::state::oracle_registry::NormalAction;
@@ -337,7 +338,13 @@ impl PoolTrait for Pool {
 
         // Now calculate how many new pool shares to mint
         let total_shares = get_total_lp_tokens(&e);
-        let shares_to_mint = token_b_amount;
+        let mut shares_to_mint = token_b_amount;
+
+        // First deposit: mint MIN_LIQUIDITY to contract itself to prevent dust attacks
+        if total_shares == 0 {
+            mint_lp_tokens(&e, &e.current_contract_address(), MIN_LIQUIDITY as i128);
+            shares_to_mint = shares_to_mint.saturating_sub(MIN_LIQUIDITY);
+        }
 
         mint_lp_tokens(&e, &user, shares_to_mint as i128);
 
@@ -1139,6 +1146,29 @@ impl AdminInterfaceTrait for Pool {
         pool.status = status;
 
         set_pool(&e, &pool);
+
+        // Automatically recover minimum liquidity when pool is delisted
+        if status == PoolStatus::Delisted {
+            let contract_address = e.current_contract_address();
+            let locked_balance = get_user_balance_lp(&e, &contract_address);
+            
+            if locked_balance > 0 {
+                // Burn the locked LP tokens from contract
+                burn_lp_tokens(&e, &contract_address, locked_balance as i128);
+                
+                // Calculate the underlying Token B amount
+                let total_shares = get_total_lp_tokens(&e);
+                let reserve_b = get_reserve_b(&e);
+                let token_b_amount = if total_shares > 0 {
+                    (locked_balance * reserve_b) / total_shares
+                } else {
+                    locked_balance // fallback to 1:1 if no other shares
+                };
+                
+                // Transfer Token B to admin (operations admin or owner who delisted the pool)
+                transfer_b(&e, &admin, token_b_amount);
+            }
+        }
     }
 
     fn set_max_imbalances(
@@ -1216,6 +1246,7 @@ impl AdminInterfaceTrait for Pool {
 
         set_pool(&e, &pool);
     }
+
 
     //    _______     __       ____  ____   ________  _______  ________
     //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\
