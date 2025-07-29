@@ -8,6 +8,7 @@ pub mod macros;
 pub mod math;
 pub mod state;
 pub mod token;
+pub mod validation;
 
 pub mod test;
 #[cfg(any(test, feature = "testutils"))]
