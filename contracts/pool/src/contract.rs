@@ -117,6 +117,7 @@ use utils::state::{
 };
 use utils::token::transfer_token;
 use utils::validate;
+use utils::validation::ensure_non_zero_u128;
 
 contractmeta!(
     key = "Description",
@@ -289,6 +290,8 @@ impl PoolTrait for Pool {
         // Depositor needs to authorize the deposit
         user.require_auth();
 
+        ensure_non_zero_u128(&e, token_b_amount, PoolValidationError::ZeroAmount);
+
         if get_is_killed_deposit(&e) {
             panic_with_error!(e, PoolError::PoolDepositKilled);
         }
@@ -422,9 +425,7 @@ impl PoolTrait for Pool {
             panic_with_error!(&e, PoolValidationError::OutTokenOutOfBounds);
         }
 
-        if in_amount == 0 {
-            panic_with_error!(e, PoolValidationError::ZeroAmount);
-        }
+        ensure_non_zero_u128(&e, in_amount, PoolValidationError::ZeroAmount);
 
         let pool = get_pool(&e);
 
@@ -636,9 +637,7 @@ impl PoolTrait for Pool {
             panic_with_error!(&e, PoolValidationError::OutTokenOutOfBounds);
         }
 
-        if out_amount == 0 {
-            panic_with_error!(e, PoolValidationError::ZeroAmount);
-        }
+        ensure_non_zero_u128(&e, out_amount, PoolValidationError::ZeroAmount);
 
         // Rebalance the pool
         let now = e.ledger().timestamp();
