@@ -1,10 +1,11 @@
 use soroban_sdk::{ contracttype, Address };
+use crate::temporal::Delay;
 
 #[contracttype]
 #[derive(Default, Clone, Copy, Debug)]
 pub struct OraclePriceData {
     pub price: u128,
-    pub delay: u64,
+    pub delay: Delay,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug, Default)]
