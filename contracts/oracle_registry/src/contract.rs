@@ -1,4 +1,5 @@
 use crate::errors::OracleRegistryError;
+use utils::validation::validate_positive_denominator;
 use crate::interface::{ AdminInterface, OracleRegistryTrait };
 use crate::oracle::{ block_operation, get_oracle_price, oracle_validity, update_twap };
 use crate::storage::{
@@ -248,6 +249,7 @@ impl AdminInterface for OracleRegistry {
     // * `OracleInfo` - The successfully registered oracle metadata.
     //
     // # Panics
+    // * `OracleRegistryError::InvalidClampDenominator` if the sanitize_clamp_denominator is negative.
     // * `OracleRegistryError::OracleAlreadyRegistered` if the asset already has an oracle.
     // * `OracleRegistryError::OracleInvalid` if the provided oracle fails validation (e.g. non-positive, too stale, or volatile).
     fn register_oracle(
@@ -257,10 +259,12 @@ impl AdminInterface for OracleRegistry {
         oracle_addr: Address,
         asset_addr: Address,
         decimals: u32,
-        sanitize_clamp_denominator: i64
+        sanitize_clamp_denominator: u64
     ) -> OracleInfo {
         admin.require_auth();
         require_admin(&e, &admin);
+
+        validate_positive_denominator(&e, sanitize_clamp_denominator, OracleRegistryError::InvalidClampDenominator);
 
         if get_oracle_base(&e, &asset).is_some() {
             panic_with_error!(&e, OracleRegistryError::OracleAlreadyRegistered);
@@ -320,6 +324,7 @@ impl AdminInterface for OracleRegistry {
     // # Panics
     // * `OracleRegistryError::OracleInvalid` if the new address returns an invalid price.
     // * `OracleRegistryError::InvalidDecimals` if provided decimals exceed safe limits.
+    // * `OracleRegistryError::InvalidClampDenominator` if the sanitize_clamp_denominator is negative.
     // * `OracleRegistryError::OracleNotRegistered` if the asset does not have a registered oracle.
     fn update_oracle(
         e: Env,
@@ -356,6 +361,10 @@ impl AdminInterface for OracleRegistry {
                 if decimals > 18 {
                     panic_with_error!(&e, OracleRegistryError::InvalidDecimals);
                 }
+            }
+
+            if let Some(sanitize_clamp_denominator) = params.sanitize_clamp_denominator {
+                validate_positive_denominator(&e, sanitize_clamp_denominator, OracleRegistryError::InvalidClampDenominator);
             }
 
             let updated_oracle = OracleInfo {
