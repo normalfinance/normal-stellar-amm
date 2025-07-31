@@ -427,6 +427,7 @@ impl AdminInterface for OracleRegistry {
         // Rate limit
         // @dev The timestamp of the last override is not tracked, meaning any
         // update to the oracle will reset this counter. May be changed in the future.
+        // Update: Fixed this, now lst_updated is updated to the current time.
         if now - oracle.last_updated <= oracle_guard_rails.validity.seconds_before_stale_for_pool {
             panic_with_error!(&e, OracleRegistryError::PriceOverrideTooSoon);
         }
@@ -440,6 +441,13 @@ impl AdminInterface for OracleRegistry {
             now,
             false
         );
+
+        // Update the oracle's last_updated timestamp to enforce cooldown
+        let updated_oracle = OracleInfo {
+            last_updated: now,
+            ..oracle
+        };
+        put_oracle(&e, &asset, &updated_oracle);
     }
 
     // TODO: Add unregister oracle function - what does this mean for pools using that oracle?
