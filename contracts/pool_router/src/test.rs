@@ -308,10 +308,10 @@ fn test_simple_ongoing_reward() {
         &rewards
     );
     e.cost_estimate().budget().reset_default();
-    router.fill_liquidity(&setup.btc_asset);
+    router.fill_liquidity(&admin, &setup.btc_asset);
     e.cost_estimate().budget().print();
     e.cost_estimate().budget().reset_default();
-    let pool_tps = router.config_pool_rewards(&setup.btc_asset);
+    let pool_tps = router.config_pool_rewards(&admin, &setup.btc_asset);
     // e.cost_estimate().budget().print();
     // e.cost_estimate().budget().reset_unlimited();
 
@@ -420,10 +420,10 @@ fn test_rewards_distribution() {
         &e.ledger().timestamp().saturating_add(60),
         &rewards
     );
-    router.fill_liquidity(&setup.btc_asset);
-    router.fill_liquidity(&setup.eth_asset);
-    let pool_tps1 = router.config_pool_rewards(&setup.btc_asset);
-    let pool_tps2 = router.config_pool_rewards(&setup.eth_asset);
+    router.fill_liquidity(&admin, &setup.btc_asset);
+    router.fill_liquidity(&admin, &setup.eth_asset);
+    let pool_tps1 = router.config_pool_rewards(&admin, &setup.btc_asset);
+    let pool_tps2 = router.config_pool_rewards(&admin, &setup.eth_asset);
     assert_eq!(pool_tps1, pool_tps2);
 
     let pool_tps = pool_tps1;
@@ -511,8 +511,8 @@ fn test_rewards_distribution_as_operator() {
         &e.ledger().timestamp().saturating_add(60),
         &rewards
     );
-    router.fill_liquidity(&setup.btc_asset);
-    let pool_tps = router.config_pool_rewards(&setup.btc_asset);
+    router.fill_liquidity(&admin, &setup.btc_asset);
+    let pool_tps = router.config_pool_rewards(&admin, &setup.btc_asset);
 
     // 30 seconds passed, half of the reward is available for the user
     jump(&e, 30);
@@ -585,8 +585,8 @@ fn test_rewards_distribution_override() {
         &e.ledger().timestamp().saturating_add(60),
         &rewards
     );
-    router.fill_liquidity(&setup.btc_asset);
-    let pool_tps = router.config_pool_rewards(&setup.btc_asset);
+    router.fill_liquidity(&admin, &setup.btc_asset);
+    let pool_tps = router.config_pool_rewards(&admin, &setup.btc_asset);
 
     // 30 seconds passed, half of the reward is available
     jump(&e, 30);
@@ -598,8 +598,8 @@ fn test_rewards_distribution_override() {
     assert_eq!(router.get_total_accumulated_reward(&setup.btc_asset), pool_tps * 30);
 
     router.config_global_rewards(&admin, &0, &e.ledger().timestamp().saturating_add(10), &rewards);
-    router.fill_liquidity(&setup.btc_asset);
-    router.config_pool_rewards(&setup.btc_asset);
+    router.fill_liquidity(&admin, &setup.btc_asset);
+    router.config_pool_rewards(&admin, &setup.btc_asset);
 
     // half of the reward accumulated
     assert_eq!(router.get_total_accumulated_reward(&setup.btc_asset), pool_tps * 30);
@@ -652,7 +652,7 @@ fn test_liqidity_not_filled() {
     router.deposit(&user1, &setup.btc_asset, &1000);
     let rewards = Vec::from_array(&e, [setup.btc_asset.clone()]);
     router.config_global_rewards(&admin, &1, &e.ledger().timestamp().saturating_add(60), &rewards);
-    router.config_pool_rewards(&setup.btc_asset);
+    router.config_pool_rewards(&admin, &setup.btc_asset);
 }
 
 #[test]
@@ -683,8 +683,8 @@ fn test_fill_liqidity_reentrancy() {
     router.deposit(&user1, &setup.btc_asset, &1000);
     let rewards = Vec::from_array(&e, [setup.btc_asset.clone()]);
     router.config_global_rewards(&admin, &1, &e.ledger().timestamp().saturating_add(60), &rewards);
-    router.fill_liquidity(&setup.btc_asset);
-    router.fill_liquidity(&setup.btc_asset);
+    router.fill_liquidity(&admin, &setup.btc_asset);
+    router.fill_liquidity(&admin, &setup.btc_asset);
 }
 
 #[test]
@@ -715,9 +715,9 @@ fn test_config_pool_rewards_reentrancy() {
     router.deposit(&user1, &setup.btc_asset, &1000);
     let rewards = Vec::from_array(&e, [setup.btc_asset.clone()]);
     router.config_global_rewards(&admin, &1, &e.ledger().timestamp().saturating_add(60), &rewards);
-    router.fill_liquidity(&setup.btc_asset);
-    router.config_pool_rewards(&setup.btc_asset);
-    router.config_pool_rewards(&setup.btc_asset);
+    router.fill_liquidity(&admin, &setup.btc_asset);
+    router.config_pool_rewards(&admin, &setup.btc_asset);
+    router.config_pool_rewards(&admin, &setup.btc_asset);
 }
 
 #[test]
@@ -747,13 +747,13 @@ fn test_config_pool_rewards_after_new_global_config() {
     router.deposit(&user1, &setup.btc_asset, &1000);
     let rewards = Vec::from_array(&e, [setup.btc_asset.clone()]);
     router.config_global_rewards(&admin, &1, &e.ledger().timestamp().saturating_add(60), &rewards);
-    router.fill_liquidity(&setup.btc_asset);
-    assert_eq!(router.config_pool_rewards(&setup.btc_asset), 1);
+    router.fill_liquidity(&admin, &setup.btc_asset);
+    assert_eq!(router.config_pool_rewards(&admin, &setup.btc_asset), 1);
 
     jump(&e, 300);
     router.config_global_rewards(&admin, &1, &e.ledger().timestamp().saturating_add(60), &rewards);
-    router.fill_liquidity(&setup.btc_asset);
-    assert_eq!(router.config_pool_rewards(&setup.btc_asset), 1);
+    router.fill_liquidity(&admin, &setup.btc_asset);
+    assert_eq!(router.config_pool_rewards(&admin, &setup.btc_asset), 1);
 }
 
 #[test]
@@ -791,8 +791,8 @@ fn test_config_pool_after_liquidity_fill() {
         &e.ledger().timestamp().saturating_add(60),
         &rewards
     );
-    router.fill_liquidity(&setup.btc_asset);
-    assert_eq!(router.config_pool_rewards(&tokens, &pool_1_hash), 1_0000000);
+    router.fill_liquidity(&admin, &setup.btc_asset);
+    assert_eq!(router.config_pool_rewards(&admin, &tokens, &pool_1_hash), 1_0000000);
 
     let (pool_2_hash, _pool_2_address) = router.init_pool(
         &user1,
@@ -833,7 +833,7 @@ fn test_fill_liquidity_no_config() {
     token2.mint(&user1, &2000);
 
     router.deposit(&user1, &setup.btc_asset, &1000);
-    router.fill_liquidity(&setup.btc_asset);
+    router.fill_liquidity(&admin, &setup.btc_asset);
 }
 
 #[test]
@@ -944,7 +944,7 @@ fn test_config_rewards_no_pools_for_tokens() {
         router.get_tokens_for_reward(),
         Map::from_array(&e, [(tokens.clone(), (1_0000000, false, U256::from_u32(&e, 0)))])
     );
-    router.fill_liquidity(&setup.btc_asset);
+    router.fill_liquidity(&admin, &setup.btc_asset);
     assert_eq!(
         router.get_tokens_for_reward(),
         Map::from_array(&e, [(tokens.clone(), (1_0000000, true, U256::from_u32(&e, 0)))])
@@ -1028,8 +1028,8 @@ fn test_event_correct() {
         &e.ledger().timestamp().saturating_add(60),
         &rewards
     );
-    router.fill_liquidity(&setup.btc_asset);
-    router.config_pool_rewards(&setup.btc_asset);
+    router.fill_liquidity(&admin, &setup.btc_asset);
+    router.config_pool_rewards(&admin, &setup.btc_asset);
 
     token2.mint(&user1, &1000);
     assert_eq!(token2.balance(&user1), 1000);
@@ -1175,8 +1175,8 @@ fn test_rewards_distribution_without_outstanding_rewards() {
         &rewards
     );
 
-    router.fill_liquidity(&setup.btc_asset);
-    router.config_pool_rewards(&setup.btc_asset);
+    router.fill_liquidity(&admin, &setup.btc_asset);
+    router.config_pool_rewards(&admin, &setup.btc_asset);
 
     // check that we don't need to add rewards to pool
     assert_eq!(router.get_total_outstanding_reward(&setup.btc_asset), 0);

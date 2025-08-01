@@ -532,8 +532,8 @@ fn test_distribute_rewards() {
             &e.ledger().timestamp().saturating_add(60),
             &Vec::from_array(&e, [setup.btc_asset.clone()])
         );
-        router.fill_liquidity(&setup.btc_asset);
-        router.config_pool_rewards(&setup.btc_asset);
+        router.fill_liquidity(&addr, &setup.btc_asset);
+        router.config_pool_rewards(&addr, &setup.btc_asset);
 
         assert_eq!(
             router
