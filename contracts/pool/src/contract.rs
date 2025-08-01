@@ -334,7 +334,7 @@ impl PoolTrait for Pool {
             NormalAction::AddLiquidity
         );
 
-        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
+        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now, pool.status.clone());
 
         // Now calculate how many new pool shares to mint
         let total_shares = get_total_lp_tokens(&e);
@@ -451,7 +451,7 @@ impl PoolTrait for Pool {
             NormalAction::Swap
         );
 
-        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
+        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now, pool.status.clone());
 
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
@@ -528,7 +528,7 @@ impl PoolTrait for Pool {
         }
 
         // After swapping, rebalance the pool
-        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
+        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now, pool.status.clone());
 
         // update plane data for every pool update
         update_plane(&e);
@@ -657,7 +657,7 @@ impl PoolTrait for Pool {
             NormalAction::Swap
         );
 
-        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
+        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now, pool.status.clone());
 
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
@@ -753,7 +753,7 @@ impl PoolTrait for Pool {
         );
 
         // Rebalance the pool
-        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
+        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now, pool.status.clone());
 
         // update plane data for every pool update
         update_plane(&e);
@@ -891,7 +891,7 @@ impl PoolTrait for Pool {
             NormalAction::RemoveLiquidity
         );
 
-        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
+        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now, pool.status.clone());
 
         // Checkpoint resulting working balance
         incentives
@@ -1021,7 +1021,7 @@ impl AdminInterfaceTrait for Pool {
             NormalAction::Rebalance
         );
 
-        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
+        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now, pool.status.clone());
     }
 
     // Withdraws surplus reservess.
@@ -1121,7 +1121,7 @@ impl AdminInterfaceTrait for Pool {
         set_reserve_b(&e, &(reserve_b + insurance_withdraw));
 
         // Rebalance
-        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
+        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now, pool.status.clone());
 
         insurance_withdraw
     }
