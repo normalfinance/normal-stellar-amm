@@ -10,12 +10,18 @@ pub fn sanitize_new_price(
     last_price_twap: u128,
     sanitize_clamp_denominator: i64
 ) -> u128 {
+    assert!(new_price > 0, "new_price must be positive");
+    assert!(last_price_twap >= 0, "last_price_twap must be non-negative");
     // when/if twap is 0, dont try to normalize new_price
     if last_price_twap == 0 {
         return new_price;
     }
 
-    let new_price_spread = new_price.safe_sub(e, last_price_twap);
+    let (new_price_spread, price_is_increasing) = if new_price >= last_price_twap {
+        (new_price.safe_sub(e, last_price_twap), true)
+    } else {
+        (last_price_twap.safe_sub(e, new_price), false)
+    };
 
     // cap new oracle update to 100/MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR% delta from twap
     let sanitize_clamp_denominator = if sanitize_clamp_denominator != 0 {
@@ -32,10 +38,14 @@ pub fn sanitize_new_price(
     let price_twap_price_band = last_price_twap.safe_div(e, sanitize_clamp_denominator as u128);
 
     let capped_update_price = if new_price_spread > price_twap_price_band {
-        if new_price > last_price_twap {
+        if price_is_increasing {
             last_price_twap.safe_add(e, price_twap_price_band)
         } else {
-            last_price_twap.safe_sub(e, price_twap_price_band)
+            if price_twap_price_band >= last_price_twap {
+                0
+            } else {
+                last_price_twap.safe_sub(e, price_twap_price_band)
+            }
         }
     } else {
         new_price
