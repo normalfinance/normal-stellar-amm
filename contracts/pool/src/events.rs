@@ -38,6 +38,8 @@ pub trait PoolEvents {
 
     fn rebalance(&self, delta_a: i128, ts: u64);
 
+    fn capped_mint(&self,  base_oracle_price: u128, quote_oracle_price: u128, delta_a: i128);
+
     fn kill_deposit(&self);
 
     fn unkill_deposit(&self);
@@ -141,6 +143,13 @@ impl PoolEvents for Events {
         let e = self.env();
         e.events()
             .publish((Symbol::new(e, "rebalance"),), (delta_a, ts));
+    }
+
+
+    fn capped_mint(&self, base_oracle_price: u128, quote_oracle_price: u128, delta_a: i128) {
+        let e = self.env();
+        e.events()
+            .publish((Symbol::new(e, "capped_mint"),), (base_oracle_price, quote_oracle_price, delta_a));
     }
 
     fn kill_deposit(&self) {
