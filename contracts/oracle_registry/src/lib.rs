@@ -5,7 +5,6 @@ pub mod errors;
 mod interface;
 mod oracle;
 mod storage;
-mod storage_types;
 mod test;
 mod test_permissions;
 mod testutils;

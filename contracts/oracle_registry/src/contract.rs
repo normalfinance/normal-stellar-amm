@@ -1,12 +1,11 @@
 use crate::errors::OracleRegistryError;
-use crate::interface::{AdminInterface, OracleRegistryTrait};
-use crate::oracle::{block_operation, get_oracle_price, oracle_validity, update_twap};
 use utils::validation::validate_positive_denominator;
+use crate::interface::{AdminInterface, OracleRegistryTrait};
+use crate::oracle::{get_oracle_price, oracle_validity, update_twap};
 use crate::storage::{
     get_historical_oracle_data, get_oracle, get_oracle_base, get_oracle_guard_rails, put_oracle,
     set_oracle_guard_rails,
 };
-use crate::storage_types::{HistoricalOracleData, OracleGuardRails, OracleValidity};
 
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
@@ -23,7 +22,14 @@ use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
-use utils::state::oracle_registry::{MutableOracleInfo, NormalAction, OracleInfo, OraclePriceData};
+use utils::state::oracle_registry::{
+    MutableOracleInfo,
+    OracleGuardRails,
+    OracleInfo,
+    OraclePriceData,
+    HistoricalOracleData,
+    OracleValidity,
+};
 use utils::temporal::Delay;
 
 #[contract]
@@ -61,58 +67,50 @@ impl OracleRegistryTrait for OracleRegistry {
     // # Arguments
     // * `e` - The Soroban environment.
     // * `asset` - The asset symbol (e.g., "BTC") whose price is being requested.
-    // * `cached` - Whether to use the cached TWAP price instead of fetching a fresh one.
-    // * `action` - The context for which the price is being retrieved (e.g., Swap, Rebalance).
     //
     // # Returns
     // * `OraclePriceData` - The price and the delay (age) of the price data.
     //
     // # Panics
     // Panics with `OracleRegistryError::OracleInvalid` if the live price data fails validation.
-    fn get_price(e: Env, asset: Symbol, cached: bool, action: NormalAction) -> OraclePriceData {
-        enter(&e);
-
+    fn get_price(e: Env, asset: Symbol) -> (HistoricalOracleData, OracleValidity) {
         let now = e.ledger().timestamp();
         let oracle = get_oracle(&e, &asset);
         let historical_oracle_data = get_historical_oracle_data(&e, &asset);
 
-        if cached || oracle.frozen {
-            return OraclePriceData {
-                price: historical_oracle_data.last_oracle_price_twap,
-                delay: Delay::from_timestamp_diff_expect(
-                    now, 
-                    historical_oracle_data.last_oracle_price_twap_ts,
-                    "Historical oracle timestamp cannot be in the future"
-                ),
-            };
+        if oracle.frozen {
+            return (historical_oracle_data, OracleValidity::Frozen);
         }
 
         let oracle_price_data = get_oracle_price(&e, &oracle.address, &oracle.asset_addr, now);
 
-        let block = block_operation(
+        let oracle_validity = oracle_validity(
             &e,
-            &oracle_price_data,
             historical_oracle_data.last_oracle_price_twap,
-            oracle_price_data.price,
-            action,
+            &oracle_price_data
         );
-        if block {
-            panic_with_error!(&e, OracleRegistryError::OracleInvalid);
+
+        if oracle_validity != OracleValidity::Valid {
+            panic_with_error!(&e, oracle_validity.get_error_code());
         }
 
-        update_twap(
-            &e,
-            &asset,
-            &historical_oracle_data,
-            &oracle_price_data,
-            oracle.sanitize_clamp_denominator,
-            now,
-            false,
-        );
+        if oracle_validity != OracleValidity::Frozen {
+            update_twap(
+                &e,
+                &asset,
+                &historical_oracle_data,
+                &oracle_price_data,
+                oracle.sanitize_clamp_denominator,
+                now,
+                false
+            );
+        }
+
+        let new_historical_oracle_data = get_historical_oracle_data(&e, &asset);
 
         exit(&e);
 
-        oracle_price_data
+        (new_historical_oracle_data, oracle_validity)
     }
 
     // Gets the last historical price of the oracle.
