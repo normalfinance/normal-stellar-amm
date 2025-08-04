@@ -24,6 +24,7 @@ pub enum PoolError {
     DefaultError = 216,
     // other
     SwapReduceOnly = 217,
+    UnfairShareCalculation = 218,
 }
 
 #[contracterror]
