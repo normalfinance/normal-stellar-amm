@@ -12,4 +12,4 @@ mod test;
 mod test_permissions;
 mod testutils;
 
-pub use crate::contract::TokenClient;
+pub use crate::contract::LpTokenClient;

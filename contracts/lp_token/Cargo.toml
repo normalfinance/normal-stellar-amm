@@ -1,6 +1,6 @@
 [package]
-name = "soroban-token-contract"
-description = "Soroban standard token contract"
+name = "lp-token"
+description = "Augmented soroban token contract tracking incentives on transfer"
 version.workspace = true
 edition = "2021"
 publish = false
