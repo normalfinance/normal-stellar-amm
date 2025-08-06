@@ -84,8 +84,9 @@ fn get_pool_salt(e: &Env, asset: &Symbol) -> BytesN<32> {
 
 pub fn deploy_pool(
     e: &Env,
-    tokens: &Vec<Address>,
+    token_b: &Address,
     assets: &(Symbol, Symbol),
+    synthetic_token_info: &(String, String),
     lp_token_info: &(String, String),
     fee_fraction: u32,
     tier: &PoolTier,
@@ -101,9 +102,10 @@ pub fn deploy_pool(
 
     init_pool(
         e,
-        tokens,
+        token_b,
         assets,
         &pool_contract_id,
+        synthetic_token_info,
         lp_token_info,
         fee_fraction,
         tier,
@@ -120,7 +122,7 @@ pub fn deploy_pool(
 
     Events::new(e).add_pool(
         base_asset.clone(),
-        tokens.clone(),
+        token_b.clone(),
         pool_contract_id.clone(),
         Vec::<Val>::from_array(e, [
             fee_fraction.into_val(e),
@@ -134,9 +136,10 @@ pub fn deploy_pool(
 
 fn init_pool(
     e: &Env,
-    tokens: &Vec<Address>,
+    token_b: &Address,
     assets: &(Symbol, Symbol),
     pool_contract_id: &Address,
+    synthetic_token_info: &(String, String),
     lp_token_info: &(String, String),
     fee_fraction: u32,
     tier: &PoolTier,
@@ -174,7 +177,12 @@ fn init_pool(
             router: e.current_contract_address(),
             oracle_registry: get_oracle_registry(e),
             assets: assets.clone(),
-            tokens: tokens.clone(),
+            token_b: token_b.clone(),
+            synthetic_token_info: TokenInitInfo {
+                token_wasm_hash: token_wasm_hash.into_val(e),
+                name: synthetic_token_info.0.clone(),
+                symbol: synthetic_token_info.1.clone(),
+            },
             lp_token_info: TokenInitInfo {
                 token_wasm_hash: token_wasm_hash.into_val(e),
                 name: lp_token_info.0.clone(),

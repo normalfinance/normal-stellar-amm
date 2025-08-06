@@ -45,7 +45,12 @@ use crate::storage::{
     set_router,
     set_token_future_wasm,
 };
-use crate::token::{ create_contract, transfer_a, transfer_b };
+use crate::token::{
+    create_lp_token_contract,
+    create_synthetic_token_contract,
+    transfer_a,
+    transfer_b,
+};
 use access_control::access::{ AccessControl, AccessControlTrait };
 use access_control::emergency::{ get_emergency_mode, set_emergency_mode };
 use access_control::errors::AccessControlError;
@@ -72,7 +77,7 @@ use pool_tokens::{
     mint_lp_tokens,
     put_token_lp,
     put_token_synthetic,
-    Client as LPTokenClient,
+    Client as PoolTokenClient,
 };
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{
@@ -180,21 +185,27 @@ impl PoolTrait for Pool {
         // validate oracle assets
         let (base_asset, quote_asset) = params.assets;
 
-        if params.tokens.len() != 2 {
-            panic_with_error!(&e, PoolValidationError::WrongInputVecSize);
-        }
-
-        let token_a = params.tokens.get(0).unwrap();
-        let token_b = params.tokens.get(1).unwrap();
+        // deploy and initialize synthetic token contract
+        let synthetic_contract = create_synthetic_token_contract(
+            &e,
+            params.synthetic_token_info.token_wasm_hash,
+            &base_asset
+        );
+        PoolTokenClient::new(&e, &synthetic_contract).initialize(
+            &e.current_contract_address(),
+            &7u32,
+            &params.synthetic_token_info.name.into_val(&e),
+            &params.synthetic_token_info.symbol.into_val(&e)
+        );
 
         // deploy and initialize LP token contract
-        let share_contract = create_contract(
+        let share_contract = create_lp_token_contract(
             &e,
             params.lp_token_info.token_wasm_hash,
-            &token_a,
-            &token_b
+            &synthetic_contract,
+            &params.token_b
         );
-        LPTokenClient::new(&e, &share_contract).initialize(
+        PoolTokenClient::new(&e, &share_contract).initialize(
             &e.current_contract_address(),
             &7u32,
             &params.lp_token_info.name.into_val(&e),
@@ -206,10 +217,10 @@ impl PoolTrait for Pool {
         }
 
         put_token_lp(&e, share_contract);
-        put_token_synthetic(&e, token_a.clone());
+        put_token_synthetic(&e, synthetic_contract);
 
         let pool = PoolType {
-            token_b,
+            token_b: params.token_b,
             tier: params.tier,
             status: PoolStatus::Initialized,
             fee_fraction: params.fee_fraction,

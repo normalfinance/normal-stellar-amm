@@ -24,6 +24,7 @@ use utils::constant::TWENTY_FOUR_HOUR;
 use utils::constant::{ FEE_MULTIPLIER, PRICE_PRECISION };
 use utils::math::safe_math::SafeMath;
 use utils::math::stats::calculate_rolling_sum;
+use utils::state::oracle_registry::HistoricalOracleData;
 use utils::state::oracle_registry::NormalAction;
 use utils::state::oracle_registry::OraclePriceData;
 

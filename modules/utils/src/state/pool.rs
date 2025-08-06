@@ -166,9 +166,9 @@ pub struct InitializeParams {
     pub router: Address,
     pub oracle_registry: Address,
     pub assets: (Symbol, Symbol),
+    pub synthetic_token_info: TokenInitInfo,
     pub lp_token_info: TokenInitInfo,
-    // A vector of token addresses.
-    pub tokens: Vec<Address>,
+    pub token_b: Address,
     pub fee_fraction: u32,
     pub tier: PoolTier,
     pub quote_max_insurance: u128,

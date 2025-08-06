@@ -45,7 +45,7 @@ pub(crate) trait PoolRouterEvents {
         amount: u128
     );
 
-    fn add_pool(&self, asset: Symbol, tokens: Vec<Address>, pool: Address, init_args: Vec<Val>);
+    fn add_pool(&self, asset: Symbol, token_b: Address, pool: Address, init_args: Vec<Val>);
 
     fn config_rewards(&self, asset: Symbol, pool: Address, pool_tps: u128, expired_at: u64);
 
@@ -109,10 +109,10 @@ impl PoolRouterEvents for Events {
             );
     }
 
-    fn add_pool(&self, asset: Symbol, tokens: Vec<Address>, pool: Address, init_args: Vec<Val>) {
+    fn add_pool(&self, asset: Symbol, token_b: Address, pool: Address, init_args: Vec<Val>) {
         self.env()
             .events()
-            .publish((Symbol::new(self.env(), "add_pool"), asset), (pool, tokens, init_args));
+            .publish((Symbol::new(self.env(), "add_pool"), asset), (pool, token_b, init_args));
     }
 
     fn config_rewards(&self, asset: Symbol, pool: Address, pool_tps: u128, expired_at: u64) {

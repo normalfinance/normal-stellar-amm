@@ -941,7 +941,8 @@ impl PoolsManagementTrait for PoolRouter {
     //
     // * `admin` - The address of the admin initializing the pool.
     // * `assets` - A tuple of the base and quote asset Oracle Registry assets.
-    // * `tokens` - A vector of token addresses that the pool consists of.
+    // * `token_b` - A token address of the pool's quote token.
+    // * `synthetic_token_info` - A tuple of the Synthetic token name and symbol.
     // * `lp_token_info` - A tuple of the LP token name and symbol.
     // * `fee_fraction` - The fee fraction for the pool (in basis points).
     // * `tier` - The risk tier of the target asset.
@@ -956,7 +957,8 @@ impl PoolsManagementTrait for PoolRouter {
         e: Env,
         admin: Address,
         assets: (Symbol, Symbol),
-        tokens: Vec<Address>,
+        token_b: Address,
+        synthetic_token_info: (String, String),
         lp_token_info: (String, String),
         fee_fraction: u32,
         tier: PoolTier,
@@ -976,8 +978,9 @@ impl PoolsManagementTrait for PoolRouter {
             None =>
                 deploy_pool(
                     &e,
-                    &tokens,
+                    &token_b,
                     &assets,
+                    &synthetic_token_info,
                     &lp_token_info,
                     fee_fraction,
                     &tier,
