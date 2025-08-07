@@ -30,6 +30,10 @@ MAX_INSURANCE="$9"
 # Fixed config
 XLM="CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
 
+# Derive Synthetic token info
+# SYNTHETIC_TOKEN_NAME="Normal $NORMAL_TOKEN_NAME"
+# SYNTHETIC_TOKEN_SYMBOL="n$NORMAL_TOKEN_SYMBOL"
+
 # Derive LP token info
 LP_TOKEN_NAME="$NORMAL_TOKEN_SYMBOL-XLM LP Token"
 LP_TOKEN_SYMBOL="$NORMAL_TOKEN_SYMBOL-XLM-LP"
@@ -38,26 +42,6 @@ cd target/wasm32v1-none/release
 
 # Get admin address
 ADMIN_ADDRESS=$(soroban keys address "$IDENTITY_STRING")
-
-# Deploy synth token
-NORMAL_TOKEN_ADDR=$(soroban contract deploy \
-    --wasm soroban_token_contract.optimized.wasm \
-    --source $IDENTITY_STRING \
-    --network $NETWORK)
-
-# Initialize synth token
-soroban contract invoke \
-    --id "$NORMAL_TOKEN_ADDR" \
-    --source "$IDENTITY_STRING" \
-    --network "$NETWORK" \
-    -- \
-    initialize \
-    --admin "$ADMIN_ADDRESS" \
-    --decimal 7 \
-    --name "$NORMAL_TOKEN_NAME" \
-    --symbol "$NORMAL_TOKEN_SYMBOL"
-
-echo "✅ Normal Token '$NORMAL_TOKEN_NAME' initialized at: $NORMAL_TOKEN_ADDR"
 
 # Initialize pool
 echo "📦 Initializing $NORMAL_TOKEN_NAME/XLM pool through Pool Router..."
@@ -70,7 +54,8 @@ stellar contract invoke \
     init_pool \
     --admin "$ADMIN_ADDRESS" \
     --assets "[\"$NORMAL_TOKEN_TARGET\", \"XLM\"]" \
-    --tokens "[\"$NORMAL_TOKEN_ADDR\", \"$XLM\"]" \
+    --token_b "$XLM" \
+    --synthetic_token_info "[\"$NORMAL_TOKEN_NAME\", \"$NORMAL_TOKEN_SYMBOL\"]" \
     --lp_token_info "[\"$LP_TOKEN_NAME\", \"$LP_TOKEN_SYMBOL\"]" \
     --fee_fraction "$FEE_FRACTION" \
     --tier "$POOL_TIER" \

@@ -28,5 +28,5 @@ pub(crate) mod insurance_fund {
     soroban_sdk::contractimport!(file = "../../wasm/insurance_fund.wasm");
 }
 pub(crate) mod lp_token {
-    soroban_sdk::contractimport!(file = "../../wasm/soroban_token_contract.wasm");
+    soroban_sdk::contractimport!(file = "../../wasm/lp_token.wasm");
 }

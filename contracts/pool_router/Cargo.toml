@@ -19,6 +19,6 @@ sep-40-oracle = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
-utils = { workspace = true, features = ["testutils"] }
+utils = { workspace = true }
 sep-40-oracle = { workspace = true, features = ["testutils"] }
-pool_tokens = { workspace = true }
+token_lp = { workspace = true }

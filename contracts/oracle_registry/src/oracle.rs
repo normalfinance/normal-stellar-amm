@@ -37,7 +37,7 @@ pub fn get_oracle_price(e: &Env, oracle: &Address, asset: &Symbol, now: u64) -> 
 
     oracle_price = oracle_price_data.price as u128;
     published_ts = oracle_price_data.timestamp;
-    log!(&e, "idk");
+
     let oracle_delay = now.safe_sub(e, published_ts);
 
     OraclePriceData {
