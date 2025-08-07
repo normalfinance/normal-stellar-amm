@@ -4,7 +4,7 @@ set -e
 # Usage instructions
 usage() {
     echo "Usage:"
-    echo "  $0 <identity_string> <contract_id> <flag> <args...>"
+    echo "  $0 <identity_string> <network> <contract_id> <flag> <args...>"
     echo ""
     echo "Flags:"
     echo "  -u <unstaking_period_u64>"
@@ -14,19 +14,19 @@ usage() {
 }
 
 # Ensure minimum args
-if [ "$#" -lt 3 ]; then
+if [ "$#" -lt 4 ]; then
     usage
 fi
 
 # Inputs
-CONTRACT_ID="$2"
-FLAG="$3"
-shift 3
-
-# Config
 IDENTITY_STRING="$1"
-NETWORK="testnet"
+NETWORK="$2"
+CONTRACT_ID="$3"
+FLAG="$4"
+
 ADMIN_ADDRESS=$(soroban keys address $IDENTITY_STRING)
+
+shift 4
 
 case "$FLAG" in
 -u)
@@ -61,20 +61,21 @@ case "$FLAG" in
 
 -r)
     if [ "$#" -ne 4 ]; then
-        echo "Error: -r requires 4 args: <optimal_utilization_u32> <base_rate_i32> <rate_slope_a> <rate_slope_b>"
+        echo "Error: -r requires 4 args: <optimal_utilization_u32> <base_rate> <rate_slope_a> <rate_slope_b>"
         exit 1
     fi
+    echo $4
     stellar contract invoke \
-        --id "$CONTRACT_ID" \
-        --source "$IDENTITY_STRING" \
-        --network "$NETWORK" \
+        --id $CONTRACT_ID \
+        --source $IDENTITY_STRING \
+        --network $NETWORK \
         -- \
         set_rate_config \
-        --admin "$ADMIN_ADDRESS" \
-        --optimal_utilization "$1" \
-        --base_rate "$2" \
-        --rate_slope_a "$3" \
-        --rate_slope_b "$4"
+        --admin $ADMIN_ADDRESS \
+        --optimal_utilization $1 \
+        --base_rate $2 \
+        --rate_slope_a $3 \
+        --rate_slope_b $4
     ;;
 
 *)
