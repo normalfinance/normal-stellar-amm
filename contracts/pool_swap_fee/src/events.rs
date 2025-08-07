@@ -1,4 +1,4 @@
-use soroban_sdk::{ Address, Env, Symbol };
+use soroban_sdk::{Address, Env, Symbol};
 use utils::state::pool::SwapDirection;
 
 #[derive(Clone)]
@@ -37,7 +37,7 @@ pub(crate) trait ProviderFeeEvents {
         lp_fee: u128,
         buffer_fee: u128,
         if_premium: u128,
-        revenue_fee: u128
+        revenue_fee: u128,
     );
 
     fn claim_fees(&self, token: Address, sender: Address, amount: u128);
@@ -64,28 +64,27 @@ impl ProviderFeeEvents for Events {
         lp_fee: u128,
         buffer_fee: u128,
         if_premium: u128,
-        revenue_fee: u128
+        revenue_fee: u128,
     ) {
-        self.env()
-            .events()
-            .publish(
-                (Symbol::new(self.env(), "swap"), asset, pool, user),
-                (
-                    direction,
-                    in_amount,
-                    out_amount,
-                    fee_amount,
-                    lp_fee,
-                    buffer_fee,
-                    if_premium,
-                    revenue_fee,
-                )
-            );
+        self.env().events().publish(
+            (Symbol::new(self.env(), "swap"), asset, pool, user),
+            (
+                direction,
+                in_amount,
+                out_amount,
+                fee_amount,
+                lp_fee,
+                buffer_fee,
+                if_premium,
+                revenue_fee,
+            ),
+        );
     }
 
     fn claim_fees(&self, token: Address, sender: Address, amount: u128) {
-        self.env()
-            .events()
-            .publish((Symbol::new(self.env(), "claim_fees"),), (token, sender, amount));
+        self.env().events().publish(
+            (Symbol::new(self.env(), "claim_fees"),),
+            (token, sender, amount),
+        );
     }
 }

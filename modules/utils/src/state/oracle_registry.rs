@@ -1,4 +1,4 @@
-use soroban_sdk::{ contracttype, Address };
+use soroban_sdk::{contracttype, Address};
 
 use crate::constant::PRICE_PRECISION;
 
@@ -54,7 +54,7 @@ pub enum NormalAction {
     AddLiquidity,
     RemoveLiquidity,
     Swap,
-    UpdateTwap, // Save time-weighted average price to historical oracle data
+    UpdateTwap,     // Save time-weighted average price to historical oracle data
     Rebalance, // Mint or burn synthetic tokens (token_a) in a Pool to peg its price to an oracle
     ClaimInsurance, // Cover a pool liquidity deficit with a Buffer reserve and/or Insurance Fund stakes
 }

@@ -1,4 +1,4 @@
-use soroban_sdk::{ Address, Env, Symbol };
+use soroban_sdk::{Address, Env, Symbol};
 
 use crate::stake::StakeAction;
 
@@ -35,7 +35,7 @@ pub(crate) trait InsuranceFundEvents {
         if_shares_before: u128,
         total_if_shares_before: u128,
         if_shares_after: u128,
-        total_if_shares_after: u128
+        total_if_shares_after: u128,
     );
 
     fn collect_premium(&self, sender: Address, amount: u128);
@@ -79,21 +79,19 @@ impl InsuranceFundEvents for Events {
         if_shares_before: u128,
         total_if_shares_before: u128,
         if_shares_after: u128,
-        total_if_shares_after: u128
+        total_if_shares_after: u128,
     ) {
-        self.env()
-            .events()
-            .publish(
-                (Symbol::new(self.env(), "if_stake_record"), user, action),
-                (
-                    amount,
-                    insurance_vault_amount_before,
-                    if_shares_before,
-                    total_if_shares_before,
-                    if_shares_after,
-                    total_if_shares_after,
-                )
-            );
+        self.env().events().publish(
+            (Symbol::new(self.env(), "if_stake_record"), user, action),
+            (
+                amount,
+                insurance_vault_amount_before,
+                if_shares_before,
+                total_if_shares_before,
+                if_shares_after,
+                total_if_shares_after,
+            ),
+        );
     }
 
     fn collect_premium(&self, sender: Address, amount: u128) {

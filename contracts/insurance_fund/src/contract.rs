@@ -59,7 +59,7 @@ impl InsuranceFundTrait for InsuranceFund {
         unstaking_period: u64,
         optimal_utilization: u32,
         base_rate: i32,
-        rate_slopes: (u32, u32)
+        rate_slopes: (u32, u32),
     ) {
         admin.require_auth();
 
@@ -840,19 +840,22 @@ impl AdminInterface for InsuranceFund {
         optimal_utilization: u32,
         base_rate: i32,
         rate_slope_a: u32,
-        rate_slope_b: u32
+        rate_slope_b: u32,
     ) {
         admin.require_auth();
         require_admin(&e, &admin);
 
         validate_percentages(
             &e,
-            &Vec::from_array(&e, [
-                optimal_utilization as i32,
-                base_rate,
-                rate_slope_a as i32,
-                rate_slope_b as i32,
-            ])
+            &Vec::from_array(
+                &e,
+                [
+                    optimal_utilization as i32,
+                    base_rate,
+                    rate_slope_a as i32,
+                    rate_slope_b as i32,
+                ],
+            ),
         );
 
         set_optimal_utilization(&e, &optimal_utilization);

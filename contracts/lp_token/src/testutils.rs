@@ -2,7 +2,7 @@
 
 use crate::LpTokenClient;
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{ contract, contractimpl, Address, Env, IntoVal };
+use soroban_sdk::{contract, contractimpl, Address, Env, IntoVal};
 
 pub fn create_token<'a>(e: &Env, admin: &Address) -> LpTokenClient<'a> {
     let token = LpTokenClient::new(e, &e.register(crate::contract::LpToken {}, ()));
@@ -23,7 +23,7 @@ impl DummyPool {
         _e: Env,
         token_contract: Address,
         _user: Address,
-        _user_shares: u128
+        _user_shares: u128,
     ) {
         token_contract.require_auth();
     }

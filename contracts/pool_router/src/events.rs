@@ -1,4 +1,4 @@
-use soroban_sdk::{ Address, Env, Symbol, Val, Vec };
+use soroban_sdk::{Address, Env, Symbol, Val, Vec};
 use utils::state::pool::SwapDirection;
 
 #[derive(Clone)]
@@ -23,7 +23,7 @@ pub(crate) trait PoolRouterEvents {
         pool: Address,
         user: Address,
         amount: u128,
-        share_amount: u128
+        share_amount: u128,
     );
 
     fn swap(
@@ -33,7 +33,7 @@ pub(crate) trait PoolRouterEvents {
         user: Address,
         direction: SwapDirection,
         in_amount: u128,
-        out_amount: u128
+        out_amount: u128,
     );
 
     fn withdraw_liquidity(
@@ -42,7 +42,7 @@ pub(crate) trait PoolRouterEvents {
         pool: Address,
         user: Address,
         share_amount: u128,
-        amount: u128
+        amount: u128,
     );
 
     fn add_pool(&self, asset: Symbol, token_b: Address, pool: Address, init_args: Vec<Val>);
@@ -55,7 +55,7 @@ pub(crate) trait PoolRouterEvents {
         pool: Address,
         user: Address,
         reward_token: Address,
-        reward_amount: u128
+        reward_amount: u128,
     );
 }
 
@@ -66,14 +66,17 @@ impl PoolRouterEvents for Events {
         pool: Address,
         user: Address,
         amount: u128,
-        share_amount: u128
+        share_amount: u128,
     ) {
-        self.env()
-            .events()
-            .publish(
-                (Symbol::new(self.env(), "deposit_liquidity"), asset, pool, user),
-                (amount, share_amount)
-            );
+        self.env().events().publish(
+            (
+                Symbol::new(self.env(), "deposit_liquidity"),
+                asset,
+                pool,
+                user,
+            ),
+            (amount, share_amount),
+        );
     }
 
     fn swap(
@@ -83,14 +86,12 @@ impl PoolRouterEvents for Events {
         user: Address,
         direction: SwapDirection,
         in_amount: u128,
-        out_amount: u128
+        out_amount: u128,
     ) {
-        self.env()
-            .events()
-            .publish(
-                (Symbol::new(self.env(), "swap"), asset, pool, user),
-                (direction, in_amount, out_amount)
-            );
+        self.env().events().publish(
+            (Symbol::new(self.env(), "swap"), asset, pool, user),
+            (direction, in_amount, out_amount),
+        );
     }
 
     fn withdraw_liquidity(
@@ -99,29 +100,31 @@ impl PoolRouterEvents for Events {
         pool: Address,
         user: Address,
         share_amount: u128,
-        amount: u128
+        amount: u128,
     ) {
-        self.env()
-            .events()
-            .publish(
-                (Symbol::new(self.env(), "withdraw_liquidity"), asset, pool, user),
-                (share_amount, amount)
-            );
+        self.env().events().publish(
+            (
+                Symbol::new(self.env(), "withdraw_liquidity"),
+                asset,
+                pool,
+                user,
+            ),
+            (share_amount, amount),
+        );
     }
 
     fn add_pool(&self, asset: Symbol, token_b: Address, pool: Address, init_args: Vec<Val>) {
-        self.env()
-            .events()
-            .publish((Symbol::new(self.env(), "add_pool"), asset), (pool, token_b, init_args));
+        self.env().events().publish(
+            (Symbol::new(self.env(), "add_pool"), asset),
+            (pool, token_b, init_args),
+        );
     }
 
     fn config_rewards(&self, asset: Symbol, pool: Address, pool_tps: u128, expired_at: u64) {
-        self.env()
-            .events()
-            .publish(
-                (Symbol::new(self.env(), "config_rewards"), asset, pool),
-                (pool_tps, expired_at)
-            );
+        self.env().events().publish(
+            (Symbol::new(self.env(), "config_rewards"), asset, pool),
+            (pool_tps, expired_at),
+        );
     }
 
     fn claim(
@@ -130,13 +133,11 @@ impl PoolRouterEvents for Events {
         pool: Address,
         user: Address,
         reward_token: Address,
-        reward_amount: u128
+        reward_amount: u128,
     ) {
-        self.env()
-            .events()
-            .publish(
-                (Symbol::new(self.env(), "claim"), asset, pool, user),
-                (reward_token, reward_amount)
-            );
+        self.env().events().publish(
+            (Symbol::new(self.env(), "claim"), asset, pool, user),
+            (reward_token, reward_amount),
+        );
     }
 }

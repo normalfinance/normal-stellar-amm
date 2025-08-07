@@ -1,4 +1,4 @@
-use soroban_sdk::{ Address, Env, Symbol };
+use soroban_sdk::{Address, Env, Symbol};
 
 #[derive(Clone)]
 pub(crate) struct Events(Env);
@@ -24,7 +24,7 @@ pub(crate) trait BufferEvents {
         token: Address,
         user: Address,
         amount: u128,
-        paid: u128
+        paid: u128,
     );
 
     fn withdraw_surplus(&self, token: Address, user: Address, amount: u128);
@@ -61,20 +61,23 @@ impl BufferEvents for Events {
         token: Address,
         user: Address,
         amount: u128,
-        paid: u128
+        paid: u128,
     ) {
-        self.env()
-            .events()
-            .publish(
-                (Symbol::new(self.env(), "resolve_liquidity_deficit"), pool, token),
-                (user, amount, paid)
-            );
+        self.env().events().publish(
+            (
+                Symbol::new(self.env(), "resolve_liquidity_deficit"),
+                pool,
+                token,
+            ),
+            (user, amount, paid),
+        );
     }
 
     fn withdraw_surplus(&self, token: Address, user: Address, amount: u128) {
-        self.env()
-            .events()
-            .publish((Symbol::new(self.env(), "withdraw_surplus"), token), (user, amount));
+        self.env().events().publish(
+            (Symbol::new(self.env(), "withdraw_surplus"), token),
+            (user, amount),
+        );
     }
 
     fn skim(&self, token: Address, user: Address, amount: i128) {
@@ -104,14 +107,16 @@ impl BufferEvents for Events {
     }
 
     fn kill_resolve_liquidity_deficit(&self) {
-        self.env()
-            .events()
-            .publish((Symbol::new(self.env(), "kill_resolve_liquidity_deficit"),), ())
+        self.env().events().publish(
+            (Symbol::new(self.env(), "kill_resolve_liquidity_deficit"),),
+            (),
+        )
     }
 
     fn unkill_resolve_liquidity_deficit(&self) {
-        self.env()
-            .events()
-            .publish((Symbol::new(self.env(), "unkill_resolve_liquidity_deficit"),), ())
+        self.env().events().publish(
+            (Symbol::new(self.env(), "unkill_resolve_liquidity_deficit"),),
+            (),
+        )
     }
 }

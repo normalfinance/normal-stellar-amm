@@ -1,12 +1,12 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::storage_types::{ OracleGuardRails, PriceDivergenceGuardRails };
-use crate::testutils::{ Setup, TestConfig };
+use crate::storage_types::{OracleGuardRails, PriceDivergenceGuardRails};
+use crate::testutils::{Setup, TestConfig};
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{ Address, Vec };
-use utils::constant::{ FIVE_MINUTE, ONE_HOUR, ONE_MINUTE, TWENTY_FOUR_HOUR };
-use utils::state::oracle_registry::{ MutableOracleInfo, NormalAction, OracleInfo };
+use soroban_sdk::{Address, Vec};
+use utils::constant::{FIVE_MINUTE, ONE_HOUR, ONE_MINUTE, TWENTY_FOUR_HOUR};
+use utils::state::oracle_registry::{MutableOracleInfo, NormalAction, OracleInfo};
 use utils::test_utils::jump;
 
 // #[test]
@@ -139,16 +139,23 @@ use utils::test_utils::jump;
 fn test_register_oracle() {
     let setup = Setup::default();
     // jump(&setup.env, 100);
-    setup.registry.register_oracle(&setup.admin, &setup.eth_asset_id, &setup.oracle, &14, &0);
-    assert_eq!(setup.registry.get_oracle(&setup.eth_asset_id), OracleInfo {
-        address: setup.oracle,
-        decimals: 14,
-        frozen: false,
-        sanitize_clamp_denominator: 0,
-        last_updated: setup.env.ledger().timestamp(),
-    });
+    setup
+        .registry
+        .register_oracle(&setup.admin, &setup.eth_asset_id, &setup.oracle, &14, &0);
+    assert_eq!(
+        setup.registry.get_oracle(&setup.eth_asset_id),
+        OracleInfo {
+            address: setup.oracle,
+            decimals: 14,
+            frozen: false,
+            sanitize_clamp_denominator: 0,
+            last_updated: setup.env.ledger().timestamp(),
+        }
+    );
 
-    setup.registry.get_price(&setup.btc_asset_id, &true, &NormalAction::Swap);
+    setup
+        .registry
+        .get_price(&setup.btc_asset_id, &true, &NormalAction::Swap);
     setup.registry.get_oracle(&setup.btc_asset_id);
     setup.registry.get_last_price(&setup.btc_asset_id);
 }

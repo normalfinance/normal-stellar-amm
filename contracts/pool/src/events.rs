@@ -1,6 +1,6 @@
 #![no_std]
 
-use soroban_sdk::{ Address, Env, Symbol };
+use soroban_sdk::{Address, Env, Symbol};
 
 #[derive(Clone)]
 pub struct Events(Env);
@@ -37,7 +37,7 @@ pub trait PoolEvents {
         token_out: Address,
         in_amount: u128,
         out_amount: u128,
-        fee_amount: u128
+        fee_amount: u128,
     );
 
     fn rebalance(
@@ -46,7 +46,7 @@ pub trait PoolEvents {
         reserve_b: u128,
         new_reserve_a: u128,
         new_reserve_b: u128,
-        delta_a: i128
+        delta_a: i128,
     );
 
     //    _______     __       ____  ____   ________  _______  ________
@@ -87,7 +87,7 @@ impl PoolEvents for Events {
         let e = self.env();
         e.events().publish(
             (Symbol::new(e, "deposit_liquidity"), token, user),
-            (amount, share_amount)
+            (amount, share_amount),
         );
     }
 
@@ -95,7 +95,7 @@ impl PoolEvents for Events {
         let e = self.env();
         e.events().publish(
             (Symbol::new(e, "withdraw_liquidity"), token, user),
-            (share_amount, amount)
+            (share_amount, amount),
         );
     }
 
@@ -106,12 +106,12 @@ impl PoolEvents for Events {
         token_out: Address,
         in_amount: u128,
         out_amount: u128,
-        fee_amount: u128
+        fee_amount: u128,
     ) {
         let e = self.env();
         e.events().publish(
             (Symbol::new(e, "swap"), token_in, token_out, user),
-            (in_amount as i128, out_amount as i128, fee_amount as i128)
+            (in_amount as i128, out_amount as i128, fee_amount as i128),
         );
     }
 
@@ -121,12 +121,12 @@ impl PoolEvents for Events {
         reserve_b: u128,
         new_reserve_a: u128,
         new_reserve_b: u128,
-        delta_a: i128
+        delta_a: i128,
     ) {
         let e = self.env();
         e.events().publish(
             (Symbol::new(e, "rebalance"),),
-            (reserve_a, reserve_b, new_reserve_a, new_reserve_b, delta_a)
+            (reserve_a, reserve_b, new_reserve_a, new_reserve_b, delta_a),
         );
     }
 

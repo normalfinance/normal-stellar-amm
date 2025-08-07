@@ -1,11 +1,6 @@
-use soroban_sdk::{ Address, BytesN, Env, Map, Symbol, Vec };
+use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Vec};
 use utils::state::pool::{
-    InitializeAllParams,
-    InitializeParams,
-    PoolInfo,
-    PoolStatus,
-    PoolTier,
-    SwapDirection,
+    InitializeAllParams, InitializeParams, PoolInfo, PoolStatus, PoolTier, SwapDirection,
 };
 
 pub trait PoolCrunch {
@@ -38,7 +33,7 @@ pub trait PoolTrait {
         user: Address,
         direction: SwapDirection,
         in_amount: u128,
-        out_min: u128
+        out_min: u128,
     ) -> u128;
 
     // Estimate amount of coins to retrieve using swap function
@@ -54,14 +49,14 @@ pub trait PoolTrait {
         user: Address,
         direction: SwapDirection,
         out_amount: u128,
-        in_max: u128
+        in_max: u128,
     ) -> u128;
 
     // Estimate amount of coins to retrieve using swap_strict_receive function
     fn estimate_swap_strict_receive(
         e: Env,
         direction: SwapDirection,
-        out_amount: u128
+        out_amount: u128,
     ) -> (u128, i128);
 
     // Remove liquidity
@@ -121,7 +116,7 @@ pub trait AdminInterfaceTrait {
         rewards_admin: Address,
         operations_admin: Address,
         pause_admin: Address,
-        emergency_pause_admins: Vec<Address>
+        emergency_pause_admins: Vec<Address>,
     );
 
     fn set_fee(e: Env, admin: Address, fee_fraction: u32);
@@ -134,7 +129,7 @@ pub trait AdminInterfaceTrait {
         e: Env,
         admin: Address,
         liquidity_max_imbalance: u128,
-        quote_max_insurance: u128
+        quote_max_insurance: u128,
     );
 
     fn set_expiry(e: Env, admin: Address, expiry_ts: u64);
@@ -175,7 +170,7 @@ pub trait UpgradeableContract {
         e: Env,
         admin: Address,
         new_wasm_hash: BytesN<32>,
-        new_token_wasm_hash: BytesN<32>
+        new_token_wasm_hash: BytesN<32>,
     );
     fn apply_upgrade(e: Env, admin: Address) -> (BytesN<32>, BytesN<32>);
     fn revert_upgrade(e: Env, admin: Address);
@@ -227,7 +222,7 @@ pub trait IncentivesTrait {
         e: Env,
         token_contract: Address,
         user: Address,
-        user_shares: u128
+        user_shares: u128,
     );
 
     // Get total amount of accumulated reward for the pool

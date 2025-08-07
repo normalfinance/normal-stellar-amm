@@ -1,11 +1,11 @@
 #![cfg(test)]
 extern crate std;
-use crate::storage_types::{ OracleGuardRails, PriceDivergenceGuardRails, ValidityGuardRails };
+use crate::storage_types::{OracleGuardRails, PriceDivergenceGuardRails, ValidityGuardRails};
 use crate::OracleRegistryClient;
-use sep_40_oracle::testutils::{ Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM };
-use soroban_sdk::testutils::{ Ledger, LedgerInfo, Address as _ };
+use sep_40_oracle::testutils::{Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM};
+use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
 
-use soroban_sdk::{ Address, Env, Symbol, Vec };
+use soroban_sdk::{Address, Env, Symbol, Vec};
 use std::vec;
 use utils::constant::PERCENTAGE_PRECISION_U64;
 // use utils::test_utils::jump;
@@ -97,7 +97,7 @@ impl Setup<'_> {
             &base,
             &Vec::from_array(&e, [asset_1.clone(), asset_2.clone()]),
             14,
-            300
+            300,
         );
 
         // ===
@@ -266,7 +266,7 @@ fn setup_price_feed_oracle<'a>(
     base: &MockAsset,
     assets: &Vec<MockAsset>,
     decimals: u32,
-    resolution: u32
+    resolution: u32,
 ) -> (Address, MockPriceOracleClient<'a>) {
     let oracle_id = env.register(MockPriceOracleWASM, ());
     let oracle_client = MockPriceOracleClient::new(env, &oracle_id);
