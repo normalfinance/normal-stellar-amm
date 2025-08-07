@@ -17,7 +17,7 @@
     "contracts:upgrade:revert": "./scripts/admin/upgrade/revert.sh admin",
     "pool:deploy": "./scripts/admin/pool/deploy.sh admin",
     "pool:deposit": "./scripts/admin/pool/deposit.sh admin",
-    "pool:withdraw": "./scripts/admin/pool/withdrawy.sh admin",
+    "pool:withdraw": "./scripts/admin/pool/withdraw.sh admin",
     "pool:update": "./scripts/admin/pool/update.sh admin",
     "oracle:register": "./scripts/admin/oracle/register.sh admin",
     "oracle:update": "./scripts/admin/oracle/update.sh admin",
