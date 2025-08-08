@@ -254,7 +254,7 @@ impl Setup<'_> {
         //     &Vec::from_array(&e, [emergency_pause_admin.clone()])
         // );
         // router.set_pool_hash(&admin, &pool_hash);
-        // router.set_token_hash(&admin, &token_hash);
+        // router.set_lp_token_hash(&admin, &token_hash);
         // router.set_reward_token(&admin, &reward_token.address);
 
         let emergency_admin = Address::generate(&e);

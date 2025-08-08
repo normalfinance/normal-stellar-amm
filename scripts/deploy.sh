@@ -20,6 +20,7 @@ echo "Contracts compiled."
 echo "Optimize contracts..."
 
 soroban contract optimize --wasm soroban_token_contract.wasm
+soroban contract optimize --wasm lp_token.wasm
 soroban contract optimize --wasm pool.wasm
 soroban contract optimize --wasm pool_router.wasm
 soroban contract optimize --wasm buffer.wasm

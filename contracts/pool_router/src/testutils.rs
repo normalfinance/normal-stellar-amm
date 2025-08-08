@@ -59,6 +59,13 @@ pub fn install_liq_pool_hash(e: &Env) -> BytesN<32> {
     e.deployer().upload_contract_wasm(pool::WASM)
 }
 
+pub fn install_lp_token_wasm(e: &Env) -> BytesN<32> {
+    soroban_sdk::contractimport!(
+        file = "../../target/wasm32v1-none/release/lp_token.wasm"
+    );
+    e.deployer().upload_contract_wasm(WASM)
+}
+
 pub fn install_token_wasm(e: &Env) -> BytesN<32> {
     soroban_sdk::contractimport!(
         file = "../../target/wasm32v1-none/release/soroban_token_contract.wasm"
@@ -186,7 +193,8 @@ impl Setup<'_> {
 
         // Pool Router
         let pool_hash = install_liq_pool_hash(&e);
-        let token_hash = install_token_wasm(&e);
+        let lp_token_hash = install_lp_token_wasm(&e);
+        let synthetic_token_hash = install_token_wasm(&e);
         let router = create_pool_router_contract(&e);
         router.init_admin(&admin);
         let rewards_admin = soroban_sdk::Address::generate(&e);
@@ -201,7 +209,8 @@ impl Setup<'_> {
             &Vec::from_array(&e, [emergency_pause_admin.clone()])
         );
         router.set_pool_hash(&admin, &pool_hash);
-        router.set_token_hash(&admin, &token_hash);
+        router.set_lp_token_hash(&admin, &lp_token_hash);
+        router.set_synthetic_token_hash(&admin, &synthetic_token_hash);
         router.set_reward_token(&admin, &reward_token.address);
 
         let emergency_admin = Address::generate(&e);

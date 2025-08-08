@@ -36,12 +36,14 @@ POOL_SWAP_FEE="CAY7BBIZNUS3QAFHE7U6FI62SRCQIVXMPWNHWDBOJUE2YO4IKADBWIXN"
 POOL_PLANE_ADDR="CAUP3NEKZ3ZHHK5JEMRXP7GQ7PC4BABSBSTRBDZ3WVY7VIEEH4M4XPXW"
 LIQUIDITY_CALCULATOR_ADDR="CCDDTBUR7QFOS33HL4THNO7CZ6J25H7AUINYCKPIFQFZKLWLI26WE7BE"
 
-# TOKEN_WASM_HASH=""
-# POOL_WASM_HASH=""
+echo "Deploy the lp_token and capture its contract ID hash..."
 
-echo "Deploy the soroban_token_contract and capture its contract ID hash..."
+LP_TOKEN_WASM_HASH=$(soroban contract upload \
+    --wasm lp_token.optimized.wasm \
+    --source $IDENTITY_STRING \
+    --network $NETWORK)
 
-TOKEN_WASM_HASH=$(soroban contract upload \
+SYNTHETIC_TOKEN_WASM_HASH=$(soroban contract upload \
     --wasm soroban_token_contract.optimized.wasm \
     --source $IDENTITY_STRING \
     --network $NETWORK)
@@ -120,9 +122,18 @@ stellar contract invoke \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     -- \
-    set_token_hash \
+    set_lp_token_hash \
     --admin $ADMIN_ADDRESS \
-    --new_hash $TOKEN_WASM_HASH
+    --new_hash $LP_TOKEN_WASM_HASH
+
+stellar contract invoke \
+    --id $POOL_ROUTER_ADDR \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    -- \
+    set_synthetic_token_hash \
+    --admin $ADMIN_ADDRESS \
+    --new_hash $SYNTHETIC_TOKEN_WASM_HASH
 
 stellar contract invoke \
     --id $POOL_ROUTER_ADDR \

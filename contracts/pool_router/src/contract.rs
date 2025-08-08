@@ -27,7 +27,8 @@ use crate::storage::{
     set_reward_tokens,
     set_reward_tokens_detailed,
     set_rewards_config,
-    set_token_hash,
+    set_lp_token_hash,
+    set_synthetic_token_hash,
     GlobalRewardsConfig,
     PoolRewardInfo,
 };
@@ -474,10 +475,17 @@ impl AdminInterface for PoolRouter {
     }
 
     // Sets the liquidity pool share token wasm hash.
-    fn set_token_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
+    fn set_lp_token_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-        set_token_hash(&e, &new_hash);
+        set_lp_token_hash(&e, &new_hash);
+    }
+
+    // Sets the synthetic token wasm hash.
+    fn set_synthetic_token_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        set_synthetic_token_hash(&e, &new_hash);
     }
 
     // Sets the pool wasm hash.
