@@ -2,27 +2,14 @@
 extern crate std;
 
 use crate::testutils::Setup;
-use crate::testutils::{ self, create_plane_contract };
+use crate::testutils::{self, create_plane_contract};
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::{
-    AuthorizedFunction,
-    AuthorizedInvocation,
-    Events,
-    MockAuth,
-    MockAuthInvoke,
+    AuthorizedFunction, AuthorizedInvocation, Events, MockAuth, MockAuthInvoke,
 };
 use soroban_sdk::{log, String};
 use soroban_sdk::{
-    symbol_short,
-    testutils::Address as _,
-    vec,
-    Address,
-    FromVal,
-    IntoVal,
-    Map,
-    Symbol,
-    Val,
-    Vec,
+    symbol_short, testutils::Address as _, vec, Address, FromVal, IntoVal, Map, Symbol, Val, Vec,
     U256,
 };
 use utils::state::pool::PoolTier;
@@ -42,7 +29,10 @@ fn test_pool() {
     let router = setup.router;
     // let [token1, token2, _, _] = setup.tokens;
 
-    let tokens = Vec::from_array(&e, [setup.token1.address.clone(), setup.token2.address.clone()]);
+    let tokens = Vec::from_array(
+        &e,
+        [setup.token1.address.clone(), setup.token2.address.clone()],
+    );
 
     // let user1 = Address::generate(&e);
     // setup.reward_token.mint(&user1, &10_0000000);
@@ -51,15 +41,23 @@ fn test_pool() {
         &setup.admin,
         &(Symbol::new(&e, "BTC"), Symbol::new(&e, "XLM")),
         &setup.token2.address.clone(),
-        &(String::from_str(&e, "Normal Bitcoin"), String::from_str(&e, "nBTC")),
-        &(String::from_str(&e, "Pool Share Token"), String::from_str(&e, "Pool Share Token")),
+        &(
+            String::from_str(&e, "Normal Bitcoin"),
+            String::from_str(&e, "nBTC"),
+        ),
+        &(
+            String::from_str(&e, "Pool Share Token"),
+            String::from_str(&e, "Pool Share Token"),
+        ),
         &30,
         &PoolTier::A,
-        &1_000_000_u128
+        &1_000_000_u128,
     );
 
     // Depopsit
-    setup.token2_admin_client.mint(&setup.users[1], &100_000_0000000);
+    setup
+        .token2_admin_client
+        .mint(&setup.users[1], &100_000_0000000);
 
     let (x, y) = router.deposit(&setup.users[1], &setup.btc_asset_id, &10000_0000000);
 

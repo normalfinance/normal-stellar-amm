@@ -6,7 +6,7 @@ use crate::contracts::pool::InsuranceClaim;
 use crate::testutils::Setup;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::TokenClient;
-use soroban_sdk::{ vec, Address, IntoVal, Symbol, Vec };
+use soroban_sdk::{vec, Address, IntoVal, Symbol, Vec};
 use utils::constant::ONE_MINUTE;
 use utils::test_utils::jump;
 
@@ -133,7 +133,9 @@ fn test_add_liquidity() {
     // Depopsit
     setup.token2_admin_client.mint(&users[1], &100_000_0000000);
 
-    let (x, y) = setup.router.deposit(&users[1], &setup.btc_asset_id, &10000_0000000);
+    let (x, y) = setup
+        .router
+        .deposit(&users[1], &setup.btc_asset_id, &10000_0000000);
 
     let reserves = setup.router.get_reserves(&setup.btc_asset_id);
 
@@ -225,7 +227,6 @@ fn test_add_liquidity() {
 //     );
 
 //     /* Pool */
-
 //     // [x] Ensure pool price is still pegged to the oracle price
 //     let updated_reserves = setup.router.get_reserves(&setup.tokens, &setup.pool_index);
 //     let pool_price = updated_reserves.get(1).unwrap() / updated_reserves.get(0).unwrap();
@@ -239,7 +240,6 @@ fn test_add_liquidity() {
 //     let protocol_fee = fee_amount - lp_fee - buffer_fee - if_fee;
 
 //     /* Buffer */
-
 //     // [x] Ensure the Buffer received a deposit() of token2
 //     assert_eq!(
 //         setup.token2.balance(&setup.buffer.address),
@@ -273,7 +273,6 @@ fn test_add_liquidity() {
 //     );
 
 //     /* Insurance Fund */
-
 //     // [x] Ensure the IF received a pay_premium() of token2
 //     assert_eq!(
 //         setup.token2.balance(&setup.insurance_fund.address),
@@ -301,7 +300,6 @@ fn test_add_liquidity() {
 //     );
 
 //     /* Incentives */
-
 //     // [x] Ensure `fee_growth_b` incentive data is increased
 //     let fee_growth_b = lp_fee / pool_tokens::get_total_lp_tokens(&setup.env);
 //     let new_fee_growth_b = incentives_info.get("fee_b").unwrap() + fee_growth_b;
@@ -315,7 +313,6 @@ fn test_add_liquidity() {
 //     );
 
 //     /* Pool Swap Fee */
-
 //     // [x] Ensure any remaining fee is kept in the contract as revenue
 //     assert_eq!(
 //         setup.token2.balance(&setup.fee_collector.address),

@@ -3,8 +3,8 @@
 use crate::testutils::Setup;
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{ symbol_short, Address };
-use utils::test_utils::{ install_dummy_wasm, jump };
+use soroban_sdk::{symbol_short, Address};
+use utils::test_utils::{install_dummy_wasm, jump};
 
 // test transfer ownership
 #[test]
@@ -17,7 +17,9 @@ fn test_transfer_ownership_too_early() {
 
     collector.commit_transfer_ownership(&admin_original, &symbol_short!("Admin"), &admin_new);
     // check admin not changed yet by calling protected method
-    assert!(collector.try_revert_transfer_ownership(&admin_new, &symbol_short!("Admin")).is_err());
+    assert!(collector
+        .try_revert_transfer_ownership(&admin_new, &symbol_short!("Admin"))
+        .is_err());
     jump(&setup.env, ADMIN_ACTIONS_DELAY - 1);
     collector.apply_transfer_ownership(&admin_original, &symbol_short!("Admin"));
 }
@@ -55,7 +57,9 @@ fn test_transfer_ownership_reverted() {
 
     collector.commit_transfer_ownership(&admin_original, &symbol_short!("Admin"), &admin_new);
     // check admin not changed yet by calling protected method
-    assert!(collector.try_revert_transfer_ownership(&admin_new, &symbol_short!("Admin")).is_err());
+    assert!(collector
+        .try_revert_transfer_ownership(&admin_new, &symbol_short!("Admin"))
+        .is_err());
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     collector.revert_transfer_ownership(&admin_original, &symbol_short!("Admin"));
     collector.apply_transfer_ownership(&admin_original, &symbol_short!("Admin"));
@@ -70,7 +74,9 @@ fn test_transfer_ownership() {
 
     collector.commit_transfer_ownership(&admin_original, &symbol_short!("Admin"), &admin_new);
     // check admin not changed yet by calling protected method
-    assert!(collector.try_revert_transfer_ownership(&admin_new, &symbol_short!("Admin")).is_err());
+    assert!(collector
+        .try_revert_transfer_ownership(&admin_new, &symbol_short!("Admin"))
+        .is_err());
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     collector.apply_transfer_ownership(&admin_original, &symbol_short!("Admin"));
 
@@ -83,12 +89,16 @@ fn test_upgrade_third_party_user() {
     let setup = Setup::default();
     let token = setup.token;
     let user = Address::generate(&setup.env);
-    assert!(token.try_upgrade(&user, &install_dummy_wasm(&setup.env)).is_err());
+    assert!(token
+        .try_upgrade(&user, &install_dummy_wasm(&setup.env))
+        .is_err());
 }
 
 #[test]
 fn test_upgrade_admin() {
     let setup = Setup::default();
     let token = setup.token;
-    assert!(token.try_upgrade(&setup.admin, &install_dummy_wasm(&setup.env)).is_ok());
+    assert!(token
+        .try_upgrade(&setup.admin, &install_dummy_wasm(&setup.env))
+        .is_ok());
 }

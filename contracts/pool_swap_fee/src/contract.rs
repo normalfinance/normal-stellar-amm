@@ -1,59 +1,38 @@
 use core::cmp::max;
 
 use crate::errors::Error;
-use crate::events::{ Events, ProviderFeeEvents };
+use crate::events::{Events, ProviderFeeEvents};
 use crate::incentives::get_incentives_manager;
-use crate::interface::{ AdminInterface, PoolSwapFeeInterface };
+use crate::interface::{AdminInterface, PoolSwapFeeInterface};
 use crate::storage::{
-    get_buffer,
-    get_buffer_fraction,
-    get_fee_destination,
-    get_insurance_fund,
-    get_last_trade_ts,
-    get_lp_revenue_fraction,
-    get_router,
-    get_volume_30d,
-    set_buffer,
-    set_buffer_fraction,
-    set_fee_destination,
-    set_insurance_fund,
-    set_lp_revenue_fraction,
-    set_router,
-    set_volume_30d,
+    get_buffer, get_buffer_fraction, get_fee_destination, get_insurance_fund, get_last_trade_ts,
+    get_lp_revenue_fraction, get_router, get_volume_30d, set_buffer, set_buffer_fraction,
+    set_fee_destination, set_insurance_fund, set_lp_revenue_fraction, set_router, set_volume_30d,
 };
-use access_control::access::{ AccessControl, AccessControlTrait };
-use access_control::emergency::{ get_emergency_mode, set_emergency_mode };
+use access_control::access::{AccessControl, AccessControlTrait};
+use access_control::emergency::{get_emergency_mode, set_emergency_mode};
 use access_control::errors::AccessControlError;
 use access_control::events::Events as AccessControlEvents;
 use access_control::interface::TransferableContract;
-use access_control::management::{ MultipleAddressesManagementTrait, SingleAddressManagementTrait };
+use access_control::management::{MultipleAddressesManagementTrait, SingleAddressManagementTrait};
 use access_control::role::Role;
 use access_control::role::SymbolRepresentation;
 use access_control::transfer::TransferOwnershipTrait;
 use access_control::utils::require_admin;
-use token_lp::{ get_total_lp_tokens, get_user_balance_lp };
 use soroban_fixed_point_math::FixedPoint;
-use soroban_sdk::auth::{ ContractContext, InvokerContractAuthEntry, SubContractInvocation };
+use soroban_sdk::auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation};
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
-    contract,
-    contractimpl,
-    panic_with_error,
-    vec,
-    Address,
-    BytesN,
-    Env,
-    IntoVal,
-    Symbol,
-    Vec,
+    contract, contractimpl, panic_with_error, vec, Address, BytesN, Env, IntoVal, Symbol, Vec,
 };
+use token_lp::{get_total_lp_tokens, get_user_balance_lp};
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
-use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
-use utils::constant::{ FEE_DENOMINATOR, PRICE_PRECISION, THIRTY_DAY };
+use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
+use utils::constant::{FEE_DENOMINATOR, PRICE_PRECISION, THIRTY_DAY};
 use utils::math::safe_math::SafeMath;
 use utils::math::stats::calculate_rolling_sum;
-use utils::state::pool::{ PoolInfo, SwapDirection };
+use utils::state::pool::{PoolInfo, SwapDirection};
 use utils::token::transfer_token;
 
 #[contract]
@@ -107,7 +86,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         asset: Symbol,
         direction: SwapDirection,
         in_amount: u128,
-        out_min: u128
+        out_min: u128,
     ) -> u128 {
         user.require_auth();
 
@@ -118,16 +97,34 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         let pool_info: PoolInfo = e.invoke_contract(
             &router,
             &Symbol::new(&e, "query_pool_details"),
-            Vec::from_array(&e, [e.current_contract_address().to_val(), asset.clone().to_val()])
+            Vec::from_array(
+                &e,
+                [
+                    e.current_contract_address().to_val(),
+                    asset.clone().to_val(),
+                ],
+            ),
         );
 
         let (token_in, token_out) = if direction == SwapDirection::Buy {
-            (pool_info.pool_response.token_b.address, pool_info.pool_response.token_a.address)
+            (
+                pool_info.pool_response.token_b.address,
+                pool_info.pool_response.token_a.address,
+            )
         } else {
-            (pool_info.pool_response.token_a.address, pool_info.pool_response.token_b.address)
+            (
+                pool_info.pool_response.token_a.address,
+                pool_info.pool_response.token_b.address,
+            )
         };
 
-        transfer_token(&e, &token_in, &user, &e.current_contract_address(), &(in_amount as i128));
+        transfer_token(
+            &e,
+            &token_in,
+            &user,
+            &e.current_contract_address(),
+            &(in_amount as i128),
+        );
 
         // Always collect the fee in token_b
         let mut fee_amount = 0;
@@ -138,47 +135,47 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         // Update fee if on token_in
         if direction == SwapDirection::Buy {
             quote_asset_amount = in_amount;
-            fee_amount =
-                (in_amount * (pool_info.pool_response.pool.fee_fraction as u128)) /
-                (FEE_DENOMINATOR as u128);
+            fee_amount = (in_amount * (pool_info.pool_response.pool.fee_fraction as u128))
+                / (FEE_DENOMINATOR as u128);
             in_amount_mut = in_amount - fee_amount;
         }
 
-        e.authorize_as_current_contract(
-            vec![
-                &e,
-                InvokerContractAuthEntry::Contract(SubContractInvocation {
-                    context: ContractContext {
-                        contract: token_in.clone(),
-                        fn_name: Symbol::new(&e, "transfer"),
-                        args: (
-                            e.current_contract_address(),
-                            router.clone(),
-                            in_amount_mut as i128,
-                        ).into_val(&e),
-                    },
-                    sub_invocations: vec![&e],
-                })
-            ]
-        );
+        e.authorize_as_current_contract(vec![
+            &e,
+            InvokerContractAuthEntry::Contract(SubContractInvocation {
+                context: ContractContext {
+                    contract: token_in.clone(),
+                    fn_name: Symbol::new(&e, "transfer"),
+                    args: (
+                        e.current_contract_address(),
+                        router.clone(),
+                        in_amount_mut as i128,
+                    )
+                        .into_val(&e),
+                },
+                sub_invocations: vec![&e],
+            }),
+        ]);
         let amount_out: u128 = e.invoke_contract(
             &router,
             &Symbol::new(&e, "swap"),
-            Vec::from_array(&e, [
-                user.clone().to_val(),
-                asset.clone().to_val(),
-                direction.clone().into_val(&e),
-                in_amount_mut.into_val(&e),
-                out_min.into_val(&e),
-            ])
+            Vec::from_array(
+                &e,
+                [
+                    user.clone().to_val(),
+                    asset.clone().to_val(),
+                    direction.clone().into_val(&e),
+                    in_amount_mut.into_val(&e),
+                    out_min.into_val(&e),
+                ],
+            ),
         );
 
         // Update fee if on token_out
         if direction == SwapDirection::Sell {
             quote_asset_amount = amount_out;
-            fee_amount =
-                (amount_out * (pool_info.pool_response.pool.fee_fraction as u128)) /
-                (FEE_DENOMINATOR as u128);
+            fee_amount = (amount_out * (pool_info.pool_response.pool.fee_fraction as u128))
+                / (FEE_DENOMINATOR as u128);
         }
 
         amount_out_w_fee = amount_out - fee_amount;
@@ -192,19 +189,14 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
             &token_out,
             &e.current_contract_address(),
             &user,
-            &(amount_out_w_fee as i128)
+            &(amount_out_w_fee as i128),
         );
 
         // UPDATE METRICS
         let volume_30d = get_volume_30d(&e);
         let since_last = max(1_u64, now.safe_sub(&e, get_last_trade_ts(&e)));
-        let updated_volume_30d = calculate_rolling_sum(
-            &e,
-            volume_30d,
-            quote_asset_amount,
-            since_last,
-            THIRTY_DAY
-        );
+        let updated_volume_30d =
+            calculate_rolling_sum(&e, volume_30d, quote_asset_amount, since_last, THIRTY_DAY);
         set_volume_30d(&e, &updated_volume_30d);
 
         // LP FEES
@@ -219,31 +211,33 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         let fee_amount_for_buffer = (protocol_fee_amount * (buffer_fraction as u128)) / 10_000_u128;
         let buffer = get_buffer(&e);
 
-        e.authorize_as_current_contract(
-            vec![
-                &e,
-                InvokerContractAuthEntry::Contract(SubContractInvocation {
-                    context: ContractContext {
-                        contract: token_out.clone(),
-                        fn_name: Symbol::new(&e, "transfer"),
-                        args: (
-                            e.current_contract_address(),
-                            buffer.clone(),
-                            fee_amount_for_buffer as i128,
-                        ).into_val(&e),
-                    },
-                    sub_invocations: vec![&e],
-                })
-            ]
-        );
+        e.authorize_as_current_contract(vec![
+            &e,
+            InvokerContractAuthEntry::Contract(SubContractInvocation {
+                context: ContractContext {
+                    contract: token_out.clone(),
+                    fn_name: Symbol::new(&e, "transfer"),
+                    args: (
+                        e.current_contract_address(),
+                        buffer.clone(),
+                        fee_amount_for_buffer as i128,
+                    )
+                        .into_val(&e),
+                },
+                sub_invocations: vec![&e],
+            }),
+        ]);
         let _: u128 = e.invoke_contract(
             &get_buffer(&e),
             &Symbol::new(&e, "deposit"),
-            Vec::from_array(&e, [
-                e.current_contract_address().to_val(),
-                token_out.clone().to_val(),
-                fee_amount_for_buffer.into_val(&e),
-            ])
+            Vec::from_array(
+                &e,
+                [
+                    e.current_contract_address().to_val(),
+                    token_out.clone().to_val(),
+                    fee_amount_for_buffer.into_val(&e),
+                ],
+            ),
         );
 
         protocol_fee_amount = protocol_fee_amount - fee_amount_for_buffer;
@@ -253,12 +247,18 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         let insurance_premium_rate: i32 = e.invoke_contract(
             &insurance_fund,
             &Symbol::new(&e, "get_rate"),
-            Vec::from_array(&e, [e.current_contract_address().to_val()])
+            Vec::from_array(&e, [e.current_contract_address().to_val()]),
         );
         let pool_insurance_coverage: u128 = e.invoke_contract(
             &router,
             &Symbol::new(&e, "get_insurance_coverage"),
-            Vec::from_array(&e, [e.current_contract_address().to_val(), asset.clone().to_val()])
+            Vec::from_array(
+                &e,
+                [
+                    e.current_contract_address().to_val(),
+                    asset.clone().to_val(),
+                ],
+            ),
         );
 
         let mut if_premium_paid: u128 = 0;
@@ -268,10 +268,8 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
             let total_annual_premium = pool_insurance_coverage
                 .fixed_mul_floor(insurance_premium_rate as u128, PRICE_PRECISION)
                 .unwrap();
-            let premium_per_dollar_swapped = total_annual_premium.safe_div(
-                &e,
-                estimated_annual_volume
-            );
+            let premium_per_dollar_swapped =
+                total_annual_premium.safe_div(&e, estimated_annual_volume);
             // Lesser of premium or what's left of protocol fee
             let insurance_premium_to_pay = quote_asset_amount
                 .safe_mul(&e, premium_per_dollar_swapped)
@@ -283,10 +281,13 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
                 if_premium_paid = e.invoke_contract(
                     &insurance_fund,
                     &Symbol::new(&e, "pay_premium"),
-                    Vec::from_array(&e, [
-                        e.current_contract_address().to_val(),
-                        insurance_premium_to_pay.into_val(&e),
-                    ])
+                    Vec::from_array(
+                        &e,
+                        [
+                            e.current_contract_address().to_val(),
+                            insurance_premium_to_pay.into_val(&e),
+                        ],
+                    ),
                 );
 
                 protocol_fee_amount = protocol_fee_amount - insurance_premium_to_pay;
@@ -304,7 +305,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
             lp_fee_amount,
             fee_amount_for_buffer,
             if_premium_paid,
-            protocol_fee_amount
+            protocol_fee_amount,
         );
 
         // Update total incentives data and refresh/initialize user incentive
@@ -313,7 +314,9 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         let total_shares = get_total_lp_tokens(&e);
         let user_shares = get_user_balance_lp(&e, &user);
         let token_b_fee = if out_idx == 0 { 0 } else { lp_fee_amount };
-        incentives.manager().checkpoint_user(&user, total_shares, user_shares, token_b_fee);
+        incentives
+            .manager()
+            .checkpoint_user(&user, total_shares, user_shares, token_b_fee);
 
         amount_out_w_fee
     }
@@ -405,7 +408,7 @@ impl AdminInterface for PoolSwapFeeCollector {
             &token,
             &e.current_contract_address(),
             &get_fee_destination(&e),
-            &amount
+            &amount,
         );
         Events::new(&e).claim_fees(token, admin, amount as u128);
         amount as u128
@@ -612,11 +615,10 @@ impl TransferableContract for PoolSwapFeeCollector {
         let access_control = AccessControl::new(&e);
         let role = Role::from_symbol(&e, role_name);
         match access_control.get_transfer_ownership_deadline(&role) {
-            0 =>
-                match access_control.get_role_safe(&role) {
-                    Some(address) => address,
-                    None => panic_with_error!(&e, AccessControlError::RoleNotFound),
-                }
+            0 => match access_control.get_role_safe(&role) {
+                Some(address) => address,
+                None => panic_with_error!(&e, AccessControlError::RoleNotFound),
+            },
             _ => access_control.get_future_address(&role),
         }
     }

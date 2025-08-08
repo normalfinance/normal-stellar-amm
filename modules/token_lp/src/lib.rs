@@ -1,23 +1,22 @@
 #![no_std]
 
 use soroban_sdk::token::{
-    StellarAssetClient as SorobanTokenAdminClient,
-    TokenClient as SorobanTokenClient,
+    StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
-use soroban_sdk::{ contracttype, panic_with_error, Address, Env };
+use soroban_sdk::{contracttype, panic_with_error, Address, Env};
 use utils::bump::bump_instance;
 
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
-    TokenLP, // Token address
+    TokenLP,       // Token address
     TotalLPTokens, // Total token supply
 }
 
 pub mod lp_token {
     soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/lp_token.wasm");
 }
-pub use lp_token::{ self as token_contract, Client };
+pub use lp_token::{self as token_contract, Client};
 use utils::errors::storage_errors::StorageError;
 
 pub fn get_token_lp(e: &Env) -> Address {
@@ -39,7 +38,10 @@ pub fn get_user_balance_lp(e: &Env, user: &Address) -> u128 {
 
 pub fn get_total_lp_tokens(e: &Env) -> u128 {
     bump_instance(e);
-    e.storage().instance().get(&DataKey::TotalLPTokens).unwrap_or(0)
+    e.storage()
+        .instance()
+        .get(&DataKey::TotalLPTokens)
+        .unwrap_or(0)
 }
 
 pub fn put_total_lp_tokens(e: &Env, value: u128) {

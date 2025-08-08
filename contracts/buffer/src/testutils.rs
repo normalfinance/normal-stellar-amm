@@ -3,20 +3,23 @@ extern crate std;
 use crate::BufferClient;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::{
-    StellarAssetClient as SorobanTokenAdminClient,
-    TokenClient as SorobanTokenClient,
+    StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
-use soroban_sdk::{ Address, Env };
+use soroban_sdk::{Address, Env};
 use std::vec;
 use utils::constant::ONE_HOUR;
 
 pub(crate) fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanTokenClient<'a> {
-    SorobanTokenClient::new(e, &e.register_stellar_asset_contract_v2(admin.clone()).address())
+    SorobanTokenClient::new(
+        e,
+        &e.register_stellar_asset_contract_v2(admin.clone())
+            .address(),
+    )
 }
 
 pub(crate) fn get_token_admin_client<'a>(
     e: &Env,
-    address: &Address
+    address: &Address,
 ) -> SorobanTokenAdminClient<'a> {
     SorobanTokenAdminClient::new(e, address)
 }
@@ -86,7 +89,7 @@ impl Setup<'_> {
             &admin,
             &emergency_admin,
             &config.min_time_between_payouts,
-            &config.min_reserve_ratio
+            &config.min_reserve_ratio,
         );
 
         Self {

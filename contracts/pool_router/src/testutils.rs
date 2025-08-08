@@ -2,24 +2,21 @@
 extern crate std;
 
 use crate::testutils::oracle_registry::{
-    OracleGuardRails,
-    PriceDivergenceGuardRails,
-    ValidityGuardRails,
+    OracleGuardRails, PriceDivergenceGuardRails, ValidityGuardRails,
 };
-use std::vec;
 use crate::PoolRouterClient;
-use sep_40_oracle::testutils::{ Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM };
-use soroban_sdk::testutils::{ Address as _, Ledger, LedgerInfo };
-use soroban_sdk::{ Address, Env, Symbol, Vec, BytesN };
+use sep_40_oracle::testutils::{Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM};
+use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
 use soroban_sdk::token::{
-    StellarAssetClient as SorobanTokenAdminClient,
-    TokenClient as SorobanTokenClient,
+    StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
+use soroban_sdk::{Address, BytesN, Env, Symbol, Vec};
+use std::vec;
 use utils::test_utils::jump;
 
 pub(crate) fn get_token_admin_client<'a>(
     e: &Env,
-    address: &Address
+    address: &Address,
 ) -> SorobanTokenAdminClient<'a> {
     SorobanTokenAdminClient::new(e, address)
 }
@@ -30,7 +27,11 @@ pub(crate) mod test_token {
 }
 
 pub fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanTokenClient<'a> {
-    SorobanTokenClient::new(e, &e.register_stellar_asset_contract_v2(admin.clone()).address())
+    SorobanTokenClient::new(
+        e,
+        &e.register_stellar_asset_contract_v2(admin.clone())
+            .address(),
+    )
 }
 
 pub mod pool_plane {
@@ -60,9 +61,7 @@ pub fn install_liq_pool_hash(e: &Env) -> BytesN<32> {
 }
 
 pub fn install_lp_token_wasm(e: &Env) -> BytesN<32> {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/lp_token.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/lp_token.wasm");
     e.deployer().upload_contract_wasm(WASM)
 }
 
@@ -80,7 +79,7 @@ pub fn setup_price_feed_oracle<'a>(
     base: &MockAsset,
     assets: &Vec<MockAsset>,
     decimals: u32,
-    resolution: u32
+    resolution: u32,
 ) -> (Address, MockPriceOracleClient<'a>) {
     let oracle_id = env.register(MockPriceOracleWASM, ());
     let oracle_client = MockPriceOracleClient::new(env, &oracle_id);
@@ -206,7 +205,7 @@ impl Setup<'_> {
             &rewards_admin,
             &operations_admin,
             &pause_admin,
-            &Vec::from_array(&e, [emergency_pause_admin.clone()])
+            &Vec::from_array(&e, [emergency_pause_admin.clone()]),
         );
         router.set_pool_hash(&admin, &pool_hash);
         router.set_lp_token_hash(&admin, &lp_token_hash);
@@ -217,7 +216,7 @@ impl Setup<'_> {
         router.commit_transfer_ownership(
             &admin,
             &Symbol::new(&e, "EmergencyAdmin"),
-            &emergency_admin
+            &emergency_admin,
         );
         router.apply_transfer_ownership(&admin, &Symbol::new(&e, "EmergencyAdmin"));
 
@@ -246,7 +245,7 @@ impl Setup<'_> {
             &base,
             &Vec::from_array(&e, [btc_asset.clone(), xlm_asset.clone()]),
             14,
-            300
+            300,
         );
 
         // ===
@@ -374,9 +373,9 @@ impl Setup<'_> {
                 },
                 validity: ValidityGuardRails {
                     seconds_before_stale_for_pool: 3000, // ~5 seconds
-                    too_volatile_ratio: 120_0000000, // 5x or 80% down
+                    too_volatile_ratio: 120_0000000,     // 5x or 80% down
                 },
-            })
+            }),
         );
 
         router.set_oracle_registry(&admin, &registry.address);
@@ -395,7 +394,6 @@ impl Setup<'_> {
             users,
             // tokens,
             // reward_token,
-
             router,
             registry,
 

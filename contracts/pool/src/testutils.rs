@@ -1,33 +1,30 @@
 #![cfg(test)]
 extern crate std;
 use crate::testutils::oracle_registry::{
-    OracleGuardRails,
-    PriceDivergenceGuardRails,
-    ValidityGuardRails,
+    OracleGuardRails, PriceDivergenceGuardRails, ValidityGuardRails,
 };
 use crate::PoolClient;
 use access_control::constants::ADMIN_ACTIONS_DELAY;
-use sep_40_oracle::testutils::{ Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM };
+use sep_40_oracle::testutils::{Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM};
 use soroban_sdk::token::{
-    StellarAssetClient as SorobanTokenAdminClient,
-    TokenClient as SorobanTokenClient,
+    StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
-use soroban_sdk::{ log, String };
-use soroban_sdk::{ testutils::Address as _, Address, BytesN, Env, Symbol, Vec };
-use utils::constant::{ PERCENTAGE_PRECISION_U64, PRICE_PRECISION_I128 };
+use soroban_sdk::{log, String};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Symbol, Vec};
+use utils::constant::{PERCENTAGE_PRECISION_U64, PRICE_PRECISION_I128};
 use utils::state::{
     access::PrivilegedAddresses,
-    pool::{ InitializeAllParams, InitializeParams, PoolTier, RewardConfig },
+    pool::{InitializeAllParams, InitializeParams, PoolTier, RewardConfig},
     token::TokenInitInfo,
 };
 
+use std::vec;
 use token_lp::token_contract::Client as LpTokenClient;
 use utils::test_utils::jump;
-use std::vec;
 
 pub(crate) fn get_token_admin_client<'a>(
     e: &Env,
-    address: &Address
+    address: &Address,
 ) -> SorobanTokenAdminClient<'a> {
     SorobanTokenAdminClient::new(e, address)
 }
@@ -39,7 +36,11 @@ pub(crate) mod test_token {
 }
 
 pub fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanTokenClient<'a> {
-    SorobanTokenClient::new(e, &e.register_stellar_asset_contract_v2(admin.clone()).address())
+    SorobanTokenClient::new(
+        e,
+        &e.register_stellar_asset_contract_v2(admin.clone())
+            .address(),
+    )
 }
 
 pub mod pool_plane {
@@ -82,7 +83,7 @@ pub fn setup_price_feed_oracle<'a>(
     base: &MockAsset,
     assets: &Vec<MockAsset>,
     decimals: u32,
-    resolution: u32
+    resolution: u32,
 ) -> (Address, MockPriceOracleClient<'a>) {
     let oracle_id = env.register(MockPriceOracleWASM, ());
     let oracle_client = MockPriceOracleClient::new(env, &oracle_id);
@@ -168,7 +169,6 @@ pub(crate) struct Setup<'a> {
     // pub(crate) btc_asset: MockAsset,
     // pub(crate) eth_asset: MockAsset,
     // pub(crate) xlm_asset: MockAsset,
-
     pub(crate) btc_asset_id: Symbol,
     // pub(crate) eth_asset_id: Symbol,
     pub(crate) xlm_asset_id: Symbol,
@@ -291,7 +291,7 @@ impl Setup<'_> {
             &base,
             &Vec::from_array(&e, [btc_asset.clone(), xlm_asset.clone()]),
             14,
-            300
+            300,
         );
 
         // ===
@@ -421,9 +421,9 @@ impl Setup<'_> {
                 },
                 validity: ValidityGuardRails {
                     seconds_before_stale_for_pool: 3000, // ~5 seconds
-                    too_volatile_ratio: 120_0000000, // 5x or 80% down
+                    too_volatile_ratio: 120_0000000,     // 5x or 80% down
                 },
-            })
+            }),
         );
 
         // router.set_oracle_registry(&admin, &registry.address);
@@ -480,7 +480,7 @@ impl Setup<'_> {
             &reward_token.address,
             config.liq_pool_fee,
             &PoolTier::A,
-            1_000_000_u128
+            1_000_000_u128,
         );
         token_reward_admin_client.mint(&liq_pool.address, &config.rewards_count);
 
@@ -489,14 +489,14 @@ impl Setup<'_> {
             &rewards_admin.clone(),
             &operations_admin.clone(),
             &pause_admin.clone(),
-            &Vec::from_array(&e, [emergency_pause_admin.clone()])
+            &Vec::from_array(&e, [emergency_pause_admin.clone()]),
         );
 
         let emergency_admin = Address::generate(&e);
         liq_pool.commit_transfer_ownership(
             &admin,
             &Symbol::new(&e, "EmergencyAdmin"),
-            &emergency_admin
+            &emergency_admin,
         );
         jump(&e, ADMIN_ACTIONS_DELAY + 1); // delay is mandatory since emergency admin was set during initialization
         liq_pool.apply_transfer_ownership(&admin, &Symbol::new(&e, "EmergencyAdmin"));
@@ -581,7 +581,7 @@ impl Setup<'_> {
             self.liq_pool.set_incentives_config(
                 &self.users[0],
                 &self.env.ledger().timestamp().saturating_add(60),
-                &reward_tps
+                &reward_tps,
             );
         }
     }
@@ -649,7 +649,7 @@ pub fn create_pool_contract<'a>(
     reward_token: &Address,
     fee_fraction: u32,
     tier: &PoolTier,
-    quote_max_insurance: u128
+    quote_max_insurance: u128,
 ) -> PoolClient<'a> {
     let pool = PoolClient::new(e, &e.register(crate::Pool {}, ()));
     let params = InitializeAllParams {

@@ -2,30 +2,31 @@
 extern crate std;
 use crate::contracts;
 // use crate::contracts::oracle_registry::PriceDivergenceGuardRails;
-use crate::contracts::pool_router::PoolTier;
 use crate::contracts::oracle_registry::{
-    OracleGuardRails,
-    PriceDivergenceGuardRails,
-    ValidityGuardRails,
+    OracleGuardRails, PriceDivergenceGuardRails, ValidityGuardRails,
 };
-use sep_40_oracle::testutils::{ Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM };
-use soroban_sdk::testutils::{ Address as _, BytesN };
+use crate::contracts::pool_router::PoolTier;
+use sep_40_oracle::testutils::{Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM};
+use soroban_sdk::testutils::{Address as _, BytesN};
 use soroban_sdk::token::{
-    StellarAssetClient as SorobanTokenAdminClient,
-    TokenClient as SorobanTokenClient,
+    StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
+use soroban_sdk::{Address, Env, String, Symbol, Vec};
 use std::vec;
-use soroban_sdk::{ Address, Env, String, Symbol, Vec };
-use utils::constant::{ PERCENTAGE_PRECISION_U64, THIRTEEN_DAY };
-use utils::test_utils::{ jump };
+use utils::constant::{PERCENTAGE_PRECISION_U64, THIRTEEN_DAY};
+use utils::test_utils::jump;
 
 pub(crate) fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanTokenClient<'a> {
-    SorobanTokenClient::new(e, &e.register_stellar_asset_contract_v2(admin.clone()).address())
+    SorobanTokenClient::new(
+        e,
+        &e.register_stellar_asset_contract_v2(admin.clone())
+            .address(),
+    )
 }
 
 pub(crate) fn get_token_admin_client<'a>(
     e: &Env,
-    address: &Address
+    address: &Address,
 ) -> SorobanTokenAdminClient<'a> {
     SorobanTokenAdminClient::new(e, address)
 }
@@ -81,7 +82,6 @@ pub(crate) struct Setup<'a> {
 
     // pub(crate) btc_asset: MockAsset,
     // pub(crate) xlm_asset: MockAsset,
-
     pub(crate) btc_asset_id: Symbol,
     pub(crate) xlm_asset_id: Symbol,
 
@@ -150,7 +150,7 @@ impl Setup<'_> {
             &rewards_admin,
             &operations_admin,
             &pause_admin,
-            &Vec::from_array(&e, [emergency_pause_admin.clone()])
+            &Vec::from_array(&e, [emergency_pause_admin.clone()]),
         );
         router.set_pool_hash(&admin, &pool_hash);
         router.set_lp_token_hash(&admin, &lp_token_hash);
@@ -161,7 +161,7 @@ impl Setup<'_> {
         router.commit_transfer_ownership(
             &admin,
             &Symbol::new(&e, "EmergencyAdmin"),
-            &emergency_admin
+            &emergency_admin,
         );
         router.apply_transfer_ownership(&admin, &Symbol::new(&e, "EmergencyAdmin"));
 
@@ -190,7 +190,7 @@ impl Setup<'_> {
             &base,
             &Vec::from_array(&e, [btc_asset.clone(), xlm_asset.clone()]),
             7,
-            300
+            300,
         );
 
         // ===
@@ -318,9 +318,9 @@ impl Setup<'_> {
                 },
                 validity: ValidityGuardRails {
                     seconds_before_stale_for_pool: 3000, // ~5 seconds
-                    too_volatile_ratio: 120_0000000, // 5x or 80% down
+                    too_volatile_ratio: 120_0000000,     // 5x or 80% down
                 },
-            })
+            }),
         );
 
         router.set_oracle_registry(&admin, &registry.address);
@@ -343,9 +343,9 @@ impl Setup<'_> {
             &emergency_admin,
             &token2.address,
             &THIRTEEN_DAY,
-            &80_00000_u32, // 80%
-            &2_00000_i32, // 2%
-            &(10_00000_u32, 60_00000_u32) // 10% and 60%
+            &80_00000_u32,                 // 80%
+            &2_00000_i32,                  // 2%
+            &(10_00000_u32, 60_00000_u32), // 10% and 60%
         );
 
         // Deploy a Pool
@@ -357,7 +357,7 @@ impl Setup<'_> {
             &(),
             &30,
             &PoolTier::A,
-            &1_000_000_0000000u128
+            &1_000_000_0000000u128,
         );
 
         Self {
@@ -430,11 +430,11 @@ fn create_oracle_registry_contract<'a>(e: &Env) -> contracts::oracle_registry::C
 }
 
 fn create_liquidity_calculator_contract<'a>(
-    e: &Env
+    e: &Env,
 ) -> contracts::liquidity_calculator::Client<'a> {
     contracts::liquidity_calculator::Client::new(
         e,
-        &e.register(contracts::liquidity_calculator::WASM, ())
+        &e.register(contracts::liquidity_calculator::WASM, ()),
     )
 }
 
@@ -469,7 +469,7 @@ fn setup_price_feed_oracle<'a>(
     base: &MockAsset,
     assets: &Vec<MockAsset>,
     decimals: u32,
-    resolution: u32
+    resolution: u32,
 ) -> (Address, MockPriceOracleClient<'a>) {
     let oracle_id = env.register(MockPriceOracleWASM, ());
     let oracle_client = MockPriceOracleClient::new(env, &oracle_id);

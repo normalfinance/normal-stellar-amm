@@ -2,35 +2,25 @@
 extern crate std;
 
 use rand::rngs::StdRng;
-use rand::{ Rng, SeedableRng };
+use rand::{Rng, SeedableRng};
 use soroban_sdk::symbol_short;
-use utils::constant::{ PRICE_PRECISION, PRICE_PRECISION_I128 };
+use utils::constant::{PRICE_PRECISION, PRICE_PRECISION_I128};
 use utils::state::pool::SwapDirection;
 
-use crate::testutils::{ create_pool_contract, Setup, TestConfig };
+use crate::testutils::{create_pool_contract, Setup, TestConfig};
 use access_control::constants::ADMIN_ACTIONS_DELAY;
-use token_lp::Client as LpTokenClient;
 use soroban_fixed_point_math::FixedPoint;
-use soroban_sdk::testutils::{ AuthorizedFunction, AuthorizedInvocation, Events };
+use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Events};
 use soroban_sdk::token::{
-    StellarAssetClient as SorobanTokenAdminClient,
-    TokenClient as SorobanTokenClient,
+    StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
 use soroban_sdk::{
-    testutils::Address as _,
-    vec,
-    Address,
-    Env,
-    Error,
-    IntoVal,
-    String,
-    Symbol,
-    Val,
-    Vec,
+    testutils::Address as _, vec, Address, Env, Error, IntoVal, String, Symbol, Val, Vec,
 };
+use token_lp::Client as LpTokenClient;
 use utils::state::{
     access::PrivilegedAddresses,
-    pool::{ InitializeAllParams, InitializeParams, PoolTier, RewardConfig },
+    pool::{InitializeAllParams, InitializeParams, PoolTier, RewardConfig},
     token::TokenInitInfo,
 };
 // use utils::test_utils::{
@@ -45,7 +35,7 @@ fn test() {
             mint_to_user: i128::MAX,
             users_count: 3,
             ..TestConfig::default()
-        })
+        }),
     );
     let e = setup.env;
     let admin = setup.admin;
