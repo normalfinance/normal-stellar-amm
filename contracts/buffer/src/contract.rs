@@ -26,6 +26,7 @@ use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::math::safe_math::SafeMath;
 use utils::token::{transfer_token, validate_token_contract};
+use utils::validation::ensure_non_zero_u128;
 
 contractmeta!(
     key = "Description",
@@ -96,6 +97,8 @@ impl BufferTrait for Buffer {
     // * `BufferError::ReserveMaxBalanceThreshold` – if deposit exceeds the reserve’s `max_balance`.
     fn deposit(e: Env, sender: Address, token: Address, amount: u128) {
         sender.require_auth();
+        
+        ensure_non_zero_u128(&e, amount, BufferError::ZeroAmount);
 
         /* @Halborn
         Currently, anyone can deposit into the Buffer. The only structured deposits
@@ -333,6 +336,8 @@ impl AdminInterface for Buffer {
     fn withdraw_surplus(e: Env, admin: Address, token: Address, amount: u128) {
         admin.require_auth();
         require_admin(&e, &admin);
+        
+        ensure_non_zero_u128(&e, amount, BufferError::ZeroAmount);
 
         validate_token_contract(&e, &token);
 
