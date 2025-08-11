@@ -1,8 +1,13 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::storage_types::{OracleGuardRails, PriceDivergenceGuardRails};
-use crate::testutils::{Setup, TestConfig};
+use utils::state::oracle_registry::{
+    HistoricalOracleData,
+    OracleGuardRails,
+    PriceDivergenceGuardRails,
+    ValidityGuardRails,
+};
+use crate::testutils::{ Setup, TestConfig };
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, Vec};
 use utils::constant::{FIVE_MINUTE, ONE_HOUR, ONE_MINUTE, TWENTY_FOUR_HOUR};
@@ -35,11 +40,11 @@ use utils::test_utils::jump;
 //         .oracle_client
 //         .set_price(&Vec::from_array(&setup.env, [new_oracle_price]), &now);
 
-//     // Fetch price from registry
-//     let oracle_price_data = setup.registry.get_price(&setup.btc_asset_id, &false, &NormalAction::Swap);
+    // Fetch price from registry
+    let oracle_price_data = setup.registry.get_price(&setup.btc_asset_id);
 
-//     assert_eq!(oracle_price_data.price, new_oracle_price as u128);
-//     assert_eq!(oracle_price_data.delay, 0);
+    assert_eq!(oracle_price_data.0.last_oracle_price, new_oracle_price as u128);
+    assert_eq!(oracle_price_data.0.last_oracle_delay, 0);
 
 //     // Ensure historical data is updated
 //     // let last_price_info = setup.registry.get_last_price(&setup.btc_asset_id);

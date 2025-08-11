@@ -1,8 +1,10 @@
 use core::cmp::max;
 
+use crate::errors::PoolError;
 use crate::errors::PoolValidationError;
 use crate::events::Events as LiquidityPoolEvents;
 use crate::events::PoolEvents;
+use crate::plane::pool_plane::HistoricalOracleData;
 use crate::storage::get_last_oracle_valid;
 use crate::storage::get_last_trade_ts;
 use crate::storage::get_last_update_ts;
@@ -14,12 +16,12 @@ use crate::storage::{get_reserve_a, get_reserve_b, set_reserve_a};
 use soroban_fixed_point_math::SorobanFixedPoint;
 use token_synthetic::{burn_synthetic_tokens, get_total_synthetic_tokens, mint_synthetic_tokens};
 
-use soroban_sdk::log;
-use soroban_sdk::IntoVal;
 use soroban_sdk::Symbol;
 use soroban_sdk::Vec;
 use soroban_sdk::{panic_with_error, Env};
 
+use utils::constant::PERCENTAGE_PRECISION_U64;
+use utils::constant::PRICE_PRECISION_U64;
 use utils::constant::PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO_I128;
 use utils::constant::TWENTY_FOUR_HOUR;
 use utils::constant::{FEE_MULTIPLIER, PRICE_PRECISION};
@@ -27,7 +29,8 @@ use utils::math::safe_math::SafeMath;
 use utils::math::stats::calculate_rolling_sum;
 use utils::state::oracle_registry::HistoricalOracleData;
 use utils::state::oracle_registry::NormalAction;
-use utils::state::oracle_registry::OraclePriceData;
+use utils::state::oracle_registry::OracleGuardRails;
+use utils::state::oracle_registry::OracleValidity;
 
 // Calculates the net liquidity imbalance between base and quote assets in the pool.
 //
@@ -69,7 +72,6 @@ pub fn get_net_liquidity_imbalance(
 // # Arguments
 // * `e` - Soroban environment reference.
 // * `asset` - Symbol representing the asset to price.
-// * `cached` - Whether to use cached data from the oracle.
 // * `action` - The context in which the price is being fetched (e.g. Swap, Rebalance).
 //
 // # Returns
@@ -77,31 +79,136 @@ pub fn get_net_liquidity_imbalance(
 pub fn get_oracle_price(
     e: &Env,
     asset: &Symbol,
-    cached: bool,
-    action: NormalAction,
-) -> OraclePriceData {
-    let skip = true;
-    e.invoke_contract(
+    action: NormalAction
+) -> HistoricalOracleData {
+    let (oracle_data, oracle_validity): (HistoricalOracleData, OracleValidity) = e.invoke_contract(
         &get_oracle_registry(e),
         &Symbol::new(e, "get_price"),
-        Vec::from_array(
-            e,
-            [
-                asset.to_val(),
-                cached.into_val(e),
-                action.into_val(e),
-                skip.into_val(e),
-            ],
-        ),
-    )
+        Vec::from_array(e, [e.current_contract_address().to_val(), asset.to_val()])
+    );
+
+    // Calculate pool price
+    let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
+    let pool_price = reserve_b / reserve_a;
+
+    // Find % difference b/t pool price and oracle price
+    let oracle_pool_price_spread_pct = calculate_oracle_twap_price_spread_pct(
+        e,
+        pool_price,
+        oracle_data.last_oracle_price_twap
+    );
+
+    let oracle_guard_rails: OracleGuardRails = e.invoke_contract(
+        &get_router(e), // TODO: update to oracle registry on merge
+        &Symbol::new(e, "get_oracle_guard_rails"),
+        Vec::from_array(e, [])
+    );
+
+    // Check if the oracle price is too divergent
+    let is_oracle_price_too_divergent = is_oracle_price_too_divergent(
+        oracle_pool_price_spread_pct,
+        oracle_guard_rails
+    );
+    if !is_oracle_price_too_divergent {
+        panic_with_error!(e, PoolError::InvalidOracle);
+    }
+
+    let oracle_valid_for_action = is_oracle_valid_for_action(oracle_validity, Some(action));
+    if !oracle_valid_for_action {
+        panic_with_error!(e, PoolError::InvalidOracle);
+    }
+
+    oracle_data
 }
 
-pub fn get_last_oracle_price(e: &Env, asset: &Symbol) -> HistoricalOracleData {
-    e.invoke_contract(
-        &get_oracle_registry(e),
-        &Symbol::new(e, "get_last_price"),
-        Vec::from_array(e, [asset.to_val()]),
-    )
+// Calculates the percentage difference between the reserve price and oracle TWAP.
+//
+// Used to evaluate whether the oracle data is in line with internal pricing,
+// expressed as a percentage spread for risk assessment.
+//
+// # Arguments
+// * `e` - Soroban environment reference.
+// * `other_price` - Reserve-derived price.
+// * `last_oracle_price_twap` - Oracle's last TWAP.
+//
+// # Returns
+// - The price spread as a percentage (scaled by `PRICE_PRECISION_U64`).
+pub fn calculate_oracle_twap_price_spread_pct(
+    e: &Env,
+    other_price: u128,
+    last_oracle_price_twap: u128
+) -> i64 {
+    let price_spread = (other_price as u64).safe_sub(e, last_oracle_price_twap as u64);
+
+    // price_spread_pct
+    price_spread.safe_mul(e, PRICE_PRECISION_U64).safe_div(e, other_price as u64) as i64
+}
+
+// Determines whether the oracle price diverges too far from the reserve price.
+//
+// Uses protocol-defined guard rails to decide if the deviation is outside
+// acceptable limits (e.g., >10%) and may indicate manipulation or lag.
+//
+//
+// # Arguments
+// * `oracle_guard_rails` - .
+// * `price_spread_pct` - Absolute spread percentage between oracle and reserve.
+//
+// # Returns
+// - `true` if the spread exceeds the maximum allowed divergence.
+pub fn is_oracle_price_too_divergent(
+    price_spread_pct: i64,
+    oracle_guard_rails: OracleGuardRails
+) -> bool {
+    let max_divergence = oracle_guard_rails.price_divergence.oracle_twap_percent_divergence.max(
+        PERCENTAGE_PRECISION_U64 / 10
+    );
+    price_spread_pct.unsigned_abs() > max_divergence
+}
+
+/// Determines whether the oracle data is valid for a specific contract action.
+///
+/// The oracle validity is evaluated based on the context of the action:
+///
+/// - `AddLiquidity` / `RemoveLiquidity`: Allowed if oracle data is valid or mildly stale.
+/// - `Swap`: Requires strictly valid oracle data.
+/// - `UpdateTwap`: Allowed if oracle price is positive.
+/// - `Rebalance`: Requires strictly valid oracle data.
+/// - `ClaimInsurance`: Disallowed if oracle is too volatile or non-positive.
+///
+/// If no action is provided, it defaults to requiring strictly valid oracle data.
+///
+/// # Arguments
+/// * `oracle_validity` - Classification of the current oracle state.
+/// * `action` - The protocol action being evaluated (optional).
+///
+/// # Returns
+/// - `true` if the oracle data meets the criteria for the specified action.
+/// - `false` if the action should be blocked due to stale, volatile, or invalid data.
+pub fn is_oracle_valid_for_action(
+    oracle_validity: OracleValidity,
+    action: Option<NormalAction>
+) -> bool {
+    let is_ok = match action {
+        Some(action) =>
+            match action {
+                NormalAction::AddLiquidity =>
+                    matches!(oracle_validity, OracleValidity::Valid | OracleValidity::StaleForPool),
+                NormalAction::RemoveLiquidity =>
+                    matches!(oracle_validity, OracleValidity::Valid | OracleValidity::StaleForPool),
+                NormalAction::Swap => matches!(oracle_validity, OracleValidity::Valid),
+                NormalAction::UpdateTwap => !matches!(oracle_validity, OracleValidity::NonPositive),
+                NormalAction::Rebalance => { matches!(oracle_validity, OracleValidity::Valid) }
+                NormalAction::ClaimInsurance =>
+                    !matches!(
+                        oracle_validity,
+                        OracleValidity::NonPositive | OracleValidity::TooVolatile
+                    ),
+            }
+        None => { matches!(oracle_validity, OracleValidity::Valid) }
+    };
+
+    is_ok
 }
 
 // Calculates the peg price between the base and quote assets based on oracle prices.

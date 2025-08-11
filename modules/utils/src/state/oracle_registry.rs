@@ -1,6 +1,9 @@
 use soroban_sdk::{contracttype, Address};
 
-use crate::constant::PRICE_PRECISION;
+use crate::{
+    constant::{ FIVE_MINUTE, PERCENTAGE_PRECISION_U64, PRICE_PRECISION },
+    errors::oracle_error::OracleError,
+};
 
 #[contracttype]
 #[derive(Default, Clone, Copy, Debug)]
@@ -60,6 +63,70 @@ pub enum NormalAction {
 }
 
 #[contracttype]
+#[derive(Copy, Clone, Debug)]
+pub struct PriceDivergenceGuardRails {
+    pub oracle_twap_percent_divergence: u64,
+}
+
+#[contracttype]
+#[derive(Copy, Clone, Default, Debug)]
+pub struct ValidityGuardRails {
+    pub seconds_before_stale_for_pool: u64,
+    pub too_volatile_ratio: u64,
+}
+
+#[contracttype]
+#[derive(Copy, Clone, Debug)]
+pub struct OracleGuardRails {
+    pub price_divergence: PriceDivergenceGuardRails,
+    pub validity: ValidityGuardRails,
+}
+
+impl Default for OracleGuardRails {
+    fn default() -> Self {
+        OracleGuardRails {
+            price_divergence: PriceDivergenceGuardRails {
+                oracle_twap_percent_divergence: PERCENTAGE_PRECISION_U64 / 10, // 10%
+            },
+            validity: ValidityGuardRails {
+                seconds_before_stale_for_pool: FIVE_MINUTE as u64,
+                too_volatile_ratio: PERCENTAGE_PRECISION_U64 / 5, // ±20%
+            },
+        }
+    }
+}
+
+impl OracleGuardRails {
+    pub fn max_oracle_twap_percent_divergence(&self) -> u64 {
+        self.price_divergence.oracle_twap_percent_divergence.max(PERCENTAGE_PRECISION_U64 / 2)
+    }
+}
+
+// ordered by "severity"
+#[contracttype]
+#[derive(Clone, Copy, PartialEq, Debug, Eq, Default)]
+pub enum OracleValidity {
+    NonPositive,
+    TooVolatile,
+    StaleForPool,
+    Frozen,
+    #[default]
+    Valid,
+}
+
+impl OracleValidity {
+    pub fn get_error_code(&self) -> OracleError {
+        match self {
+            OracleValidity::NonPositive => OracleError::OracleNonPositive,
+            OracleValidity::TooVolatile => OracleError::OracleTooVolatile,
+            OracleValidity::StaleForPool => OracleError::OracleStaleForPool,
+            OracleValidity::Frozen => unreachable!(),
+            OracleValidity::Valid => unreachable!(),
+        }
+    }
+}
+
+#[contracttype]
 #[derive(Default, Clone, Copy, Eq, PartialEq, Debug)]
 pub struct HistoricalOracleData {
     pub last_oracle_price: u128,
@@ -87,12 +154,12 @@ impl HistoricalOracleData {
         }
     }
 
-    pub fn default_with_current_oracle(oracle_price_data: OraclePriceData, now: u64) -> Self {
+    pub fn default_with_current_oracle(oracle_price_data: OraclePriceData) -> Self {
         HistoricalOracleData {
             last_oracle_price: oracle_price_data.price,
             last_oracle_delay: oracle_price_data.delay,
             last_oracle_price_twap: oracle_price_data.price,
-            last_oracle_price_twap_ts: now,
+            ..HistoricalOracleData::default()
         }
     }
 }
