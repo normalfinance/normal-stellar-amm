@@ -1,4 +1,4 @@
-use crate::access::AccessControl;
+use crate::{access::AccessControl, management::SingleAddressManagementTrait};
 use crate::constants::ADMIN_ACTIONS_DELAY;
 use crate::errors::AccessControlError;
 use crate::role::Role;

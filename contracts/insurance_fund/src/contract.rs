@@ -119,7 +119,7 @@ impl InsuranceFundTrait for InsuranceFund {
     fn deposit(e: Env, user: Address, amount: u128) {
         user.require_auth();
 
-        ensure_non_zero_u128(&e, amount, InsuranceFundError::ZeroAmount);
+        ensure_non_zero_u128(&e, amount);
 
         enter(&e);
 
@@ -399,7 +399,7 @@ impl InsuranceFundTrait for InsuranceFund {
         validate!(
             &e,
             total_shares >= if_shares_lost,
-            InsuranceFundError::InsufficientShares
+            InsuranceFundError::InsufficientIFShares
         );
         set_total_shares(&e, &(total_shares - if_shares_lost));
 
@@ -529,7 +529,7 @@ impl InsuranceFundTrait for InsuranceFund {
         validate!(
             &e,
             total_shares >= n_shares,
-            InsuranceFundError::InsufficientShares
+            InsuranceFundError::InsufficientIFShares
         );
         set_total_shares(&e, &(total_shares - n_shares));
 

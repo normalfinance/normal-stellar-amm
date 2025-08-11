@@ -74,10 +74,6 @@ impl OracleRegistryTrait for OracleRegistry {
         let now = e.ledger().timestamp();
         let oracle = get_oracle(&e, &asset);
 
-        if skip_validation {
-            return get_oracle_price(&e, &oracle.address, &asset, now);
-        }
-
         let historical_oracle_data = get_historical_oracle_data(&e, &asset);
 
         if oracle.frozen {

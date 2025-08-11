@@ -99,7 +99,7 @@ impl BufferTrait for Buffer {
     fn deposit(e: Env, sender: Address, token: Address, amount: u128) {
         sender.require_auth();
 
-        ensure_non_zero_u128(&e, amount, BufferError::ZeroAmount);
+        ensure_non_zero_u128(&e, amount);
 
         enter(&e);
 
@@ -354,7 +354,7 @@ impl AdminInterface for Buffer {
         admin.require_auth();
         require_admin(&e, &admin);
 
-        ensure_non_zero_u128(&e, amount, BufferError::ZeroAmount);
+        ensure_non_zero_u128(&e, amount);
 
         enter(&e);
 

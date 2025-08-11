@@ -1,6 +1,6 @@
 use core::cmp::max;
 
-use crate::errors::Error;
+use crate::errors::{PoolSwapFeeError};
 use crate::events::{Events, ProviderFeeEvents};
 use crate::incentives::get_incentives_manager;
 use crate::interface::{AdminInterface, PoolSwapFeeInterface};
@@ -19,7 +19,7 @@ use access_control::role::Role;
 use access_control::role::SymbolRepresentation;
 use access_control::transfer::TransferOwnershipTrait;
 use access_control::utils::require_admin;
-use pool_tokens::{get_total_lp_tokens, get_user_balance_lp};
+use token_lp::{get_total_lp_tokens, get_user_balance_lp};
 use reentrancy_guard::{enter, exit};
 use soroban_fixed_point_math::FixedPoint;
 use soroban_sdk::auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation};
@@ -27,7 +27,6 @@ use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
     contract, contractimpl, panic_with_error, vec, Address, BytesN, Env, IntoVal, Symbol, Vec,
 };
-use token_lp::{get_total_lp_tokens, get_user_balance_lp};
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
@@ -36,6 +35,7 @@ use utils::math::safe_math::SafeMath;
 use utils::math::stats::calculate_rolling_sum;
 use utils::state::pool::{PoolInfo, SwapDirection};
 use utils::token::transfer_token;
+use utils::validate;
 
 #[contract]
 pub struct PoolSwapFeeCollector;
@@ -96,14 +96,6 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
 
         let now = e.ledger().timestamp();
 
-        transfer_token(
-            &e,
-            &token_in,
-            &user,
-            &e.current_contract_address(),
-            &(in_amount as i128),
-        );
-
         // Fetch the pool
         let router = get_router(&e);
         let pool_info: PoolInfo = e.invoke_contract(
@@ -129,6 +121,14 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
                 pool_info.pool_response.token_b.address,
             )
         };
+
+        transfer_token(
+            &e,
+            &token_in,
+            &user,
+            &e.current_contract_address(),
+            &(in_amount as i128),
+        );
 
         // Always collect the fee in token_b
         let mut fee_amount = 0;
@@ -184,7 +184,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
 
         amount_out_w_fee = amount_out - fee_amount;
         if amount_out_w_fee < out_min {
-            panic_with_error!(&e, Error::OutMinNotSatisfied);
+            panic_with_error!(&e, PoolSwapFeeError::OutMinNotSatisfied);
         }
 
         // Send token_out to the user

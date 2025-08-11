@@ -4,7 +4,6 @@ use crate::errors::PoolError;
 use crate::errors::PoolValidationError;
 use crate::events::Events as LiquidityPoolEvents;
 use crate::events::PoolEvents;
-use crate::plane::pool_plane::HistoricalOracleData;
 use crate::storage::get_last_oracle_valid;
 use crate::storage::get_last_trade_ts;
 use crate::storage::get_last_update_ts;
@@ -93,7 +92,7 @@ pub fn get_oracle_price(e: &Env, asset: &Symbol, action: NormalAction) -> Histor
         calculate_oracle_twap_price_spread_pct(e, pool_price, oracle_data.last_oracle_price_twap);
 
     let oracle_guard_rails: OracleGuardRails = e.invoke_contract(
-        &get_router(e), // TODO: update to oracle registry on merge
+        &get_oracle_registry(e),
         &Symbol::new(e, "get_oracle_guard_rails"),
         Vec::from_array(e, []),
     );

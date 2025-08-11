@@ -1,4 +1,3 @@
-use crate::storage_types::OracleGuardRails;
 use paste::paste;
 use soroban_sdk::{contracttype, panic_with_error, Env, Symbol};
 use utils::bump::{bump_instance, bump_persistent};

@@ -53,9 +53,9 @@ where
 /// ensure_non_zero(&e, token_amount, PoolValidationError::ZeroAmount);
 /// ```
 #[inline]
-pub fn ensure_non_zero<T: PartialEq + From<u8>, E: Copy>(env: &Env, amount: T, error: E) {
+pub fn ensure_non_zero<T: PartialEq + From<u8>, E: Copy>(env: &Env, amount: T) {
     if amount == T::from(0u8) {
-        panic_with_error!(env, error);
+        panic_with_error!(env, ValidationError::ZeroAmount);
     }
 }
 
@@ -80,9 +80,9 @@ pub fn ensure_non_zero<T: PartialEq + From<u8>, E: Copy>(env: &Env, amount: T, e
 /// ensure_non_zero_u128(&e, token_b_amount, PoolValidationError::ZeroAmount);
 /// ```
 #[inline]
-pub fn ensure_non_zero_u128<E: Copy>(env: &Env, amount: u128, error: E) {
+pub fn ensure_non_zero_u128(env: &Env, amount: u128) {
     if amount == 0 {
-        panic_with_error!(env, error);
+        panic_with_error!(env, ValidationError::ZeroAmount);
     }
 }
 
@@ -107,8 +107,8 @@ pub fn ensure_non_zero_u128<E: Copy>(env: &Env, amount: u128, error: E) {
 /// ensure_non_zero_i128(&e, signed_amount, PoolValidationError::ZeroAmount);
 /// ```
 #[inline]
-pub fn ensure_non_zero_i128<E: Copy>(env: &Env, amount: i128, error: E) {
+pub fn ensure_non_zero_i128<E: Copy>(env: &Env, amount: i128) {
     if amount == 0 {
-        panic_with_error!(env, error);
+        panic_with_error!(env, ValidationError::ZeroAmount);
     }
 }

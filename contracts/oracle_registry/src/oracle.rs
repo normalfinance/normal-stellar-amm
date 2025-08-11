@@ -5,7 +5,7 @@ use soroban_sdk::{log, Address, Env, Symbol};
 use utils::{
     constant::{FIVE_MINUTE, PERCENTAGE_PRECISION_U64},
     math::{pool::sanitize_new_price, safe_math::SafeMath, stats::calculate_new_twap},
-    state::oracle_registry::{HistoricalOracleData, OraclePriceData, OracleValidity},
+    state::oracle_registry::{HistoricalOracleData, OraclePriceData, OracleValidity}, temporal::Delay,
 };
 
 use crate::storage::{get_oracle_guard_rails, put_historical_oracle_data};
@@ -40,7 +40,7 @@ pub fn get_oracle_price(e: &Env, oracle: &Address, asset: &Symbol, now: u64) -> 
 
     OraclePriceData {
         price: oracle_price,
-        delay: oracle_delay,
+        delay: Delay::from_seconds(oracle_delay).into(),
     }
 }
 

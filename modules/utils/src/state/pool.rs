@@ -3,7 +3,6 @@ use soroban_sdk::contracttype;
 use soroban_sdk::Address;
 use soroban_sdk::Env;
 use soroban_sdk::Symbol;
-use soroban_sdk::Vec;
 
 use crate::constant::FEE_MULTIPLIER;
 use crate::state::access::PrivilegedAddresses;
