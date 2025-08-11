@@ -16,6 +16,7 @@ access_control = { path = "modules/access_control" }
 token_lp = { path = "modules/token_lp" }
 token_synthetic = { path = "modules/token_synthetic" }
 incentives = { path = "modules/incentives" }
+reentrancy_guard = { path = "modules/reentrancy_guard" }
 upgrade = { path = "modules/upgrade" }
 sep-40-oracle = "1.2.2"
 

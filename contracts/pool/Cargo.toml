@@ -19,6 +19,7 @@ utils = { workspace = true }
 soroban-fixed-point-math = { workspace = true }
 paste = { workspace = true }
 upgrade = { workspace = true }
+reentrancy_guard = { workspace = true }
 sep-40-oracle = { workspace = true }
 
 [dev-dependencies]

@@ -19,6 +19,7 @@ use access_control::utils::require_admin;
 use soroban_sdk::{
     contract, contractimpl, log, panic_with_error, Address, BytesN, Env, Symbol, Vec,
 };
+use reentrancy_guard::{enter, exit};
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
@@ -268,6 +269,8 @@ impl AdminInterface for OracleRegistry {
         admin.require_auth();
         require_admin(&e, &admin);
 
+        enter(&e);
+
         validate_positive_denominator(&e, sanitize_clamp_denominator, OracleRegistryError::InvalidClampDenominator);
 
         if get_oracle_base(&e, &asset).is_some() {
@@ -304,6 +307,8 @@ impl AdminInterface for OracleRegistry {
         };
         put_oracle(&e, &asset, &oracle);
 
+        exit(&e);
+
         oracle
     }
 
@@ -336,6 +341,8 @@ impl AdminInterface for OracleRegistry {
     ) -> OracleInfo {
         admin.require_auth();
         require_admin(&e, &admin);
+
+        enter(&e);
 
         if let Some(oracle) = get_oracle_base(&e, &asset) {
             let now = e.ledger().timestamp();
@@ -380,8 +387,11 @@ impl AdminInterface for OracleRegistry {
             };
             put_oracle(&e, &asset, &updated_oracle);
 
+            exit(&e);
+
             updated_oracle
         } else {
+            exit(&e);
             panic_with_error!(&e, OracleRegistryError::OracleNotRegistered);
         }
     }
@@ -414,6 +424,8 @@ impl AdminInterface for OracleRegistry {
     fn set_oracle_price(e: Env, admin: Address, asset: Symbol, price: u128) {
         admin.require_auth();
         require_admin(&e, &admin);
+
+        enter(&e);
 
         let now = e.ledger().timestamp();
         let oracle = get_oracle(&e, &asset);
@@ -460,6 +472,8 @@ impl AdminInterface for OracleRegistry {
             ..oracle
         };
         put_oracle(&e, &asset, &updated_oracle);
+
+        exit(&e);
     }
 
     // TODO: Add unregister oracle function - what does this mean for pools using that oracle?

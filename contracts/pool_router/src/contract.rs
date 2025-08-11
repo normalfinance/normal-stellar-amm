@@ -26,6 +26,7 @@ use access_control::transfer::TransferOwnershipTrait;
 use access_control::utils::{
     require_admin, require_operations_admin_or_owner, require_rewards_admin_or_owner,
 };
+use reentrancy_guard::{enter, exit};
 use incentives::storage::RewardTokenStorageTrait;
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
@@ -82,6 +83,8 @@ impl PoolInterfaceTrait for PoolRouter {
     fn deposit(e: Env, user: Address, asset: Symbol, token_b_amount: u128) -> (u128, u128) {
         user.require_auth();
 
+        enter(&e);
+
         let pool = get_pool(&e, &asset);
 
         let (amount, share_amount): (u128, u128) = e.invoke_contract(
@@ -90,6 +93,9 @@ impl PoolInterfaceTrait for PoolRouter {
             Vec::from_array(&e, [user.clone().into_val(&e), token_b_amount.into_val(&e)]),
         );
         Events::new(&e).deposit_liquidity(asset, pool, user, amount, share_amount);
+
+        exit(&e);
+
         (amount, share_amount)
     }
 
@@ -132,6 +138,8 @@ impl PoolInterfaceTrait for PoolRouter {
     ) -> u128 {
         user.require_auth();
 
+        enter(&e);
+
         let pool = get_pool(&e, &asset);
 
         let out_amount = e.invoke_contract(
@@ -149,6 +157,9 @@ impl PoolInterfaceTrait for PoolRouter {
         );
 
         Events::new(&e).swap(asset, pool, user, direction, in_amount, out_amount);
+
+        exit(&e);
+
         out_amount
     }
 
@@ -213,6 +224,8 @@ impl PoolInterfaceTrait for PoolRouter {
     fn withdraw(e: Env, user: Address, asset: Symbol, share_amount: u128) -> u128 {
         user.require_auth();
 
+        enter(&e);
+
         let pool = get_pool(&e, &asset);
 
         let amount: u128 = e.invoke_contract(
@@ -222,6 +235,9 @@ impl PoolInterfaceTrait for PoolRouter {
         );
 
         Events::new(&e).withdraw_liquidity(asset, pool, user, share_amount, amount);
+
+        exit(&e);
+
         amount
     }
 
@@ -575,6 +591,8 @@ impl IncentivesInterfaceTrait for PoolRouter {
         user.require_auth();
         require_rewards_admin_or_owner(&e, &user);
 
+        enter(&e);
+
         let mut tokens_with_liquidity = Map::new(&e);
         for asset in assets {
             tokens_with_liquidity.set(
@@ -593,7 +611,9 @@ impl IncentivesInterfaceTrait for PoolRouter {
                 tps: reward_tps,
                 expired_at,
             }),
-        )
+        );
+
+        exit(&e);
     }
 
     // Fills the aggregated liquidity information for a given asset.
@@ -865,6 +885,8 @@ impl IncentivesInterfaceTrait for PoolRouter {
         user.require_auth();
         require_rewards_admin_or_owner(&e, &user);
 
+        enter(&e);
+
         let pool_id = get_pool(&e, &asset);
 
         let outstanding_reward = Self::get_total_outstanding_reward(e.clone(), asset.clone());
@@ -889,6 +911,9 @@ impl IncentivesInterfaceTrait for PoolRouter {
                 &(outstanding_reward as i128),
             );
         }
+
+        exit(&e);
+
         outstanding_reward
     }
 
@@ -907,6 +932,8 @@ impl IncentivesInterfaceTrait for PoolRouter {
     fn claim(e: Env, user: Address, asset: Symbol) -> u128 {
         user.require_auth();
 
+        enter(&e);
+
         let pool_id = get_pool(&e, &asset);
 
         let amount = e.invoke_contract(
@@ -922,6 +949,8 @@ impl IncentivesInterfaceTrait for PoolRouter {
             get_incentives_manager(&e).storage().get_reward_token(),
             amount,
         );
+
+        exit(&e);
 
         amount
     }

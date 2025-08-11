@@ -7,4 +7,5 @@ pub enum ValidationError {
     #[doc = "ValidationError"]
     InvalidToken = 801,
     InvalidPercentage = 802,
+    Reentrancy = 803,
 }

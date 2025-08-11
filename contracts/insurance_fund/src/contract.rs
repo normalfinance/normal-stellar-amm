@@ -18,6 +18,7 @@ use crate::storage::{
     set_optimal_utilization, set_rate_slope_a, set_rate_slope_b, set_token, set_total_shares,
     set_unstaking_period,
 };
+use reentrancy_guard::{enter, exit};
 
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
@@ -120,6 +121,8 @@ impl InsuranceFundTrait for InsuranceFund {
         
         ensure_non_zero_u128(&e, amount, InsuranceFundError::ZeroAmount);
 
+        enter(&e);
+
         if get_is_killed_deposit(&e) {
             panic_with_error!(e, InsuranceFundError::FundDepositKilled);
         }
@@ -194,6 +197,8 @@ impl InsuranceFundTrait for InsuranceFund {
             &e.current_contract_address(),
             &(amount as i128),
         );
+
+        exit(&e);
     }
 
     // Initiates a withdrawal request from the Insurance Fund by locking a portion of the user's shares.
@@ -230,6 +235,8 @@ impl InsuranceFundTrait for InsuranceFund {
     // * If calculated withdrawal value exceeds the vault balance.
     fn request_withdraw(e: Env, user: Address, amount: u128) {
         user.require_auth();
+
+        enter(&e);
 
         if get_is_killed_request_withdraw(&e) {
             panic_with_error!(e, InsuranceFundError::FundRequestWithdrawKilled);
@@ -322,6 +329,8 @@ impl InsuranceFundTrait for InsuranceFund {
         stake.last_withdraw_request_ts = now;
 
         save_stake(&e, &user, &stake);
+
+        exit(&e);
     }
 
     // Cancels a pending withdrawal request from the Insurance Fund for a given user.
@@ -352,6 +361,8 @@ impl InsuranceFundTrait for InsuranceFund {
     // * If rebase metadata is inconsistent (e.g., base mismatch).
     fn cancel_request_withdraw(e: Env, user: Address) {
         user.require_auth();
+
+        enter(&e);
 
         let now = e.ledger().timestamp();
         let mut stake = get_stake(&e, &user);
@@ -405,6 +416,8 @@ impl InsuranceFundTrait for InsuranceFund {
         stake.last_withdraw_request_ts = now;
 
         save_stake(&e, &user, &stake);
+
+        exit(&e);
     }
 
     // Completes a pending Insurance Fund withdrawal request after the unstaking period has elapsed.
@@ -442,6 +455,8 @@ impl InsuranceFundTrait for InsuranceFund {
     // * If the vault balance would be zero after withdrawal.
     fn withdraw(e: Env, user: Address) {
         user.require_auth();
+
+        enter(&e);
 
         if get_is_killed_withdraw(&e) {
             panic_with_error!(e, InsuranceFundError::FundWithdrawKilled);
@@ -530,6 +545,8 @@ impl InsuranceFundTrait for InsuranceFund {
             insurance_vault_amount > 0,
             InsuranceFundError::InvalidIFDetected
         );
+
+        exit(&e);
     }
 
     // Collects a premium payment from a pool or protocol participant into the Insurance Fund.
@@ -563,6 +580,8 @@ impl InsuranceFundTrait for InsuranceFund {
     fn pay_premium(e: Env, sender: Address, amount: u128) {
         sender.require_auth();
 
+        enter(&e);
+
         /* @Halborn
         The `Pool.insurance_claim` property defines how much coverage each Pool
         receives from the Insurance Fund. Pools pay a premium for this insurance
@@ -583,6 +602,8 @@ impl InsuranceFundTrait for InsuranceFund {
         );
 
         FundEvents::new(&e).collect_premium(sender, amount);
+
+        exit(&e);
     }
 
     //   _______    _______  ___________  ___________  _______   _______    ________
@@ -781,6 +802,8 @@ impl AdminInterface for InsuranceFund {
         is to either: a) automate within `Pool.swap()` itself; or b) decentralize via the Normal DAO */
         require_admin(&e, &admin);
 
+        enter(&e);
+
         let insurance_vault_amount = get_insurance_vault_amount(&e);
 
         // Call `Pool.pay_insurance_claim()` to calculate how much insurance is needed
@@ -813,6 +836,8 @@ impl AdminInterface for InsuranceFund {
                 InsuranceFundError::InvalidIFDetected
             );
         }
+
+        exit(&e);
     }
 
     //   ________  _______  ___________  ___________  _______   _______    ________

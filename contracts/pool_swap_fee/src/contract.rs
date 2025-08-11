@@ -19,6 +19,8 @@ use access_control::role::Role;
 use access_control::role::SymbolRepresentation;
 use access_control::transfer::TransferOwnershipTrait;
 use access_control::utils::require_admin;
+use pool_tokens::{get_total_lp_tokens, get_user_balance_lp};
+use reentrancy_guard::{enter, exit};
 use soroban_fixed_point_math::FixedPoint;
 use soroban_sdk::auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation};
 use soroban_sdk::token::Client as SorobanTokenClient;
@@ -90,7 +92,17 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
     ) -> u128 {
         user.require_auth();
 
+        enter(&e);
+
         let now = e.ledger().timestamp();
+
+        transfer_token(
+            &e,
+            &token_in,
+            &user,
+            &e.current_contract_address(),
+            &(in_amount as i128),
+        );
 
         // Fetch the pool
         let router = get_router(&e);
@@ -117,14 +129,6 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
                 pool_info.pool_response.token_b.address,
             )
         };
-
-        transfer_token(
-            &e,
-            &token_in,
-            &user,
-            &e.current_contract_address(),
-            &(in_amount as i128),
-        );
 
         // Always collect the fee in token_b
         let mut fee_amount = 0;
@@ -318,6 +322,8 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
             .manager()
             .checkpoint_user(&user, total_shares, user_shares, token_b_fee);
 
+        exit(&e);
+
         amount_out_w_fee
     }
 
@@ -400,6 +406,8 @@ impl AdminInterface for PoolSwapFeeCollector {
         admin.require_auth();
         require_admin(&e, &admin);
 
+        enter(&e);
+
         let token_client = SorobanTokenClient::new(&e, &token);
         let amount = token_client.balance(&e.current_contract_address());
 
@@ -411,6 +419,9 @@ impl AdminInterface for PoolSwapFeeCollector {
             &amount,
         );
         Events::new(&e).claim_fees(token, admin, amount as u128);
+
+        exit(&e);
+
         amount as u128
     }
 

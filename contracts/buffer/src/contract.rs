@@ -17,6 +17,7 @@ use access_control::management::SingleAddressManagementTrait;
 use access_control::role::{Role, SymbolRepresentation};
 use access_control::transfer::TransferOwnershipTrait;
 use access_control::utils::require_admin;
+use reentrancy_guard::{enter, exit};
 use soroban_sdk::{
     contract, contractimpl, contractmeta, panic_with_error, Address, BytesN, Env, IntoVal, Symbol,
     Vec,
@@ -100,6 +101,8 @@ impl BufferTrait for Buffer {
         
         ensure_non_zero_u128(&e, amount, BufferError::ZeroAmount);
 
+        enter(&e);
+
         /* @Halborn
         Currently, anyone can deposit into the Buffer. The only structured deposits
         are from `PoolSwapFee.swap()` when the buffer fraction is removed from the
@@ -144,6 +147,8 @@ impl BufferTrait for Buffer {
         );
 
         Events::new(&e).deposit(token, sender, amount);
+
+        exit(&e);
     }
 
     // Sync token balances with reserves.
@@ -155,12 +160,16 @@ impl BufferTrait for Buffer {
     fn sync(e: Env, sender: Address, token: Address) {
         sender.require_auth();
 
+        enter(&e);
+
         validate_token_contract(&e, &token);
 
         let now = e.ledger().timestamp();
         let reserve = get_reserve(&e, &token);
         let balance = get_buffer_reserve_amount(&e, &token);
         put_reserve(&e, &token, &reserve.update_balance(balance, now));
+
+        exit(&e);
     }
 
     // Skim excess token balances.
@@ -172,6 +181,8 @@ impl BufferTrait for Buffer {
     fn skim(e: Env, sender: Address, token: Address) {
         sender.require_auth();
 
+        enter(&e);
+
         validate_token_contract(&e, &token);
 
         let reserve = get_reserve(&e, &token);
@@ -181,6 +192,8 @@ impl BufferTrait for Buffer {
             transfer_token(&e, &token, &e.current_contract_address(), &sender, &skimmed);
             Events::new(&e).skim(token, sender, skimmed);
         }
+
+        exit(&e);
     }
 
     //   _______    _______  ___________  ___________  _______   _______    ________
@@ -265,6 +278,8 @@ impl AdminInterface for Buffer {
         is to either: a) automate within `Pool.swap()` itself; or b) decentralize via the Normal DAO */
         require_admin(&e, &admin);
 
+        enter(&e);
+
         if get_is_killed_resolve_liquidity_deficit(&e) {
             panic_with_error!(e, BufferError::BufferRequestPayoutKilled);
         }
@@ -303,6 +318,8 @@ impl AdminInterface for Buffer {
 
         Events::new(&e).resolve_liquidity_deficit(pool_address, token, admin, amount, paid);
 
+        exit(&e);
+
         paid
     }
 
@@ -339,6 +356,8 @@ impl AdminInterface for Buffer {
         
         ensure_non_zero_u128(&e, amount, BufferError::ZeroAmount);
 
+        enter(&e);
+
         validate_token_contract(&e, &token);
 
         // Calculate the minimum reserve that must be left in the Buffer
@@ -367,6 +386,8 @@ impl AdminInterface for Buffer {
         );
 
         Events::new(&e).withdraw_surplus(token, admin, amount);
+
+        exit(&e);
     }
 
     //   ________  _______  ___________  ___________  _______   _______    ________
