@@ -198,9 +198,14 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
 
         // UPDATE METRICS
         let volume_30d = get_volume_30d(&e);
-        let since_last = max(1_u64, now.safe_sub(&e, get_last_trade_ts(&e)));
-        let updated_volume_30d =
-            calculate_rolling_sum(&e, volume_30d, quote_asset_amount, since_last, THIRTY_DAY);
+        let since_last = max(1_u64, now.saturating_sub(get_last_trade_ts(&e)));
+        let updated_volume_30d = calculate_rolling_sum(
+            &e,
+            volume_30d,
+            quote_asset_amount,
+            since_last,
+            THIRTY_DAY
+        );
         set_volume_30d(&e, &updated_volume_30d);
 
         // LP FEES
@@ -208,7 +213,9 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         let lp_fee_amount =
             (fee_amount * (lp_revenue_fraction as u128)) / (FEE_DENOMINATOR as u128);
 
-        let mut protocol_fee_amount = fee_amount.safe_sub(&e, lp_fee_amount);
+        // Add bounds checking to prevent fee calculation underflow when LP fees exceed total fees
+        validate!(&e, fee_amount >= lp_fee_amount, PoolSwapFeeError::InvalidFeeCalculation);
+        let mut protocol_fee_amount = fee_amount - lp_fee_amount;
 
         // BUFFER
         let buffer_fraction = get_buffer_fraction(&e);

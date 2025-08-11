@@ -1062,7 +1062,7 @@ impl AdminInterfaceTrait for Pool {
                 quote_oracle_price_data.last_oracle_price
             );
 
-            net_liquidity_imbalance.safe_sub(&e, pool.liquidity_max_imbalance as i128)
+            net_liquidity_imbalance.saturating_sub(pool.liquidity_max_imbalance as i128)
         } else {
             0
         };
@@ -1071,10 +1071,10 @@ impl AdminInterfaceTrait for Pool {
         // "No excess_liquidity_imbalance({}) to settle",
         validate!(&e, excess_liquidity_imbalance > 0, PoolError::LiquidityDeficitBelowThreshold);
 
-        let max_insurance_withdraw = pool.insurance_claim.quote_max_insurance.safe_sub(
-            &e,
-            pool.insurance_claim.quote_settled_insurance
-        );
+        let max_insurance = pool.insurance_claim.quote_max_insurance;
+        let settled_insurance = pool.insurance_claim.quote_settled_insurance;
+        validate!(&e, max_insurance >= settled_insurance, PoolError::SettledExceedsMax);
+        let max_insurance_withdraw = max_insurance - settled_insurance;
 
         // "max_insurance_withdraw={}/{} as already been reached",
         validate!(&e, max_insurance_withdraw > 0, PoolError::MaxIFWithdrawReached);

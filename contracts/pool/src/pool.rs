@@ -243,7 +243,7 @@ pub fn peg_price(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -> 
 // * `quote_asset_amount` - Amount of quote asset involved in the trade.
 // * `now` - Current ledger timestamp.
 pub fn update_volume_30d(e: &Env, quote_asset_amount: u128, now: u64) {
-    let since_last = max(1_u64, now.safe_sub(e, get_last_trade_ts(e)));
+    let since_last = max(1_u64, now.saturating_sub(get_last_trade_ts(e)));
     let volume_30d = get_volume_30d(e);
 
     if volume_30d == 0 {
