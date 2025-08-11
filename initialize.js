@@ -61,7 +61,7 @@ function removeFiles(pattern) {
 function buildAll() {
   removeFiles(`${dirname}/target/wasm32v1-none/release/*.wasm`);
   removeFiles(`${dirname}/target/wasm32v1-none/release/*.d`);
-  exe(`stellar contract build`);
+  exe(`task build`);
 }
 
 /**
@@ -79,21 +79,13 @@ function filenameNoExtension(filename) {
  * @param {string} wasm path to the compiled Wasm file
  */
 function deploy(wasm) {
-  if (wasm.includes("locker")) {
-    exe(
-      `stellar contract deploy --wasm ${wasm} --ignore-checks --alias ${filenameNoExtension(
-        wasm
-      )} -- --admin=${process.env.PUBLIC_STELLAR_ADMIN} --operations_admin=${
-        process.env.PUBLIC_STELLAR_ADMIN
-      } --emergency_admin=${process.env.PUBLIC_STELLAR_ADMIN}`
-    );
-  } else {
-    exe(
-      `stellar contract deploy --wasm ${wasm} --ignore-checks --alias ${filenameNoExtension(
-        wasm
-      )}`
-    );
-  }
+  // Do not deploy the Pool contract since it's deployed via the Pool Router
+  if (wasm.includes("release/pool.wasm")) return;
+  exe(
+    `stellar contract deploy --wasm ${wasm} --ignore-checks --alias ${filenameNoExtension(
+      wasm
+    )}`
+  );
 }
 
 /**
@@ -106,9 +98,7 @@ function deployAll() {
   mkdirSync(contractsDir, { recursive: true });
 
   // search for all compiled Wasm files
-  const wasmFiles = glob(
-    `${dirname}/target/wasm32v1-none/release/*.wasm`
-  );
+  const wasmFiles = glob(`${dirname}/target/wasm32v1-none/release/*.wasm`);
 
   // run the `deploy()` function for each compiled Wasm file found
   wasmFiles.forEach(deploy);
@@ -162,7 +152,7 @@ function installAndBuild({ alias }) {
  */
 function bindAll() {
   contracts().forEach(bind);
-  exe("./scripts/run_prefix_all.sh");
+  exe("./scripts/build/run_prefix_all.sh");
   contracts().forEach(installAndBuild);
 }
 

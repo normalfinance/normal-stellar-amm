@@ -1,15 +1,13 @@
 use paste::paste;
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
-use soroban_sdk::{ contracttype, panic_with_error, Address, Env };
-use utils::bump::{ bump_instance };
+use soroban_sdk::{contracttype, panic_with_error, Address, Env};
+use utils::bump::bump_instance;
 use utils::constant::THIRTEEN_DAY;
 use utils::errors::storage_errors::StorageError;
 use utils::{
+    generate_instance_storage_getter, generate_instance_storage_getter_and_setter,
     generate_instance_storage_getter_and_setter_with_default,
-    generate_instance_storage_getter_with_default,
-    generate_instance_storage_getter_and_setter,
-    generate_instance_storage_setter,
-    generate_instance_storage_getter,
+    generate_instance_storage_getter_with_default, generate_instance_storage_setter,
 };
 
 // TODO: must we track the interest paid to avoid counting uncollected interest as insurance?
@@ -17,16 +15,16 @@ use utils::{
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
-    Token, // the token address of supported deposits.
-    Router, // the address of the Pool Router.
+    Token,              // the token address of supported deposits.
+    Router,             // the address of the Pool Router.
     UnstakingPeriod, // a period of time stakers must wait once requesting withdrawal to actually withdraw.
     OptimalInsurance, // the maximum amount of insurance (in Token amount) to adequately insure the protocol.
-    TotalShares, // the total amount of issued shares.
-    SharesBase, // exponent for lp shares (for rebasing).
+    TotalShares,      // the total amount of issued shares.
+    SharesBase,       // exponent for lp shares (for rebasing).
     OptimalUtilization, // the optimal utilization point (utilization = current insurance / optimal insurance)
-    BaseRate, // the base interest rate when utilization is 0%
-    RateSlopeA, // the slope before hitting optimal utilization (gradual increase)
-    RateSlopeB, // the slope after optimal utilization (steep increase)
+    BaseRate,           // the base interest rate when utilization is 0%
+    RateSlopeA,         // the slope before hitting optimal utilization (gradual increase)
+    RateSlopeB,         // the slope after optimal utilization (steep increase)
 
     // paused ops
     IsKilledDeposit,

@@ -13,7 +13,8 @@ soroban-fixed-point-math = { version = "1.3.0" }
 paste = { version = "1.0.15" }
 utils = { path = "modules/utils" }
 access_control = { path = "modules/access_control" }
-pool_tokens = { path = "modules/pool_tokens" }
+token_lp = { path = "modules/token_lp" }
+token_synthetic = { path = "modules/token_synthetic" }
 incentives = { path = "modules/incentives" }
 upgrade = { path = "modules/upgrade" }
 sep-40-oracle = "1.2.2"

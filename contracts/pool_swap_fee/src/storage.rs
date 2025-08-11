@@ -1,29 +1,27 @@
 use paste::paste;
-use soroban_sdk::{ contracttype, panic_with_error, Address, Env };
+use soroban_sdk::{contracttype, panic_with_error, Address, Env};
 use utils::bump::bump_instance;
 use utils::errors::storage_errors::StorageError;
 use utils::{
-    generate_instance_storage_getter,
-    generate_instance_storage_getter_and_setter,
+    generate_instance_storage_getter, generate_instance_storage_getter_and_setter,
     generate_instance_storage_getter_and_setter_with_default,
-    generate_instance_storage_getter_with_default,
-    generate_instance_storage_setter,
+    generate_instance_storage_getter_with_default, generate_instance_storage_setter,
 };
 
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
-    Router, // Address of the Pool Router.
-    Buffer, // Address of the Buffer.
-    InsuranceFund, // Address of the Insurance Fund.
-    FeeDestination, // Fee destination address
+    Router,            // Address of the Pool Router.
+    Buffer,            // Address of the Buffer.
+    InsuranceFund,     // Address of the Insurance Fund.
+    FeeDestination,    // Fee destination address
     LPRevenueFraction, // The portion of fees to give back to LPs as yield in basis points (100 = 1%)
-    BufferFraction, // The portion of fees to deposit to the Buffer in basis points (100 = 1%)
+    BufferFraction,    // The portion of fees to deposit to the Buffer in basis points (100 = 1%)
 
     // metrics
     LastTradeTs, // the timestamp of the last swap.
-    Volume24h, // rolling total swap volume over the past 24 hours.
-    Volume7d, // rolling total swap volume over the pst 7 days.
+    Volume24h,   // rolling total swap volume over the past 24 hours.
+    Volume7d,    // rolling total swap volume over the pst 7 days.
     Volume30d, // rolling total swap volume over the pst 30 days (used to estimate insurance premium).
 }
 

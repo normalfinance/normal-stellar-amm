@@ -1,26 +1,26 @@
 use crate::errors::InsuranceFundError;
-use crate::storage::{ get_shares_base, get_total_shares, set_shares_base, set_total_shares };
+use crate::storage::{get_shares_base, get_total_shares, set_shares_base, set_total_shares};
 use soroban_fixed_point_math::SorobanFixedPoint;
-use soroban_sdk::{ contracttype, panic_with_error, Address, Env };
-use utils::bump::{ bump_persistent };
+use soroban_sdk::{contracttype, panic_with_error, Address, Env};
+use utils::bump::bump_persistent;
 use utils::errors::math_errors::MathError;
 use utils::helpers::log10_iter;
 use utils::math::safe_math::SafeMath;
-use utils::{ safe_decrement, safe_increment, validate };
+use utils::{safe_decrement, safe_increment, validate};
 
 #[contracttype]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum StakeAction {
-    Deposit, // stake tokens
-    WithdrawRequest, // initiate an unstake
+    Deposit,               // stake tokens
+    WithdrawRequest,       // initiate an unstake
     WithdrawCancelRequest, // cancel an unstake
-    Withdraw, // fulfill an unstake
+    Withdraw,              // fulfill an unstake
 }
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Stake {
-    pub if_shares: u128, // the number of shares the user owns.
+    pub if_shares: u128,                    // the number of shares the user owns.
     pub last_withdraw_request_shares: u128, //
     pub if_base: u128, // the exponent for if_shares decimal places (for rebase).
     pub last_withdraw_request_value: u128, // the token amount of the last user withdrawal request.
@@ -42,7 +42,11 @@ impl Stake {
 
     fn validate_base(&self, e: &Env) {
         let shares_base = get_shares_base(e);
-        validate!(e, self.if_base == shares_base, InsuranceFundError::InvalidIFRebase);
+        validate!(
+            e,
+            self.if_base == shares_base,
+            InsuranceFundError::InvalidIFRebase
+        );
     }
 
     pub fn checked_if_shares(&self, e: &Env) -> u128 {
@@ -114,11 +118,8 @@ pub fn apply_rebase_to_insurance_fund(e: &Env, insurance_vault_amount: u128) {
     let shares_base = get_shares_base(e);
 
     if insurance_vault_amount != 0 && insurance_vault_amount < total_shares {
-        let (expo_diff, rebase_divisor) = calculate_rebase_info(
-            e,
-            total_shares,
-            insurance_vault_amount
-        );
+        let (expo_diff, rebase_divisor) =
+            calculate_rebase_info(e, total_shares, insurance_vault_amount);
 
         set_total_shares(e, &total_shares.safe_div(e, rebase_divisor));
         set_shares_base(e, &shares_base.safe_add(e, expo_diff as u128));
@@ -151,7 +152,11 @@ pub fn apply_rebase_to_stake(e: &Env, stake: &mut Stake) {
 
     if shares_base != stake.if_base {
         //  "Rebase expo out of bounds"
-        validate!(e, shares_base > stake.if_base, InsuranceFundError::InvalidIFRebase);
+        validate!(
+            e,
+            shares_base > stake.if_base,
+            InsuranceFundError::InvalidIFRebase
+        );
 
         let expo_diff = (shares_base - stake.if_base) as u32;
 
@@ -164,10 +169,9 @@ pub fn apply_rebase_to_stake(e: &Env, stake: &mut Stake) {
 
         stake.update_if_shares(e, new_if_shares);
 
-        stake.last_withdraw_request_shares = stake.last_withdraw_request_shares.safe_div(
-            e,
-            rebase_divisor
-        );
+        stake.last_withdraw_request_shares = stake
+            .last_withdraw_request_shares
+            .safe_div(e, rebase_divisor);
     }
 }
 
@@ -192,7 +196,7 @@ pub fn vault_amount_to_if_shares(
     e: &Env,
     amount: u128,
     total_if_shares: u128,
-    insurance_vault_amount: u128
+    insurance_vault_amount: u128,
 ) -> u128 {
     // relative to the entire pool + total amount minted
     let n_shares = if insurance_vault_amount > 0 {
@@ -200,7 +204,11 @@ pub fn vault_amount_to_if_shares(
         amount.fixed_mul_floor(e, &total_if_shares, &insurance_vault_amount)
     } else {
         // must be case that total_if_shares == 0 for nice result for user
-        validate!(e, total_if_shares == 0, InsuranceFundError::InvalidIFSharesDetected);
+        validate!(
+            e,
+            total_if_shares == 0,
+            InsuranceFundError::InvalidIFSharesDetected
+        );
 
         amount
     };
@@ -228,9 +236,13 @@ pub fn if_shares_to_vault_amount(
     e: &Env,
     n_shares: u128,
     total_if_shares: u128,
-    insurance_vault_amount: u128
+    insurance_vault_amount: u128,
 ) -> u128 {
-    validate!(e, n_shares <= total_if_shares, InsuranceFundError::InvalidIFSharesDetected);
+    validate!(
+        e,
+        n_shares <= total_if_shares,
+        InsuranceFundError::InvalidIFSharesDetected
+    );
 
     let amount = if total_if_shares > 0 {
         insurance_vault_amount.fixed_mul_floor(e, &n_shares, &total_if_shares)
@@ -259,9 +271,11 @@ pub fn if_shares_to_vault_amount(
 pub fn calculate_rebase_info(
     e: &Env,
     total_if_shares: u128,
-    insurance_vault_amount: u128
+    insurance_vault_amount: u128,
 ) -> (u32, u128) {
-    let rebase_divisor_full = total_if_shares.safe_div(e, 10).safe_div(e, insurance_vault_amount);
+    let rebase_divisor_full = total_if_shares
+        .safe_div(e, 10)
+        .safe_div(e, insurance_vault_amount);
 
     let expo_diff = log10_iter(rebase_divisor_full) as u32;
     let rebase_divisor = (10_u128).pow(expo_diff);
@@ -300,10 +314,14 @@ pub fn calculate_if_shares_lost(e: &Env, stake: &Stake, insurance_vault_amount: 
             e,
             stake.last_withdraw_request_value,
             total_shares.safe_sub(e, n_shares),
-            insurance_vault_amount.safe_sub(e, stake.last_withdraw_request_value)
+            insurance_vault_amount.safe_sub(e, stake.last_withdraw_request_value),
         );
 
-        validate!(e, new_n_shares <= n_shares, InsuranceFundError::InvalidIFSharesDetected);
+        validate!(
+            e,
+            new_n_shares <= n_shares,
+            InsuranceFundError::InvalidIFSharesDetected
+        );
 
         n_shares.safe_sub(e, new_n_shares)
     } else {
@@ -316,7 +334,7 @@ pub fn calculate_if_shares_lost(e: &Env, stake: &Stake, insurance_vault_amount: 
 #[test]
 pub fn basic_stake_if_test() {
     use crate::testutils::Setup;
-    use utils::{ constant::QUOTE_PRECISION, helpers::{ log10 } };
+    use utils::{constant::QUOTE_PRECISION, helpers::log10};
 
     let setup = Setup::default();
 
@@ -359,7 +377,7 @@ pub fn basic_stake_if_test() {
     let (expo_diff, rebase_div) = calculate_rebase_info(
         &setup.env,
         60_078 * QUOTE_PRECISION,
-        600 * QUOTE_PRECISION + 19234
+        600 * QUOTE_PRECISION + 19234,
     );
     assert_eq!(rebase_div, 10);
     assert_eq!(expo_diff, 1);
@@ -367,17 +385,14 @@ pub fn basic_stake_if_test() {
     let (expo_diff, rebase_div) = calculate_rebase_info(
         &setup.env,
         60_078 * QUOTE_PRECISION,
-        601 * QUOTE_PRECISION + 19234
+        601 * QUOTE_PRECISION + 19234,
     );
     assert_eq!(rebase_div, 1);
     assert_eq!(expo_diff, 0);
 
     // $800M goes to 1e-6 of dollar
-    let (expo_diff, rebase_div) = calculate_rebase_info(
-        &setup.env,
-        800_000_078 * QUOTE_PRECISION,
-        1_u128
-    );
+    let (expo_diff, rebase_div) =
+        calculate_rebase_info(&setup.env, 800_000_078 * QUOTE_PRECISION, 1_u128);
 
     assert_eq!(rebase_div, 10000000000000);
     assert_eq!(expo_diff, 13);
@@ -416,7 +431,7 @@ pub fn basic_stake_if_test() {
 #[test]
 pub fn if_shares_lost_test() {
     use crate::testutils::Setup;
-    use utils::{ constant::QUOTE_PRECISION };
+    use utils::constant::QUOTE_PRECISION;
 
     let setup = Setup::default();
 
@@ -469,8 +484,8 @@ pub fn if_shares_lost_test() {
     let lost_shares = calculate_if_shares_lost(&setup.env, &if_stake, if_balance);
     assert_eq!(lost_shares, 90_909_092); // giving up $5 of gains
     assert_eq!(
-        (9090908 * if_balance) / (total_shares - lost_shares) <
-            if_stake.last_withdraw_request_value,
+        (9090908 * if_balance) / (total_shares - lost_shares)
+            < if_stake.last_withdraw_request_value,
         true
     );
 }

@@ -1,27 +1,26 @@
 use paste::paste;
-use soroban_sdk::{ contracttype, panic_with_error, Address, BytesN, Env };
+use soroban_sdk::{contracttype, panic_with_error, Address, BytesN, Env};
 pub use utils::bump::bump_instance;
 use utils::errors::storage_errors::StorageError;
 use utils::state::pool::Pool as PoolType;
 use utils::{
+    generate_instance_storage_getter, generate_instance_storage_getter_and_setter,
     generate_instance_storage_getter_and_setter_with_default,
-    generate_instance_storage_getter_with_default,
-    generate_instance_storage_getter_and_setter,
-    generate_instance_storage_getter,
-    generate_instance_storage_setter,
+    generate_instance_storage_getter_with_default, generate_instance_storage_setter,
 };
 
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
-    ReserveA, // total token_a amount in the pool (x in the constant product formula)
-    ReserveB, // total token_b amount in the pool (y in the constant product formula)
-    Pool, // struct containing infrequently updated pool data
-    Plane, // the address of the pool plane.
-    Router, // the Pool Router contract address
+    ReserveA,        // total token_a amount in the pool (x in the constant product formula)
+    ReserveB,        // total token_b amount in the pool (y in the constant product formula)
+    Pool,            // struct containing infrequently updated pool data
+    Plane,           // the address of the pool plane.
+    Router,          // the Pool Router contract address
+    OracleRegistry,  // the Oracle Registry contract address
     LastOracleValid, // tracks whether the oracle was considered valid at the last pool update
-    LastTradeTs, // the blockchain unix timestamp at the time of the last trade
-    LastUpdateTs, // the last blockchain slot the amm was updated
+    LastTradeTs,     // the blockchain unix timestamp at the time of the last trade
+    LastUpdateTs,    // the last blockchain slot the amm was updated
 
     // metrics
     Volume30d, // estimated total of volume in market
@@ -39,6 +38,7 @@ generate_instance_storage_getter_and_setter_with_default!(reserve_a, DataKey::Re
 generate_instance_storage_getter_and_setter_with_default!(reserve_b, DataKey::ReserveB, u128, 0);
 generate_instance_storage_getter_and_setter!(plane, DataKey::Plane, Address);
 generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
+generate_instance_storage_getter_and_setter!(oracle_registry, DataKey::OracleRegistry, Address);
 generate_instance_storage_getter_and_setter_with_default!(volume_30d, DataKey::Volume30d, u128, 0);
 generate_instance_storage_getter_and_setter_with_default!(
     last_trade_ts,

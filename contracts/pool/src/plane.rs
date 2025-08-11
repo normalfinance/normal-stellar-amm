@@ -4,8 +4,8 @@ pub mod pool_plane {
 
 pub use crate::plane::pool_plane::Client as PoolPlaneClient;
 
-use crate::storage::{ get_pool, get_plane, get_reserve_a, get_reserve_b };
-use soroban_sdk::{ Env, Vec };
+use crate::storage::{get_plane, get_pool, get_reserve_a, get_reserve_b};
+use soroban_sdk::{Env, Vec};
 
 fn get_pool_data(e: &Env) -> (Vec<u128>, Vec<u128>) {
     let pool = get_pool(e);
@@ -20,6 +20,6 @@ pub fn update_plane(e: &Env) {
     PoolPlaneClient::new(e, &get_plane(e)).update(
         &e.current_contract_address(),
         &init_args,
-        &reserves
+        &reserves,
     );
 }

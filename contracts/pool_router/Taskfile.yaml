@@ -21,7 +21,7 @@ tasks:
   test:
     deps:
       - build
-    cmd: cargo test
+    cmd: RUST_LOG=trace cargo test
 
   test_slow:
     cmds:

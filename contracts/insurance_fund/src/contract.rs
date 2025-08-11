@@ -3,72 +3,42 @@ use crate::events::Events as FundEvents;
 use crate::events::InsuranceFundEvents;
 use crate::interest::calculate_rate;
 use crate::interest::calculate_utilization;
-use crate::interface::{ AdminInterface, InsuranceFundTrait };
+use crate::interface::{AdminInterface, InsuranceFundTrait};
 use crate::stake::Stake;
 use crate::stake::{
-    apply_rebase_to_insurance_fund,
-    apply_rebase_to_stake,
-    calculate_if_shares_lost,
-    get_stake,
-    if_shares_to_vault_amount,
-    save_stake,
-    vault_amount_to_if_shares,
-    StakeAction,
+    apply_rebase_to_insurance_fund, apply_rebase_to_stake, calculate_if_shares_lost, get_stake,
+    if_shares_to_vault_amount, save_stake, vault_amount_to_if_shares, StakeAction,
 };
 use crate::storage::{
-    get_base_rate,
-    get_optimal_insurance,
-    get_optimal_utilization,
-    get_rate_slope_a,
-    get_rate_slope_b,
-    get_token,
-    get_insurance_vault_amount,
-    get_is_killed_deposit,
-    get_is_killed_request_withdraw,
-    get_is_killed_withdraw,
-    get_shares_base,
-    get_total_shares,
-    get_unstaking_period,
-    set_base_rate,
-    set_optimal_insurance,
-    set_optimal_utilization,
-    set_rate_slope_a,
-    set_rate_slope_b,
-    set_token,
-    set_is_killed_deposit,
-    set_is_killed_request_withdraw,
-    set_is_killed_withdraw,
-    set_total_shares,
+    get_base_rate, get_insurance_vault_amount, get_is_killed_deposit,
+    get_is_killed_request_withdraw, get_is_killed_withdraw, get_optimal_insurance,
+    get_optimal_utilization, get_rate_slope_a, get_rate_slope_b, get_shares_base, get_token,
+    get_total_shares, get_unstaking_period, set_base_rate, set_is_killed_deposit,
+    set_is_killed_request_withdraw, set_is_killed_withdraw, set_optimal_insurance,
+    set_optimal_utilization, set_rate_slope_a, set_rate_slope_b, set_token, set_total_shares,
     set_unstaking_period,
 };
 
-use access_control::access::{ AccessControl, AccessControlTrait };
-use access_control::emergency::{ get_emergency_mode, set_emergency_mode };
+use access_control::access::{AccessControl, AccessControlTrait};
+use access_control::emergency::{get_emergency_mode, set_emergency_mode};
 use access_control::errors::AccessControlError;
 use access_control::events::Events as AccessControlEvents;
 use access_control::interface::TransferableContract;
 use access_control::management::SingleAddressManagementTrait;
-use access_control::role::{ Role, SymbolRepresentation };
+use access_control::role::{Role, SymbolRepresentation};
 use access_control::transfer::TransferOwnershipTrait;
-use access_control::utils::{ require_admin };
+use access_control::utils::require_admin;
 use soroban_sdk::contractmeta;
 use soroban_sdk::{
-    contract,
-    contractimpl,
-    panic_with_error,
-    Address,
-    BytesN,
-    Env,
-    IntoVal,
-    Symbol,
-    Vec,
+    contract, contractimpl, panic_with_error, Address, BytesN, Env, IntoVal, Symbol, Vec,
 };
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
-use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
+use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::math::safe_math::SafeMath;
 use utils::token::transfer_token;
 use utils::validate;
+use utils::validation::validate_percentages;
 
 contractmeta!(
     key = "Description",
@@ -89,7 +59,7 @@ impl InsuranceFundTrait for InsuranceFund {
         unstaking_period: u64,
         optimal_utilization: u32,
         base_rate: i32,
-        rate_slopes: (u32, u32)
+        rate_slopes: (u32, u32),
     ) {
         admin.require_auth();
 
@@ -202,7 +172,6 @@ impl InsuranceFundTrait for InsuranceFund {
         let new_total_shares = get_total_shares(&e);
 
         FundEvents::new(&e).if_stake_record(
-            now,
             user.clone(),
             StakeAction::Deposit,
             amount,
@@ -210,12 +179,18 @@ impl InsuranceFundTrait for InsuranceFund {
             if_shares_before,
             total_if_shares_before,
             if_shares_after,
-            new_total_shares
+            new_total_shares,
         );
 
         save_stake(&e, &user, &stake);
 
-        transfer_token(&e, &get_token(&e), &user, &e.current_contract_address(), &(amount as i128));
+        transfer_token(
+            &e,
+            &get_token(&e),
+            &user,
+            &e.current_contract_address(),
+            &(amount as i128),
+        );
     }
 
     // Initiates a withdrawal request from the Insurance Fund by locking a portion of the user's shares.
@@ -272,11 +247,19 @@ impl InsuranceFundTrait for InsuranceFund {
         let insurance_vault_amount = get_insurance_vault_amount(&e);
         let n_shares = vault_amount_to_if_shares(&e, amount, total_shares, insurance_vault_amount);
 
-        validate!(&e, n_shares > 0, InsuranceFundError::IFWithdrawRequestTooSmall);
+        validate!(
+            &e,
+            n_shares > 0,
+            InsuranceFundError::IFWithdrawRequestTooSmall
+        );
 
         // Error if user does not have enough shares to satisfy the request
         let user_if_shares = stake.checked_if_shares(&e);
-        validate!(&e, user_if_shares >= n_shares, InsuranceFundError::InsufficientIFShares);
+        validate!(
+            &e,
+            user_if_shares >= n_shares,
+            InsuranceFundError::InsufficientIFShares
+        );
 
         // Update the user stake
         stake.last_withdraw_request_shares = n_shares;
@@ -298,27 +281,31 @@ impl InsuranceFundTrait for InsuranceFund {
         );
 
         // "if stake base != base"
-        validate!(&e, stake.if_base == shares_base, InsuranceFundError::InvalidIFRebase);
+        validate!(
+            &e,
+            stake.if_base == shares_base,
+            InsuranceFundError::InvalidIFRebase
+        );
 
         stake.last_withdraw_request_value = if_shares_to_vault_amount(
             &e,
             stake.last_withdraw_request_shares,
             total_shares,
-            insurance_vault_amount
-        ).min(insurance_vault_amount.saturating_sub(1));
+            insurance_vault_amount,
+        )
+        .min(insurance_vault_amount.saturating_sub(1));
 
         //  "Requested withdraw value is not below Insurance Fund balance"
         validate!(
             &e,
-            stake.last_withdraw_request_value == 0 ||
-                stake.last_withdraw_request_value < insurance_vault_amount,
+            stake.last_withdraw_request_value == 0
+                || stake.last_withdraw_request_value < insurance_vault_amount,
             InsuranceFundError::InvalidIFUnstakeSize
         );
 
         let if_shares_after = stake.checked_if_shares(&e);
 
         FundEvents::new(&e).if_stake_record(
-            now,
             user.clone(),
             StakeAction::WithdrawRequest,
             stake.last_withdraw_request_value,
@@ -326,7 +313,7 @@ impl InsuranceFundTrait for InsuranceFund {
             if_shares_before,
             total_if_shares_before,
             if_shares_after,
-            total_shares
+            total_shares,
         );
 
         stake.last_withdraw_request_ts = now;
@@ -385,7 +372,11 @@ impl InsuranceFundTrait for InsuranceFund {
         let total_if_shares_before = total_shares;
 
         //  "if stake base != base"
-        validate!(&e, stake.if_base == shares_base, InsuranceFundError::InvalidIFRebase);
+        validate!(
+            &e,
+            stake.if_base == shares_base,
+            InsuranceFundError::InvalidIFRebase
+        );
 
         let if_shares_lost = calculate_if_shares_lost(&e, &stake, insurance_vault_amount);
 
@@ -396,7 +387,6 @@ impl InsuranceFundTrait for InsuranceFund {
         let if_shares_after = stake.checked_if_shares(&e);
 
         FundEvents::new(&e).if_stake_record(
-            now,
             user.clone(),
             StakeAction::WithdrawCancelRequest,
             0,
@@ -404,7 +394,7 @@ impl InsuranceFundTrait for InsuranceFund {
             if_shares_before,
             total_if_shares_before,
             if_shares_after,
-            total_shares
+            total_shares,
         );
 
         stake.last_withdraw_request_shares = 0;
@@ -484,7 +474,11 @@ impl InsuranceFundTrait for InsuranceFund {
         //  "Must submit withdraw request and wait the escrow period"
         validate!(&e, n_shares > 0, InsuranceFundError::InvalidIFUnstake);
 
-        validate!(&e, if_shares_before >= n_shares, InsuranceFundError::InsufficientIFShares);
+        validate!(
+            &e,
+            if_shares_before >= n_shares,
+            InsuranceFundError::InsufficientIFShares
+        );
 
         let amount = if_shares_to_vault_amount(&e, n_shares, total_shares, insurance_vault_amount);
 
@@ -506,7 +500,6 @@ impl InsuranceFundTrait for InsuranceFund {
         let if_shares_after = stake.checked_if_shares(&e);
 
         FundEvents::new(&e).if_stake_record(
-            now,
             user.clone(),
             StakeAction::Withdraw,
             withdraw_amount,
@@ -514,7 +507,7 @@ impl InsuranceFundTrait for InsuranceFund {
             if_shares_before,
             total_if_shares_before,
             if_shares_after,
-            total_shares
+            total_shares,
         );
 
         save_stake(&e, &user, &stake);
@@ -524,12 +517,16 @@ impl InsuranceFundTrait for InsuranceFund {
             &get_token(&e),
             &e.current_contract_address(),
             &user,
-            &(withdraw_amount as i128)
+            &(withdraw_amount as i128),
         );
 
         let insurance_vault_amount = get_insurance_vault_amount(&e);
         // "insurance_fund_vault.amount must remain > 0"
-        validate!(&e, insurance_vault_amount > 0, InsuranceFundError::InvalidIFDetected);
+        validate!(
+            &e,
+            insurance_vault_amount > 0,
+            InsuranceFundError::InvalidIFDetected
+        );
     }
 
     // Collects a premium payment from a pool or protocol participant into the Insurance Fund.
@@ -570,7 +567,7 @@ impl InsuranceFundTrait for InsuranceFund {
         function is invoked to pay premiums.
 
         Access to this function has been left open (not restricted to only the
-        PoolSwapFee contract) to allow other methods of protocol revenue to 
+        PoolSwapFee contract) to allow other methods of protocol revenue to
         eventually contribute to premium payments.
          */
 
@@ -579,7 +576,7 @@ impl InsuranceFundTrait for InsuranceFund {
             &get_token(&e),
             &sender,
             &e.current_contract_address(),
-            &(amount as i128)
+            &(amount as i128),
         );
 
         FundEvents::new(&e).collect_premium(sender, amount);
@@ -649,7 +646,7 @@ impl InsuranceFundTrait for InsuranceFund {
 
         let (slope1, slope2) = (get_rate_slope_a(&e), get_rate_slope_b(&e));
 
-        calculate_rate(&e, utilization, optimal_utilization, base_rate, slope1, slope2)
+        calculate_rate(utilization, optimal_utilization, base_rate, slope1, slope2)
     }
 
     fn get_base_rate(e: Env) -> i32 {
@@ -777,7 +774,7 @@ impl AdminInterface for InsuranceFund {
     // * `InsuranceFundError::InvalidIFDetected` if the payout fully depletes the Insurance Fund.
     fn resolve_liquidity_deficit(e: Env, admin: Address, pool_address: Address) {
         admin.require_auth();
-        /* Currently, only the Insurance Fund admin may resolve deficits, however, our goal 
+        /* Currently, only the Insurance Fund admin may resolve deficits, however, our goal
         is to either: a) automate within `Pool.swap()` itself; or b) decentralize via the Normal DAO */
         require_admin(&e, &admin);
 
@@ -788,10 +785,13 @@ impl AdminInterface for InsuranceFund {
         let pay_from_insurance: u128 = e.invoke_contract(
             &pool_address,
             &Symbol::new(&e, "pay_insurance_claim"),
-            Vec::from_array(&e, [
-                e.current_contract_address().to_val(),
-                insurance_vault_amount.into_val(&e),
-            ])
+            Vec::from_array(
+                &e,
+                [
+                    e.current_contract_address().to_val(),
+                    insurance_vault_amount.into_val(&e),
+                ],
+            ),
         );
 
         if pay_from_insurance > 0 {
@@ -804,7 +804,11 @@ impl AdminInterface for InsuranceFund {
 
             // Error if a claim leaves removes all insurance
             let new_insurance_vault_amount = get_insurance_vault_amount(&e);
-            validate!(&e, new_insurance_vault_amount > 0, InsuranceFundError::InvalidIFDetected);
+            validate!(
+                &e,
+                new_insurance_vault_amount > 0,
+                InsuranceFundError::InvalidIFDetected
+            );
         }
     }
 
@@ -836,10 +840,23 @@ impl AdminInterface for InsuranceFund {
         optimal_utilization: u32,
         base_rate: i32,
         rate_slope_a: u32,
-        rate_slope_b: u32
+        rate_slope_b: u32,
     ) {
         admin.require_auth();
         require_admin(&e, &admin);
+
+        validate_percentages(
+            &e,
+            &Vec::from_array(
+                &e,
+                [
+                    optimal_utilization as i32,
+                    base_rate,
+                    rate_slope_a as i32,
+                    rate_slope_b as i32,
+                ],
+            ),
+        );
 
         set_optimal_utilization(&e, &optimal_utilization);
         set_base_rate(&e, &base_rate);
@@ -988,11 +1005,10 @@ impl TransferableContract for InsuranceFund {
         let access_control = AccessControl::new(&e);
         let role = Role::from_symbol(&e, role_name);
         match access_control.get_transfer_ownership_deadline(&role) {
-            0 =>
-                match access_control.get_role_safe(&role) {
-                    Some(address) => address,
-                    None => panic_with_error!(&e, AccessControlError::RoleNotFound),
-                }
+            0 => match access_control.get_role_safe(&role) {
+                Some(address) => address,
+                None => panic_with_error!(&e, AccessControlError::RoleNotFound),
+            },
             _ => access_control.get_future_address(&role),
         }
     }

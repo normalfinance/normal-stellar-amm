@@ -3,8 +3,8 @@
 use crate::testutils::Setup;
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{ symbol_short, Address, Symbol };
-use utils::test_utils::{ install_dummy_wasm, jump };
+use soroban_sdk::{symbol_short, Address, Symbol};
+use utils::test_utils::{install_dummy_wasm, jump};
 
 // test admin transfer ownership
 #[test]
@@ -17,7 +17,9 @@ fn test_admin_transfer_ownership_too_early() {
 
     buffer.commit_transfer_ownership(&admin_original, &symbol_short!("Admin"), &admin_new);
     // check admin not changed yet by calling protected method
-    assert!(buffer.try_revert_transfer_ownership(&admin_new, &symbol_short!("Admin")).is_err());
+    assert!(buffer
+        .try_revert_transfer_ownership(&admin_new, &symbol_short!("Admin"))
+        .is_err());
     jump(&setup.env, ADMIN_ACTIONS_DELAY - 1);
     buffer.apply_transfer_ownership(&admin_original, &symbol_short!("Admin"));
 }
@@ -55,7 +57,9 @@ fn test_admin_transfer_ownership_reverted() {
 
     buffer.commit_transfer_ownership(&admin_original, &symbol_short!("Admin"), &admin_new);
     // check admin not changed yet by calling protected method
-    assert!(buffer.try_revert_transfer_ownership(&admin_new, &symbol_short!("Admin")).is_err());
+    assert!(buffer
+        .try_revert_transfer_ownership(&admin_new, &symbol_short!("Admin"))
+        .is_err());
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     buffer.revert_transfer_ownership(&admin_original, &symbol_short!("Admin"));
     buffer.apply_transfer_ownership(&admin_original, &symbol_short!("Admin"));
@@ -70,7 +74,9 @@ fn test_admin_transfer_ownership() {
 
     buffer.commit_transfer_ownership(&admin_original, &symbol_short!("Admin"), &admin_new);
     // check admin not changed yet by calling protected method
-    assert!(buffer.try_revert_transfer_ownership(&admin_new, &symbol_short!("Admin")).is_err());
+    assert!(buffer
+        .try_revert_transfer_ownership(&admin_new, &symbol_short!("Admin"))
+        .is_err());
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     buffer.apply_transfer_ownership(&admin_original, &symbol_short!("Admin"));
 
@@ -88,12 +94,16 @@ fn test_emergency_admin_transfer_ownership_too_early() {
     buffer.commit_transfer_ownership(
         &setup.admin,
         &Symbol::new(&setup.env, "EmergencyAdmin"),
-        &emergency_admin_new
+        &emergency_admin_new,
     );
 
     // check emergency admin not changed yet by calling protected method
-    assert!(buffer.try_set_emergency_mode(&emergency_admin_new, &false).is_err());
-    assert!(buffer.try_set_emergency_mode(&setup.emergency_admin, &false).is_ok());
+    assert!(buffer
+        .try_set_emergency_mode(&emergency_admin_new, &false)
+        .is_err());
+    assert!(buffer
+        .try_set_emergency_mode(&setup.emergency_admin, &false)
+        .is_ok());
 
     jump(&setup.env, ADMIN_ACTIONS_DELAY - 1);
     buffer.apply_transfer_ownership(&setup.admin, &Symbol::new(&setup.env, "EmergencyAdmin"));
@@ -109,12 +119,12 @@ fn test_emergency_admin_transfer_ownership_twice() {
     buffer.commit_transfer_ownership(
         &setup.admin,
         &Symbol::new(&setup.env, "EmergencyAdmin"),
-        &emergency_admin_new
+        &emergency_admin_new,
     );
     buffer.commit_transfer_ownership(
         &setup.admin,
         &Symbol::new(&setup.env, "EmergencyAdmin"),
-        &emergency_admin_new
+        &emergency_admin_new,
     );
 }
 
@@ -138,12 +148,16 @@ fn test_emergency_admin_transfer_ownership_reverted() {
     buffer.commit_transfer_ownership(
         &setup.admin,
         &Symbol::new(&setup.env, "EmergencyAdmin"),
-        &emergency_admin_new
+        &emergency_admin_new,
     );
 
     // check emergency admin not changed yet by calling protected method
-    assert!(buffer.try_set_emergency_mode(&emergency_admin_new, &false).is_err());
-    assert!(buffer.try_set_emergency_mode(&setup.emergency_admin, &false).is_ok());
+    assert!(buffer
+        .try_set_emergency_mode(&emergency_admin_new, &false)
+        .is_err());
+    assert!(buffer
+        .try_set_emergency_mode(&setup.emergency_admin, &false)
+        .is_ok());
 
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     buffer.revert_transfer_ownership(&setup.admin, &Symbol::new(&setup.env, "EmergencyAdmin"));
@@ -159,19 +173,27 @@ fn test_emergency_admin_transfer_ownership() {
     buffer.commit_transfer_ownership(
         &setup.admin,
         &Symbol::new(&setup.env, "EmergencyAdmin"),
-        &emergency_admin_new
+        &emergency_admin_new,
     );
 
     // check emergency admin not changed yet by calling protected method
-    assert!(buffer.try_set_emergency_mode(&emergency_admin_new, &false).is_err());
-    assert!(buffer.try_set_emergency_mode(&setup.emergency_admin, &false).is_ok());
+    assert!(buffer
+        .try_set_emergency_mode(&emergency_admin_new, &false)
+        .is_err());
+    assert!(buffer
+        .try_set_emergency_mode(&setup.emergency_admin, &false)
+        .is_ok());
 
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
     buffer.apply_transfer_ownership(&setup.admin, &Symbol::new(&setup.env, "EmergencyAdmin"));
 
     // check emergency admin has changed
-    assert!(buffer.try_set_emergency_mode(&emergency_admin_new, &false).is_ok());
-    assert!(buffer.try_set_emergency_mode(&setup.emergency_admin, &false).is_err());
+    assert!(buffer
+        .try_set_emergency_mode(&emergency_admin_new, &false)
+        .is_ok());
+    assert!(buffer
+        .try_set_emergency_mode(&setup.emergency_admin, &false)
+        .is_err());
 }
 
 #[test]
@@ -185,15 +207,22 @@ fn test_transfer_ownership_separate_deadlines() {
         buffer.get_future_address(&Symbol::new(&setup.env, "EmergencyAdmin")),
         setup.emergency_admin
     );
-    assert_eq!(buffer.get_future_address(&symbol_short!("Admin")), setup.admin);
+    assert_eq!(
+        buffer.get_future_address(&symbol_short!("Admin")),
+        setup.admin
+    );
 
-    assert!(buffer.try_set_emergency_mode(&emergency_admin_new, &false).is_err());
-    assert!(buffer.try_set_emergency_mode(&setup.emergency_admin, &false).is_ok());
+    assert!(buffer
+        .try_set_emergency_mode(&emergency_admin_new, &false)
+        .is_err());
+    assert!(buffer
+        .try_set_emergency_mode(&setup.emergency_admin, &false)
+        .is_ok());
 
     buffer.commit_transfer_ownership(
         &setup.admin,
         &Symbol::new(&setup.env, "EmergencyAdmin"),
-        &emergency_admin_new
+        &emergency_admin_new,
     );
     jump(&setup.env, 10);
     buffer.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &admin_new);
@@ -202,11 +231,16 @@ fn test_transfer_ownership_separate_deadlines() {
         buffer.get_future_address(&Symbol::new(&setup.env, "EmergencyAdmin")),
         emergency_admin_new
     );
-    assert_eq!(buffer.get_future_address(&symbol_short!("Admin")), admin_new);
+    assert_eq!(
+        buffer.get_future_address(&symbol_short!("Admin")),
+        admin_new
+    );
 
     jump(&setup.env, ADMIN_ACTIONS_DELAY + 1 - 10);
     buffer.apply_transfer_ownership(&setup.admin, &Symbol::new(&setup.env, "EmergencyAdmin"));
-    assert!(buffer.try_apply_transfer_ownership(&setup.admin, &symbol_short!("Admin")).is_err());
+    assert!(buffer
+        .try_apply_transfer_ownership(&setup.admin, &symbol_short!("Admin"))
+        .is_err());
 
     assert_eq!(
         buffer.get_future_address(&Symbol::new(&setup.env, "EmergencyAdmin")),
@@ -216,13 +250,20 @@ fn test_transfer_ownership_separate_deadlines() {
     jump(&setup.env, 10);
     buffer.apply_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
 
-    assert_eq!(buffer.get_future_address(&symbol_short!("Admin")), admin_new);
+    assert_eq!(
+        buffer.get_future_address(&symbol_short!("Admin")),
+        admin_new
+    );
 
     // check ownership transfer is complete. new admin is capable to call protected methods
     //      and new emergency admin can change toggle emergency mode
     buffer.commit_transfer_ownership(&admin_new, &Symbol::new(&setup.env, "Admin"), &setup.admin);
-    assert!(buffer.try_set_emergency_mode(&emergency_admin_new, &false).is_ok());
-    assert!(buffer.try_set_emergency_mode(&setup.emergency_admin, &false).is_err());
+    assert!(buffer
+        .try_set_emergency_mode(&emergency_admin_new, &false)
+        .is_ok());
+    assert!(buffer
+        .try_set_emergency_mode(&setup.emergency_admin, &false)
+        .is_err());
 }
 
 // upgrade pool & token
@@ -300,7 +341,9 @@ fn test_set_emergency_mode_emergency_admin() {
 fn test_set_emergency_mode_admin() {
     let setup = Setup::default();
     let buffer = setup.buffer;
-    assert!(buffer.try_set_emergency_mode(&setup.emergency_admin, &false).is_ok());
+    assert!(buffer
+        .try_set_emergency_mode(&setup.emergency_admin, &false)
+        .is_ok());
 }
 
 // kill switches
@@ -310,10 +353,7 @@ fn test_kill_deposit() {
     let buffer = setup.buffer;
     let user = Address::generate(&setup.env);
 
-    for (addr, is_ok) in [
-        (user.clone(), false),
-        (setup.admin.clone(), true),
-    ] {
+    for (addr, is_ok) in [(user.clone(), false), (setup.admin.clone(), true)] {
         assert_eq!(buffer.try_kill_deposit(&addr).is_ok(), is_ok);
     }
 }
@@ -324,11 +364,11 @@ fn test_kill_resolve_liquidity_deficit() {
     let buffer = setup.buffer;
     let user = Address::generate(&setup.env);
 
-    for (addr, is_ok) in [
-        (user.clone(), false),
-        (setup.admin.clone(), true),
-    ] {
-        assert_eq!(buffer.try_kill_resolve_liquidity_deficit(&addr).is_ok(), is_ok);
+    for (addr, is_ok) in [(user.clone(), false), (setup.admin.clone(), true)] {
+        assert_eq!(
+            buffer.try_kill_resolve_liquidity_deficit(&addr).is_ok(),
+            is_ok
+        );
     }
 }
 
@@ -338,10 +378,7 @@ fn test_unkill_deposit() {
     let buffer = setup.buffer;
     let user = Address::generate(&setup.env);
 
-    for (addr, is_ok) in [
-        (user.clone(), false),
-        (setup.admin.clone(), true),
-    ] {
+    for (addr, is_ok) in [(user.clone(), false), (setup.admin.clone(), true)] {
         assert_eq!(buffer.try_unkill_deposit(&addr).is_ok(), is_ok);
     }
 }
@@ -352,11 +389,11 @@ fn test_unkill_resolve_liquidity_deficit() {
     let buffer = setup.buffer;
     let user = Address::generate(&setup.env);
 
-    for (addr, is_ok) in [
-        (user.clone(), false),
-        (setup.admin.clone(), true),
-    ] {
-        assert_eq!(buffer.try_unkill_resolve_liquidity_deficit(&addr).is_ok(), is_ok);
+    for (addr, is_ok) in [(user.clone(), false), (setup.admin.clone(), true)] {
+        assert_eq!(
+            buffer.try_unkill_resolve_liquidity_deficit(&addr).is_ok(),
+            is_ok
+        );
     }
 }
 
@@ -368,11 +405,13 @@ fn test_set_min_time_between_payouts() {
     let buffer = setup.buffer;
     let user = Address::generate(&setup.env);
 
-    for (addr, is_ok) in [
-        (user, false),
-        (setup.admin, true),
-    ] {
-        assert_eq!(buffer.try_set_min_time_between_payouts(&addr, &1_000_000_u64).is_ok(), is_ok);
+    for (addr, is_ok) in [(user, false), (setup.admin, true)] {
+        assert_eq!(
+            buffer
+                .try_set_min_time_between_payouts(&addr, &1_000_000_u64)
+                .is_ok(),
+            is_ok
+        );
     }
 }
 
@@ -382,11 +421,11 @@ fn test_set_min_reserve_ratio() {
     let buffer = setup.buffer;
     let user = Address::generate(&setup.env);
 
-    for (addr, is_ok) in [
-        (user, false),
-        (setup.admin, true),
-    ] {
-        assert_eq!(buffer.try_set_min_reserve_ratio(&addr, &500_u32).is_ok(), is_ok);
+    for (addr, is_ok) in [(user, false), (setup.admin, true)] {
+        assert_eq!(
+            buffer.try_set_min_reserve_ratio(&addr, &500_u32).is_ok(),
+            is_ok
+        );
     }
 }
 
@@ -397,12 +436,11 @@ fn test_set_reserve_max_balance() {
     let token = Address::generate(&setup.env);
     let user = Address::generate(&setup.env);
 
-    for (addr, is_ok) in [
-        (user, false),
-        (setup.admin, true),
-    ] {
+    for (addr, is_ok) in [(user, false), (setup.admin, true)] {
         assert_eq!(
-            buffer.try_set_reserve_max_balance(&addr, &token, &1_000_000_u128).is_ok(),
+            buffer
+                .try_set_reserve_max_balance(&addr, &token, &1_000_000_u128)
+                .is_ok(),
             is_ok
         );
     }

@@ -1,5 +1,5 @@
 [package]
-name = "pool_tokens"
+name = "token_synthetic"
 version.workspace = true
 edition = "2021"
 publish = false

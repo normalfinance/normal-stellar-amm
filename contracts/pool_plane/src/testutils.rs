@@ -1,8 +1,8 @@
 #![cfg(test)]
 
 use crate::PoolPlaneClient;
-use soroban_sdk::testutils::{ Address as _, Ledger, LedgerInfo };
-use soroban_sdk::{ Address, Env, Symbol };
+use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
+use soroban_sdk::{Address, Env, Symbol};
 
 fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
     let client = PoolPlaneClient::new(e, &e.register(crate::contract::PoolPlane {}, ()));
@@ -45,7 +45,7 @@ impl Default for Setup<'_> {
         plane.commit_transfer_ownership(
             &admin,
             &Symbol::new(&env, "EmergencyAdmin"),
-            &emergency_admin
+            &emergency_admin,
         );
         plane.apply_transfer_ownership(&admin, &Symbol::new(&env, "EmergencyAdmin"));
 

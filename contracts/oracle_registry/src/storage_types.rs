@@ -1,47 +1,8 @@
 use soroban_sdk::contracttype;
 use utils::{
-    constant::{ PERCENTAGE_PRECISION_U64, PRICE_PRECISION },
-    errors::oracle_error::OracleError,
+    constant::PERCENTAGE_PRECISION_U64, errors::oracle_error::OracleError,
     state::oracle_registry::OraclePriceData,
 };
-
-#[contracttype]
-#[derive(Default, Clone, Copy, Eq, PartialEq, Debug)]
-pub struct HistoricalOracleData {
-    pub last_oracle_price: u128,
-    pub last_oracle_delay: u64, // amount of time since last update.
-    pub last_oracle_price_twap: u128,
-    pub last_oracle_price_twap_ts: u64, // unix_timestamp of last snapshot.
-}
-
-impl HistoricalOracleData {
-    pub fn default_quote_oracle() -> Self {
-        HistoricalOracleData {
-            last_oracle_price: PRICE_PRECISION,
-            last_oracle_delay: 0,
-            last_oracle_price_twap: PRICE_PRECISION,
-            ..HistoricalOracleData::default()
-        }
-    }
-
-    pub fn default_price(price: u128) -> Self {
-        HistoricalOracleData {
-            last_oracle_price: price,
-            last_oracle_delay: 10,
-            last_oracle_price_twap: price,
-            ..HistoricalOracleData::default()
-        }
-    }
-
-    pub fn default_with_current_oracle(oracle_price_data: OraclePriceData) -> Self {
-        HistoricalOracleData {
-            last_oracle_price: oracle_price_data.price,
-            last_oracle_delay: oracle_price_data.delay,
-            last_oracle_price_twap: oracle_price_data.price,
-            ..HistoricalOracleData::default()
-        }
-    }
-}
 
 #[contracttype]
 #[derive(Copy, Clone, Debug)]
@@ -79,7 +40,9 @@ impl Default for OracleGuardRails {
 
 impl OracleGuardRails {
     pub fn max_oracle_twap_percent_divergence(&self) -> u64 {
-        self.price_divergence.oracle_twap_percent_divergence.max(PERCENTAGE_PRECISION_U64 / 2)
+        self.price_divergence
+            .oracle_twap_percent_divergence
+            .max(PERCENTAGE_PRECISION_U64 / 2)
     }
 }
 

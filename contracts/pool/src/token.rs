@@ -1,9 +1,22 @@
 use crate::storage::get_pool;
-use pool_tokens::get_token_synthetic;
-use soroban_sdk::{xdr::ToXdr, Address, Bytes, BytesN, Env};
+use soroban_sdk::{xdr::ToXdr, Address, Bytes, BytesN, Env, Symbol};
+use token_synthetic::get_token_synthetic;
 use utils::token::transfer_token;
 
-pub fn create_contract(
+pub fn create_synthetic_token_contract(
+    e: &Env,
+    token_wasm_hash: BytesN<32>,
+    asset: &Symbol,
+) -> Address {
+    let mut salt = Bytes::new(e);
+    salt.append(&asset.to_xdr(e));
+    let salt = e.crypto().sha256(&salt);
+    e.deployer()
+        .with_current_contract(salt)
+        .deploy_v2(token_wasm_hash, ())
+}
+
+pub fn create_lp_token_contract(
     e: &Env,
     token_wasm_hash: BytesN<32>,
     token_a: &Address,

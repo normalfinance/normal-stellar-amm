@@ -1,27 +1,21 @@
-use crate::events::{ Events, PoolRouterEvents };
+use crate::events::{Events, PoolRouterEvents};
 use crate::incentives::get_incentives_manager;
 use crate::liquidity_calculator::LiquidityCalculatorClient;
-use crate::storage::{ get_pool, get_pool_hash, get_pool_plane, get_token_hash, put_pool };
-use access_control::access::AccessControl;
-use access_control::management::{ MultipleAddressesManagementTrait, SingleAddressManagementTrait };
-use access_control::role::Role;
-use incentives::storage::{ RewardTokenStorageTrait };
-use soroban_sdk::{ String, U256 };
-use soroban_sdk::{
-    symbol_short,
-    xdr::ToXdr,
-    Address,
-    Bytes,
-    BytesN,
-    Env,
-    IntoVal,
-    Symbol,
-    Val,
-    Vec,
+use crate::storage::{
+    get_lp_token_hash, get_oracle_registry, get_pool, get_pool_hash, get_pool_plane, get_pools_vec,
+    get_synthetic_token_hash, put_pool, set_pools_vec,
 };
+use access_control::access::AccessControl;
+use access_control::management::{MultipleAddressesManagementTrait, SingleAddressManagementTrait};
+use access_control::role::Role;
+use incentives::storage::RewardTokenStorageTrait;
+use soroban_sdk::{
+    symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Symbol, Val, Vec,
+};
+use soroban_sdk::{String, U256};
 use utils::state::{
-    pool::{ InitializeAllParams, InitializeParams, PoolTier, RewardConfig },
     access::PrivilegedAddresses,
+    pool::{InitializeAllParams, InitializeParams, PoolTier, RewardConfig},
     token::TokenInitInfo,
 };
 
@@ -29,7 +23,7 @@ use utils::state::{
 
 Most AMMs use a merged salt consisting of two parts:
 1) A token salt (token_a and token_b)
-2) A fee percentage salt 
+2) A fee percentage salt
 
 This combined salt ensures only a single pool for each fee tier for each token pair
 may be created. This structure works fine for traditional AMMs, but does not satisfy
@@ -44,8 +38,8 @@ may be created.
 This design is intentional for three reasons:
 1)  There are limited quote assets with sufficient behavior to collateralize a synthetic asset.
 
-    Tokens like XLM have deep liquidity, broad support, and most importantly, similar price 
-    volatility to the assets being synthetically tracked. This volatility correlation is 
+    Tokens like XLM have deep liquidity, broad support, and most importantly, similar price
+    volatility to the assets being synthetically tracked. This volatility correlation is
     deeply important to the protocol so that liquidity imbalances do not grow overly large.
     Assets like USDC (and stablecoins in general) or other more/less volatile assets do not
     have a reliably similar volatility which creates too much risk of large liquidity imbalance.
@@ -60,7 +54,7 @@ This design is intentional for three reasons:
 
     Normal's only goal is to create and maintain a reliable protocol with pools that have deep
     liquidity and a secure price peg. 3rd party users are encouraged to create pools for
-    Normal Tokens with their desired quote token(s) on secondary markets such as Aquarius, 
+    Normal Tokens with their desired quote token(s) on secondary markets such as Aquarius,
     Soroswap, Phoenix, and more. This helps achieve more sufficient decentralization and
     creates better trading access and conditions given the natural arbitrage that follows
     primary to secondary market dynamics.
@@ -75,12 +69,13 @@ fn get_pool_salt(e: &Env, asset: &Symbol) -> BytesN<32> {
 
 pub fn deploy_pool(
     e: &Env,
-    tokens: &Vec<Address>,
+    token_b: &Address,
     assets: &(Symbol, Symbol),
+    synthetic_token_info: &(String, String),
     lp_token_info: &(String, String),
     fee_fraction: u32,
     tier: &PoolTier,
-    quote_max_insurance: u128
+    quote_max_insurance: u128,
 ) -> Address {
     let pool_wasm_hash = get_pool_hash(e);
     let (base_asset, _) = assets;
@@ -92,22 +87,36 @@ pub fn deploy_pool(
 
     init_pool(
         e,
-        tokens,
+        token_b,
         assets,
         &pool_contract_id,
+        synthetic_token_info,
         lp_token_info,
         fee_fraction,
         tier,
-        quote_max_insurance
+        quote_max_insurance,
     );
 
-    put_pool(e, base_asset.clone(), &pool_contract_id);
+    // Add pool contract address to Map<Symbol, Address>
+    put_pool(e, base_asset.clone(), &pool_contract_id.clone());
+
+    // Add pool contract address to Vec<Address>
+    let mut pools_vec = get_pools_vec(&e);
+    pools_vec.push_back(pool_contract_id.clone());
+    set_pools_vec(&e, &pools_vec);
 
     Events::new(e).add_pool(
-        tokens.clone(),
-        pool_contract_id.clone(),
         base_asset.clone(),
-        Vec::<Val>::from_array(e, [fee_fraction.into_val(e)])
+        token_b.clone(),
+        pool_contract_id.clone(),
+        Vec::<Val>::from_array(
+            e,
+            [
+                fee_fraction.into_val(e),
+                tier.into_val(e),
+                quote_max_insurance.into_val(e),
+            ],
+        ),
     );
 
     pool_contract_id
@@ -115,15 +124,17 @@ pub fn deploy_pool(
 
 fn init_pool(
     e: &Env,
-    tokens: &Vec<Address>,
+    token_b: &Address,
     assets: &(Symbol, Symbol),
     pool_contract_id: &Address,
+    synthetic_token_info: &(String, String),
     lp_token_info: &(String, String),
     fee_fraction: u32,
     tier: &PoolTier,
-    quote_max_insurance: u128
+    quote_max_insurance: u128,
 ) {
-    let token_wasm_hash = get_token_hash(e);
+    let lp_token_wasm_hash = get_lp_token_hash(e);
+    let synthetic_token_wasm_hash = get_synthetic_token_hash(e);
     let incentives = get_incentives_manager(e);
     let reward_token = incentives.storage().get_reward_token();
     let access_control = AccessControl::new(e);
@@ -133,11 +144,15 @@ fn init_pool(
     let emergency_admin = access_control
         .get_role_safe(&Role::EmergencyAdmin)
         .unwrap_or(admin.clone());
-    let rewards_admin = access_control.get_role_safe(&Role::RewardsAdmin).unwrap_or(admin.clone());
+    let rewards_admin = access_control
+        .get_role_safe(&Role::RewardsAdmin)
+        .unwrap_or(admin.clone());
     let operations_admin = access_control
         .get_role_safe(&Role::OperationsAdmin)
         .unwrap_or(admin.clone());
-    let pause_admin = access_control.get_role_safe(&Role::PauseAdmin).unwrap_or(admin.clone());
+    let pause_admin = access_control
+        .get_role_safe(&Role::PauseAdmin)
+        .unwrap_or(admin.clone());
     let emergency_pause_admins = access_control.get_role_addresses(&Role::EmergencyPauseAdmin);
 
     let plane = get_pool_plane(e);
@@ -153,10 +168,16 @@ fn init_pool(
                 emergency_pause_admins,
             },
             router: e.current_contract_address(),
+            oracle_registry: get_oracle_registry(e),
             assets: assets.clone(),
-            tokens: tokens.clone(),
+            token_b: token_b.clone(),
+            synthetic_token_info: TokenInitInfo {
+                token_wasm_hash: synthetic_token_wasm_hash.into_val(e),
+                name: synthetic_token_info.0.clone(),
+                symbol: synthetic_token_info.1.clone(),
+            },
             lp_token_info: TokenInitInfo {
-                token_wasm_hash: token_wasm_hash.into_val(e),
+                token_wasm_hash: lp_token_wasm_hash.into_val(e),
                 name: lp_token_info.0.clone(),
                 symbol: lp_token_info.1.clone(),
             },
@@ -171,16 +192,15 @@ fn init_pool(
     e.invoke_contract::<()>(
         pool_contract_id,
         &Symbol::new(e, "initialize_all"),
-        Vec::from_array(e, [params.into_val(e)])
+        Vec::from_array(e, [params.into_val(e)]),
     );
 }
 
 pub fn get_total_liquidity(e: &Env, asset: Symbol, calculator: Address) -> U256 {
     let pool = get_pool(e, &asset);
 
-    let pools_liquidity = LiquidityCalculatorClient::new(&e, &calculator).get_liquidity(
-        &Vec::from_array(e, [pool])
-    );
+    let pools_liquidity =
+        LiquidityCalculatorClient::new(&e, &calculator).get_liquidity(&Vec::from_array(e, [pool]));
 
     pools_liquidity.get(0).unwrap()
 }

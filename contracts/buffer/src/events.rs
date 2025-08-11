@@ -1,4 +1,4 @@
-use soroban_sdk::{ Address, Env, Symbol };
+use soroban_sdk::{Address, Env, Symbol};
 
 #[derive(Clone)]
 pub(crate) struct Events(Env);
@@ -18,11 +18,26 @@ impl Events {
 pub(crate) trait BufferEvents {
     fn deposit(&self, token: Address, user: Address, amount: u128);
 
-    fn resolve_liquidity_deficit(&self, token: Address, user: Address, amount: u128);
+    fn resolve_liquidity_deficit(
+        &self,
+        pool: Address,
+        token: Address,
+        user: Address,
+        amount: u128,
+        paid: u128,
+    );
 
     fn withdraw_surplus(&self, token: Address, user: Address, amount: u128);
 
     fn skim(&self, token: Address, user: Address, amount: i128);
+
+    //    _______     __       ____  ____   ________  _______  ________
+    //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\
+    //   (. |__) :) /    \    |   (  ) : |(:   \___/(: ______)(.  ___  :)
+    //   |:  ____/ /' /\  \   (:  |  | . ) \___  \   \/    |  |: \   ) ||
+    //   (|  /    //  __'  \   \\ \__/ //   __/  \\  // ___)_ (| (___\ ||
+    //  /|__/ \  /   /  \\  \  /\\ __ //\  /" \   :)(:      "||:       :)
+    // (_______)(___/    \___)(__________)(_______/  \_______)(________/
 
     fn kill_deposit(&self);
 
@@ -37,26 +52,47 @@ impl BufferEvents for Events {
     fn deposit(&self, token: Address, user: Address, amount: u128) {
         self.env()
             .events()
-            .publish((Symbol::new(self.env(), "deposit"), token, user), amount);
+            .publish((Symbol::new(self.env(), "deposit"), token), (user, amount));
     }
 
-    fn resolve_liquidity_deficit(&self, token: Address, user: Address, amount: u128) {
-        self.env()
-            .events()
-            .publish((Symbol::new(self.env(), "resolve_liquidity_deficit"), token, user), amount);
+    fn resolve_liquidity_deficit(
+        &self,
+        pool: Address,
+        token: Address,
+        user: Address,
+        amount: u128,
+        paid: u128,
+    ) {
+        self.env().events().publish(
+            (
+                Symbol::new(self.env(), "resolve_liquidity_deficit"),
+                pool,
+                token,
+            ),
+            (user, amount, paid),
+        );
     }
 
     fn withdraw_surplus(&self, token: Address, user: Address, amount: u128) {
-        self.env()
-            .events()
-            .publish((Symbol::new(self.env(), "withdraw_surplus"), token, user), amount);
+        self.env().events().publish(
+            (Symbol::new(self.env(), "withdraw_surplus"), token),
+            (user, amount),
+        );
     }
 
     fn skim(&self, token: Address, user: Address, amount: i128) {
         self.env()
             .events()
-            .publish((Symbol::new(self.env(), "skim"), token, user), amount);
+            .publish((Symbol::new(self.env(), "skim"), token), (user, amount));
     }
+
+    //    _______     __       ____  ____   ________  _______  ________
+    //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\
+    //   (. |__) :) /    \    |   (  ) : |(:   \___/(: ______)(.  ___  :)
+    //   |:  ____/ /' /\  \   (:  |  | . ) \___  \   \/    |  |: \   ) ||
+    //   (|  /    //  __'  \   \\ \__/ //   __/  \\  // ___)_ (| (___\ ||
+    //  /|__/ \  /   /  \\  \  /\\ __ //\  /" \   :)(:      "||:       :)
+    // (_______)(___/    \___)(__________)(_______/  \_______)(________/
 
     fn kill_deposit(&self) {
         self.env()
@@ -71,14 +107,16 @@ impl BufferEvents for Events {
     }
 
     fn kill_resolve_liquidity_deficit(&self) {
-        self.env()
-            .events()
-            .publish((Symbol::new(self.env(), "kill_resolve_liquidity_deficit"),), ())
+        self.env().events().publish(
+            (Symbol::new(self.env(), "kill_resolve_liquidity_deficit"),),
+            (),
+        )
     }
 
     fn unkill_resolve_liquidity_deficit(&self) {
-        self.env()
-            .events()
-            .publish((Symbol::new(self.env(), "unkill_resolve_liquidity_deficit"),), ())
+        self.env().events().publish(
+            (Symbol::new(self.env(), "unkill_resolve_liquidity_deficit"),),
+            (),
+        )
     }
 }

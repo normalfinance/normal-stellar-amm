@@ -2,9 +2,9 @@ name: Rust
 
 on:
   push:
-    branches: [ "master", "develop", "audit" ]
+    branches: ["master", "audit"]
   pull_request:
-    branches: [ "master", "develop", "audit" ]
+    branches: ["master", "audit"]
 
 permissions: {}
 
@@ -15,24 +15,23 @@ env:
 
 jobs:
   test:
-
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    - uses: Swatinem/rust-cache@v2
-    - name: Install Task
-      uses: arduino/setup-task@v1
-    - name: Install soroban-cli
-      uses: baptiste0928/cargo-install@v3
-      with:
-        crate: soroban-cli
-        version: 22.2.0
-        features: opt
-        locked: true
-    - name: Check code formatting
-      run: task fmt && git diff --exit-code
-    - name: Check all the necessary bindings are implemented
-      run: task check_bindings
-    - name: Run tests
-      run: task test
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Task
+        uses: arduino/setup-task@v1
+      - name: Install soroban-cli
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: soroban-cli
+          version: 22.2.0
+          features: opt
+          locked: true
+      - name: Check code formatting
+        run: task fmt && git diff --exit-code
+      - name: Check all the necessary bindings are implemented
+        run: task check_bindings
+      - name: Run tests
+        run: task test

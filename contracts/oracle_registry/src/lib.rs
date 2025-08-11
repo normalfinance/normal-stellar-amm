@@ -10,4 +10,4 @@ mod test;
 mod test_permissions;
 mod testutils;
 
-pub use contract::{ OracleRegistry, OracleRegistryClient };
+pub use contract::{OracleRegistry, OracleRegistryClient};

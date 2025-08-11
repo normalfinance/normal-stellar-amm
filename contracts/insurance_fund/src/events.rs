@@ -1,4 +1,4 @@
-use soroban_sdk::{ Address, Env, Symbol };
+use soroban_sdk::{Address, Env, Symbol};
 
 use crate::stake::StakeAction;
 
@@ -18,9 +18,16 @@ impl Events {
 }
 
 pub(crate) trait InsuranceFundEvents {
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
+
     fn if_stake_record(
         &self,
-        ts: u64,
         user: Address,
         action: StakeAction,
         amount: u128,
@@ -28,10 +35,18 @@ pub(crate) trait InsuranceFundEvents {
         if_shares_before: u128,
         total_if_shares_before: u128,
         if_shares_after: u128,
-        total_if_shares_after: u128
+        total_if_shares_after: u128,
     );
 
     fn collect_premium(&self, sender: Address, amount: u128);
+
+    //    _______     __       ____  ____   ________  _______  ________
+    //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\
+    //   (. |__) :) /    \    |   (  ) : |(:   \___/(: ______)(.  ___  :)
+    //   |:  ____/ /' /\  \   (:  |  | . ) \___  \   \/    |  |: \   ) ||
+    //   (|  /    //  __'  \   \\ \__/ //   __/  \\  // ___)_ (| (___\ ||
+    //  /|__/ \  /   /  \\  \  /\\ __ //\  /" \   :)(:      "||:       :)
+    // (_______)(___/    \___)(__________)(_______/  \_______)(________/
 
     fn kill_deposit(&self);
 
@@ -47,9 +62,16 @@ pub(crate) trait InsuranceFundEvents {
 }
 
 impl InsuranceFundEvents for Events {
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
+
     fn if_stake_record(
         &self,
-        ts: u64,
         user: Address,
         action: StakeAction,
         amount: u128,
@@ -57,22 +79,19 @@ impl InsuranceFundEvents for Events {
         if_shares_before: u128,
         total_if_shares_before: u128,
         if_shares_after: u128,
-        total_if_shares_after: u128
+        total_if_shares_after: u128,
     ) {
-        self.env()
-            .events()
-            .publish(
-                (Symbol::new(self.env(), "if_stake_record"), user, action),
-                (
-                    ts,
-                    amount,
-                    insurance_vault_amount_before,
-                    if_shares_before,
-                    total_if_shares_before,
-                    if_shares_after,
-                    total_if_shares_after,
-                )
-            );
+        self.env().events().publish(
+            (Symbol::new(self.env(), "if_stake_record"), user, action),
+            (
+                amount,
+                insurance_vault_amount_before,
+                if_shares_before,
+                total_if_shares_before,
+                if_shares_after,
+                total_if_shares_after,
+            ),
+        );
     }
 
     fn collect_premium(&self, sender: Address, amount: u128) {
@@ -80,6 +99,14 @@ impl InsuranceFundEvents for Events {
             .events()
             .publish((Symbol::new(self.env(), "collect_premium"), sender), amount);
     }
+
+    //    _______     __       ____  ____   ________  _______  ________
+    //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\
+    //   (. |__) :) /    \    |   (  ) : |(:   \___/(: ______)(.  ___  :)
+    //   |:  ____/ /' /\  \   (:  |  | . ) \___  \   \/    |  |: \   ) ||
+    //   (|  /    //  __'  \   \\ \__/ //   __/  \\  // ___)_ (| (___\ ||
+    //  /|__/ \  /   /  \\  \  /\\ __ //\  /" \   :)(:      "||:       :)
+    // (_______)(___/    \___)(__________)(_______/  \_______)(________/
 
     fn kill_deposit(&self) {
         self.env()
