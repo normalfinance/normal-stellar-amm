@@ -66,6 +66,7 @@ pub const FEE_DENOMINATOR: u32 = 10000;
 pub const REWARD_PRECISION: u128 = 1_000_000_000_000_000_0000000;
 
 // TIME PERIODS
+pub const FIVE_SECONDS: u64 = 5;
 pub const ONE_MINUTE: i128 = 60_i128;
 pub const FIVE_MINUTE: i128 = (60 * 5) as i128;
 pub const ONE_HOUR: u64 = 3600;

@@ -1,6 +1,7 @@
 use soroban_sdk::contracttype;
 use utils::{
-    constant::PERCENTAGE_PRECISION_U64, errors::oracle_error::OracleError,
+    constant::{ FIVE_SECONDS, PERCENTAGE_PRECISION_U64 },
+    errors::oracle_error::OracleError,
     state::oracle_registry::OraclePriceData,
 };
 
@@ -31,7 +32,7 @@ impl Default for OracleGuardRails {
                 oracle_twap_percent_divergence: PERCENTAGE_PRECISION_U64 / 10, // 10%
             },
             validity: ValidityGuardRails {
-                seconds_before_stale_for_pool: 5,
+                seconds_before_stale_for_pool: FIVE_SECONDS,
                 too_volatile_ratio: 120, // allows up to ±20%
             },
         }
@@ -40,9 +41,7 @@ impl Default for OracleGuardRails {
 
 impl OracleGuardRails {
     pub fn max_oracle_twap_percent_divergence(&self) -> u64 {
-        self.price_divergence
-            .oracle_twap_percent_divergence
-            .max(PERCENTAGE_PRECISION_U64 / 2)
+        self.price_divergence.oracle_twap_percent_divergence.max(PERCENTAGE_PRECISION_U64 / 2)
     }
 }
 
