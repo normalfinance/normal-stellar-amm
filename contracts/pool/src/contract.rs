@@ -416,13 +416,11 @@ impl PoolTrait for Pool {
         let cached_base_oracle_price_data = get_oracle_price(
             &e,
             &pool.base_asset,
-            true, // Use cached since we just called rebalance
             NormalAction::AddLiquidity
         );
         let cached_quote_oracle_price_data = get_oracle_price(
             &e,
             &pool.quote_asset,
-            true, // Use cached since we just called rebalance
             NormalAction::AddLiquidity
         );
         
