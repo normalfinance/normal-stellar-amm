@@ -9,11 +9,15 @@ use crate::interface::{
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
 use crate::pool::{
-    get_amount_out_strict_receive, get_delta_a, get_net_liquidity_imbalance,
-    get_oracle_price, peg_price, rebalance, update_volume_30d,
+    get_amount_out_strict_receive, get_delta_a, get_net_liquidity_imbalance, get_oracle_price,
+    peg_price, rebalance, update_volume_30d,
 };
 use crate::storage::{
-    get_is_killed_claim, get_is_killed_deposit, get_is_killed_swap, get_is_killed_withdraw, get_mint_cap_fraction, get_plane, get_pool, get_reserve_a, get_reserve_b, get_router, get_token_future_wasm, has_plane, set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap, set_is_killed_withdraw, set_mint_cap_fraction, set_oracle_registry, set_plane, set_pool, set_reserve_a, set_reserve_b, set_router, set_token_future_wasm
+    get_is_killed_claim, get_is_killed_deposit, get_is_killed_swap, get_is_killed_withdraw,
+    get_mint_cap_fraction, get_plane, get_pool, get_reserve_a, get_reserve_b, get_router,
+    get_token_future_wasm, has_plane, set_is_killed_claim, set_is_killed_deposit,
+    set_is_killed_swap, set_is_killed_withdraw, set_mint_cap_fraction, set_oracle_registry,
+    set_plane, set_pool, set_reserve_a, set_reserve_b, set_router, set_token_future_wasm,
 };
 use crate::token::{
     create_lp_token_contract, create_synthetic_token_contract, transfer_a, transfer_b,

@@ -5,7 +5,8 @@ use soroban_sdk::{log, Address, Env, Symbol};
 use utils::{
     constant::{FIVE_MINUTE, PERCENTAGE_PRECISION_U64},
     math::{pool::sanitize_new_price, safe_math::SafeMath, stats::calculate_new_twap},
-    state::oracle_registry::{HistoricalOracleData, OraclePriceData, OracleValidity}, temporal::Delay,
+    state::oracle_registry::{HistoricalOracleData, OraclePriceData, OracleValidity},
+    temporal::Delay,
 };
 
 use crate::storage::{get_oracle_guard_rails, put_historical_oracle_data};

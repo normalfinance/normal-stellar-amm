@@ -1,6 +1,6 @@
 use core::cmp::max;
 
-use crate::errors::{PoolSwapFeeError};
+use crate::errors::PoolSwapFeeError;
 use crate::events::{Events, ProviderFeeEvents};
 use crate::incentives::get_incentives_manager;
 use crate::interface::{AdminInterface, PoolSwapFeeInterface};
@@ -19,7 +19,6 @@ use access_control::role::Role;
 use access_control::role::SymbolRepresentation;
 use access_control::transfer::TransferOwnershipTrait;
 use access_control::utils::require_admin;
-use token_lp::{get_total_lp_tokens, get_user_balance_lp};
 use reentrancy_guard::{enter, exit};
 use soroban_fixed_point_math::FixedPoint;
 use soroban_sdk::auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation};
@@ -27,6 +26,7 @@ use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
     contract, contractimpl, panic_with_error, vec, Address, BytesN, Env, IntoVal, Symbol, Vec,
 };
+use token_lp::{get_total_lp_tokens, get_user_balance_lp};
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
