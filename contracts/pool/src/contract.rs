@@ -71,6 +71,7 @@ use incentives::events::Events as RewardEvents;
 use incentives::storage::{ PoolIncentivesStorageTrait, RewardTokenStorageTrait };
 use reentrancy_guard::{ enter, exit };
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
+use soroban_fixed_point_math::FixedPoint;
 use soroban_sdk::{
     contract,
     contractimpl,
@@ -147,6 +148,53 @@ impl PoolCrunch for Pool {
         Self::init_pools_plane(e.clone(), params.plane);
         Self::initialize(e.clone(), params.base);
         Self::initialize_incentives_config(e.clone(), params.reward_config.reward_token);
+    }
+}
+
+// Validates that the share calculation prevents value extraction after synthetic minting
+//
+// This function ensures that new depositors cannot exploit synthetic Token A minting
+// by receiving shares disproportionate to their actual contribution to the pool's total value.
+//
+// # Arguments
+// * `e` - Soroban environment reference.
+// * `token_b_amount` - Amount of Token B being deposited.
+// * `shares_to_mint` - Number of shares calculated to be minted.
+// * `total_shares` - Total shares before this deposit.
+// * `reserve_a` - Current Token A reserves (including synthetic tokens).
+// * `reserve_b_before_deposit` - Token B reserves before this deposit.
+// * `base_oracle_price` - Oracle price for base asset.
+// * `quote_oracle_price` - Oracle price for quote asset.
+fn validate_fair_share_calculation(
+    e: &Env,
+    token_b_amount: u128,
+    shares_to_mint: u128,
+    total_shares: u128,
+    reserve_a: u128,
+    reserve_b_before_deposit: u128,
+    base_oracle_price: u128,
+    quote_oracle_price: u128,
+) {
+    if total_shares > 0 && reserve_a > 0 {
+        // Calculate the minimum fair shares based on pool's total value
+        let token_a_value_in_token_b = reserve_a
+            .fixed_mul_floor(base_oracle_price, quote_oracle_price)
+            .unwrap();
+        
+        let total_pool_value = reserve_b_before_deposit + token_a_value_in_token_b;
+        
+        // Minimum shares should be proportional to contribution vs total pool value
+        let expected_min_shares = token_b_amount
+            .fixed_mul_floor(total_shares, total_pool_value)
+            .unwrap();
+        
+        // Allow for small rounding differences
+        let tolerance = expected_min_shares / 10000; 
+        let min_acceptable_shares = expected_min_shares.saturating_sub(tolerance);
+        
+        if shares_to_mint < min_acceptable_shares {
+            panic_with_error!(e, PoolError::UnfairShareCalculation);
+        }
     }
 }
 
@@ -361,7 +409,58 @@ impl PoolTrait for Pool {
 
         // Now calculate how many new pool shares to mint
         let total_shares = get_total_lp_tokens(&e);
-        let shares_to_mint = token_b_amount;
+        let reserve_a_after_rebalance = get_reserve_a(&e);
+        let reserve_b_after_deposit = get_reserve_b(&e);
+        
+        // Get oracle prices for validation (reuse the ones from rebalancing)
+        let cached_base_oracle_price_data = get_oracle_price(
+            &e,
+            &pool.base_asset,
+            true, // Use cached since we just called rebalance
+            NormalAction::AddLiquidity
+        );
+        let cached_quote_oracle_price_data = get_oracle_price(
+            &e,
+            &pool.quote_asset,
+            true, // Use cached since we just called rebalance
+            NormalAction::AddLiquidity
+        );
+        
+        let shares_to_mint = if total_shares == 0 {
+            // First deposit case - initialize pool with 1:1 ratio
+            token_b_amount
+        } else if reserve_a_after_rebalance == 0 {
+            // No synthetic tokens exist - use simple proportion based on Token B
+            token_b_amount
+                .fixed_mul_floor(total_shares, reserve_b_after_deposit - token_b_amount)
+                .unwrap()
+        } else {
+            // Both tokens exist - calculate proportional shares based on total pool value
+            // Calculate Token A value in Token B terms using oracle prices
+            let token_a_value_in_token_b = reserve_a_after_rebalance
+                .fixed_mul_floor(cached_base_oracle_price_data.price, cached_quote_oracle_price_data.price)
+                .unwrap();
+            
+            // Total pool value in Token B terms (before the deposit)
+            let total_pool_value_before_deposit = (reserve_b_after_deposit - token_b_amount) + token_a_value_in_token_b;
+            
+            // Calculate proportional shares
+            token_b_amount
+                .fixed_mul_floor(total_shares, total_pool_value_before_deposit)
+                .unwrap()
+        };
+
+        // Validate that the share calculation is fair and prevents value extraction
+        validate_fair_share_calculation(
+            &e,
+            token_b_amount,
+            shares_to_mint,
+            total_shares,
+            reserve_a_after_rebalance,
+            reserve_b_after_deposit - token_b_amount,
+            cached_base_oracle_price_data.price,
+            cached_quote_oracle_price_data.price,
+        );
 
         // First deposit: mint MIN_LIQUIDITY to contract itself to prevent dust attacks
         if total_shares == 0 {
@@ -396,6 +495,7 @@ impl PoolTrait for Pool {
 
         (token_b_amount, shares_to_mint)
     }
+
 
     // Swaps tokens in the pool by transferring an input token from the user and returning an output token,
     // ensuring pool invariants, oracle validity, and slippage constraints are upheld.
