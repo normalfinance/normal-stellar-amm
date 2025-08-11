@@ -31,6 +31,7 @@ use utils::state::oracle_registry::{
     HistoricalOracleData,
     OracleValidity,
 };
+use utils::temporal::Delay;
 
 #[contract]
 pub struct OracleRegistry;
@@ -432,14 +433,19 @@ impl AdminInterface for OracleRegistry {
         let oracle_guard_rails = get_oracle_guard_rails(&e);
         let historical_oracle_data = get_historical_oracle_data(&e, &asset);
 
-        let oracle_is_valid = oracle_validity(
-            &e,
-            historical_oracle_data.last_oracle_price_twap,
-            &(OraclePriceData {
-                price,
-                delay: now - historical_oracle_data.last_oracle_price_twap_ts,
-            }),
-        ) == OracleValidity::Valid;
+        let oracle_is_valid =
+            oracle_validity(
+                &e,
+                historical_oracle_data.last_oracle_price_twap,
+                &(OraclePriceData {
+                    price,
+                    delay: Delay::from_timestamp_diff_expect(
+                        now,
+                        historical_oracle_data.last_oracle_price_twap_ts,
+                        "Historical TWAP timestamp cannot be in the future"
+                    ),
+                })
+            ) == OracleValidity::Valid;
 
         if !oracle_is_valid {
             panic_with_error!(&e, OracleRegistryError::OracleInvalid);
@@ -457,10 +463,7 @@ impl AdminInterface for OracleRegistry {
             &e,
             &asset,
             &historical_oracle_data,
-            &(OraclePriceData {
-                price: price,
-                delay: 0,
-            }),
+            &(OraclePriceData { price: price, delay: Delay::ZERO }),
             oracle.sanitize_clamp_denominator,
             now,
             false,

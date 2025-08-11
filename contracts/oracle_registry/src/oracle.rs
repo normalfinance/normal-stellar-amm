@@ -37,6 +37,7 @@ pub fn get_oracle_price(e: &Env, oracle: &Address, asset: &Symbol, now: u64) -> 
     published_ts = oracle_price_data.timestamp;
 
     let oracle_delay = now.saturating_sub(published_ts);
+
     OraclePriceData {
         price: oracle_price,
         delay: oracle_delay,
@@ -86,13 +87,8 @@ pub fn update_twap(
         &asset,
         &(HistoricalOracleData {
             last_oracle_price_twap: oracle_price_twap,
-            // if registering {
-            //     0
-            // } else {
-            //     oracle_price_twap
-            // },
             last_oracle_price: oracle_price_data.price,
-            last_oracle_delay: oracle_price_data.delay,
+            last_oracle_delay: oracle_price_data.delay.as_seconds(),
             last_oracle_price_twap_ts: now,
         }),
     );

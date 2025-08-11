@@ -1,4 +1,5 @@
-use soroban_sdk::{contracttype, Address};
+use soroban_sdk::{ contracttype, Address };
+use crate::temporal::Delay;
 
 use crate::{
     constant::{ FIVE_MINUTE, PERCENTAGE_PRECISION_U64, PRICE_PRECISION },
@@ -9,7 +10,7 @@ use crate::{
 #[derive(Default, Clone, Copy, Debug)]
 pub struct OraclePriceData {
     pub price: u128,
-    pub delay: u64,
+    pub delay: Delay,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug, Default)]

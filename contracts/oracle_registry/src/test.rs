@@ -41,10 +41,10 @@ use utils::test_utils::jump;
 //         .set_price(&Vec::from_array(&setup.env, [new_oracle_price]), &now);
 
     // Fetch price from registry
-    let oracle_price_data = setup.registry.get_price(&setup.btc_asset_id);
+    // let oracle_price_data = setup.registry.get_price(&setup.btc_asset_id);
 
-    assert_eq!(oracle_price_data.0.last_oracle_price, new_oracle_price as u128);
-    assert_eq!(oracle_price_data.0.last_oracle_delay, 0);
+    // assert_eq!(oracle_price_data.price, new_oracle_price as u128);
+    // assert_eq!(oracle_price_data.delay.as_seconds(), 0);
 
 //     // Ensure historical data is updated
 //     // let last_price_info = setup.registry.get_last_price(&setup.btc_asset_id);
@@ -70,7 +70,7 @@ use utils::test_utils::jump;
 
 //     // TODO: price should come from historical oracle data
 //     assert_eq!(oracle_price_data.price, 100);
-//     assert_eq!(oracle_price_data.delay, 0);
+//     assert_eq!(oracle_price_data.delay.as_seconds(), 0);
 // }
 
 // #[test]
@@ -79,7 +79,7 @@ use utils::test_utils::jump;
 //     let oracle_price_data = setup.registry.get_price(&setup.asset_id, &false);
 //     // TODO: price should come from historical oracle data
 //     assert_eq!(oracle_price_data.price, 100);
-//     assert_eq!(oracle_price_data.delay, 0);
+//     assert_eq!(oracle_price_data.delay.as_seconds(), 0);
 // }
 
 // #[test]
@@ -160,7 +160,7 @@ fn test_register_oracle() {
 
     setup
         .registry
-        .get_price(&setup.btc_asset_id, &true, &NormalAction::Swap);
+        .get_price(&setup.btc_asset_id, &NormalAction::Swap);
     setup.registry.get_oracle(&setup.btc_asset_id);
     setup.registry.get_last_price(&setup.btc_asset_id);
 }
