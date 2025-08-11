@@ -8,7 +8,7 @@ pub fn sanitize_new_price(
     e: &Env,
     new_price: u128,
     last_price_twap: u128,
-    sanitize_clamp_denominator: i64,
+    sanitize_clamp_denominator: u64
 ) -> u128 {
     // when/if twap is 0, dont try to normalize new_price
     if last_price_twap == 0 {
