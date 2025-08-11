@@ -81,6 +81,8 @@ pub trait PoolTrait {
 
     fn get_fee_fraction(e: Env) -> u32;
 
+    fn get_mint_cap_fraction(e: Env) -> u32;
+
     fn get_insurance_coverage(e: Env) -> u128;
 
     // Get dictionary of basic pool information: type, fee, special parameters if any.
@@ -131,6 +133,8 @@ pub trait AdminInterfaceTrait {
         liquidity_max_imbalance: u128,
         quote_max_insurance: u128,
     );
+
+    fn set_mint_cap_fraction(e: Env, admin: Address, mint_cap_fraction: u32);
 
     fn set_expiry(e: Env, admin: Address, expiry_ts: u64);
 

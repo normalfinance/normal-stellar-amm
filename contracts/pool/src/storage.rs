@@ -19,8 +19,9 @@ enum DataKey {
     Router,          // the Pool Router contract address
     OracleRegistry,  // the Oracle Registry contract address
     LastOracleValid, // tracks whether the oracle was considered valid at the last pool update
-    LastTradeTs,     // the blockchain unix timestamp at the time of the last trade
-    LastUpdateTs,    // the last blockchain slot the amm was updated
+    LastTradeTs, // the blockchain unix timestamp at the time of the last trade
+    LastUpdateTs, // the last blockchain slot the amm was updated
+    MintCapFraction, // a bps cap on how much token_a can be minted when the pool is in reduce only mode
 
     // metrics
     Volume30d, // estimated total of volume in market
@@ -57,6 +58,12 @@ generate_instance_storage_getter_and_setter_with_default!(
     DataKey::LastUpdateTs,
     u64,
     0
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    mint_cap_fraction,
+    DataKey::MintCapFraction,
+    u32,
+    1000 // 0.1%
 );
 
 pub(crate) fn has_plane(e: &Env) -> bool {

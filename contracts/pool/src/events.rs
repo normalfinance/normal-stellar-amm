@@ -49,6 +49,8 @@ pub trait PoolEvents {
         delta_a: i128,
     );
 
+    fn capped_mint(&self,  base_oracle_price: u128, quote_oracle_price: u128, delta_a: i128);
+
     //    _______     __       ____  ____   ________  _______  ________
     //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\
     //   (. |__) :) /    \    |   (  ) : |(:   \___/(: ______)(.  ___  :)
@@ -130,6 +132,13 @@ impl PoolEvents for Events {
             (Symbol::new(e, "rebalance"),),
             (reserve_a, reserve_b, new_reserve_a, new_reserve_b, delta_a),
         );
+    }
+
+
+    fn capped_mint(&self, base_oracle_price: u128, quote_oracle_price: u128, delta_a: i128) {
+        let e = self.env();
+        e.events()
+            .publish((Symbol::new(e, "capped_mint"),), (base_oracle_price, quote_oracle_price, delta_a));
     }
 
     //    _______     __       ____  ____   ________  _______  ________

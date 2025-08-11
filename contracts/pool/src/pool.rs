@@ -8,6 +8,7 @@ use crate::plane::pool_plane::HistoricalOracleData;
 use crate::storage::get_last_oracle_valid;
 use crate::storage::get_last_trade_ts;
 use crate::storage::get_last_update_ts;
+use crate::storage::get_mint_cap_fraction;
 use crate::storage::get_oracle_registry;
 use crate::storage::get_volume_30d;
 use crate::storage::set_last_trade_ts;
@@ -311,13 +312,14 @@ pub fn get_delta_a(
 //
 // Uses oracle prices to calculate the required change in synthetic token supply to match
 // the peg. Adjusts the pool's reserve A accordingly and emits a rebalance event.
+// In ReduceOnly mode, prevents minting new synthetic tokens to avoid increasing synthetic asset exposure.
 //
 // # Arguments
 // * `e` - Soroban environment reference.
 // * `base_oracle_price` - Oracle price of the synthetic base asset.
 // * `quote_oracle_price` - Oracle price of the quote asset.
-// * `now` - Current ledger timestamp used in the emitted event.
-pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) {
+// * `pool_status` - Current pool status to determine if minting should be restricted.
+pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128, reduce_only: bool) {
     let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
 
     // Find the ideal reserve_a amount such that the pool's price is equal to the oracle price
@@ -328,9 +330,19 @@ pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) {
         base_oracle_price,
         quote_oracle_price,
     );
-
     if delta_a != 0 {
         if delta_a > 0 {
+            if reduce_only {
+                LiquidityPoolEvents::new(&e).capped_mint(base_oracle_price, quote_oracle_price, delta_a);
+
+                // allow minting up to 0.1 % of current supply per ledger
+                let mint_cap = (get_total_synthetic_tokens(&e) / get_mint_cap_fraction(&e) as u128) as i128;
+
+                if delta_a > mint_cap {
+                    panic_with_error!(&e, PoolError::SwapReduceOnly);
+                }
+            }
+        } else {
             mint_synthetic_tokens(&e, &e.current_contract_address(), delta_a);
             set_reserve_a(&e, &(reserve_a + (delta_a as u128)));
         }
