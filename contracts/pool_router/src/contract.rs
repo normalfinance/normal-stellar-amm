@@ -26,8 +26,8 @@ use access_control::transfer::TransferOwnershipTrait;
 use access_control::utils::{
     require_admin, require_operations_admin_or_owner, require_rewards_admin_or_owner,
 };
-use reentrancy_guard::{enter, exit};
 use incentives::storage::RewardTokenStorageTrait;
+use reentrancy_guard::{enter, exit};
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
     contract, contractimpl, panic_with_error, symbol_short, Address, BytesN, Env, IntoVal, Map,

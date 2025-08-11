@@ -3,12 +3,12 @@ use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{log, Address, Env, Symbol};
 // use soroban_fixed_point_math::
 use utils::{
-    constant::{ FIVE_MINUTE, PERCENTAGE_PRECISION_U64 },
-    math::{ pool::sanitize_new_price, safe_math::SafeMath, stats::calculate_new_twap },
-    state::oracle_registry::{ HistoricalOracleData, OraclePriceData, OracleValidity },
+    constant::{FIVE_MINUTE, PERCENTAGE_PRECISION_U64},
+    math::{pool::sanitize_new_price, safe_math::SafeMath, stats::calculate_new_twap},
+    state::oracle_registry::{HistoricalOracleData, OraclePriceData, OracleValidity},
 };
 
-use crate::{ storage::{ get_oracle_guard_rails, put_historical_oracle_data } };
+use crate::storage::{get_oracle_guard_rails, put_historical_oracle_data};
 
 // Fetches the latest oracle price and timestamp for a given asset.
 //
@@ -125,14 +125,12 @@ pub fn oracle_validity(
 
     // Volatility
     // if Δprice <= 0.80 or 1.20 <= Δprice → too volatile
-    let lower_bound = PERCENTAGE_PRECISION_U64.safe_sub(
-        e,
-        oracle_guard_rails.validity.too_volatile_ratio
-    );
-    let upper_bound = oracle_guard_rails.validity.too_volatile_ratio.safe_add(
-        e,
-        PERCENTAGE_PRECISION_U64
-    );
+    let lower_bound =
+        PERCENTAGE_PRECISION_U64.safe_sub(e, oracle_guard_rails.validity.too_volatile_ratio);
+    let upper_bound = oracle_guard_rails
+        .validity
+        .too_volatile_ratio
+        .safe_add(e, PERCENTAGE_PRECISION_U64);
 
     let price_delta = oracle_price.safe_div(e, last_oracle_twap.max(1)) as u64;
     let is_oracle_price_too_volatile = price_delta <= lower_bound || upper_bound <= price_delta;

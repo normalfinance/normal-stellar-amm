@@ -19,8 +19,8 @@ enum DataKey {
     Router,          // the Pool Router contract address
     OracleRegistry,  // the Oracle Registry contract address
     LastOracleValid, // tracks whether the oracle was considered valid at the last pool update
-    LastTradeTs, // the blockchain unix timestamp at the time of the last trade
-    LastUpdateTs, // the last blockchain slot the amm was updated
+    LastTradeTs,     // the blockchain unix timestamp at the time of the last trade
+    LastUpdateTs,    // the last blockchain slot the amm was updated
     MintCapFraction, // a bps cap on how much token_a can be minted when the pool is in reduce only mode
 
     // metrics

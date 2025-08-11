@@ -8,7 +8,7 @@ pub fn sanitize_new_price(
     e: &Env,
     new_price: u128,
     last_price_twap: u128,
-    sanitize_clamp_denominator: u64
+    sanitize_clamp_denominator: u64,
 ) -> u128 {
     assert!(new_price > 0, "new_price must be positive");
     assert!(last_price_twap >= 0, "last_price_twap must be non-negative");

@@ -1,13 +1,11 @@
 #![cfg(test)]
 extern crate std;
-use utils::state::oracle_registry::{
-    OracleGuardRails,
-    PriceDivergenceGuardRails,
-    ValidityGuardRails,
-};
 use crate::OracleRegistryClient;
 use sep_40_oracle::testutils::{Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM};
 use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
+use utils::state::oracle_registry::{
+    OracleGuardRails, PriceDivergenceGuardRails, ValidityGuardRails,
+};
 
 use soroban_sdk::{Address, Env, Symbol, Vec};
 use std::vec;

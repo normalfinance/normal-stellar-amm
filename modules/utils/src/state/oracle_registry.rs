@@ -1,8 +1,8 @@
-use soroban_sdk::{ contracttype, Address };
 use crate::temporal::Delay;
+use soroban_sdk::{contracttype, Address};
 
 use crate::{
-    constant::{ FIVE_MINUTE, PERCENTAGE_PRECISION_U64, PRICE_PRECISION },
+    constant::{FIVE_MINUTE, PERCENTAGE_PRECISION_U64, PRICE_PRECISION},
     errors::oracle_error::OracleError,
 };
 
@@ -99,7 +99,9 @@ impl Default for OracleGuardRails {
 
 impl OracleGuardRails {
     pub fn max_oracle_twap_percent_divergence(&self) -> u64 {
-        self.price_divergence.oracle_twap_percent_divergence.max(PERCENTAGE_PRECISION_U64 / 2)
+        self.price_divergence
+            .oracle_twap_percent_divergence
+            .max(PERCENTAGE_PRECISION_U64 / 2)
     }
 }
 

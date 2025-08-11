@@ -77,15 +77,11 @@ pub fn get_net_liquidity_imbalance(
 //
 // # Returns
 // * `OraclePriceData` — The current oracle price and delay since publication.
-pub fn get_oracle_price(
-    e: &Env,
-    asset: &Symbol,
-    action: NormalAction
-) -> HistoricalOracleData {
+pub fn get_oracle_price(e: &Env, asset: &Symbol, action: NormalAction) -> HistoricalOracleData {
     let (oracle_data, oracle_validity): (HistoricalOracleData, OracleValidity) = e.invoke_contract(
         &get_oracle_registry(e),
         &Symbol::new(e, "get_price"),
-        Vec::from_array(e, [e.current_contract_address().to_val(), asset.to_val()])
+        Vec::from_array(e, [e.current_contract_address().to_val(), asset.to_val()]),
     );
 
     // Calculate pool price
@@ -93,23 +89,18 @@ pub fn get_oracle_price(
     let pool_price = reserve_b / reserve_a;
 
     // Find % difference b/t pool price and oracle price
-    let oracle_pool_price_spread_pct = calculate_oracle_twap_price_spread_pct(
-        e,
-        pool_price,
-        oracle_data.last_oracle_price_twap
-    );
+    let oracle_pool_price_spread_pct =
+        calculate_oracle_twap_price_spread_pct(e, pool_price, oracle_data.last_oracle_price_twap);
 
     let oracle_guard_rails: OracleGuardRails = e.invoke_contract(
         &get_router(e), // TODO: update to oracle registry on merge
         &Symbol::new(e, "get_oracle_guard_rails"),
-        Vec::from_array(e, [])
+        Vec::from_array(e, []),
     );
 
     // Check if the oracle price is too divergent
-    let is_oracle_price_too_divergent = is_oracle_price_too_divergent(
-        oracle_pool_price_spread_pct,
-        oracle_guard_rails
-    );
+    let is_oracle_price_too_divergent =
+        is_oracle_price_too_divergent(oracle_pool_price_spread_pct, oracle_guard_rails);
     if !is_oracle_price_too_divergent {
         panic_with_error!(e, PoolError::InvalidOracle);
     }
@@ -137,12 +128,14 @@ pub fn get_oracle_price(
 pub fn calculate_oracle_twap_price_spread_pct(
     e: &Env,
     other_price: u128,
-    last_oracle_price_twap: u128
+    last_oracle_price_twap: u128,
 ) -> i64 {
     let price_spread = (other_price as u64).safe_sub(e, last_oracle_price_twap as u64);
 
     // price_spread_pct
-    price_spread.safe_mul(e, PRICE_PRECISION_U64).safe_div(e, other_price as u64) as i64
+    price_spread
+        .safe_mul(e, PRICE_PRECISION_U64)
+        .safe_div(e, other_price as u64) as i64
 }
 
 // Determines whether the oracle price diverges too far from the reserve price.
@@ -159,11 +152,12 @@ pub fn calculate_oracle_twap_price_spread_pct(
 // - `true` if the spread exceeds the maximum allowed divergence.
 pub fn is_oracle_price_too_divergent(
     price_spread_pct: i64,
-    oracle_guard_rails: OracleGuardRails
+    oracle_guard_rails: OracleGuardRails,
 ) -> bool {
-    let max_divergence = oracle_guard_rails.price_divergence.oracle_twap_percent_divergence.max(
-        PERCENTAGE_PRECISION_U64 / 10
-    );
+    let max_divergence = oracle_guard_rails
+        .price_divergence
+        .oracle_twap_percent_divergence
+        .max(PERCENTAGE_PRECISION_U64 / 10);
     price_spread_pct.unsigned_abs() > max_divergence
 }
 
@@ -188,25 +182,31 @@ pub fn is_oracle_price_too_divergent(
 /// - `false` if the action should be blocked due to stale, volatile, or invalid data.
 pub fn is_oracle_valid_for_action(
     oracle_validity: OracleValidity,
-    action: Option<NormalAction>
+    action: Option<NormalAction>,
 ) -> bool {
     let is_ok = match action {
-        Some(action) =>
-            match action {
-                NormalAction::AddLiquidity =>
-                    matches!(oracle_validity, OracleValidity::Valid | OracleValidity::StaleForPool),
-                NormalAction::RemoveLiquidity =>
-                    matches!(oracle_validity, OracleValidity::Valid | OracleValidity::StaleForPool),
-                NormalAction::Swap => matches!(oracle_validity, OracleValidity::Valid),
-                NormalAction::UpdateTwap => !matches!(oracle_validity, OracleValidity::NonPositive),
-                NormalAction::Rebalance => { matches!(oracle_validity, OracleValidity::Valid) }
-                NormalAction::ClaimInsurance =>
-                    !matches!(
-                        oracle_validity,
-                        OracleValidity::NonPositive | OracleValidity::TooVolatile
-                    ),
+        Some(action) => match action {
+            NormalAction::AddLiquidity => matches!(
+                oracle_validity,
+                OracleValidity::Valid | OracleValidity::StaleForPool
+            ),
+            NormalAction::RemoveLiquidity => matches!(
+                oracle_validity,
+                OracleValidity::Valid | OracleValidity::StaleForPool
+            ),
+            NormalAction::Swap => matches!(oracle_validity, OracleValidity::Valid),
+            NormalAction::UpdateTwap => !matches!(oracle_validity, OracleValidity::NonPositive),
+            NormalAction::Rebalance => {
+                matches!(oracle_validity, OracleValidity::Valid)
             }
-        None => { matches!(oracle_validity, OracleValidity::Valid) }
+            NormalAction::ClaimInsurance => !matches!(
+                oracle_validity,
+                OracleValidity::NonPositive | OracleValidity::TooVolatile
+            ),
+        },
+        None => {
+            matches!(oracle_validity, OracleValidity::Valid)
+        }
     };
 
     is_ok
@@ -333,10 +333,15 @@ pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128, red
     if delta_a != 0 {
         if delta_a > 0 {
             if reduce_only {
-                LiquidityPoolEvents::new(&e).capped_mint(base_oracle_price, quote_oracle_price, delta_a);
+                LiquidityPoolEvents::new(&e).capped_mint(
+                    base_oracle_price,
+                    quote_oracle_price,
+                    delta_a,
+                );
 
                 // allow minting up to 0.1 % of current supply per ledger
-                let mint_cap = (get_total_synthetic_tokens(&e) / get_mint_cap_fraction(&e) as u128) as i128;
+                let mint_cap =
+                    (get_total_synthetic_tokens(&e) / get_mint_cap_fraction(&e) as u128) as i128;
 
                 if delta_a > mint_cap {
                     panic_with_error!(&e, PoolError::SwapReduceOnly);

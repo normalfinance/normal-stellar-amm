@@ -49,7 +49,7 @@ pub trait PoolEvents {
         delta_a: i128,
     );
 
-    fn capped_mint(&self,  base_oracle_price: u128, quote_oracle_price: u128, delta_a: i128);
+    fn capped_mint(&self, base_oracle_price: u128, quote_oracle_price: u128, delta_a: i128);
 
     //    _______     __       ____  ____   ________  _______  ________
     //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\
@@ -134,11 +134,12 @@ impl PoolEvents for Events {
         );
     }
 
-
     fn capped_mint(&self, base_oracle_price: u128, quote_oracle_price: u128, delta_a: i128) {
         let e = self.env();
-        e.events()
-            .publish((Symbol::new(e, "capped_mint"),), (base_oracle_price, quote_oracle_price, delta_a));
+        e.events().publish(
+            (Symbol::new(e, "capped_mint"),),
+            (base_oracle_price, quote_oracle_price, delta_a),
+        );
     }
 
     //    _______     __       ____  ____   ________  _______  ________
@@ -199,9 +200,7 @@ impl PoolEvents for Events {
 
     fn permanently_locked_liquidity(&self, amount: u128) {
         let e = self.env();
-        e.events().publish(
-            (Symbol::new(e, "permanently_locked_liquidity"),),
-            amount
-        );
+        e.events()
+            .publish((Symbol::new(e, "permanently_locked_liquidity"),), amount);
     }
 }
