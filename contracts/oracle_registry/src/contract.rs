@@ -100,7 +100,6 @@ impl OracleRegistryTrait for OracleRegistry {
                 &oracle_price_data,
                 oracle.sanitize_clamp_denominator,
                 now,
-                false,
             );
         }
 
@@ -292,7 +291,6 @@ impl AdminInterface for OracleRegistry {
             &oracle_price_data,
             sanitize_clamp_denominator,
             now,
-            true,
         );
 
         let oracle = OracleInfo {
@@ -468,7 +466,6 @@ impl AdminInterface for OracleRegistry {
             }),
             oracle.sanitize_clamp_denominator,
             now,
-            false,
         );
 
         // Update the oracle's last_updated timestamp to enforce cooldown

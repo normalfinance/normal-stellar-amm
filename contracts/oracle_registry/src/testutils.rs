@@ -27,7 +27,7 @@ impl Default for TestConfig {
                 },
                 validity: ValidityGuardRails {
                     seconds_before_stale_for_pool: 300,
-                    too_volatile_ratio: 1200000000, // allow ±20%
+                    too_volatile_ratio: 2000000, // allow ±20%
                 },
             },
         }
@@ -221,7 +221,7 @@ impl Setup<'_> {
         registry.initialize(&admin, &emergency_admin);
         registry.set_oracle_guard_rails(&admin, &config.oracle_guard_rails);
 
-        registry.register_oracle(&admin, &btc_asset_id, &oracle_id, &14, &0);
+        registry.register_oracle(&admin, &btc_asset_id, &oracle_id, &14, &1);
 
         Self {
             env: e,

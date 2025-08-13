@@ -57,5 +57,5 @@ pub fn get_historical_oracle_data(e: &Env, asset: &Symbol) -> HistoricalOracleDa
 
 pub fn put_historical_oracle_data(e: &Env, asset: &Symbol, data: &HistoricalOracleData) {
     let key = DataKey::HistoricalOracleData(asset.clone());
-    e.storage().instance().set(&key, data)
+    e.storage().persistent().set(&key, data)
 }

@@ -1,9 +1,11 @@
 use sep_40_oracle::{Asset, PriceFeedClient};
 use soroban_fixed_point_math::SorobanFixedPoint;
-use soroban_sdk::{log, Address, Env, Symbol};
-// use soroban_fixed_point_math::
+use soroban_sdk::{Address, Env, Symbol};
 use utils::{
-    constant::{FIVE_MINUTE, PERCENTAGE_PRECISION_U64},
+    constant::{
+        FIVE_MINUTE, PERCENTAGE_PRECISION, PERCENTAGE_PRECISION_U64, PRICE_PRECISION,
+        PRICE_PRECISION_U64,
+    },
     math::{pool::sanitize_new_price, safe_math::SafeMath, stats::calculate_new_twap},
     state::oracle_registry::{HistoricalOracleData, OraclePriceData, OracleValidity},
     temporal::Delay,
@@ -34,7 +36,7 @@ pub fn get_oracle_price(e: &Env, oracle: &Address, asset: &Symbol, now: u64) -> 
 
     let oracle_price_data = oracle_client.lastprice(&oracle_asset).unwrap();
 
-    oracle_price = oracle_price_data.price as u128;
+    oracle_price = (oracle_price_data.price as u128).saturating_div(PRICE_PRECISION);
     published_ts = oracle_price_data.timestamp;
 
     let oracle_delay = now.saturating_sub(published_ts);
@@ -65,7 +67,6 @@ pub fn update_twap(
     oracle_price_data: &OraclePriceData,
     sanitize_clamp_denominator: u64,
     now: u64,
-    registering: bool,
 ) {
     let capped_oracle_update_price = sanitize_new_price(
         e,
@@ -128,12 +129,16 @@ pub fn oracle_validity(
     // if Δprice <= 0.80 or 1.20 <= Δprice → too volatile
     let lower_bound =
         PERCENTAGE_PRECISION_U64.safe_sub(e, oracle_guard_rails.validity.too_volatile_ratio);
+
     let upper_bound = oracle_guard_rails
         .validity
         .too_volatile_ratio
         .safe_add(e, PERCENTAGE_PRECISION_U64);
 
-    let price_delta = oracle_price.safe_div(e, last_oracle_twap.max(1)) as u64;
+    // let price_delta = oracle_price.safe_div(e, last_oracle_twap.max(1)) as u64;
+    let price_delta =
+        oracle_price.fixed_div_floor(e, &last_oracle_twap, &PERCENTAGE_PRECISION) as u64;
+
     let is_oracle_price_too_volatile = price_delta <= lower_bound || upper_bound <= price_delta;
 
     // StaleForPool
