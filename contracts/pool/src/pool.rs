@@ -14,6 +14,7 @@ use crate::storage::set_last_trade_ts;
 use crate::storage::set_volume_30d;
 use crate::storage::{get_reserve_a, get_reserve_b, set_reserve_a};
 use soroban_fixed_point_math::SorobanFixedPoint;
+use soroban_sdk::token::StellarAssetClient;
 use token_synthetic::{burn_synthetic_tokens, get_total_synthetic_tokens, mint_synthetic_tokens};
 
 use soroban_sdk::Symbol;
@@ -340,7 +341,7 @@ pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128, red
 
                 // allow minting up to 0.1 % of current supply per ledger
                 let mint_cap =
-                    (get_total_synthetic_tokens(&e) / get_mint_cap_fraction(&e) as u128) as i128;
+                    (get_total_synthetic_tokens(&e) / (get_mint_cap_fraction(&e) as u128)) as i128;
 
                 if delta_a > mint_cap {
                     panic_with_error!(&e, PoolError::SwapReduceOnly);

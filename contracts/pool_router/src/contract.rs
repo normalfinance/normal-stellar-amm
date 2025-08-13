@@ -12,7 +12,7 @@ use crate::storage::{
     get_reward_tokens, get_reward_tokens_detailed, get_rewards_config, remove_pool,
     set_liquidity_calculator, set_lp_token_hash, set_oracle_registry, set_pool_hash,
     set_pool_plane, set_reward_tokens, set_reward_tokens_detailed, set_rewards_config,
-    set_synthetic_token_hash, GlobalRewardsConfig, PoolRewardInfo,
+    GlobalRewardsConfig, PoolRewardInfo,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
@@ -472,13 +472,6 @@ impl AdminInterface for PoolRouter {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
         set_lp_token_hash(&e, &new_hash);
-    }
-
-    // Sets the synthetic token wasm hash.
-    fn set_synthetic_token_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-        set_synthetic_token_hash(&e, &new_hash);
     }
 
     // Sets the pool wasm hash.
@@ -986,7 +979,7 @@ impl PoolsManagementTrait for PoolRouter {
     // * `admin` - The address of the admin initializing the pool.
     // * `assets` - A tuple of the base and quote asset Oracle Registry assets.
     // * `token_b` - A token address of the pool's quote token.
-    // * `synthetic_token_info` - A tuple of the Synthetic token name and symbol.
+    // * `synthetic_sac_address` - .
     // * `lp_token_info` - A tuple of the LP token name and symbol.
     // * `fee_fraction` - The fee fraction for the pool (in basis points).
     // * `tier` - The risk tier of the target asset.
@@ -1002,7 +995,7 @@ impl PoolsManagementTrait for PoolRouter {
         admin: Address,
         assets: (Symbol, Symbol),
         token_b: Address,
-        synthetic_token_info: (String, String),
+        synthetic_sac_address: Address,
         lp_token_info: (String, String),
         fee_fraction: u32,
         tier: PoolTier,
@@ -1023,7 +1016,7 @@ impl PoolsManagementTrait for PoolRouter {
                 &e,
                 &token_b,
                 &assets,
-                &synthetic_token_info,
+                &synthetic_sac_address,
                 &lp_token_info,
                 fee_fraction,
                 &tier,
