@@ -183,7 +183,7 @@ pub trait PoolsManagementTrait {
         admin: Address,
         assets: (Symbol, Symbol),
         token_b: Address,
-        synthetic_token_info: (String, String),
+        synthetic_sac_address: Address,
         lp_token_info: (String, String),
         fee_fraction: u32,
         tier: PoolTier,

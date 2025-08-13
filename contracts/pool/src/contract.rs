@@ -19,9 +19,7 @@ use crate::storage::{
     set_is_killed_swap, set_is_killed_withdraw, set_mint_cap_fraction, set_oracle_registry,
     set_plane, set_pool, set_reserve_a, set_reserve_b, set_router, set_token_future_wasm,
 };
-use crate::token::{
-    create_lp_token_contract, create_synthetic_token_contract, transfer_a, transfer_b,
-};
+use crate::token::{create_lp_token_contract, transfer_a, transfer_b};
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
 use access_control::errors::AccessControlError;
@@ -48,7 +46,7 @@ use token_lp::{
     burn_lp_tokens, get_token_lp, get_total_lp_tokens, get_user_balance_lp, mint_lp_tokens,
     put_token_lp, Client as LpTokenClient,
 };
-use token_synthetic::{get_token_synthetic, put_token_synthetic, Client as TokenClient};
+use token_synthetic::{get_sac_address, put_sac_address};
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::constant::{
@@ -59,7 +57,6 @@ use utils::math::safe_math::SafeMath;
 use utils::state::oracle_registry::NormalAction;
 use utils::state::pool::{InsuranceClaim, SwapDirection};
 use utils::state::{
-    oracle_registry::OraclePriceData,
     pool::{
         InitializeAllParams, InitializeParams, Pool as PoolType, PoolInfo, PoolResponse,
         PoolStatus, PoolTier,
@@ -179,24 +176,11 @@ impl PoolTrait for Pool {
         get_oracle_price(&e, &base_asset, NormalAction::AddLiquidity);
         get_oracle_price(&e, &quote_asset, NormalAction::AddLiquidity);
 
-        // deploy and initialize synthetic token contract
-        let synthetic_contract = create_synthetic_token_contract(
-            &e,
-            params.synthetic_token_info.token_wasm_hash,
-            &base_asset,
-        );
-        TokenClient::new(&e, &synthetic_contract).initialize(
-            &e.current_contract_address(),
-            &7u32,
-            &params.synthetic_token_info.name.into_val(&e),
-            &params.synthetic_token_info.symbol.into_val(&e),
-        );
-
         // deploy and initialize LP token contract
         let share_contract = create_lp_token_contract(
             &e,
             params.lp_token_info.token_wasm_hash,
-            &synthetic_contract,
+            &params.synthetic_sac_address,
             &params.token_b,
         );
         LpTokenClient::new(&e, &share_contract).initialize(
@@ -211,7 +195,7 @@ impl PoolTrait for Pool {
         }
 
         put_token_lp(&e, share_contract);
-        put_token_synthetic(&e, synthetic_contract);
+        put_sac_address(&e, params.synthetic_sac_address);
 
         let pool = PoolType {
             token_b: params.token_b,
@@ -952,7 +936,7 @@ impl PoolTrait for Pool {
 
     fn get_tokens(e: Env) -> Vec<Address> {
         let pool = get_pool(&e);
-        let token_synthetic = get_token_synthetic(&e);
+        let token_synthetic = get_sac_address(&e);
         Vec::from_array(&e, [token_synthetic, pool.token_b])
     }
 
@@ -1005,7 +989,7 @@ impl PoolTrait for Pool {
         let pool_response = PoolResponse {
             pool: pool.clone(),
             token_a: AddressAndAmount {
-                address: get_token_synthetic(&e),
+                address: get_sac_address(&e),
                 amount: get_reserve_a(&e),
             },
             token_b: AddressAndAmount {

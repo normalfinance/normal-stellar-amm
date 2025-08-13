@@ -15,8 +15,6 @@ pub trait AdminInterface {
 
     fn set_lp_token_hash(e: Env, admin: Address, new_hash: BytesN<32>);
 
-    fn set_synthetic_token_hash(e: Env, admin: Address, new_hash: BytesN<32>);
-
     fn set_pool_hash(e: Env, admin: Address, new_hash: BytesN<32>);
 
     fn set_reward_token(e: Env, admin: Address, reward_token: Address);

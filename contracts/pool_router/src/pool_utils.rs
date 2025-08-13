@@ -3,7 +3,7 @@ use crate::incentives::get_incentives_manager;
 use crate::liquidity_calculator::LiquidityCalculatorClient;
 use crate::storage::{
     get_lp_token_hash, get_oracle_registry, get_pool, get_pool_hash, get_pool_plane, get_pools_vec,
-    get_synthetic_token_hash, put_pool, set_pools_vec,
+    put_pool, set_pools_vec,
 };
 use access_control::access::AccessControl;
 use access_control::management::{MultipleAddressesManagementTrait, SingleAddressManagementTrait};
@@ -71,7 +71,7 @@ pub fn deploy_pool(
     e: &Env,
     token_b: &Address,
     assets: &(Symbol, Symbol),
-    synthetic_token_info: &(String, String),
+    synthetic_sac_address: &Address,
     lp_token_info: &(String, String),
     fee_fraction: u32,
     tier: &PoolTier,
@@ -90,7 +90,7 @@ pub fn deploy_pool(
         token_b,
         assets,
         &pool_contract_id,
-        synthetic_token_info,
+        synthetic_sac_address,
         lp_token_info,
         fee_fraction,
         tier,
@@ -127,14 +127,13 @@ fn init_pool(
     token_b: &Address,
     assets: &(Symbol, Symbol),
     pool_contract_id: &Address,
-    synthetic_token_info: &(String, String),
+    synthetic_sac_address: &Address,
     lp_token_info: &(String, String),
     fee_fraction: u32,
     tier: &PoolTier,
     quote_max_insurance: u128,
 ) {
     let lp_token_wasm_hash = get_lp_token_hash(e);
-    let synthetic_token_wasm_hash = get_synthetic_token_hash(e);
     let incentives = get_incentives_manager(e);
     let reward_token = incentives.storage().get_reward_token();
     let access_control = AccessControl::new(e);
@@ -171,11 +170,7 @@ fn init_pool(
             oracle_registry: get_oracle_registry(e),
             assets: assets.clone(),
             token_b: token_b.clone(),
-            synthetic_token_info: TokenInitInfo {
-                token_wasm_hash: synthetic_token_wasm_hash.into_val(e),
-                name: synthetic_token_info.0.clone(),
-                symbol: synthetic_token_info.1.clone(),
-            },
+            synthetic_sac_address: synthetic_sac_address.clone(),
             lp_token_info: TokenInitInfo {
                 token_wasm_hash: lp_token_wasm_hash.into_val(e),
                 name: lp_token_info.0.clone(),
