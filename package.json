@@ -13,6 +13,7 @@
     "contracts:setup": "./scripts/setup.sh admin",
     "sac:deploy": "./scripts/sac/deploy_asset_and_sac.sh",
     "sac:update": "./scripts/sac/set_sac_admin_to_pool.sh",
+    "sac:lock": "./scripts/sac/lock_issuer.sh",
     "contracts:killswitch": "./scripts/admin/killswitch.sh admin",
     "contracts:upgrade:apply": "./scripts/admin/upgrade/apply.sh admin",
     "contracts:upgrade:commit": "./scripts/admin/upgrade/commit.sh admin",
