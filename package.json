@@ -11,6 +11,8 @@
     "scout": "cargo scout-audit --output-format html --output-path audits/scout/report.html",
     "deploy": "./scripts/deploy.sh admin",
     "contracts:setup": "./scripts/setup.sh admin",
+    "sac:deploy": "./scripts/sac/deploy-asset-and-sac.sh",
+    "sac:update": "./scripts/sac/set_sac_admin_to_pool.sh",
     "contracts:killswitch": "./scripts/admin/killswitch.sh admin",
     "contracts:upgrade:apply": "./scripts/admin/upgrade/apply.sh admin",
     "contracts:upgrade:commit": "./scripts/admin/upgrade/commit.sh admin",
