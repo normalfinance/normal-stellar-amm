@@ -80,12 +80,18 @@ function filenameNoExtension(filename) {
  */
 function deploy(wasm) {
   // Do not deploy the Pool contract since it's deployed via the Pool Router
-  if (wasm.includes("release/pool.wasm")) return;
-  exe(
-    `stellar contract deploy --wasm ${wasm} --ignore-checks --alias ${filenameNoExtension(
-      wasm
-    )}`
-  );
+  if (
+    wasm.includes("release/pool.wasm") ||
+    wasm.includes("release/lp_token.wasm")
+  )
+    return;
+  else {
+    exe(
+      `stellar contract deploy --wasm ${wasm} --ignore-checks --alias ${filenameNoExtension(
+        wasm
+      )}`
+    );
+  }
 }
 
 /**

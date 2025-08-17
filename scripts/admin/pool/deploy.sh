@@ -4,10 +4,10 @@ set -e
 # Usage
 usage() {
     echo "Usage:"
-    echo "  $0 <identity_string> <network> <pool_router_address> <token_target> <token_name> <token_symbol> <fee_fraction> <pool_tier> <max_insurance>"
+    echo "  $0 <identity_string> <network> <pool_router_address> <token_target> <token_symbol> <fee_fraction> <pool_tier> <max_insurance> <sac_address>"
     echo ""
     echo "Example:"
-    echo "  $0 josh CAS123 BTC 'Normal Bitcoin' nBTC 30 A 1000000"
+    echo "  $0 josh CAS123 BTC 'Normal Bitcoin' nBTC 30 A 1000000 CAS123"
     exit 1
 }
 
@@ -21,11 +21,11 @@ IDENTITY_STRING="$1"
 NETWORK=$2
 POOL_ROUTER_ADDR="$3"
 NORMAL_TOKEN_TARGET="$4"
-NORMAL_TOKEN_NAME="$5"
-NORMAL_TOKEN_SYMBOL="$6"
-FEE_FRACTION="$7"
-POOL_TIER="$8"
-MAX_INSURANCE="$9"
+NORMAL_TOKEN_SYMBOL="$5"
+FEE_FRACTION="$6"
+POOL_TIER="$7"
+MAX_INSURANCE="$8"
+SYNTHETIC_SAC_ADDRESS="$9"
 
 # Fixed config
 XLM="CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
@@ -44,7 +44,7 @@ cd target/wasm32v1-none/release
 ADMIN_ADDRESS=$(soroban keys address "$IDENTITY_STRING")
 
 # Initialize pool
-echo "📦 Initializing $NORMAL_TOKEN_NAME/XLM pool through Pool Router..."
+echo "📦 Initializing $NORMAL_TOKEN_SYMBOL/XLM pool through Pool Router..."
 
 stellar contract invoke \
     --id "$POOL_ROUTER_ADDR" \
@@ -55,14 +55,14 @@ stellar contract invoke \
     --admin "$ADMIN_ADDRESS" \
     --assets "[\"$NORMAL_TOKEN_TARGET\", \"XLM\"]" \
     --token_b "$XLM" \
-    --synthetic_token_info "[\"$NORMAL_TOKEN_NAME\", \"$NORMAL_TOKEN_SYMBOL\"]" \
+    --synthetic_sac_address "$SYNTHETIC_SAC_ADDRESS" \
     --lp_token_info "[\"$LP_TOKEN_NAME\", \"$LP_TOKEN_SYMBOL\"]" \
     --fee_fraction "$FEE_FRACTION" \
     --tier "$POOL_TIER" \
     --quote_max_insurance "$MAX_INSURANCE"
 
 # Query initialized pool
-echo "🔍 Querying $NORMAL_TOKEN_NAME/XLM pool address..."
+echo "🔍 Querying $NORMAL_TOKEN_SYMBOL/XLM pool address..."
 POOL_ADDR=$(soroban contract invoke \
     --id "$POOL_ROUTER_ADDR" \
     --source "$IDENTITY_STRING" \

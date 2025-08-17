@@ -25,12 +25,19 @@ NETWORK=$2
 ISSUER_ADDRESS=$(soroban keys address "$ISSUER")
 
 # Issue an asset by creating a trustline
-stellar tx new change-trust \
-    --source-account "$ISSUER" \
-    --network "$NETWORK" \
+# stellar tx new change-trust \
+#     --source-account "$ISSUER" \
+#     --network "$NETWORK" \
 
 # Deploy the built-in SAC contract for the new asset
 stellar contract asset deploy \
-    --source-account "$ISSUER" \
+    --source "$ISSUER" \
     --network "$NETWORK" \
-    --asset STAR:GCS5NEHKJALCSVJAKIORXXVS554QQV5FNDLBK33CCAH6UIRYPXYZFC34
+    --asset nSOL:GAW562S4FWKNB5EOA7AH4Z5DLQT243BFHM2MX6UC3NL3RAKEASDDMBQU
+
+# stellar contract asset deploy \
+#     --source "$ISSUER" \
+#     --network "$NETWORK" \
+#     --rpc-url "https://rpc.ankr.com/stellar_soroban/<api_key>" \
+#     --network-passphrase "Public Global Stellar Network ; September 2015" \
+#     --asset nSOL:GAW562S4FWKNB5EOA7AH4Z5DLQT243BFHM2MX6UC3NL3RAKEASDDMBQU

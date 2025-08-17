@@ -18,7 +18,7 @@ cd target/wasm32v1-none/release
 echo "Contracts compiled."
 echo "Optimize contracts..."
 
-soroban contract optimize --wasm soroban_token_contract.wasm
+soroban contract optimize --wasm lp_token.wasm
 soroban contract optimize --wasm pool.wasm
 
 echo "Contracts optimized."
@@ -28,25 +28,20 @@ ADMIN_ADDRESS=$(soroban keys address $IDENTITY_STRING)
 
 XLM="CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA"
 
-POOL_ROUTER_ADDR="CCSNREEQ2A7RUYXNFXCZPUHTMZ3FAWUVZBUDXQYC6Q6ZWBNAXZ6NV4AV"
-ORACLE_REGISTRY_ADDR="CB6TCEOSXIWBE7O6EDQW3534Z35H2UB2D6TRNXKAA4AJZRVN3PYXN5NI"
-BUFFER_ADDR="CBDSO56Z2JU5UFNGD3U2OOR74AKUGFLPCWS2YYXHF46LQPFPWWTWI3PJ"
-INSURANCE_FUND_ADDR="CABZG27QEFCTYDDFXLYKPTZYZJ2J7M6I6UYIVTBBK35LWJ73GSHYNKJP"
-POOL_SWAP_FEE="CAY7BBIZNUS3QAFHE7U6FI62SRCQIVXMPWNHWDBOJUE2YO4IKADBWIXN"
-POOL_PLANE_ADDR="CAUP3NEKZ3ZHHK5JEMRXP7GQ7PC4BABSBSTRBDZ3WVY7VIEEH4M4XPXW"
-LIQUIDITY_CALCULATOR_ADDR="CCDDTBUR7QFOS33HL4THNO7CZ6J25H7AUINYCKPIFQFZKLWLI26WE7BE"
+POOL_ROUTER_ADDR="CDE375VH2EQFLLCCZFSMLLOCNQJYSGQHUP23LNYAGAUX5PKOM3HLRLGR"
+ORACLE_REGISTRY_ADDR="CB3STPQ2HWRVLGNEQNAFY27BX4SY3DV45CVGB4FQ3KDTTTCRVMJBPCJO"
+BUFFER_ADDR="CDTKYREGG6RI4ROKG2Q4RCEBD44FZVR4XKLKIINIBCEDQGL7DBBEDCWT"
+INSURANCE_FUND_ADDR="CAV2MY75WV54R7HGG3HB5FPXOKJOMG6NUDKJZSAMENAJVKJWOMH2XNJV"
+POOL_SWAP_FEE="CB2Q3NDZQSPLZ54PJSN7PSFKTFGTEZI7BIMP2PWMT2HJVGSSK7FCTJDO"
+POOL_PLANE_ADDR="CDAXUJERUMHYU24SQCJUUVEGD4AQ3YP34P6XWM5TKOVTRUHB2TJSE7KE"
+LIQUIDITY_CALCULATOR_ADDR="CANL5GXNFKGSBB6KVZTAQXRNRLOKGPLZS2SOTLCFMAFPNXEN4CMEVN3J"
 
-echo "Deploy the lp_token and capture its contract ID hash..."
+# echo "Deploy the lp_token and pool and capture their contract ID hashes..."
 
-LP_TOKEN_WASM_HASH=$(soroban contract upload \
-    --wasm lp_token.optimized.wasm \
-    --source $IDENTITY_STRING \
-    --network $NETWORK)
-
-SYNTHETIC_TOKEN_WASM_HASH=$(soroban contract upload \
-    --wasm soroban_token_contract.optimized.wasm \
-    --source $IDENTITY_STRING \
-    --network $NETWORK)
+# LP_TOKEN_WASM_HASH=$(soroban contract upload \
+#     --wasm lp_token.optimized.wasm \
+#     --source $IDENTITY_STRING \
+#     --network $NETWORK)
 
 # Continue with the rest of the deployments
 POOL_WASM_HASH=$(soroban contract upload \
@@ -82,11 +77,11 @@ stellar contract invoke \
     --admin $ADMIN_ADDRESS \
     --oracle_guard_rails '{
         "price_divergence": {
-            "oracle_twap_percent_divergence": 1200000000
+            "oracle_twap_percent_divergence": 1000000
         },
         "validity": {
-            "seconds_before_stale_for_pool": 3000,
-            "too_volatile_ratio": 1200000000
+            "seconds_before_stale_for_pool": 300,
+            "too_volatile_ratio": 2000000
         }
     }'
 

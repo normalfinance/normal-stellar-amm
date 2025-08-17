@@ -39,12 +39,7 @@ echo "Deploy the soroban_token_contract and capture its contract ID hash..."
 
 XLM="CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA"
 
-echo "Install the soroban_token and pool contracts..."
-
-TOKEN_WASM_HASH=$(soroban contract upload \
-    --wasm soroban_token_contract.optimized.wasm \
-    --source $IDENTITY_STRING \
---network $NETWORK)
+echo "Install the pool contract..."
 
 # Continue with the rest of the deployments
 POOL_WASM_HASH=$(soroban contract upload \
@@ -52,7 +47,7 @@ POOL_WASM_HASH=$(soroban contract upload \
     --source $IDENTITY_STRING \
 --network $NETWORK)
 
-echo "Token and pool contracts deployed."
+echo "Pool contract deployed."
 
 #     ______     _______        __       ______   ___       _______   ________
 #    /    " \   /"      \      /""\     /" _  "\ |"  |     /"     "| /"       )
@@ -113,7 +108,6 @@ BUFFER_ADDR=$(soroban contract deploy \
 
 ONE_HOUR=$((3600))
 
-
 #   __    _____  ___    ________  ____  ____   _______        __      _____  ___    ______    _______
 #  |" \  (\"   \|"  \  /"       )("  _||_ " | /"      \      /""\    (\"   \|"  \  /" _  "\  /"     "|
 #  ||  | |.\\   \    |(:   \___/ |   (  ) : ||:        |    /    \   |.\\   \    |(: ( \___)(: ______)
@@ -128,7 +122,6 @@ INSURANCE_FUND_ADDR=$(soroban contract deploy \
     --wasm insurance_fund.optimized.wasm \
     --source $IDENTITY_STRING \
 --network $NETWORK)
-
 
 #   _______   _______   _______       ______    ______    ___      ___       _______   ______  ___________  ______     _______
 #  /"     "| /"     "| /"     "|     /" _  "\  /    " \  |"  |    |"  |     /"     "| /" _  "\("     _   ")/    " \   /"      \
