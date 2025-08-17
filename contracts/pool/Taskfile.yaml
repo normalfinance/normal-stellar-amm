@@ -11,11 +11,12 @@ tasks:
 
   build:
     cmds:
+      - task -d ../oracle_registry build || exit 1
       - task -d ../lp_token build || exit 1
       - task -d ../pool_plane build || exit 1
       - soroban contract build --package pool
       - soroban contract optimize --wasm ../../target/wasm32v1-none/release/pool.wasm --wasm-out ../../target/wasm32v1-none/release/pool.wasm
-      - ls -l ../../target/wasm32v1-none/release/*.wasm
+      # - ls -l ../../target/wasm32v1-none/release/*.wasm
       - cp ../../target/wasm32v1-none/release/pool.wasm ../../wasm/pool.wasm
 
   test:

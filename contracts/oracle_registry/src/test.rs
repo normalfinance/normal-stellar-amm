@@ -6,7 +6,8 @@ use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, Vec};
 use utils::constant::{FIVE_MINUTE, ONE_HOUR, ONE_MINUTE, TWENTY_FOUR_HOUR};
 use utils::state::oracle_registry::{
-    HistoricalOracleData, OracleGuardRails, PriceDivergenceGuardRails, ValidityGuardRails,
+    HistoricalOracleData, OracleGuardRails, OracleValidity, PriceDivergenceGuardRails,
+    ValidityGuardRails,
 };
 use utils::state::oracle_registry::{MutableOracleInfo, NormalAction, OracleInfo};
 use utils::test_utils::jump;
@@ -22,36 +23,39 @@ use utils::test_utils::jump;
 
 // // get price
 
-// #[test]
-// fn test_get_price() {
-//     let setup = Setup::default();
-//     let new_oracle_price = 50250_0000000_i128; //(setup.init_btc_price * 102) / 100;
-//     let now = setup.env.ledger().timestamp();
+#[test]
+fn test_get_price() {
+    let setup = Setup::default();
+    let new_oracle_price = 50250_0000000_i128; //(setup.init_btc_price * 102) / 100;
+    let now = setup.env.ledger().timestamp();
 
-//     // Fetch oracle
-//     let oracle_info = setup.registry.get_oracle(&setup.btc_asset_id);
+    let (prices, validity) = setup.registry.get_price(&setup.btc_asset_id);
+    assert_eq!(validity, OracleValidity::Valid);
+    assert_eq!(prices.last_oracle_price, 0);
 
-//     jump(&setup.env, TWENTY_FOUR_HOUR as u64);
-//     // Set mock price
-//     setup
-//         .oracle_client
-//         .set_price(&Vec::from_array(&setup.env, [new_oracle_price]), &now);
+    // Fetch oracle
+    // let oracle_info = setup.registry.get_oracle(&setup.btc_asset_id);
 
-// Fetch price from registry
-// let oracle_price_data = setup.registry.get_price(&setup.btc_asset_id);
+    // jump(&setup.env, TWENTY_FOUR_HOUR as u64);
+    // Set mock price
+    // setup
+    //     .oracle_client
+    //     .set_price(&Vec::from_array(&setup.env, [new_oracle_price]), &now);
 
-// assert_eq!(oracle_price_data.price, new_oracle_price as u128);
-// assert_eq!(oracle_price_data.delay.as_seconds(), 0);
+    // Fetch price from registry
+    // let oracle_price_data = setup.registry.get_price(&setup.btc_asset_id);
 
-//     // Ensure historical data is updated
-//     // let last_price_info = setup.registry.get_last_price(&setup.btc_asset_id);
-//     // assert_eq!(last_price_info, HistoricalOracleData {
-//     //     last_oracle_price: new_oracle_price as u128,
-//     //     last_oracle_delay: 0,
-//     //     last_oracle_price_twap: new_oracle_price as u128,
-//     //     last_oracle_price_twap_ts: now,
-//     // })
-// }
+    // assert_eq!(oracle_price_data.price, new_oracle_price as u128);
+    // assert_eq!(oracle_price_data.delay.as_seconds(), 0);
+
+    // Ensure historical data is updated
+    // let last_price_info = setup.registry.get_last_price(&setup.btc_asset_id);
+    // assert_eq!(last_price_info, HistoricalOracleData {
+    //     last_oracle_price: new_oracle_price as u128,
+    //     last_oracle_price_twap: new_oracle_price as u128,
+    //     last_oracle_price_twap_ts: now,
+    // })
+}
 
 // #[test]
 // #[should_panic(expected = "Error(Contract, #501)")]

@@ -10,7 +10,7 @@ use crate::plane::update_plane;
 use crate::plane_interface::Plane;
 use crate::pool::{
     get_amount_out_strict_receive, get_delta_a, get_net_liquidity_imbalance, get_oracle_price,
-    peg_price, rebalance, update_volume_30d,
+    peg_price, rebalance, update_volume_30d, validate_oracle_price_with_pool,
 };
 use crate::storage::{
     get_is_killed_claim, get_is_killed_deposit, get_is_killed_swap, get_is_killed_withdraw,
@@ -173,8 +173,8 @@ impl PoolTrait for Pool {
         // validate oracle assets
         let (base_asset, quote_asset) = params.assets;
 
-        get_oracle_price(&e, &base_asset, NormalAction::AddLiquidity);
-        get_oracle_price(&e, &quote_asset, NormalAction::AddLiquidity);
+        get_oracle_price(&e, &base_asset, NormalAction::PoolInit);
+        get_oracle_price(&e, &quote_asset, NormalAction::PoolInit);
 
         // deploy and initialize LP token contract
         let share_contract = create_lp_token_contract(
@@ -268,6 +268,8 @@ impl PoolTrait for Pool {
             panic_with_error!(e, PoolError::PoolDepositKilled);
         }
 
+        let action = NormalAction::AddLiquidity;
+
         let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
 
         // Before actual changes were made to the pool, update total rewards data and refresh/initialize user reward
@@ -284,6 +286,17 @@ impl PoolTrait for Pool {
 
         let pool = get_pool(&e);
 
+        // Fetch asset oracle prices
+        let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, action);
+        let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, action);
+
+        validate_oracle_price_with_pool(
+            &e,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
+            action,
+        );
+
         // Increase reserves
         set_reserve_b(&e, &(reserve_b + token_b_amount));
 
@@ -297,11 +310,6 @@ impl PoolTrait for Pool {
         );
 
         // Rebalance the pool
-        let base_oracle_price_data =
-            get_oracle_price(&e, &pool.base_asset, NormalAction::AddLiquidity);
-        let quote_oracle_price_data =
-            get_oracle_price(&e, &pool.quote_asset, NormalAction::AddLiquidity);
-
         rebalance(
             &e,
             base_oracle_price_data.last_oracle_price_twap,
@@ -313,12 +321,6 @@ impl PoolTrait for Pool {
         let total_shares = get_total_lp_tokens(&e);
         let reserve_a_after_rebalance = get_reserve_a(&e);
         let reserve_b_after_deposit = get_reserve_b(&e);
-
-        // Get oracle prices for validation (reuse the ones from rebalancing)
-        let cached_base_oracle_price_data =
-            get_oracle_price(&e, &pool.base_asset, NormalAction::AddLiquidity);
-        let cached_quote_oracle_price_data =
-            get_oracle_price(&e, &pool.quote_asset, NormalAction::AddLiquidity);
 
         let mut shares_to_mint = if total_shares == 0 {
             // First deposit case - initialize pool with 1:1 ratio
@@ -333,14 +335,14 @@ impl PoolTrait for Pool {
             // Calculate Token A value in Token B terms using oracle prices
             let token_a_value_in_token_b = reserve_a_after_rebalance
                 .fixed_mul_floor(
-                    cached_base_oracle_price_data.last_oracle_price,
-                    cached_quote_oracle_price_data.last_oracle_price,
+                    base_oracle_price_data.last_oracle_price_twap,
+                    quote_oracle_price_data.last_oracle_price_twap,
                 )
                 .unwrap();
 
             // Total pool value in Token B terms (before the deposit)
             let total_pool_value_before_deposit =
-                (reserve_b_after_deposit - token_b_amount) + token_a_value_in_token_b;
+                reserve_b_after_deposit - token_b_amount + token_a_value_in_token_b;
 
             // Calculate proportional shares
             token_b_amount
@@ -356,8 +358,8 @@ impl PoolTrait for Pool {
             total_shares,
             reserve_a_after_rebalance,
             reserve_b_after_deposit - token_b_amount,
-            cached_base_oracle_price_data.last_oracle_price,
-            cached_quote_oracle_price_data.last_oracle_price,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
         );
 
         // First deposit: mint MIN_LIQUIDITY to contract itself to prevent dust attacks
@@ -440,6 +442,8 @@ impl PoolTrait for Pool {
 
         ensure_non_zero_u128(&e, in_amount);
 
+        let action = NormalAction::Swap;
+
         let pool = get_pool(&e);
 
         // Error if Pool is in reduce only status and swap is attempting to buy
@@ -453,8 +457,15 @@ impl PoolTrait for Pool {
         // Rebalance the pool before swapping
         let now = e.ledger().timestamp();
 
-        let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, NormalAction::Swap);
-        let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, NormalAction::Swap);
+        let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, action);
+        let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, action);
+
+        validate_oracle_price_with_pool(
+            &e,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
+            action,
+        );
 
         rebalance(
             &e,
@@ -639,11 +650,20 @@ impl PoolTrait for Pool {
 
         ensure_non_zero_u128(&e, out_amount);
 
+        let action = NormalAction::Swap;
+
         // Rebalance the pool
         let pool = get_pool(&e);
 
-        let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, NormalAction::Swap);
-        let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, NormalAction::Swap);
+        let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, action);
+        let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, action);
+
+        validate_oracle_price_with_pool(
+            &e,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
+            action,
+        );
 
         rebalance(
             &e,
@@ -859,6 +879,8 @@ impl PoolTrait for Pool {
             panic_with_error!(e, PoolError::PoolWithdrawKilled);
         }
 
+        let action = NormalAction::RemoveLiquidity;
+
         // Before actual changes were made to the pool, update total rewards data and refresh user reward
         let incentives = get_incentives_manager(&e);
         let total_shares = get_total_lp_tokens(&e);
@@ -883,10 +905,15 @@ impl PoolTrait for Pool {
         // Rebalance the pool
         let pool = get_pool(&e);
 
-        let base_oracle_price_data =
-            get_oracle_price(&e, &pool.base_asset, NormalAction::RemoveLiquidity);
-        let quote_oracle_price_data =
-            get_oracle_price(&e, &pool.quote_asset, NormalAction::RemoveLiquidity);
+        let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, action);
+        let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, action);
+
+        validate_oracle_price_with_pool(
+            &e,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
+            action,
+        );
 
         rebalance(
             &e,
@@ -1030,12 +1057,18 @@ impl AdminInterfaceTrait for Pool {
 
         enter(&e);
 
+        let action = NormalAction::Rebalance;
         let pool = get_pool(&e);
 
-        let base_oracle_price_data =
-            get_oracle_price(&e, &pool.base_asset, NormalAction::Rebalance);
-        let quote_oracle_price_data =
-            get_oracle_price(&e, &pool.quote_asset, NormalAction::Rebalance);
+        let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, action);
+        let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, action);
+
+        validate_oracle_price_with_pool(
+            &e,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
+            action,
+        );
 
         rebalance(
             &e,
@@ -1043,6 +1076,7 @@ impl AdminInterfaceTrait for Pool {
             quote_oracle_price_data.last_oracle_price_twap,
             pool.is_reduce_only(),
         );
+
         exit(&e);
     }
 
@@ -1063,23 +1097,29 @@ impl AdminInterfaceTrait for Pool {
         // check pool has liquidity deficit
 
         let now = e.ledger().timestamp();
+        let action = NormalAction::ClaimInsurance;
         let mut pool = get_pool(&e);
 
         // "Pool is in settlement mode"
         validate!(&e, !pool.is_in_settlement(now), PoolError::PoolActionPaused);
 
-        let base_oracle_price_data =
-            get_oracle_price(&e, &pool.base_asset, NormalAction::ClaimInsurance);
-        let quote_oracle_price_data =
-            get_oracle_price(&e, &pool.quote_asset, NormalAction::ClaimInsurance);
+        let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, action);
+        let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, action);
+
+        validate_oracle_price_with_pool(
+            &e,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
+            action,
+        );
 
         // TODO: validate pool balances?
 
         let excess_liquidity_imbalance = if pool.liquidity_max_imbalance > 0 {
             let net_liquidity_imbalance = get_net_liquidity_imbalance(
                 &e,
-                base_oracle_price_data.last_oracle_price,
-                quote_oracle_price_data.last_oracle_price,
+                base_oracle_price_data.last_oracle_price_twap,
+                quote_oracle_price_data.last_oracle_price_twap,
             );
 
             net_liquidity_imbalance.saturating_sub(pool.liquidity_max_imbalance as i128)
@@ -1154,8 +1194,8 @@ impl AdminInterfaceTrait for Pool {
         // Rebalance
         rebalance(
             &e,
-            base_oracle_price_data.last_oracle_price,
-            quote_oracle_price_data.last_oracle_price,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
             pool.is_reduce_only(),
         );
 
@@ -1303,17 +1343,16 @@ impl AdminInterfaceTrait for Pool {
         let now = e.ledger().timestamp();
         validate!(&e, now < expiry_ts, PoolError::DefaultError);
 
+        let action = NormalAction::UpdateTwap;
         let mut pool = get_pool(&e);
 
         // set the price from last price of oracle registry
-        let base_oracle_price_data =
-            get_oracle_price(&e, &pool.base_asset, NormalAction::UpdateTwap);
-        let quote_oracle_price_data =
-            get_oracle_price(&e, &pool.quote_asset, NormalAction::UpdateTwap);
+        let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, action);
+        let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, action);
         pool.expiry_price = peg_price(
             &e,
-            base_oracle_price_data.last_oracle_price,
-            quote_oracle_price_data.last_oracle_price,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
         );
 
         // automatically enter reduce only

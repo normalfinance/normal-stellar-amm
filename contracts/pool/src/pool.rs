@@ -13,16 +13,14 @@ use crate::storage::get_volume_30d;
 use crate::storage::set_last_trade_ts;
 use crate::storage::set_volume_30d;
 use crate::storage::{get_reserve_a, get_reserve_b, set_reserve_a};
-use soroban_fixed_point_math::SorobanFixedPoint;
-use soroban_sdk::token::StellarAssetClient;
+use soroban_fixed_point_math::FixedPoint;
 use token_synthetic::{burn_synthetic_tokens, get_total_synthetic_tokens, mint_synthetic_tokens};
 
 use soroban_sdk::Symbol;
 use soroban_sdk::Vec;
 use soroban_sdk::{panic_with_error, Env};
 
-use utils::constant::PERCENTAGE_PRECISION_U64;
-use utils::constant::PRICE_PRECISION_U64;
+use utils::constant::PRICE_PRECISION_I64;
 use utils::constant::PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO_I128;
 use utils::constant::TWENTY_FOUR_HOUR;
 use utils::constant::{FEE_MULTIPLIER, PRICE_PRECISION};
@@ -68,7 +66,7 @@ pub fn get_net_liquidity_imbalance(
 // Invokes the external Oracle Registry contract to fetch the current price for a given asset.
 //
 // This performs a cross-contract call to the `get_price` method on the Oracle Registry,
-// passing the calling contract, asset, caching preference, and action context.
+// passing the asset and action context.
 //
 // # Arguments
 // * `e` - Soroban environment reference.
@@ -76,66 +74,89 @@ pub fn get_net_liquidity_imbalance(
 // * `action` - The context in which the price is being fetched (e.g. Swap, Rebalance).
 //
 // # Returns
-// * `OraclePriceData` — The current oracle price and delay since publication.
+// * `HistoricalOracleData` — The current oracle price and delay since publication.
 pub fn get_oracle_price(e: &Env, asset: &Symbol, action: NormalAction) -> HistoricalOracleData {
-    let (oracle_data, oracle_validity): (HistoricalOracleData, OracleValidity) = e.invoke_contract(
-        &get_oracle_registry(e),
-        &Symbol::new(e, "get_price"),
-        Vec::from_array(e, [e.current_contract_address().to_val(), asset.to_val()]),
-    );
+    let (historical_oracle_data, oracle_validity): (HistoricalOracleData, OracleValidity) = e
+        .invoke_contract(
+            &get_oracle_registry(e),
+            &Symbol::new(e, "get_price"),
+            Vec::from_array(e, [asset.to_val()]),
+        );
 
-    // Calculate pool price
+    let oracle_valid_for_action = is_oracle_valid_for_action(oracle_validity, Some(action));
+
+    if !oracle_valid_for_action {
+        panic_with_error!(e, PoolError::InvalidOracle);
+    }
+
+    historical_oracle_data
+}
+
+pub fn validate_oracle_price_with_pool(
+    e: &Env,
+    base_oracle_price_twap: u128,
+    quote_oracle_price_twap: u128,
+    action: NormalAction,
+) {
+    if action == NormalAction::PoolInit {
+        return;
+    }
+
     let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
-    let pool_price = reserve_b / reserve_a;
+
+    let peg_price = peg_price(e, base_oracle_price_twap, quote_oracle_price_twap);
+
+    let pool_price = if reserve_a == 0 || reserve_b == 0 {
+        peg_price
+    } else {
+        reserve_b
+            .fixed_div_floor(reserve_a, PRICE_PRECISION)
+            .unwrap()
+    };
 
     // Find % difference b/t pool price and oracle price
     let oracle_pool_price_spread_pct =
-        calculate_oracle_twap_price_spread_pct(e, pool_price, oracle_data.last_oracle_price_twap);
+        calculate_oracle_twap_price_spread_pct(e, pool_price, peg_price);
 
+    // Check if the oracle price is too divergent
     let oracle_guard_rails: OracleGuardRails = e.invoke_contract(
         &get_oracle_registry(e),
         &Symbol::new(e, "get_oracle_guard_rails"),
         Vec::from_array(e, []),
     );
 
-    // Check if the oracle price is too divergent
     let is_oracle_price_too_divergent =
         is_oracle_price_too_divergent(oracle_pool_price_spread_pct, oracle_guard_rails);
-    if !is_oracle_price_too_divergent {
+
+    if is_oracle_price_too_divergent {
         panic_with_error!(e, PoolError::InvalidOracle);
     }
-
-    let oracle_valid_for_action = is_oracle_valid_for_action(oracle_validity, Some(action));
-    if !oracle_valid_for_action {
-        panic_with_error!(e, PoolError::InvalidOracle);
-    }
-
-    oracle_data
 }
 
-// Calculates the percentage difference between the reserve price and oracle TWAP.
+// Calculates the percentage difference between the pool price and oracle TWAP.
 //
 // Used to evaluate whether the oracle data is in line with internal pricing,
 // expressed as a percentage spread for risk assessment.
 //
 // # Arguments
 // * `e` - Soroban environment reference.
-// * `other_price` - Reserve-derived price.
+// * `pool_price` - The current pool price.
 // * `last_oracle_price_twap` - Oracle's last TWAP.
 //
 // # Returns
 // - The price spread as a percentage (scaled by `PRICE_PRECISION_U64`).
 pub fn calculate_oracle_twap_price_spread_pct(
     e: &Env,
-    other_price: u128,
+    pool_price: u128,
     last_oracle_price_twap: u128,
 ) -> i64 {
-    let price_spread = (other_price as u64).safe_sub(e, last_oracle_price_twap as u64);
+    let price_spread: i64 =
+        (pool_price as i128).saturating_sub(last_oracle_price_twap as i128) as i64;
 
     // price_spread_pct
     price_spread
-        .safe_mul(e, PRICE_PRECISION_U64)
-        .safe_div(e, other_price as u64) as i64
+        .fixed_div_floor(pool_price as i64, PRICE_PRECISION_I64)
+        .unwrap() as i64
 }
 
 // Determines whether the oracle price diverges too far from the reserve price.
@@ -145,8 +166,8 @@ pub fn calculate_oracle_twap_price_spread_pct(
 //
 //
 // # Arguments
-// * `oracle_guard_rails` - .
 // * `price_spread_pct` - Absolute spread percentage between oracle and reserve.
+// * `oracle_guard_rails` - .
 //
 // # Returns
 // - `true` if the spread exceeds the maximum allowed divergence.
@@ -156,8 +177,8 @@ pub fn is_oracle_price_too_divergent(
 ) -> bool {
     let max_divergence = oracle_guard_rails
         .price_divergence
-        .oracle_twap_percent_divergence
-        .max(PERCENTAGE_PRECISION_U64 / 10);
+        .oracle_twap_percent_divergence;
+
     price_spread_pct.unsigned_abs() > max_divergence
 }
 
@@ -186,6 +207,7 @@ pub fn is_oracle_valid_for_action(
 ) -> bool {
     let is_ok = match action {
         Some(action) => match action {
+            NormalAction::PoolInit => matches!(oracle_validity, OracleValidity::Valid),
             NormalAction::AddLiquidity => matches!(
                 oracle_validity,
                 OracleValidity::Valid | OracleValidity::StaleForPool
@@ -229,7 +251,9 @@ pub fn peg_price(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -> 
         return 0;
     }
 
-    base_oracle_price.fixed_div_floor(e, &quote_oracle_price, &PRICE_PRECISION)
+    base_oracle_price
+        .fixed_div_floor(quote_oracle_price, PRICE_PRECISION)
+        .unwrap()
     // quote_oracle_price.checked_div(base_oracle_price).unwrap_or(0)
     // quote_oracle_price.safe_div(e, base_oracle_price)
 }
@@ -300,7 +324,9 @@ pub fn get_delta_a(
     quote_oracle_price: u128,
 ) -> i128 {
     let peg_price = peg_price(e, base_oracle_price, quote_oracle_price);
-    let target_reserve_a = reserve_b.fixed_div_floor(e, &peg_price, &PRICE_PRECISION);
+    let target_reserve_a = reserve_b
+        .fixed_div_floor(peg_price, PRICE_PRECISION)
+        .unwrap();
     let delta_a = (target_reserve_a as i128)
         .checked_sub(reserve_a as i128)
         .unwrap();
@@ -346,10 +372,10 @@ pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128, red
                 if delta_a > mint_cap {
                     panic_with_error!(&e, PoolError::SwapReduceOnly);
                 }
+            } else {
+                mint_synthetic_tokens(&e, &e.current_contract_address(), delta_a);
+                set_reserve_a(&e, &(reserve_a + (delta_a as u128)));
             }
-        } else {
-            mint_synthetic_tokens(&e, &e.current_contract_address(), delta_a);
-            set_reserve_a(&e, &(reserve_a + (delta_a as u128)));
         }
         if delta_a < 0 {
             burn_synthetic_tokens(&e, &e.current_contract_address(), delta_a.abs() as u128);
@@ -399,17 +425,17 @@ pub fn get_amount_out_strict_receive(
         return (0, 0);
     }
 
-    let dy_w_fee = out_amount.fixed_mul_ceil(
-        &e,
-        &FEE_MULTIPLIER,
-        &(FEE_MULTIPLIER - (fee_fraction as u128)),
-    );
+    let dy_w_fee = out_amount
+        .fixed_mul_ceil(FEE_MULTIPLIER, (FEE_MULTIPLIER - (fee_fraction as u128)))
+        .unwrap();
     // if total value including fee is more than the reserve, math can't be done properly
     if dy_w_fee >= reserve_buy {
         panic_with_error!(e, PoolValidationError::InsufficientBalance);
     }
     // +1 just in case there were some rounding errors & convert to real units in place
-    let result = reserve_buy.fixed_mul_floor(&e, &reserve_sell, &(reserve_buy - dy_w_fee))
+    let result = reserve_buy
+        .fixed_mul_floor(reserve_sell, (reserve_buy - dy_w_fee))
+        .unwrap()
         - reserve_sell
         + 1;
     (result, dy_w_fee - out_amount)

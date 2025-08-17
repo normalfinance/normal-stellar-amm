@@ -16,9 +16,7 @@ use access_control::role::SymbolRepresentation;
 use access_control::transfer::TransferOwnershipTrait;
 use access_control::utils::require_admin;
 use reentrancy_guard::{enter, exit};
-use soroban_sdk::{
-    contract, contractimpl, log, panic_with_error, Address, BytesN, Env, Symbol, Vec,
-};
+use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env, Symbol, Vec};
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
@@ -66,7 +64,8 @@ impl OracleRegistryTrait for OracleRegistry {
     // * `asset` - The asset symbol (e.g., "BTC") whose price is being requested.
     //
     // # Returns
-    // * `OraclePriceData` - The price and the delay (age) of the price data.
+    // * `HistoricalOracleData` -  The historical oracle price information.
+    // * `OracleValidity` - The oracle validity.
     //
     // # Panics
     // Panics with `OracleRegistryError::OracleInvalid` if the live price data fails validation.
@@ -87,10 +86,6 @@ impl OracleRegistryTrait for OracleRegistry {
             historical_oracle_data.last_oracle_price_twap,
             &oracle_price_data,
         );
-
-        if oracle_validity != OracleValidity::Valid {
-            panic_with_error!(&e, oracle_validity.get_error_code());
-        }
 
         if oracle_validity != OracleValidity::Frozen {
             update_twap(

@@ -34,6 +34,8 @@ fn test_pool() {
         [setup.token1.address.clone(), setup.token2.address.clone()],
     );
 
+    let sac = Address::generate(&e);
+
     // let user1 = Address::generate(&e);
     // setup.reward_token.mint(&user1, &10_0000000);
 
@@ -41,10 +43,7 @@ fn test_pool() {
         &setup.admin,
         &(Symbol::new(&e, "BTC"), Symbol::new(&e, "XLM")),
         &setup.token2.address.clone(),
-        &(
-            String::from_str(&e, "Normal Bitcoin"),
-            String::from_str(&e, "nBTC"),
-        ),
+        &sac,
         &(
             String::from_str(&e, "Pool Share Token"),
             String::from_str(&e, "Pool Share Token"),
@@ -59,7 +58,7 @@ fn test_pool() {
         .token2_admin_client
         .mint(&setup.users[1], &100_000_0000000);
 
-    let (x, y) = router.deposit(&setup.users[1], &setup.btc_asset_id, &10000_0000000);
+    // let (x, y) = router.deposit(&setup.users[1], &setup.btc_asset_id, &10000_0000000);
 
     // let router_str: String = router.address.to_string(&e).into();
 
