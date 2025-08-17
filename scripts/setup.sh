@@ -126,15 +126,6 @@ stellar contract invoke \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     -- \
-    set_synthetic_token_hash \
-    --admin $ADMIN_ADDRESS \
-    --new_hash $SYNTHETIC_TOKEN_WASM_HASH
-
-stellar contract invoke \
-    --id $POOL_ROUTER_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    -- \
     set_reward_token \
     --admin $ADMIN_ADDRESS \
     --reward_token $XLM
