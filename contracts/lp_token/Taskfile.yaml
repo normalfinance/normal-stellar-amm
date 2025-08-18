@@ -13,7 +13,6 @@ tasks:
     cmds:
       - soroban contract build --package lp-token
       - soroban contract optimize --wasm ../../target/wasm32v1-none/release/lp_token.wasm --wasm-out ../../target/wasm32v1-none/release/lp_token.wasm
-      - ls -l ../../target/wasm32v1-none/release/*.wasm
       - cp ../../target/wasm32v1-none/release/lp_token.wasm ../../wasm/lp_token.wasm
 
   test:

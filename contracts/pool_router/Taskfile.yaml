@@ -15,7 +15,6 @@ tasks:
       - task -d ../liquidity_calculator build || exit 1
       - soroban contract build --package pool-router
       - soroban contract optimize --wasm ../../target/wasm32v1-none/release/pool_router.wasm --wasm-out ../../target/wasm32v1-none/release/pool_router.wasm
-      - ls -l ../../target/wasm32v1-none/release/*.wasm
       - cp ../../target/wasm32v1-none/release/pool_router.wasm ../../wasm/pool_router.wasm
 
   test:
