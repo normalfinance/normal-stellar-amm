@@ -3,7 +3,7 @@
   "description": "Normal is a synthetic asset protocol enabling investors to trade any crypto asset or real-world asset (RWA) from a single DEX",
   "version": "0.0.1",
   "scripts": {
-    "env": "cp .env.example .env",
+    "env": "cp .env.example .env.testnet",
     "test": "pnpm run test:integration && pnpm run test:unit",
     "lint": "prettier --check . && eslint .",
     "format": "prettier --write .",
