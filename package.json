@@ -4,7 +4,6 @@
   "version": "0.0.1",
   "scripts": {
     "env": "cp .env.example .env",
-    "setup": "node initialize.js",
     "test": "pnpm run test:integration && pnpm run test:unit",
     "lint": "prettier --check . && eslint .",
     "format": "prettier --write .",
