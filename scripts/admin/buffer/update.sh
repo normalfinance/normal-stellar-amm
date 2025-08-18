@@ -1,10 +1,13 @@
-#!/bin/bash
+# Ensure the script exits on any errors
 set -e
+
+# Load environment variables from .env file
+source .env
 
 # Usage instructions
 usage() {
     echo "Usage:"
-    echo "  $0 <identity_string> <contract_id> <flag> <args...>"
+    echo "  $0 <identity_string> <network> <contract_id> <flag> <args...>"
     echo ""
     echo "Flags:"
     echo "  -t <min_time_between_payouts_u64>"
@@ -14,18 +17,18 @@ usage() {
 }
 
 # Validate input
-if [ "$#" -lt 3 ]; then
+if [ "$#" -lt 4 ]; then
     usage
 fi
 
 # Inputs
-CONTRACT_ID="$2"
-FLAG="$3"
+CONTRACT_ID="$3"
+FLAG="$4"
 shift 3
 
 # Config
 IDENTITY_STRING="$1"
-NETWORK="testnet"
+NETWORK="$2"
 ADMIN_ADDRESS=$(soroban keys address $IDENTITY_STRING)
 
 case "$FLAG" in
@@ -38,6 +41,9 @@ case "$FLAG" in
         --id "$CONTRACT_ID" \
         --source "$IDENTITY_STRING" \
         --network "$NETWORK" \
+        --rpc-url $STELLAR_RPC_URL \
+        --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+        --fee $STELLAR_BASE_FEE \
         -- \
         set_min_time_between_payouts \
         --admin "$ADMIN_ADDRESS" \
@@ -53,6 +59,9 @@ case "$FLAG" in
         --id "$CONTRACT_ID" \
         --source "$IDENTITY_STRING" \
         --network "$NETWORK" \
+        --rpc-url $STELLAR_RPC_URL \
+        --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+        --fee $STELLAR_BASE_FEE \
         -- \
         set_min_reserve_ratio \
         --admin "$ADMIN_ADDRESS" \
@@ -68,6 +77,9 @@ case "$FLAG" in
         --id "$CONTRACT_ID" \
         --source "$IDENTITY_STRING" \
         --network "$NETWORK" \
+        --rpc-url $STELLAR_RPC_URL \
+        --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+        --fee $STELLAR_BASE_FEE \
         -- \
         set_reserve_max_balance \
         --admin "$ADMIN_ADDRESS" \

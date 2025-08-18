@@ -7,7 +7,7 @@ source .env
 # Usage
 usage() {
     echo "Usage:"
-    echo "  $0 <issuer> <network>"
+    echo "  $0 <issuer> <network> <symbol>"
     echo ""
     echo "Example:"
     echo "  $0 admin testnet"
@@ -15,22 +15,23 @@ usage() {
 }
 
 # Validate args
-if [ "$#" -ne 2 ]; then
+if [ "$#" -ne 3 ]; then
     usage
 fi
 
 # Parse arguments
 ISSUER=$1
 NETWORK=$2
+SYMBOL=$3
 
 # Get admin address
 ISSUER_ADDRESS=$(soroban keys address "$ISSUER")
 
-# Locks the asset issuer so no additional tokens can be minted by it
-stellar tx new set-options \
-    --source-account "$ISSUER" \
+# Deploy the built-in SAC contract for the new asset
+stellar contract asset deploy \
+    --source "$ISSUER" \
     --network "$NETWORK" \
     --rpc-url $STELLAR_RPC_URL \
     --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
     --fee $STELLAR_BASE_FEE \
-    --master-weight 0
+    --asset "${SYMBOL}:${ISSUER_ADDRESS}"

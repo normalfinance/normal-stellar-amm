@@ -89,7 +89,7 @@ function deploy(wasm) {
     exe(
       `stellar contract deploy --wasm ${wasm} --ignore-checks --alias ${filenameNoExtension(
         wasm
-      )}`
+      )} --network ${process.env.STELLAR_NETWORK} --rpc_url ${process.env.STELLAR_RPC_URL}`
     );
   }
 }
@@ -199,7 +199,7 @@ function importAll() {
 
 /* Now, we call the functions we've written in the order we want them to happen: */
 // 1. generate and (optionally) fund an account
-fundAll();
+// fundAll();
 // 2. compile and build contracts
 buildAll();
 // 3. deploy all built contracts

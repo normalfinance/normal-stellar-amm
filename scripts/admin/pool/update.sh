@@ -1,5 +1,8 @@
-#!/bin/bash
+# Ensure the script exits on any errors
 set -e
+
+# Load environment variables from .env file
+source .env
 
 # Usage guide
 usage() {
@@ -50,6 +53,9 @@ case "$FLAG" in
         --id "$CONTRACT_ID" \
         --source "$IDENTITY_STRING" \
         --network "$NETWORK" \
+        --rpc-url $STELLAR_RPC_URL \
+        --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+        --fee $STELLAR_BASE_FEE \
         -- \
         set_privileged_addrs \
         --admin "$ADMIN_ADDRESS" \
@@ -68,6 +74,9 @@ case "$FLAG" in
         --id "$CONTRACT_ID" \
         --source "$IDENTITY_STRING" \
         --network "$NETWORK" \
+        --rpc-url $STELLAR_RPC_URL \
+        --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+        --fee $STELLAR_BASE_FEE \
         -- \
         set_fee \
         --admin "$ADMIN_ADDRESS" \
@@ -83,6 +92,9 @@ case "$FLAG" in
         --id "$CONTRACT_ID" \
         --source "$IDENTITY_STRING" \
         --network "$NETWORK" \
+        --rpc-url $STELLAR_RPC_URL \
+        --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+        --fee $STELLAR_BASE_FEE \
         -- \
         set_tier \
         --admin "$ADMIN_ADDRESS" \
@@ -98,6 +110,9 @@ case "$FLAG" in
         --id "$CONTRACT_ID" \
         --source "$IDENTITY_STRING" \
         --network "$NETWORK" \
+        --rpc-url $STELLAR_RPC_URL \
+        --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+        --fee $STELLAR_BASE_FEE \
         -- \
         set_status \
         --admin "$ADMIN_ADDRESS" \
@@ -113,6 +128,9 @@ case "$FLAG" in
         --id "$CONTRACT_ID" \
         --source "$IDENTITY_STRING" \
         --network "$NETWORK" \
+        --rpc-url $STELLAR_RPC_URL \
+        --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+        --fee $STELLAR_BASE_FEE \
         -- \
         set_max_imbalances \
         --admin "$ADMIN_ADDRESS" \
@@ -142,6 +160,9 @@ case "$FLAG" in
         --id "$CONTRACT_ID" \
         --source "$IDENTITY_STRING" \
         --network "$NETWORK" \
+        --rpc-url $STELLAR_RPC_URL \
+        --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+        --fee $STELLAR_BASE_FEE \
         -- \
         set_expiry \
         --admin "$ADMIN_ADDRESS" \

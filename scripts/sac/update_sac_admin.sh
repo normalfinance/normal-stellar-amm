@@ -1,6 +1,8 @@
-
-#!/bin/bash
+# Ensure the script exits on any errors
 set -e
+
+# Load environment variables from .env file
+source .env
 
 # Usage
 usage() {
@@ -8,7 +10,7 @@ usage() {
     echo "  $0 <issuer> <network> <sac_address> <pool_address>"
     echo ""
     echo "Example:"
-    echo "  $0 josh CAS123 CAS123"
+    echo "  $0 admin testnet CAS123 CAS123"
     exit 1
 }
 
@@ -31,5 +33,9 @@ stellar contract invoke \
     --source-account "$ISSUER" \
     --network "$NETWORK" \
     --id $SAC_ADDRESS \
+    --rpc-url $STELLAR_RPC_URL \
+    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --fee $STELLAR_BASE_FEE \
     -- \
-    set_admin --new_admin $POOL_ADDRESS
+    set_admin \
+    --new_admin $POOL_ADDRESS

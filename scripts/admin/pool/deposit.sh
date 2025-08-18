@@ -1,6 +1,9 @@
 # Ensure the script exits on any errors
 set -e
 
+# Load environment variables from .env file
+source .env
+
 # Check if the arguments are provided
 # Required: identity_string, network, pool_router_address, asset, amount
 if [ "$#" -lt 5 ]; then
@@ -23,24 +26,15 @@ if ! [[ "$AMOUNT" =~ ^[0-9]+$ ]]; then
     exit 1
 fi
 
-# XLM_BALANCE=$(stellar account balance $ADMIN_ADDRESS)
-
-# if [ -z "$XLM_BALANCE" ]; then
-#     echo "Error: Could not retrieve XLM balance for account $ADMIN_ADDRESS"
-#     exit 1
-# fi
-
-# if [ "$XLM_BALANCE" -lt "$AMOUNT" ]; then
-#     echo "❌ Error: Account has insufficient XLM. Balance: $XLM_BALANCE, required: $AMOUNT"
-#     exit 1
-# fi
-
 echo "Deposit liquidity into pool..."
 
 stellar contract invoke \
     --id $POOL_ROUTER_ADDR \
     --source $IDENTITY_STRING \
     --network $NETWORK \
+    --rpc-url $STELLAR_RPC_URL \
+    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --fee $STELLAR_BASE_FEE \
     -- \
     deposit \
     --user $ADMIN_ADDRESS \

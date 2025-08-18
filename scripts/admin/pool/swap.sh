@@ -1,6 +1,9 @@
 # Ensure the script exits on any errors
 set -e
 
+# Load environment variables from .env file
+source .env
+
 # Check if the arguments are provided
 # Required: identity_string, network, pool_router_address, asset, direction, amount, out_minimum
 if [ "$#" -lt 6 ]; then
@@ -31,6 +34,9 @@ stellar contract invoke \
     --id $POOL_ROUTER_ADDR \
     --source $IDENTITY_STRING \
     --network $NETWORK \
+    --rpc-url $STELLAR_RPC_URL \
+    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --fee $STELLAR_BASE_FEE \
     -- \
     swap \
     --user $ADMIN_ADDRESS \

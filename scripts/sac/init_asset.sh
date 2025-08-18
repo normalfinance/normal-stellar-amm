@@ -26,11 +26,10 @@ NETWORK=$2
 # Get admin address
 ISSUER_ADDRESS=$(soroban keys address "$ISSUER")
 
-# Locks the asset issuer so no additional tokens can be minted by it
-stellar tx new set-options \
+# Issue an asset by creating a trustline
+stellar tx new change-trust \
     --source-account "$ISSUER" \
     --network "$NETWORK" \
     --rpc-url $STELLAR_RPC_URL \
     --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
-    --fee $STELLAR_BASE_FEE \
-    --master-weight 0
+    --fee $STELLAR_BASE_FEE 
