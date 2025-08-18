@@ -1,9 +1,6 @@
 # Ensure the script exits on any errors
 set -e
 
-# Load environment variables from .env file
-source .env
-
 # Usage
 usage() {
     echo "Usage:"
@@ -24,6 +21,9 @@ ISSUER=$1
 NETWORK=$2
 SAC_ADDRESS=$3
 POOL_ADDRESS=$4
+
+# Load env vars dynamically
+source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh" "$NETWORK"
 
 # Get issuer address
 ISSUER_ADDRESS=$(soroban keys address "$ISSUER")

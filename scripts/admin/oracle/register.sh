@@ -1,9 +1,6 @@
 # Ensure the script exits on any errors
 set -e
 
-# Load environment variables from .env file
-source .env
-
 # Check if the argument is provided
 if [ "$#" -lt 6 ]; then
     echo "Usage: $0 <identity_string> <network> <oracle_registry_address> <asset> <decimals> <clamp>"
@@ -16,6 +13,9 @@ ORACLE_REGISTRY_ADDR="$3"
 ASSET="$4"
 DECIMALS="$5"
 CLAMP="$6"
+
+# Load env vars dynamically
+source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh" "$NETWORK"
 
 # Get admin address
 ADMIN_ADDRESS=$(soroban keys address "$IDENTITY_STRING")

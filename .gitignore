@@ -26,3 +26,5 @@ wasm
 .stellar
 node_modules
 .env
+.env.testnet
+.env.mainnet

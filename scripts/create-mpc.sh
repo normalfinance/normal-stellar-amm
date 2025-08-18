@@ -1,8 +1,8 @@
 # Ensure the script exits on any errors
 set -e
 
-# Load environment variables from .env file
-source .env
+# Load env vars dynamically
+source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh" "$NETWORK"
 
 # ---------- Config ----------
 

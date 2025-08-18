@@ -1,9 +1,6 @@
 # Ensure the script exits on any errors
 set -e
 
-# Load environment variables from .env file
-source .env
-
 # Check if the arguments are provided
 # Required: identity_string, pool_address, fund_type, fund_address
 if [ "$#" -lt 4 ]; then
@@ -16,6 +13,9 @@ NETWORK=$2
 POOL_ROUTER_ADDR=$3
 FUND_TYPE=""
 FUND_ADDR=$4
+
+# Load env vars dynamically
+source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh" "$NETWORK"
 
 # Parse input flags
 while [[ "$#" -gt 0 ]]; do

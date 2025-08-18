@@ -1,13 +1,10 @@
 # Ensure the script exits on any errors
 set -e
 
-# Load environment variables from .env file
-source .env
-
 # Usage guide
 usage() {
     echo "Usage:"
-    echo "  $0 <identity_string> <contract_id> <flag> <args...>"
+    echo "  $0 <identity_string> <network> <contract_id> <flag> <args...>"
     echo ""
     echo "Flags:"
     echo "  -p <rewards_admin> <operations_admin> <pause_admin> <emergency_admin1,admin2,...>"
@@ -20,7 +17,7 @@ usage() {
 }
 
 # Ensure minimum arguments
-if [ "$#" -lt 3 ]; then
+if [ "$#" -lt 4 ]; then
     usage
 fi
 
@@ -30,9 +27,12 @@ FLAG="$3"
 shift 3
 
 # Config
-NETWORK="testnet"
+NETWORK="$2"
 ADMIN_ADDRESS=$(soroban keys address $IDENTITY_STRING)
 IDENTITY_STRING="$1"
+
+# Load env vars dynamically
+source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh" "$NETWORK"
 
 case "$FLAG" in
 -p)

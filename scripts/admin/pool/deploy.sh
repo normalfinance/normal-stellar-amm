@@ -1,9 +1,6 @@
 # Ensure the script exits on any errors
 set -e
 
-# Load environment variables from .env file
-source .env
-
 # Usage
 usage() {
     echo "Usage:"
@@ -29,6 +26,9 @@ FEE_FRACTION="$6"
 POOL_TIER="$7"
 MAX_INSURANCE="$8"
 SYNTHETIC_SAC_ADDRESS="$9"
+
+# Load env vars dynamically
+source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh" "$NETWORK"
 
 # Derive LP token info
 LP_TOKEN_NAME="$NORMAL_TOKEN_SYMBOL-XLM LP Token"

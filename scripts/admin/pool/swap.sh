@@ -1,9 +1,6 @@
 # Ensure the script exits on any errors
 set -e
 
-# Load environment variables from .env file
-source .env
-
 # Check if the arguments are provided
 # Required: identity_string, network, pool_router_address, asset, direction, amount, out_minimum
 if [ "$#" -lt 6 ]; then
@@ -18,6 +15,9 @@ ASSET=$4
 DIRECTION=$5
 AMOUNT=$6
 OUT_MINIMUM=$7
+
+# Load env vars dynamically
+source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh" "$NETWORK"
 
 # Fetch the admin's address
 ADMIN_ADDRESS=$(soroban keys address $IDENTITY_STRING)

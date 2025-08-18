@@ -3,12 +3,15 @@ set -e
 
 # Check if the argument is provided
 if [ -z "$1" ]; then
-    echo "Usage: $0 <identity_string>"
+    echo "Usage: $0 <identity_string> <network>"
     exit 1
 fi
 
 IDENTITY_STRING=$1
-NETWORK="testnet"
+NETWORK=$2
+
+# Load env vars dynamically
+source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh" "$NETWORK"
 
 # Config
 CONTRACT_TYPE="..."

@@ -1,9 +1,6 @@
 # Ensure the script exits on any errors
 set -e
 
-# Load environment variables from .env file
-source .env
-
 # Usage check
 if [ "$#" -ne 5 ]; then
     echo "Usage: $0 <identity_string> <network> <contract_id> [-r|-b|-i|-f|-u|-l] <value>"
@@ -25,6 +22,9 @@ VALUE="$5"
 IDENTITY_STRING=$1
 NETWORK=$2
 ADMIN_ADDRESS=$(soroban keys address $IDENTITY_STRING)
+
+# Load env vars dynamically
+source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh" "$NETWORK"
 
 # Select function based on flag
 case "$FLAG" in
