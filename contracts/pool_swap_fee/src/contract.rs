@@ -1,6 +1,6 @@
 use core::cmp::max;
 
-use crate::errors::Error;
+use crate::errors::PoolSwapFeeError;
 use crate::events::{Events, ProviderFeeEvents};
 use crate::incentives::get_incentives_manager;
 use crate::interface::{AdminInterface, PoolSwapFeeInterface};
@@ -19,6 +19,7 @@ use access_control::role::Role;
 use access_control::role::SymbolRepresentation;
 use access_control::transfer::TransferOwnershipTrait;
 use access_control::utils::require_admin;
+use reentrancy_guard::{enter, exit};
 use soroban_fixed_point_math::FixedPoint;
 use soroban_sdk::auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation};
 use soroban_sdk::token::Client as SorobanTokenClient;
@@ -34,6 +35,7 @@ use utils::math::safe_math::SafeMath;
 use utils::math::stats::calculate_rolling_sum;
 use utils::state::pool::{PoolInfo, SwapDirection};
 use utils::token::transfer_token;
+use utils::validate;
 
 #[contract]
 pub struct PoolSwapFeeCollector;
@@ -89,6 +91,8 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         out_min: u128,
     ) -> u128 {
         user.require_auth();
+
+        enter(&e);
 
         let now = e.ledger().timestamp();
 
@@ -180,7 +184,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
 
         amount_out_w_fee = amount_out - fee_amount;
         if amount_out_w_fee < out_min {
-            panic_with_error!(&e, Error::OutMinNotSatisfied);
+            panic_with_error!(&e, PoolSwapFeeError::OutMinNotSatisfied);
         }
 
         // Send token_out to the user
@@ -194,7 +198,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
 
         // UPDATE METRICS
         let volume_30d = get_volume_30d(&e);
-        let since_last = max(1_u64, now.safe_sub(&e, get_last_trade_ts(&e)));
+        let since_last = max(1_u64, now.saturating_sub(get_last_trade_ts(&e)));
         let updated_volume_30d =
             calculate_rolling_sum(&e, volume_30d, quote_asset_amount, since_last, THIRTY_DAY);
         set_volume_30d(&e, &updated_volume_30d);
@@ -204,7 +208,13 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         let lp_fee_amount =
             (fee_amount * (lp_revenue_fraction as u128)) / (FEE_DENOMINATOR as u128);
 
-        let mut protocol_fee_amount = fee_amount.safe_sub(&e, lp_fee_amount);
+        // Add bounds checking to prevent fee calculation underflow when LP fees exceed total fees
+        validate!(
+            &e,
+            fee_amount >= lp_fee_amount,
+            PoolSwapFeeError::InvalidFeeCalculation
+        );
+        let mut protocol_fee_amount = fee_amount - lp_fee_amount;
 
         // BUFFER
         let buffer_fraction = get_buffer_fraction(&e);
@@ -318,6 +328,8 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
             .manager()
             .checkpoint_user(&user, total_shares, user_shares, token_b_fee);
 
+        exit(&e);
+
         amount_out_w_fee
     }
 
@@ -400,6 +412,8 @@ impl AdminInterface for PoolSwapFeeCollector {
         admin.require_auth();
         require_admin(&e, &admin);
 
+        enter(&e);
+
         let token_client = SorobanTokenClient::new(&e, &token);
         let amount = token_client.balance(&e.current_contract_address());
 
@@ -411,6 +425,9 @@ impl AdminInterface for PoolSwapFeeCollector {
             &amount,
         );
         Events::new(&e).claim_fees(token, admin, amount as u128);
+
+        exit(&e);
+
         amount as u128
     }
 

@@ -2,7 +2,7 @@
 set -e
 
 # Check if the argument is provided
-if [ -z "$1" ]; then
+if [ "$#" -lt 2 ]; then
     echo "Usage: $0 <identity_string> <network>"
     exit 1
 fi
@@ -10,9 +10,11 @@ fi
 IDENTITY_STRING=$1
 NETWORK=$2
 
+# Load env vars dynamically
+source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh" "$NETWORK"
+
 echo "Build and optimize the contracts..."
 
-# make build >/dev/null
 task build
 cd target/wasm32v1-none/release
 
@@ -35,24 +37,31 @@ echo "Contracts optimized."
 # Fetch the admin's address
 ADMIN_ADDRESS=$(soroban keys address $IDENTITY_STRING)
 
-echo "Deploy the soroban_token_contract and capture its contract ID hash..."
+echo "Install the pool contract..."
 
-XLM="CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA"
-
-echo "Install the soroban_token and pool contracts..."
-
-TOKEN_WASM_HASH=$(soroban contract upload \
-    --wasm soroban_token_contract.optimized.wasm \
-    --source $IDENTITY_STRING \
---network $NETWORK)
-
-# Continue with the rest of the deployments
 POOL_WASM_HASH=$(soroban contract upload \
     --wasm pool.optimized.wasm \
     --source $IDENTITY_STRING \
---network $NETWORK)
+    --network $NETWORK \
+    --rpc-url $STELLAR_RPC_URL \
+    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --fee $STELLAR_BASE_FEE 
+    )
 
-echo "Token and pool contracts deployed."
+echo "Pool contract deployed."
+
+echo "Install the LP token contract..."
+
+LP_TOKEN_WASM_HASH=$(soroban contract upload \
+    --wasm lp_token.optimized.wasm \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    --rpc-url $STELLAR_RPC_URL \
+    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --fee $STELLAR_BASE_FEE 
+    )
+
+echo "LP token contract deployed."
 
 #     ______     _______        __       ______   ___       _______   ________
 #    /    " \   /"      \      /""\     /" _  "\ |"  |     /"     "| /"       )
@@ -64,10 +73,14 @@ echo "Token and pool contracts deployed."
 
 echo "Initialize oracle registry..."
 
-ORACLE_REGISTRY_ADDR=$(soroban contract deploy \
+ORACLE_REGISTRY_ADDR=$(stellar contract deploy \
     --wasm oracle_registry.optimized.wasm \
     --source $IDENTITY_STRING \
---network $NETWORK)
+    --network $NETWORK \
+    --rpc-url $STELLAR_RPC_URL \
+    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --fee $STELLAR_BASE_FEE 
+    )
 
 #   _______     ______    ____  ____  ___________  _______   _______
 #  /"      \   /    " \  ("  _||_ " |("     _   ")/"     "| /"      \
@@ -82,17 +95,29 @@ echo "Initialize pool router..."
 POOL_PLANE_ADDR=$(soroban contract deploy \
     --wasm pool_plane.optimized.wasm \
     --source $IDENTITY_STRING \
---network $NETWORK)
+    --network $NETWORK \
+    --rpc-url $STELLAR_RPC_URL \
+    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --fee $STELLAR_BASE_FEE
+    )
 
 LIQUIDITY_CALCULATOR_ADDR=$(soroban contract deploy \
     --wasm liquidity_calculator.optimized.wasm \
     --source $IDENTITY_STRING \
---network $NETWORK)
+    --network $NETWORK \
+    --rpc-url $STELLAR_RPC_URL \
+    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --fee $STELLAR_BASE_FEE
+    )
 
 POOL_ROUTER_ADDR=$(soroban contract deploy \
     --wasm pool_router.optimized.wasm \
     --source $IDENTITY_STRING \
---network $NETWORK)
+    --network $NETWORK \
+    --rpc-url $STELLAR_RPC_URL \
+    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --fee $STELLAR_BASE_FEE
+    )
 
 echo "Tokens and pool router deployed."
 
@@ -109,10 +134,11 @@ echo "Initialize buffer..."
 BUFFER_ADDR=$(soroban contract deploy \
     --wasm buffer.optimized.wasm \
     --source $IDENTITY_STRING \
---network $NETWORK)
-
-ONE_HOUR=$((3600))
-
+    --network $NETWORK \
+    --rpc-url $STELLAR_RPC_URL \
+    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --fee $STELLAR_BASE_FEE
+    )
 
 #   __    _____  ___    ________  ____  ____   _______        __      _____  ___    ______    _______
 #  |" \  (\"   \|"  \  /"       )("  _||_ " | /"      \      /""\    (\"   \|"  \  /" _  "\  /"     "|
@@ -127,8 +153,11 @@ echo "Initialize insurance fund..."
 INSURANCE_FUND_ADDR=$(soroban contract deploy \
     --wasm insurance_fund.optimized.wasm \
     --source $IDENTITY_STRING \
---network $NETWORK)
-
+    --network $NETWORK \
+    --rpc-url $STELLAR_RPC_URL \
+    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --fee $STELLAR_BASE_FEE
+    )
 
 #   _______   _______   _______       ______    ______    ___      ___       _______   ______  ___________  ______     _______
 #  /"     "| /"     "| /"     "|     /" _  "\  /    " \  |"  |    |"  |     /"     "| /" _  "\("     _   ")/    " \   /"      \
@@ -143,7 +172,11 @@ echo "Initialize fee collector..."
 FEE_COLLECTOR_ADDR=$(soroban contract deploy \
     --wasm pool_swap_fee.optimized.wasm \
     --source $IDENTITY_STRING \
---network $NETWORK)
+    --network $NETWORK \
+    --rpc-url $STELLAR_RPC_URL \
+    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --fee $STELLAR_BASE_FEE
+    )
 
 echo "#############################"
 

@@ -113,7 +113,7 @@ pub trait IncentivesInterfaceTrait {
     );
 
     // Fills the aggregated liquidity information for a given set of tokens.
-    fn fill_liquidity(e: Env, asset: Symbol);
+    fn fill_liquidity(e: Env, user: Address, asset: Symbol);
 
     // Configures the rewards for a specific pool.
     //
@@ -136,7 +136,7 @@ pub trait IncentivesInterfaceTrait {
     // * The pool does not exist.
     // * The tokens are not found in the current rewards configuration.
     // * The liquidity for the tokens has not been filled.
-    fn config_pool_rewards(e: Env, asset: Symbol) -> u128;
+    fn config_pool_rewards(e: Env, user: Address, asset: Symbol) -> u128;
 
     // Get rewards status for the pool,
     // including amount available for the user
@@ -183,7 +183,7 @@ pub trait PoolsManagementTrait {
         admin: Address,
         assets: (Symbol, Symbol),
         token_b: Address,
-        synthetic_token_info: (String, String),
+        synthetic_sac_address: Address,
         lp_token_info: (String, String),
         fee_fraction: u32,
         tier: PoolTier,

@@ -6,7 +6,7 @@ use crate::testutils::oracle_registry::{
 };
 use crate::PoolRouterClient;
 use sep_40_oracle::testutils::{Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM};
-use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
@@ -193,7 +193,7 @@ impl Setup<'_> {
         // Pool Router
         let pool_hash = install_liq_pool_hash(&e);
         let lp_token_hash = install_lp_token_wasm(&e);
-        let synthetic_token_hash = install_token_wasm(&e);
+        // let synthetic_token_hash = install_token_wasm(&e);
         let router = create_pool_router_contract(&e);
         router.init_admin(&admin);
         let rewards_admin = soroban_sdk::Address::generate(&e);
@@ -209,7 +209,6 @@ impl Setup<'_> {
         );
         router.set_pool_hash(&admin, &pool_hash);
         router.set_lp_token_hash(&admin, &lp_token_hash);
-        router.set_synthetic_token_hash(&admin, &synthetic_token_hash);
         router.set_reward_token(&admin, &reward_token.address);
 
         let emergency_admin = Address::generate(&e);
@@ -381,10 +380,10 @@ impl Setup<'_> {
         router.set_oracle_registry(&admin, &registry.address);
 
         // Register XLM oracle
-        registry.register_oracle(&admin, &btc_asset_id, &oracle_id, &14, &0);
+        registry.register_oracle(&admin, &btc_asset_id, &oracle_id, &14, &1);
 
         // Register BTC oralce
-        registry.register_oracle(&admin, &xlm_asset_id, &oracle_id, &14, &0);
+        registry.register_oracle(&admin, &xlm_asset_id, &oracle_id, &14, &1);
 
         Setup {
             env: e,

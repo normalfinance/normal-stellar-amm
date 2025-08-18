@@ -1,17 +1,14 @@
 use sep_40_oracle::{Asset, PriceFeedClient};
 use soroban_fixed_point_math::SorobanFixedPoint;
-use soroban_sdk::{log, Address, Env, Symbol};
-// use soroban_fixed_point_math::
+use soroban_sdk::{Address, Env, Symbol};
 use utils::{
-    constant::{FIVE_MINUTE, PERCENTAGE_PRECISION, PERCENTAGE_PRECISION_U64, PRICE_PRECISION_U64},
+    constant::{FIVE_MINUTE, PERCENTAGE_PRECISION, PERCENTAGE_PRECISION_U64, PRICE_PRECISION},
     math::{pool::sanitize_new_price, safe_math::SafeMath, stats::calculate_new_twap},
-    state::oracle_registry::{HistoricalOracleData, NormalAction, OraclePriceData},
+    state::oracle_registry::{HistoricalOracleData, OraclePriceData, OracleValidity},
+    temporal::Delay,
 };
 
-use crate::{
-    storage::{get_oracle_guard_rails, put_historical_oracle_data},
-    storage_types::{OracleStatus, OracleValidity},
-};
+use crate::storage::{get_oracle_guard_rails, put_historical_oracle_data};
 
 // Fetches the latest oracle price and timestamp for a given asset.
 //
@@ -27,6 +24,7 @@ use crate::{
 // # Returns
 // - `OraclePriceData` containing the price and delay since last update.
 pub fn get_oracle_price(e: &Env, oracle: &Address, asset: &Symbol, now: u64) -> OraclePriceData {
+    assert!(now > 0, "now timestamp must be positive");
     let oracle_client = PriceFeedClient::new(e, oracle);
     let oracle_asset = Asset::Other(asset.clone());
 
@@ -35,10 +33,14 @@ pub fn get_oracle_price(e: &Env, oracle: &Address, asset: &Symbol, now: u64) -> 
 
     let oracle_price_data = oracle_client.lastprice(&oracle_asset).unwrap();
 
-    oracle_price = oracle_price_data.price as u128;
+    oracle_price = (oracle_price_data.price as u128).saturating_div(PRICE_PRECISION);
     published_ts = oracle_price_data.timestamp;
 
-    let oracle_delay = now.safe_sub(e, published_ts);
+    let oracle_delay = Delay::from_timestamp_diff_expect(
+        now,
+        published_ts,
+        "Oracle published timestamp cannot be in the future",
+    );
 
     OraclePriceData {
         price: oracle_price,
@@ -58,15 +60,13 @@ pub fn get_oracle_price(e: &Env, oracle: &Address, asset: &Symbol, now: u64) -> 
 // * `oracle_price_data` - The newly observed price and timestamp.
 // * `sanitize_clamp_denominator` - Clamp denominator for price sanitization.
 // * `now` - Current timestamp.
-// * `registering` - If true, initializes TWAP to 0 instead of computing it.
 pub fn update_twap(
     e: &Env,
     asset: &Symbol,
     historical_oracle_data: &HistoricalOracleData,
     oracle_price_data: &OraclePriceData,
-    sanitize_clamp_denominator: i64,
+    sanitize_clamp_denominator: u64,
     now: u64,
-    registering: bool,
 ) {
     let capped_oracle_update_price = sanitize_new_price(
         e,
@@ -89,179 +89,10 @@ pub fn update_twap(
         &asset,
         &(HistoricalOracleData {
             last_oracle_price_twap: oracle_price_twap,
-            // if registering {
-            //     0
-            // } else {
-            //     oracle_price_twap
-            // },
             last_oracle_price: oracle_price_data.price,
-            last_oracle_delay: oracle_price_data.delay,
             last_oracle_price_twap_ts: now,
         }),
     );
-}
-
-// Returns a full status summary of the oracle's health and price divergence.
-//
-// Assesses oracle freshness, price validity, and spread between reserve price
-// and TWAP to categorize risk and guide on-chain logic like rebalancing.
-//
-// # Arguments
-// * `e` - Soroban environment reference.
-// * `oracle_price_data` - Latest oracle price and delay info.
-// * `reserve_price` - Internal reserve-derived price.
-// * `last_oracle_price_twap` - Last known oracle TWAP.
-//
-// # Returns
-// - `OracleStatus` struct with validation, divergence, and spread metrics.
-pub fn get_oracle_status(
-    e: &Env,
-    oracle_price_data: &OraclePriceData,
-    reserve_price: u128,
-    last_oracle_price_twap: u128,
-) -> OracleStatus {
-    let oracle_validity = oracle_validity(e, last_oracle_price_twap, oracle_price_data);
-    let oracle_reserve_price_spread_pct =
-        calculate_oracle_twap_price_spread_pct(e, reserve_price, last_oracle_price_twap);
-    let is_oracle_price_too_divergent =
-        is_oracle_price_too_divergent(e, oracle_reserve_price_spread_pct);
-
-    OracleStatus {
-        price_data: *oracle_price_data,
-        oracle_reserve_price_spread_pct,
-        price_too_divergent: is_oracle_price_too_divergent,
-        oracle_validity,
-    }
-}
-
-// Calculates the percentage difference between the reserve price and oracle TWAP.
-//
-// Used to evaluate whether the oracle data is in line with internal pricing,
-// expressed as a percentage spread for risk assessment.
-//
-// # Arguments
-// * `e` - Soroban environment reference.
-// * `other_price` - Reserve-derived price.
-// * `last_oracle_price_twap` - Oracle's last TWAP.
-//
-// # Returns
-// - The price spread as a percentage (scaled by `PRICE_PRECISION_U64`).
-pub fn calculate_oracle_twap_price_spread_pct(
-    e: &Env,
-    other_price: u128,
-    last_oracle_price_twap: u128,
-) -> i64 {
-    let price_spread = (other_price as u64).safe_sub(e, last_oracle_price_twap as u64);
-
-    // price_spread_pct
-    price_spread
-        .safe_mul(e, PRICE_PRECISION_U64)
-        .safe_div(e, other_price as u64) as i64
-}
-
-/// Determines whether the oracle data is valid for a specific contract action.
-///
-/// The oracle validity is evaluated based on the context of the action:
-///
-/// - `AddLiquidity` / `RemoveLiquidity`: Allowed if oracle data is valid or mildly stale.
-/// - `Swap`: Requires strictly valid oracle data.
-/// - `UpdateTwap`: Allowed if oracle price is positive.
-/// - `Rebalance`: Requires strictly valid oracle data.
-/// - `ClaimInsurance`: Disallowed if oracle is too volatile or non-positive.
-///
-/// If no action is provided, it defaults to requiring strictly valid oracle data.
-///
-/// # Arguments
-/// * `oracle_validity` - Classification of the current oracle state.
-/// * `action` - The protocol action being evaluated (optional).
-///
-/// # Returns
-/// - `true` if the oracle data meets the criteria for the specified action.
-/// - `false` if the action should be blocked due to stale, volatile, or invalid data.
-pub fn is_oracle_valid_for_action(
-    oracle_validity: OracleValidity,
-    action: Option<NormalAction>,
-) -> bool {
-    let is_ok = match action {
-        Some(action) => match action {
-            NormalAction::AddLiquidity => matches!(
-                oracle_validity,
-                OracleValidity::Valid | OracleValidity::StaleForPool
-            ),
-            NormalAction::RemoveLiquidity => matches!(
-                oracle_validity,
-                OracleValidity::Valid | OracleValidity::StaleForPool
-            ),
-            NormalAction::Swap => matches!(oracle_validity, OracleValidity::Valid),
-            NormalAction::UpdateTwap => !matches!(oracle_validity, OracleValidity::NonPositive),
-            NormalAction::Rebalance => {
-                matches!(oracle_validity, OracleValidity::Valid)
-            }
-            NormalAction::ClaimInsurance => !matches!(
-                oracle_validity,
-                OracleValidity::NonPositive | OracleValidity::TooVolatile
-            ),
-        },
-        None => {
-            matches!(oracle_validity, OracleValidity::Valid)
-        }
-    };
-
-    is_ok
-}
-
-// Determines whether an operation should be blocked due to oracle data issues.
-//
-// Uses oracle validity and price divergence checks to decide whether conditions
-// are safe for performing sensitive actions like rebalancing or updates.
-//
-// # Arguments
-// * `e` - Soroban environment reference.
-// * `oracle_price_data` - Latest oracle price and delay info.
-// * `reserve_price` - Current price from internal reserves.
-// * `last_oracle_price_twap` - Last known oracle TWAP.
-//
-// # Returns
-// - `true` if the operation should be blocked due to stale or divergent data.
-pub fn block_operation(
-    e: &Env,
-    oracle_price_data: &OraclePriceData,
-    reserve_price: u128,
-    last_oracle_price_twap: u128,
-    action: NormalAction,
-) -> bool {
-    let OracleStatus {
-        oracle_validity,
-        price_too_divergent,
-        oracle_reserve_price_spread_pct: _,
-        ..
-    } = get_oracle_status(e, oracle_price_data, reserve_price, last_oracle_price_twap);
-
-    let is_oracle_valid = is_oracle_valid_for_action(oracle_validity, Some(action));
-
-    let block = !is_oracle_valid || price_too_divergent;
-    block
-}
-
-// Determines whether the oracle price diverges too far from the reserve price.
-//
-// Uses protocol-defined guard rails to decide if the deviation is outside
-// acceptable limits (e.g., >10%) and may indicate manipulation or lag.
-//
-//
-// # Arguments
-// * `e` - Soroban environment reference.
-// * `price_spread_pct` - Absolute spread percentage between oracle and reserve.
-//
-// # Returns
-// - `true` if the spread exceeds the maximum allowed divergence.
-pub fn is_oracle_price_too_divergent(e: &Env, price_spread_pct: i64) -> bool {
-    let oracle_guard_rails = get_oracle_guard_rails(e);
-    let max_divergence = oracle_guard_rails
-        .price_divergence
-        .oracle_twap_percent_divergence
-        .max(PERCENTAGE_PRECISION_U64 / 10);
-    price_spread_pct.unsigned_abs() > max_divergence
 }
 
 // Classifies the current oracle price data as valid, stale, or invalid.
@@ -294,18 +125,25 @@ pub fn oracle_validity(
     let is_oracle_price_nonpositive = oracle_price <= 0;
 
     // Volatility
-    // if price / twap >= 1.10 or twap / price >= 1.10 → too volatile
+    // if Δprice <= 0.80 or 1.20 <= Δprice → too volatile
+    let lower_bound =
+        PERCENTAGE_PRECISION_U64.safe_sub(e, oracle_guard_rails.validity.too_volatile_ratio);
 
-    let max_ratio = oracle_guard_rails.validity.too_volatile_ratio;
-    let ratio_1 = oracle_price.fixed_div_floor(e, &last_oracle_twap, &PERCENTAGE_PRECISION);
-    let ratio_2 = last_oracle_twap.fixed_div_floor(e, &oracle_price, &PERCENTAGE_PRECISION);
+    let upper_bound = oracle_guard_rails
+        .validity
+        .too_volatile_ratio
+        .safe_add(e, PERCENTAGE_PRECISION_U64);
 
-    let is_oracle_price_too_volatile =
-        (ratio_1 as i64) >= max_ratio || (ratio_2 as i64) >= max_ratio;
+    // let price_delta = oracle_price.safe_div(e, last_oracle_twap.max(1)) as u64;
+    let price_delta =
+        oracle_price.fixed_div_floor(e, &last_oracle_twap, &PERCENTAGE_PRECISION) as u64;
+
+    let is_oracle_price_too_volatile = price_delta <= lower_bound || upper_bound <= price_delta;
 
     // StaleForPool
-    let is_stale_for_pool =
-        oracle_delay.gt(&oracle_guard_rails.validity.seconds_before_stale_for_pool);
+    let is_stale_for_pool = oracle_delay
+        .as_seconds()
+        .gt(&oracle_guard_rails.validity.seconds_before_stale_for_pool);
 
     let oracle_validity = if is_oracle_price_nonpositive {
         OracleValidity::NonPositive

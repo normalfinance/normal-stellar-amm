@@ -1,4 +1,4 @@
-#!/bin/bash
+# Ensure the script exits on any errors
 set -e
 
 # Usage instructions
@@ -24,6 +24,9 @@ NETWORK="$2"
 CONTRACT_ID="$3"
 FLAG="$4"
 
+# Load env vars dynamically
+source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh" "$NETWORK"
+
 ADMIN_ADDRESS=$(soroban keys address $IDENTITY_STRING)
 
 shift 4
@@ -38,6 +41,9 @@ case "$FLAG" in
         --id "$CONTRACT_ID" \
         --source "$IDENTITY_STRING" \
         --network "$NETWORK" \
+        --rpc-url $STELLAR_RPC_URL \
+        --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+        --fee $STELLAR_BASE_FEE \
         -- \
         set_unstaking_period \
         --admin "$ADMIN_ADDRESS" \
@@ -53,6 +59,9 @@ case "$FLAG" in
         --id "$CONTRACT_ID" \
         --source "$IDENTITY_STRING" \
         --network "$NETWORK" \
+        --rpc-url $STELLAR_RPC_URL \
+        --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+        --fee $STELLAR_BASE_FEE \
         -- \
         set_optimal_insurance \
         --admin "$ADMIN_ADDRESS" \
@@ -69,6 +78,9 @@ case "$FLAG" in
         --id $CONTRACT_ID \
         --source $IDENTITY_STRING \
         --network $NETWORK \
+        --rpc-url $STELLAR_RPC_URL \
+        --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+        --fee $STELLAR_BASE_FEE \
         -- \
         set_rate_config \
         --admin $ADMIN_ADDRESS \

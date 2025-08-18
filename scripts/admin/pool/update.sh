@@ -1,10 +1,10 @@
-#!/bin/bash
+# Ensure the script exits on any errors
 set -e
 
 # Usage guide
 usage() {
     echo "Usage:"
-    echo "  $0 <identity_string> <contract_id> <flag> <args...>"
+    echo "  $0 <identity_string> <network> <contract_id> <flag> <args...>"
     echo ""
     echo "Flags:"
     echo "  -p <rewards_admin> <operations_admin> <pause_admin> <emergency_admin1,admin2,...>"
@@ -17,7 +17,7 @@ usage() {
 }
 
 # Ensure minimum arguments
-if [ "$#" -lt 3 ]; then
+if [ "$#" -lt 4 ]; then
     usage
 fi
 
@@ -27,9 +27,12 @@ FLAG="$3"
 shift 3
 
 # Config
-NETWORK="testnet"
+NETWORK="$2"
 ADMIN_ADDRESS=$(soroban keys address $IDENTITY_STRING)
 IDENTITY_STRING="$1"
+
+# Load env vars dynamically
+source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh" "$NETWORK"
 
 case "$FLAG" in
 -p)
@@ -50,6 +53,9 @@ case "$FLAG" in
         --id "$CONTRACT_ID" \
         --source "$IDENTITY_STRING" \
         --network "$NETWORK" \
+        --rpc-url $STELLAR_RPC_URL \
+        --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+        --fee $STELLAR_BASE_FEE \
         -- \
         set_privileged_addrs \
         --admin "$ADMIN_ADDRESS" \
@@ -68,6 +74,9 @@ case "$FLAG" in
         --id "$CONTRACT_ID" \
         --source "$IDENTITY_STRING" \
         --network "$NETWORK" \
+        --rpc-url $STELLAR_RPC_URL \
+        --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+        --fee $STELLAR_BASE_FEE \
         -- \
         set_fee \
         --admin "$ADMIN_ADDRESS" \
@@ -83,6 +92,9 @@ case "$FLAG" in
         --id "$CONTRACT_ID" \
         --source "$IDENTITY_STRING" \
         --network "$NETWORK" \
+        --rpc-url $STELLAR_RPC_URL \
+        --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+        --fee $STELLAR_BASE_FEE \
         -- \
         set_tier \
         --admin "$ADMIN_ADDRESS" \
@@ -98,6 +110,9 @@ case "$FLAG" in
         --id "$CONTRACT_ID" \
         --source "$IDENTITY_STRING" \
         --network "$NETWORK" \
+        --rpc-url $STELLAR_RPC_URL \
+        --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+        --fee $STELLAR_BASE_FEE \
         -- \
         set_status \
         --admin "$ADMIN_ADDRESS" \
@@ -113,6 +128,9 @@ case "$FLAG" in
         --id "$CONTRACT_ID" \
         --source "$IDENTITY_STRING" \
         --network "$NETWORK" \
+        --rpc-url $STELLAR_RPC_URL \
+        --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+        --fee $STELLAR_BASE_FEE \
         -- \
         set_max_imbalances \
         --admin "$ADMIN_ADDRESS" \
@@ -142,6 +160,9 @@ case "$FLAG" in
         --id "$CONTRACT_ID" \
         --source "$IDENTITY_STRING" \
         --network "$NETWORK" \
+        --rpc-url $STELLAR_RPC_URL \
+        --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+        --fee $STELLAR_BASE_FEE \
         -- \
         set_expiry \
         --admin "$ADMIN_ADDRESS" \

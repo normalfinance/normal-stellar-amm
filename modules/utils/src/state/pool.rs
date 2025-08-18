@@ -3,7 +3,6 @@ use soroban_sdk::contracttype;
 use soroban_sdk::Address;
 use soroban_sdk::Env;
 use soroban_sdk::Symbol;
-use soroban_sdk::Vec;
 
 use crate::constant::FEE_MULTIPLIER;
 use crate::state::access::PrivilegedAddresses;
@@ -166,7 +165,8 @@ pub struct InitializeParams {
     pub router: Address,
     pub oracle_registry: Address,
     pub assets: (Symbol, Symbol),
-    pub synthetic_token_info: TokenInitInfo,
+    pub synthetic_sac_address: Address,
+    // pub synthetic_token_info: TokenInitInfo,
     pub lp_token_info: TokenInitInfo,
     pub token_b: Address,
     pub fee_fraction: u32,

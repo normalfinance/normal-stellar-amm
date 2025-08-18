@@ -13,7 +13,10 @@ pub fn calculate_rolling_sum(
 ) -> u128 {
     // assumes that missing times are zeros (e.g. handle NaN as 0)
     let prev_twap_99 = data1
-        .safe_mul(e, max(0, weight1_denom.safe_sub(e, weight1_numer)) as u128)
+        .safe_mul(
+            e,
+            max(0, weight1_denom.saturating_sub(weight1_numer)) as u128,
+        )
         .safe_div(e, weight1_denom as u128);
 
     prev_twap_99.safe_add(e, data2)
@@ -69,8 +72,8 @@ pub fn calculate_new_twap(
     last_ts: u64,
     period: u64,
 ) -> u128 {
-    let since_last = max(0_u64, current_ts.safe_sub(e, last_ts));
-    let from_start = max(1_u64, period.safe_sub(e, since_last));
+    let since_last = max(0_u64, current_ts.saturating_sub(last_ts));
+    let from_start = max(1_u64, period.saturating_sub(since_last));
 
     calculate_weighted_average(e, current_price, last_twap, since_last, from_start)
 }

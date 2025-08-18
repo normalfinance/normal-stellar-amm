@@ -14,6 +14,9 @@ POOL_ROUTER_ADDR=$3
 ASSET=$4
 SHARE_AMOUNT=$5
 
+# Load env vars dynamically
+source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh" "$NETWORK"
+
 # Fetch the admin's address
 ADMIN_ADDRESS=$(soroban keys address $IDENTITY_STRING)
 
@@ -23,24 +26,15 @@ if ! [[ "$SHARE_AMOUNT" =~ ^[0-9]+$ ]]; then
     exit 1
 fi
 
-# XLM_BALANCE=$(stellar account balance $ADMIN_ADDRESS)
-
-# if [ -z "$XLM_BALANCE" ]; then
-#     echo "Error: Could not retrieve XLM balance for account $ADMIN_ADDRESS"
-#     exit 1
-# fi
-
-# if [ "$XLM_BALANCE" -lt "$AMOUNT" ]; then
-#     echo "❌ Error: Account has insufficient XLM. Balance: $XLM_BALANCE, required: $AMOUNT"
-#     exit 1
-# fi
-
 echo "Withdraw liquidity into pool..."
 
 stellar contract invoke \
     --id $POOL_ROUTER_ADDR \
     --source $IDENTITY_STRING \
     --network $NETWORK \
+    --rpc-url $STELLAR_RPC_URL \
+    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --fee $STELLAR_BASE_FEE \
     -- \
     withdraw \
     --user $ADMIN_ADDRESS \

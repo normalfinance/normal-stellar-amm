@@ -24,6 +24,10 @@ pub enum InsuranceFundError {
     InvalidIFDetected = 19,
     TooMuchInsurance = 20,
 
+    InvalidOptimalUtilization = 21,
+    InvalidTimestamp = 22,
+    CostBasisUnderflow = 23,
+
     // paused ops
     FundDepositKilled = 30,
     FundRequestWithdrawKilled = 31,

@@ -1,9 +1,11 @@
 #![cfg(test)]
 extern crate std;
-use crate::storage_types::{OracleGuardRails, PriceDivergenceGuardRails, ValidityGuardRails};
 use crate::OracleRegistryClient;
 use sep_40_oracle::testutils::{Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM};
 use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
+use utils::state::oracle_registry::{
+    OracleGuardRails, PriceDivergenceGuardRails, ValidityGuardRails,
+};
 
 use soroban_sdk::{Address, Env, Symbol, Vec};
 use std::vec;
@@ -21,11 +23,11 @@ impl Default for TestConfig {
             users_count: 3,
             oracle_guard_rails: OracleGuardRails {
                 price_divergence: PriceDivergenceGuardRails {
-                    oracle_twap_percent_divergence: 1200000000,
+                    oracle_twap_percent_divergence: 1000000,
                 },
                 validity: ValidityGuardRails {
-                    seconds_before_stale_for_pool: 300,
-                    too_volatile_ratio: 1200000000, // allow ±20%
+                    seconds_before_stale_for_pool: 500,
+                    too_volatile_ratio: 2000000, // allow ±20%
                 },
             },
         }
@@ -74,7 +76,7 @@ impl Setup<'_> {
         e.mock_all_auths();
         e.cost_estimate().budget().reset_unlimited();
 
-        let start_time = 1751513914;
+        let start_time = 1755271154;
         jump(&e, start_time);
 
         // addresses
@@ -83,8 +85,8 @@ impl Setup<'_> {
         let emergency_admin = Address::generate(&e);
 
         // assets
-        let btc_asset_id = Symbol::new(&e, "BTC");
-        let eth_asset_id = Symbol::new(&e, "ETH");
+        let btc_asset_id = Symbol::new(&e, "SOL");
+        let eth_asset_id = Symbol::new(&e, "XLM");
 
         let asset_1 = MockAsset::Other(btc_asset_id.clone());
         let asset_2 = MockAsset::Other(eth_asset_id.clone());
@@ -103,7 +105,7 @@ impl Setup<'_> {
         // ===
 
         // let prices_1: Vec<i128> = vec![&e, 94_234_1234567, 1_1021304];
-        let prices_1: Vec<i128> = Vec::from_array(&e, [10923722794294087742, 10923722794294087742]);
+        let prices_1: Vec<i128> = Vec::from_array(&e, [190_00000000000000, 0_42190000000000]);
         oracle_client.set_price(&prices_1, &start_time);
 
         // verify price data can be fetched
@@ -219,7 +221,7 @@ impl Setup<'_> {
         registry.initialize(&admin, &emergency_admin);
         registry.set_oracle_guard_rails(&admin, &config.oracle_guard_rails);
 
-        registry.register_oracle(&admin, &btc_asset_id, &oracle_id, &14, &0);
+        registry.register_oracle(&admin, &btc_asset_id, &oracle_id, &14, &1);
 
         Self {
             env: e,

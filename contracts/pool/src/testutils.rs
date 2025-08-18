@@ -7,7 +7,7 @@ use crate::PoolClient;
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use sep_40_oracle::testutils::{Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM};
 use soroban_sdk::token::{
-    StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
+    self, StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
 use soroban_sdk::{log, String};
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Symbol, Vec};
@@ -129,11 +129,11 @@ impl Default for TestConfig {
             reward_token_in_pool: false,
             oracle_guard_rails: OracleGuardRails {
                 price_divergence: PriceDivergenceGuardRails {
-                    oracle_twap_percent_divergence: PERCENTAGE_PRECISION_U64 / 10, // allows up to ±10%
+                    oracle_twap_percent_divergence: 1000000, // allows up to ±10%
                 },
                 validity: ValidityGuardRails {
-                    seconds_before_stale_for_pool: 5,
-                    too_volatile_ratio: 120, // allows up to ±20%
+                    seconds_before_stale_for_pool: 500,
+                    too_volatile_ratio: 2000000, // allows up to ±20%
                 },
             },
         }
@@ -185,6 +185,8 @@ pub(crate) struct Setup<'a> {
     pub(crate) token_reward: SorobanTokenClient<'a>,
     pub(crate) token_reward_admin_client: SorobanTokenAdminClient<'a>,
     pub(crate) token_share: LpTokenClient<'a>,
+
+    pub(crate) liquidity_calculator: liquidity_calculator::Client<'a>,
 }
 
 impl Default for Setup<'_> {
@@ -212,7 +214,7 @@ impl Setup<'_> {
         e.mock_all_auths();
         e.cost_estimate().budget().reset_unlimited();
 
-        let start_time = 1753720896;
+        let start_time = 1755287263;
         jump(&e, start_time);
 
         let users = Self::generate_random_users(&e, config.users_count);
@@ -303,7 +305,7 @@ impl Setup<'_> {
         // verify price data can be fetched
         let result_1 = oracle_client.lastprice(&btc_asset).unwrap();
         assert_eq!(result_1.price, prices_1.get_unchecked(0));
-        log!(&e, "BTC price", result_1.price);
+        log!(&e, "SOL price", result_1.price);
         // assert_eq!(result_1.timestamp, start_time);
 
         let result_2 = oracle_client.lastprice(&xlm_asset).unwrap();
@@ -417,11 +419,11 @@ impl Setup<'_> {
             &admin,
             &(OracleGuardRails {
                 price_divergence: PriceDivergenceGuardRails {
-                    oracle_twap_percent_divergence: 120_0000000,
+                    oracle_twap_percent_divergence: 1000000,
                 },
                 validity: ValidityGuardRails {
-                    seconds_before_stale_for_pool: 3000, // ~5 seconds
-                    too_volatile_ratio: 120_0000000,     // 5x or 80% down
+                    seconds_before_stale_for_pool: 300, // ~5 seconds
+                    too_volatile_ratio: 2000000,        // 5x or 80% down
                 },
             }),
         );
@@ -429,10 +431,10 @@ impl Setup<'_> {
         // router.set_oracle_registry(&admin, &registry.address);
 
         // Register XLM oracle
-        registry.register_oracle(&admin, &btc_asset_id, &oracle_id, &14, &0);
+        registry.register_oracle(&admin, &btc_asset_id, &oracle_id, &14, &1);
 
         // Register BTC oralce
-        registry.register_oracle(&admin, &xlm_asset_id, &oracle_id, &14, &0);
+        registry.register_oracle(&admin, &xlm_asset_id, &oracle_id, &14, &1);
 
         // =============
 
@@ -458,6 +460,11 @@ impl Setup<'_> {
 
         // =============
 
+        // let sac = Address::generate(&e);
+        let sac = e.register_stellar_asset_contract_v2(admin.clone());
+        // let asset_address = sac.address();
+        let asset_client = token::Client::new(&e, &sac.address());
+
         // Pool
         let liq_pool = create_pool_contract(
             &e,
@@ -466,11 +473,7 @@ impl Setup<'_> {
             &router.address,
             &registry.address,
             &(btc_asset_id.clone(), xlm_asset_id.clone()),
-            &(
-                install_token_wasm(&e),
-                String::from_str(&e, "Pool Share Token"),
-                String::from_str(&e, "Pool Share Token"),
-            ),
+            &sac.address(),
             &(
                 install_token_wasm(&e),
                 String::from_str(&e, "Pool Share Token"),
@@ -493,13 +496,13 @@ impl Setup<'_> {
         );
 
         let emergency_admin = Address::generate(&e);
-        liq_pool.commit_transfer_ownership(
-            &admin,
-            &Symbol::new(&e, "EmergencyAdmin"),
-            &emergency_admin,
-        );
-        jump(&e, ADMIN_ACTIONS_DELAY + 1); // delay is mandatory since emergency admin was set during initialization
-        liq_pool.apply_transfer_ownership(&admin, &Symbol::new(&e, "EmergencyAdmin"));
+        // liq_pool.commit_transfer_ownership(
+        //     &admin,
+        //     &Symbol::new(&e, "EmergencyAdmin"),
+        //     &emergency_admin,
+        // );
+        // jump(&e, ADMIN_ACTIONS_DELAY + 1); // delay is mandatory since emergency admin was set during initialization
+        // liq_pool.apply_transfer_ownership(&admin, &Symbol::new(&e, "EmergencyAdmin"));
 
         let token_share = LpTokenClient::new(&e, &liq_pool.share_id());
 
@@ -551,6 +554,8 @@ impl Setup<'_> {
             operations_admin,
             pause_admin,
             emergency_pause_admin,
+
+            liquidity_calculator,
         }
     }
 
@@ -643,7 +648,7 @@ pub fn create_pool_contract<'a>(
     router: &Address,
     oracle_registry: &Address,
     assets: &(Symbol, Symbol),
-    synthetic_token_info: &(BytesN<32>, String, String),
+    sac: &Address,
     lp_token_info: &(BytesN<32>, String, String),
     token_b: &Address,
     reward_token: &Address,
@@ -666,11 +671,7 @@ pub fn create_pool_contract<'a>(
             oracle_registry: oracle_registry.clone(),
             assets: assets.clone(),
             token_b: token_b.clone(),
-            synthetic_token_info: TokenInitInfo {
-                token_wasm_hash: synthetic_token_info.0.clone(),
-                name: synthetic_token_info.1.clone(),
-                symbol: synthetic_token_info.2.clone(),
-            },
+            synthetic_sac_address: sac.clone(),
             lp_token_info: TokenInitInfo {
                 token_wasm_hash: lp_token_info.0.clone(),
                 name: lp_token_info.1.clone(),

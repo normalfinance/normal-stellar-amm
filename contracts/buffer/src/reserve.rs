@@ -47,7 +47,7 @@ impl Reserve {
 
     pub fn payout(self, e: &Env, amount: u128, now: u64) -> Self {
         Reserve {
-            balance: self.balance.safe_sub(e, amount),
+            balance: self.balance.saturating_sub(amount),
             total_outflow: self.total_outflow.safe_add(e, amount),
             last_payout: amount,
             last_payout_ts: now,
@@ -58,7 +58,7 @@ impl Reserve {
 
     pub fn withdraw(self, e: &Env, amount: u128, now: u64) -> Self {
         Reserve {
-            balance: self.balance.safe_sub(e, amount),
+            balance: self.balance.saturating_sub(amount),
             total_outflow: self.total_outflow.safe_add(e, amount),
             total_withdraw: self.total_withdraw.safe_add(e, amount),
             last_update_ts: now,
