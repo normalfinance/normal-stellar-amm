@@ -54,7 +54,7 @@ case "$FLAG" in
         --source "$IDENTITY_STRING" \
         --network "$NETWORK" \
         --rpc-url $STELLAR_RPC_URL \
-        --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+        --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
         --fee $STELLAR_BASE_FEE \
         -- \
         set_privileged_addrs \
@@ -75,7 +75,7 @@ case "$FLAG" in
         --source "$IDENTITY_STRING" \
         --network "$NETWORK" \
         --rpc-url $STELLAR_RPC_URL \
-        --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+        --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
         --fee $STELLAR_BASE_FEE \
         -- \
         set_fee \
@@ -93,7 +93,7 @@ case "$FLAG" in
         --source "$IDENTITY_STRING" \
         --network "$NETWORK" \
         --rpc-url $STELLAR_RPC_URL \
-        --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+        --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
         --fee $STELLAR_BASE_FEE \
         -- \
         set_tier \
@@ -111,7 +111,7 @@ case "$FLAG" in
         --source "$IDENTITY_STRING" \
         --network "$NETWORK" \
         --rpc-url $STELLAR_RPC_URL \
-        --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+        --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
         --fee $STELLAR_BASE_FEE \
         -- \
         set_status \
@@ -129,7 +129,7 @@ case "$FLAG" in
         --source "$IDENTITY_STRING" \
         --network "$NETWORK" \
         --rpc-url $STELLAR_RPC_URL \
-        --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+        --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
         --fee $STELLAR_BASE_FEE \
         -- \
         set_max_imbalances \
@@ -161,7 +161,7 @@ case "$FLAG" in
         --source "$IDENTITY_STRING" \
         --network "$NETWORK" \
         --rpc-url $STELLAR_RPC_URL \
-        --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+        --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
         --fee $STELLAR_BASE_FEE \
         -- \
         set_expiry \

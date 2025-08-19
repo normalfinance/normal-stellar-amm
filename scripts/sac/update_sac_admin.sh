@@ -34,7 +34,7 @@ stellar contract invoke \
     --network "$NETWORK" \
     --id $SAC_ADDRESS \
     --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     -- \
     set_admin \

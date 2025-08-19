@@ -32,6 +32,6 @@ stellar contract asset deploy \
     --source "$ISSUER" \
     --network "$NETWORK" \
     --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     --asset "${SYMBOL}:${ISSUER_ADDRESS}"

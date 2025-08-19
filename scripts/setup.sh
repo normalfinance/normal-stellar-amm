@@ -33,7 +33,7 @@ stellar contract invoke \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     -- \
     initialize \
@@ -46,7 +46,7 @@ stellar contract invoke \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     -- \
     set_oracle_guard_rails \
@@ -76,7 +76,7 @@ stellar contract invoke \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     -- \
     init_admin \
@@ -87,7 +87,7 @@ stellar contract invoke \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     -- \
     set_pool_hash \
@@ -99,7 +99,7 @@ stellar contract invoke \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     -- \
     set_lp_token_hash \
@@ -111,19 +111,19 @@ stellar contract invoke \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     -- \
     set_reward_token \
     --admin $ADMIN_ADDRESS \
-    --reward_token $XLM
+    --reward_token $XLM_ADDRESS
 
 stellar contract invoke \
     --id $POOL_ROUTER_ADDR \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     -- \
     set_privileged_addrs \
@@ -138,7 +138,7 @@ stellar contract invoke \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     -- \
     set_pools_plane \
@@ -150,7 +150,7 @@ stellar contract invoke \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     -- \
     set_liquidity_calculator \
@@ -162,7 +162,7 @@ stellar contract invoke \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     -- \
     set_oracle_registry \
@@ -188,7 +188,7 @@ stellar contract invoke \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     -- \
     initialize \
@@ -214,13 +214,13 @@ stellar contract invoke \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     -- \
     initialize \
     --admin $ADMIN_ADDRESS \
     --emergency_admin $ADMIN_ADDRESS \
-    --token $XLM \
+    --token $XLM_ADDRESS \
     --unstaking_period $THIRTEEN_DAYS \
     --optimal_utilization 8000 \
     --base_rate 200 \
@@ -241,7 +241,7 @@ stellar contract invoke \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     -- \
     init_admin \
@@ -253,7 +253,7 @@ stellar contract invoke \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     -- \
     set_router \
@@ -265,7 +265,7 @@ stellar contract invoke \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     -- \
     set_buffer \
@@ -277,7 +277,7 @@ stellar contract invoke \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     -- \
     set_insurance_fund \
@@ -289,7 +289,7 @@ stellar contract invoke \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     -- \
     set_fee_destination \
