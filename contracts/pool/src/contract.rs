@@ -37,7 +37,6 @@ use incentives::events::Events as RewardEvents;
 use incentives::storage::{PoolIncentivesStorageTrait, RewardTokenStorageTrait};
 use reentrancy_guard::{enter, exit};
 use soroban_fixed_point_math::FixedPoint;
-use soroban_fixed_point_math::FixedPoint;
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{
     contract, contractimpl, contractmeta, panic_with_error, symbol_short, Address, BytesN, Env,
@@ -58,7 +57,6 @@ use utils::math::safe_math::SafeMath;
 use utils::state::oracle_registry::NormalAction;
 use utils::state::pool::{InsuranceClaim, SwapDirection};
 use utils::state::{
-    oracle_registry::OraclePriceData,
     pool::{
         InitializeAllParams, InitializeParams, Pool as PoolType, PoolInfo, PoolResponse,
         PoolStatus, PoolTier,
@@ -217,23 +215,6 @@ impl PoolTrait for Pool {
             expiry_price: 0,
         };
         set_pool(&e, &pool);
-
-        // deploy and initialize LP token contract
-        let share_contract =
-            create_contract(&e, params.lp_token_info.token_wasm_hash, &token_a, &token_b);
-        LPTokenClient::new(&e, &share_contract).initialize(
-            &e.current_contract_address(),
-            &7u32,
-            &params.lp_token_info.name.into_val(&e),
-            &params.lp_token_info.symbol.into_val(&e),
-        );
-
-        if params.fee_fraction > MAX_POOL_FEE {
-            panic_with_error!(&e, PoolValidationError::FeeOutOfBounds);
-        }
-
-        put_token_lp(&e, share_contract);
-        put_token_synthetic(&e, token_a.clone());
 
         // update plane data for every pool update
         update_plane(&e);
@@ -661,13 +642,13 @@ impl PoolTrait for Pool {
     ) -> u128 {
         user.require_auth();
 
+        ensure_non_zero_u128(&e, out_amount);
+
         enter(&e);
 
         if get_is_killed_swap(&e) {
             panic_with_error!(e, PoolError::PoolSwapKilled);
         }
-
-        ensure_non_zero_u128(&e, out_amount);
 
         let action = NormalAction::Swap;
 
@@ -963,8 +944,6 @@ impl PoolTrait for Pool {
             share_amount,
             share_amount,
         );
-
-        exit(&e);
 
         exit(&e);
 

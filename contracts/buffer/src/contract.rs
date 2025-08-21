@@ -25,7 +25,6 @@ use soroban_sdk::{
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
-use utils::math::safe_math::SafeMath;
 use utils::token::{transfer_token, validate_token_contract};
 use utils::validation::ensure_non_zero_u128;
 
@@ -98,10 +97,6 @@ impl BufferTrait for Buffer {
     // * `BufferError::ReserveMaxBalanceThreshold` – if deposit exceeds the reserve’s `max_balance`.
     fn deposit(e: Env, sender: Address, token: Address, amount: u128) {
         sender.require_auth();
-
-        ensure_non_zero_u128(&e, amount, BufferError::ZeroAmount);
-
-        enter(&e);
 
         ensure_non_zero_u128(&e, amount);
 
@@ -324,8 +319,6 @@ impl AdminInterface for Buffer {
 
         exit(&e);
 
-        exit(&e);
-
         paid
     }
 
@@ -359,10 +352,6 @@ impl AdminInterface for Buffer {
     fn withdraw_surplus(e: Env, admin: Address, token: Address, amount: u128) {
         admin.require_auth();
         require_admin(&e, &admin);
-
-        ensure_non_zero_u128(&e, amount, BufferError::ZeroAmount);
-
-        enter(&e);
 
         ensure_non_zero_u128(&e, amount);
 

@@ -119,10 +119,6 @@ impl InsuranceFundTrait for InsuranceFund {
     fn deposit(e: Env, user: Address, amount: u128) {
         user.require_auth();
 
-        ensure_non_zero_u128(&e, amount, InsuranceFundError::ZeroAmount);
-
-        enter(&e);
-
         ensure_non_zero_u128(&e, amount);
 
         enter(&e);
@@ -130,8 +126,6 @@ impl InsuranceFundTrait for InsuranceFund {
         if get_is_killed_deposit(&e) {
             panic_with_error!(e, InsuranceFundError::FundDepositKilled);
         }
-
-        let now = e.ledger().timestamp();
 
         // TODO: Automically update optimal insurance instead of relying on manual admin updates
 
@@ -606,6 +600,8 @@ impl InsuranceFundTrait for InsuranceFund {
     // * If the `sender` fails to authenticate.
     fn pay_premium(e: Env, sender: Address, amount: u128) {
         sender.require_auth();
+
+        ensure_non_zero_u128(&e, amount);
 
         enter(&e);
 
