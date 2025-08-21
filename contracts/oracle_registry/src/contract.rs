@@ -1,32 +1,29 @@
 use crate::errors::OracleRegistryError;
+use crate::interface::{AdminInterface, OracleRegistryTrait};
+use crate::oracle::{block_operation, get_oracle_price, oracle_validity, update_twap};
 use utils::validation::validate_positive_denominator;
-use crate::interface::{ AdminInterface, OracleRegistryTrait };
-use crate::oracle::{ block_operation, get_oracle_price, oracle_validity, update_twap };
 use crate::storage::{
-    get_historical_oracle_data,
-    get_oracle,
-    get_oracle_base,
-    get_oracle_guard_rails,
-    put_oracle,
+    get_historical_oracle_data, get_oracle, get_oracle_base, get_oracle_guard_rails, put_oracle,
     set_oracle_guard_rails,
 };
-use crate::storage_types::{ HistoricalOracleData, OracleGuardRails, OracleValidity };
+use crate::storage_types::{HistoricalOracleData, OracleGuardRails, OracleValidity};
 
-use access_control::access::{ AccessControl, AccessControlTrait };
-use access_control::emergency::{ get_emergency_mode, set_emergency_mode };
+use access_control::access::{AccessControl, AccessControlTrait};
+use access_control::emergency::{get_emergency_mode, set_emergency_mode};
 use access_control::errors::AccessControlError;
 use access_control::events::Events as AccessControlEvents;
 use access_control::interface::TransferableContract;
-use access_control::management::{ MultipleAddressesManagementTrait, SingleAddressManagementTrait };
+use access_control::management::{MultipleAddressesManagementTrait, SingleAddressManagementTrait};
 use access_control::role::Role;
 use access_control::role::SymbolRepresentation;
 use access_control::transfer::TransferOwnershipTrait;
 use access_control::utils::require_admin;
-use soroban_sdk::{ contract, contractimpl, panic_with_error, Address, BytesN, Env, Symbol, Vec };
+use reentrancy_guard::{enter, exit};
+use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env, Symbol, Vec};
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
-use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
-use utils::state::oracle_registry::{ MutableOracleInfo, NormalAction, OracleInfo, OraclePriceData };
+use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
+use utils::state::oracle_registry::{MutableOracleInfo, NormalAction, OracleInfo, OraclePriceData};
 use utils::temporal::Delay;
 
 #[contract]
@@ -73,6 +70,8 @@ impl OracleRegistryTrait for OracleRegistry {
     // # Panics
     // Panics with `OracleRegistryError::OracleInvalid` if the live price data fails validation.
     fn get_price(e: Env, asset: Symbol, cached: bool, action: NormalAction) -> OraclePriceData {
+        enter(&e);
+
         let now = e.ledger().timestamp();
         let oracle = get_oracle(&e, &asset);
         let historical_oracle_data = get_historical_oracle_data(&e, &asset);
@@ -95,7 +94,7 @@ impl OracleRegistryTrait for OracleRegistry {
             &oracle_price_data,
             historical_oracle_data.last_oracle_price_twap,
             oracle_price_data.price,
-            action
+            action,
         );
         if block {
             panic_with_error!(&e, OracleRegistryError::OracleInvalid);
@@ -108,8 +107,10 @@ impl OracleRegistryTrait for OracleRegistry {
             &oracle_price_data,
             oracle.sanitize_clamp_denominator,
             now,
-            false
+            false,
         );
+
+        exit(&e);
 
         oracle_price_data
     }
@@ -269,6 +270,8 @@ impl AdminInterface for OracleRegistry {
         admin.require_auth();
         require_admin(&e, &admin);
 
+        enter(&e);
+
         validate_positive_denominator(&e, sanitize_clamp_denominator, OracleRegistryError::InvalidClampDenominator);
 
         if get_oracle_base(&e, &asset).is_some() {
@@ -279,9 +282,8 @@ impl AdminInterface for OracleRegistry {
         let oracle_price_data = get_oracle_price(&e, &oracle_addr, &asset_addr, now);
 
         // Check oracle validity
-        let oracle_is_valid =
-            oracle_validity(&e, oracle_price_data.price, &oracle_price_data) ==
-            OracleValidity::Valid;
+        let oracle_is_valid = oracle_validity(&e, oracle_price_data.price, &oracle_price_data)
+            == OracleValidity::Valid;
 
         if !oracle_is_valid {
             panic_with_error!(&e, OracleRegistryError::OracleInvalid);
@@ -294,7 +296,7 @@ impl AdminInterface for OracleRegistry {
             &oracle_price_data,
             sanitize_clamp_denominator,
             now,
-            true
+            true,
         );
 
         let oracle = OracleInfo {
@@ -306,6 +308,8 @@ impl AdminInterface for OracleRegistry {
             last_updated: now,
         };
         put_oracle(&e, &asset, &oracle);
+
+        exit(&e);
 
         oracle
     }
@@ -335,10 +339,12 @@ impl AdminInterface for OracleRegistry {
         e: Env,
         admin: Address,
         asset: Symbol,
-        params: MutableOracleInfo
+        params: MutableOracleInfo,
     ) -> OracleInfo {
         admin.require_auth();
         require_admin(&e, &admin);
+
+        enter(&e);
 
         if let Some(oracle) = get_oracle_base(&e, &asset) {
             let now = e.ledger().timestamp();
@@ -349,12 +355,11 @@ impl AdminInterface for OracleRegistry {
 
                 // Check oracle validity
                 let historical_oracle_data = get_historical_oracle_data(&e, &asset);
-                let oracle_is_valid =
-                    oracle_validity(
-                        &e,
-                        historical_oracle_data.last_oracle_price_twap,
-                        &oracle_price_data
-                    ) == OracleValidity::Valid;
+                let oracle_is_valid = oracle_validity(
+                    &e,
+                    historical_oracle_data.last_oracle_price_twap,
+                    &oracle_price_data,
+                ) == OracleValidity::Valid;
 
                 if !oracle_is_valid {
                     panic_with_error!(&e, OracleRegistryError::OracleInvalid);
@@ -375,17 +380,20 @@ impl AdminInterface for OracleRegistry {
             let updated_oracle = OracleInfo {
                 address: params.address.unwrap_or(oracle.address),
                 decimals: params.decimals.unwrap_or(oracle.decimals),
-                sanitize_clamp_denominator: params.sanitize_clamp_denominator.unwrap_or(
-                    oracle.sanitize_clamp_denominator
-                ),
+                sanitize_clamp_denominator: params
+                    .sanitize_clamp_denominator
+                    .unwrap_or(oracle.sanitize_clamp_denominator),
                 frozen: params.frozen.unwrap_or(oracle.frozen),
                 last_updated: now,
                 ..oracle
             };
             put_oracle(&e, &asset, &updated_oracle);
 
+            exit(&e);
+
             updated_oracle
         } else {
+            exit(&e);
             panic_with_error!(&e, OracleRegistryError::OracleNotRegistered);
         }
     }
@@ -418,6 +426,8 @@ impl AdminInterface for OracleRegistry {
     fn set_oracle_price(e: Env, admin: Address, asset: Symbol, price: u128) {
         admin.require_auth();
         require_admin(&e, &admin);
+
+        enter(&e);
 
         let now = e.ledger().timestamp();
         let oracle = get_oracle(&e, &asset);
@@ -457,7 +467,7 @@ impl AdminInterface for OracleRegistry {
             &(OraclePriceData { price: price, delay: Delay::ZERO }),
             oracle.sanitize_clamp_denominator,
             now,
-            false
+            false,
         );
 
         // Update the oracle's last_updated timestamp to enforce cooldown
@@ -466,6 +476,8 @@ impl AdminInterface for OracleRegistry {
             ..oracle
         };
         put_oracle(&e, &asset, &updated_oracle);
+
+        exit(&e);
     }
 
     // TODO: Add unregister oracle function - what does this mean for pools using that oracle?
@@ -558,11 +570,10 @@ impl TransferableContract for OracleRegistry {
         let access_control = AccessControl::new(&e);
         let role = Role::from_symbol(&e, role_name);
         match access_control.get_transfer_ownership_deadline(&role) {
-            0 =>
-                match access_control.get_role_safe(&role) {
-                    Some(address) => address,
-                    None => panic_with_error!(&e, AccessControlError::RoleNotFound),
-                }
+            0 => match access_control.get_role_safe(&role) {
+                Some(address) => address,
+                None => panic_with_error!(&e, AccessControlError::RoleNotFound),
+            },
             _ => access_control.get_future_address(&role),
         }
     }

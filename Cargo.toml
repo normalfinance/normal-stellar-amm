@@ -15,6 +15,7 @@ utils = { path = "modules/utils" }
 access_control = { path = "modules/access_control" }
 pool_tokens = { path = "modules/pool_tokens" }
 incentives = { path = "modules/incentives" }
+reentrancy_guard = { path = "modules/reentrancy_guard" }
 upgrade = { path = "modules/upgrade" }
 sep-40-oracle = "1.2.2"
 
