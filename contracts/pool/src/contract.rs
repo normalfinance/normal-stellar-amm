@@ -22,27 +22,7 @@ use crate::interface::{
     UpgradeableLPTokenTrait,
 };
 use crate::storage::{
-    get_is_killed_claim,
-    get_is_killed_deposit,
-    get_is_killed_swap,
-    get_is_killed_withdraw,
-    get_plane,
-    get_pool,
-    get_reserve_a,
-    get_reserve_b,
-    get_router,
-    get_token_future_wasm,
-    has_plane,
-    set_is_killed_claim,
-    set_is_killed_deposit,
-    set_is_killed_swap,
-    set_is_killed_withdraw,
-    set_plane,
-    set_pool,
-    set_reserve_a,
-    set_reserve_b,
-    set_router,
-    set_token_future_wasm,
+    get_is_killed_claim, get_is_killed_deposit, get_is_killed_swap, get_is_killed_withdraw, get_mint_cap_fraction, get_plane, get_pool, get_reserve_a, get_reserve_b, get_router, get_token_future_wasm, has_plane, set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap, set_is_killed_withdraw, set_mint_cap_fraction, set_plane, set_pool, set_reserve_a, set_reserve_b, set_router, set_token_future_wasm
 };
 use crate::token::{ create_contract, transfer_a, transfer_b };
 use access_control::access::{ AccessControl, AccessControlTrait };
@@ -334,7 +314,7 @@ impl PoolTrait for Pool {
             NormalAction::AddLiquidity
         );
 
-        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
+        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now, pool.is_reduce_only());
 
         // Now calculate how many new pool shares to mint
         let total_shares = get_total_lp_tokens(&e);
@@ -459,7 +439,7 @@ impl PoolTrait for Pool {
             NormalAction::Swap
         );
 
-        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
+        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now, pool.is_reduce_only());
 
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
@@ -536,7 +516,7 @@ impl PoolTrait for Pool {
         }
 
         // After swapping, rebalance the pool
-        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
+        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now, pool.is_reduce_only());
 
         // update plane data for every pool update
         update_plane(&e);
@@ -665,7 +645,7 @@ impl PoolTrait for Pool {
             NormalAction::Swap
         );
 
-        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
+        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now, pool.is_reduce_only());
 
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
@@ -761,7 +741,7 @@ impl PoolTrait for Pool {
         );
 
         // Rebalance the pool
-        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
+        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now, pool.is_reduce_only());
 
         // update plane data for every pool update
         update_plane(&e);
@@ -903,7 +883,7 @@ impl PoolTrait for Pool {
             NormalAction::RemoveLiquidity
         );
 
-        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
+        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now, pool.is_reduce_only());
 
         // Checkpoint resulting working balance
         incentives
@@ -966,6 +946,10 @@ impl PoolTrait for Pool {
     fn get_fee_fraction(e: Env) -> u32 {
         let pool = get_pool(&e);
         pool.fee_fraction
+    }
+
+    fn get_mint_cap_fraction(e: Env) -> u32 {
+        get_mint_cap_fraction(&e)
     }
 
     fn get_insurance_coverage(e: Env) -> u128 {
@@ -1033,7 +1017,7 @@ impl AdminInterfaceTrait for Pool {
             NormalAction::Rebalance
         );
 
-        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
+        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now, pool.is_reduce_only());
     }
 
     // Withdraws surplus reservess.
@@ -1133,7 +1117,7 @@ impl AdminInterfaceTrait for Pool {
         set_reserve_b(&e, &(reserve_b + insurance_withdraw));
 
         // Rebalance
-        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now);
+        rebalance(&e, base_oracle_price_data.price, quote_oracle_price_data.price, now, pool.is_reduce_only());
 
         insurance_withdraw
     }
@@ -1261,6 +1245,13 @@ impl AdminInterfaceTrait for Pool {
         pool.insurance_claim.quote_max_insurance = quote_max_insurance;
 
         set_pool(&e, &pool);
+    }
+
+    fn set_mint_cap_fraction(e: Env, admin: Address, mint_cap_fraction: u32) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+
+        set_mint_cap_fraction(&e, &mint_cap_fraction);
     }
 
     fn set_expiry(e: Env, admin: Address, expiry_ts: u64) {
