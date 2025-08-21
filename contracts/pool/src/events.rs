@@ -59,7 +59,7 @@ pub trait PoolEvents {
     //  /|__/ \  /   /  \\  \  /\\ __ //\  /" \   :)(:      "||:       :)
     // (_______)(___/    \___)(__________)(_______/  \_______)(________/
 
-    fn capped_mint(&self,  base_oracle_price: u128, quote_oracle_price: u128, delta_a: i128);
+    fn capped_mint(&self, base_oracle_price: u128, quote_oracle_price: u128, delta_a: i128);
 
     fn kill_deposit(&self);
 

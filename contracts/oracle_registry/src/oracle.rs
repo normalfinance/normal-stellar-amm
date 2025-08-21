@@ -25,7 +25,7 @@ use crate::storage::{get_oracle_guard_rails, put_historical_oracle_data};
 // - `OraclePriceData` containing the price and delay since last update.
 pub fn get_oracle_price(e: &Env, oracle: &Address, asset: &Address, now: u64) -> OraclePriceData {
     assert!(now > 0, "now timestamp must be positive");
-    
+
     let oracle_client = PriceFeedClient::new(e, oracle);
     let oracle_asset = Asset::Other(asset.clone());
 
@@ -38,9 +38,9 @@ pub fn get_oracle_price(e: &Env, oracle: &Address, asset: &Address, now: u64) ->
     published_ts = oracle_price_data.timestamp;
 
     let oracle_delay = Delay::from_timestamp_diff_expect(
-        now, 
+        now,
         published_ts,
-        "Oracle published timestamp cannot be in the future"
+        "Oracle published timestamp cannot be in the future",
     );
 
     OraclePriceData {

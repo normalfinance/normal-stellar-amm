@@ -37,8 +37,8 @@ use incentives::events::Events as RewardEvents;
 use incentives::storage::{PoolIncentivesStorageTrait, RewardTokenStorageTrait};
 use reentrancy_guard::{enter, exit};
 use soroban_fixed_point_math::FixedPoint;
-use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_fixed_point_math::FixedPoint;
+use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{
     contract, contractimpl, contractmeta, panic_with_error, symbol_short, Address, BytesN, Env,
     IntoVal, Map, Symbol, Vec, U256,
@@ -412,7 +412,6 @@ impl PoolTrait for Pool {
 
         (token_b_amount, shares_to_mint)
     }
-
 
     // Swaps tokens in the pool by transferring an input token from the user and returning an output token,
     // ensuring pool invariants, oracle validity, and slippage constraints are upheld.
@@ -912,11 +911,11 @@ impl PoolTrait for Pool {
         burn_lp_tokens(&e, &user, share_amount);
 
         let (_, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
-      
+
         if total_shares - share_amount < MIN_LIQUIDITY {
             panic_with_error!(e, PoolError::WithdrawExceedsMinLiquidity);
         }
-      
+
         set_reserve_b(&e, &(reserve_b - share_amount));
 
         if total_shares - share_amount < MIN_LIQUIDITY {

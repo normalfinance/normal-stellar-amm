@@ -316,7 +316,6 @@ pub fn calculate_if_shares_lost(e: &Env, stake: &Stake, insurance_vault_amount: 
             total_shares.saturating_sub(n_shares),
             insurance_vault_amount.saturating_sub(stake.last_withdraw_request_value),
         );
-        
 
         validate!(
             e,

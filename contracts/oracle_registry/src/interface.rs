@@ -1,10 +1,6 @@
-use soroban_sdk::{ Address, Env, Symbol };
+use soroban_sdk::{Address, Env, Symbol};
 use utils::state::oracle_registry::{
-    HistoricalOracleData,
-    MutableOracleInfo,
-    OracleGuardRails,
-    OracleInfo,
-    OracleValidity,
+    HistoricalOracleData, MutableOracleInfo, OracleGuardRails, OracleInfo, OracleValidity,
 };
 
 pub trait OracleRegistryTrait {
@@ -54,7 +50,7 @@ pub trait AdminInterface {
         asset: Symbol,
         oracle_addr: Address,
         decimals: u32,
-        sanitize_clamp_denominator: u64
+        sanitize_clamp_denominator: u64,
     ) -> OracleInfo;
 
     // Update oracle info
@@ -62,7 +58,7 @@ pub trait AdminInterface {
         e: Env,
         admin: Address,
         asset: Symbol,
-        params: MutableOracleInfo
+        params: MutableOracleInfo,
     ) -> OracleInfo;
 
     // Admin failsafe to manually set the oracle price
