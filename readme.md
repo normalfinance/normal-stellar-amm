@@ -6,12 +6,11 @@
 
 <div>
   <a href="https://discord.gg/hayb9pafjZ"><img src="https://img.shields.io/discord/928701482319101952"/></a>
-  <a  href="https://github.com/normalfinance/normal-stellar-amm/releases"><img src="https://img.shields.io/github/release-pre/normalfinance/normal-stellar-amm.svg"/></a>
-  <a  href="https://github.com/normalfinance/normal-stellar-amm/pulse"><img src="https://img.shields.io/github/contributors/normalfinance/normal-stellar-amm.svg"/></a>
+  <a href="https://github.com/normalfinance/normal-stellar-amm/releases"><img src="https://img.shields.io/github/release-pre/normalfinance/normal-stellar-amm.svg"/></a>
+  <a href="https://github.com/normalfinance/normal-stellar-amm/pulse"><img src="https://img.shields.io/github/contributors/normalfinance/normal-stellar-amm.svg"/></a>
   <a href="https://opensource.org/license/apache-2-0"><img src="https://img.shields.io/github/license/normalfinance/normal-stellar-amm"/></a>
   <a href="https://github.com/normalfinance/normal-stellar-amm/pulse"><img src="https://img.shields.io/github/last-commit/normalfinance/normal-stellar-amm.svg"/></a>
   <a href="https://github.com/normalfinance/normal-stellar-amm/pulls"><img src="https://img.shields.io/github/issues-pr/normalfinance/normal-stellar-amm.svg"/></a>
- 
   <a href="https://github.com/normalfinance/normal-stellar-amm/issues"><img src="https://img.shields.io/github/issues/normalfinance/normal-stellar-amm.svg"/></a>
   <a href="https://github.com/normalfinance/normal-stellar-amm/issues"><img src="https://img.shields.io/github/issues-closed/normalfinance/normal-stellar-amm.svg"/></a>
 </div>
@@ -37,26 +36,20 @@ Normal is a synthetic asset protocol enabling investors to trade any crypto asse
 - **pool_swap_fee** - A proxy for the `PoolRouter` that handles swap fee collection and distribution.
 - **pool_plane** - contract designed to store minimum information about any pool: type, parameters, reserves. being updated on every action with the pool (deposit, swap, withdraw, parameters update, etc)
 - **liquidity_calculator** - smart contract containing pools liquidity calculation logic which is capable to compare many pools at once
-- **token** - [SEP-0041](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0041.md) compatible token smart contract designed for liquidity pool share management
+- **lp_token** - [SEP-0041](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0041.md) compatible token smart contract designed for liquidity pool share management
+- **token** - [SEP-0041](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0041.md) compatible token smart contract
 
 ## Modules
 
-- **access_control** - Handles permissioned access to contracts using role-based authentication
+- **access_control** - Handles permissioned access to contracts using role-based access control (RBAC)
 - **incentives** - Handles how liquidity provider fees and pool rewards are calculated and claimed
-- **pool_tokens** - Handles LP token and synthetic token (`Pool.token_a`) utilities
+- **reentrancy_guard** - Handles utilities helping prevent re-entrant calls (even though they're technically impossible on Soroban)
+- **token_lp** - Handles LP token utilities
+- **token_synthetic** - Handles synthetic token (`Pool.token_a`) utilities
 - **upgrade** - Handles contract upgrades
 - **utils** - Handles shared types, utils, constants, errors, macros, and more
 
 ![Normal AMM Swap Flow](./docs/images/swap.png "Swap Flow")
-
-## Todo
-
-- [ ] Finish integration tests
-- [ ] Finish contract tests
-- [ ] Add `OracleSource` to the `OracleRegistry` contract to support various oracles such as Reflector and DIA
-- [ ] Create the `Index` and `IndexFactory` contracts for on-chain index funds
-- [ ] Convert the `Pool` into a concentrated liquidity pool
-- [ ] ...
 
 ## Built With
 
@@ -103,6 +96,7 @@ check the Soroban documentation: https://soroban.stellar.org/docs/reference/rpc
 
 - [@AquaToken](https://github.com/AquaToken)
 - [@jblewnormal](https://github.com/jblewnormal)
+- [@jaymalve](ttps://github.com/jaymalve)
 
 ## Contributing
 
@@ -121,7 +115,7 @@ Don't forget to give the project a star! Thanks again!
 
 You can find audits of this codebase in the `/audits` directory. These are our most recent audits:
 
-- **Summer 2025 x Halborn** - (https://github.com/normalfinance/normal-stellar-amm/tree/master/audits/Normal x Halborn - Summer 2025 Audit.pdf)
+- **Summer 2025 x Halborn** - (https://github.com/normalfinance/normal-stellar-amm/audits/)
 
 ## Contact
 
@@ -129,7 +123,7 @@ You can find audits of this codebase in the `/audits` directory. These are our m
 - ✈️ Telegram: [@normalfinance](https://t.me/normalfinance)
 - 🐣 Twitter: [@normalfi](https://twitter.com/normalfi)
 - 🥷🏼 GitHub: [@normalfinance](https://github.com/normalfinance)
-- 👾 Discord: [@Normal](https://discord.gg/xQMvceZjeS)
+- 👾 Discord: [@Normal](https://discord.gg/cB3DVSddQR)
 - 📚 Docs: [@normalfinance](https://docs.normalfinance.io/)
 - 🤓 Blog: [@normalfinance](https://blog.normalfinance.io/)
 
