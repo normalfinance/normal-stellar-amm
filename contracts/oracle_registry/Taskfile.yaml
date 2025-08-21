@@ -13,7 +13,6 @@ tasks:
     cmds:
       - soroban contract build --package oracle-registry
       - soroban contract optimize --wasm ../../target/wasm32v1-none/release/oracle_registry.wasm --wasm-out ../../target/wasm32v1-none/release/oracle_registry.wasm
-      - ls -l ../../target/wasm32v1-none/release/*.wasm
       - cp ../../target/wasm32v1-none/release/oracle_registry.wasm ../../wasm/oracle_registry.wasm
 
   test:

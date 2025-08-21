@@ -12,7 +12,7 @@ use crate::storage::{
     get_reward_tokens, get_reward_tokens_detailed, get_rewards_config, remove_pool,
     set_liquidity_calculator, set_lp_token_hash, set_oracle_registry, set_pool_hash,
     set_pool_plane, set_reward_tokens, set_reward_tokens_detailed, set_rewards_config,
-    set_synthetic_token_hash, GlobalRewardsConfig, PoolRewardInfo,
+    GlobalRewardsConfig, PoolRewardInfo,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
@@ -27,6 +27,7 @@ use access_control::utils::{
     require_admin, require_operations_admin_or_owner, require_rewards_admin_or_owner,
 };
 use incentives::storage::RewardTokenStorageTrait;
+use reentrancy_guard::{enter, exit};
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
     contract, contractimpl, panic_with_error, symbol_short, Address, BytesN, Env, IntoVal, Map,
@@ -82,6 +83,8 @@ impl PoolInterfaceTrait for PoolRouter {
     fn deposit(e: Env, user: Address, asset: Symbol, token_b_amount: u128) -> (u128, u128) {
         user.require_auth();
 
+        enter(&e);
+
         let pool = get_pool(&e, &asset);
 
         let (amount, share_amount): (u128, u128) = e.invoke_contract(
@@ -90,6 +93,9 @@ impl PoolInterfaceTrait for PoolRouter {
             Vec::from_array(&e, [user.clone().into_val(&e), token_b_amount.into_val(&e)]),
         );
         Events::new(&e).deposit_liquidity(asset, pool, user, amount, share_amount);
+
+        exit(&e);
+
         (amount, share_amount)
     }
 
@@ -132,6 +138,8 @@ impl PoolInterfaceTrait for PoolRouter {
     ) -> u128 {
         user.require_auth();
 
+        enter(&e);
+
         let pool = get_pool(&e, &asset);
 
         let out_amount = e.invoke_contract(
@@ -149,6 +157,9 @@ impl PoolInterfaceTrait for PoolRouter {
         );
 
         Events::new(&e).swap(asset, pool, user, direction, in_amount, out_amount);
+
+        exit(&e);
+
         out_amount
     }
 
@@ -213,6 +224,8 @@ impl PoolInterfaceTrait for PoolRouter {
     fn withdraw(e: Env, user: Address, asset: Symbol, share_amount: u128) -> u128 {
         user.require_auth();
 
+        enter(&e);
+
         let pool = get_pool(&e, &asset);
 
         let amount: u128 = e.invoke_contract(
@@ -222,6 +235,9 @@ impl PoolInterfaceTrait for PoolRouter {
         );
 
         Events::new(&e).withdraw_liquidity(asset, pool, user, share_amount, amount);
+
+        exit(&e);
+
         amount
     }
 
@@ -458,13 +474,6 @@ impl AdminInterface for PoolRouter {
         set_lp_token_hash(&e, &new_hash);
     }
 
-    // Sets the synthetic token wasm hash.
-    fn set_synthetic_token_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-        set_synthetic_token_hash(&e, &new_hash);
-    }
-
     // Sets the pool wasm hash.
     fn set_pool_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
         admin.require_auth();
@@ -575,6 +584,8 @@ impl IncentivesInterfaceTrait for PoolRouter {
         user.require_auth();
         require_rewards_admin_or_owner(&e, &user);
 
+        enter(&e);
+
         let mut tokens_with_liquidity = Map::new(&e);
         for asset in assets {
             tokens_with_liquidity.set(
@@ -593,17 +604,27 @@ impl IncentivesInterfaceTrait for PoolRouter {
                 tps: reward_tps,
                 expired_at,
             }),
-        )
+        );
+
+        exit(&e);
     }
 
     // Fills the aggregated liquidity information for a given asset.
     //
     // # Arguments
     //
+    // * `user` - The address of the user.
     // * `asset` - A vector of token addresses for which to fill the liquidity.
-    fn fill_liquidity(e: Env, asset: Symbol) {
+    fn fill_liquidity(e: Env, user: Address, asset: Symbol) {
+        user.require_auth();
+        require_rewards_admin_or_owner(&e, &user);
+
         let calculator = get_liquidity_calculator(&e);
         let total_liquidity = get_total_liquidity(&e, asset.clone(), calculator);
+
+        if total_liquidity == U256::from_u32(&e, 0) {
+            return;
+        }
 
         let pool_with_processed_info = (total_liquidity.clone(), false);
 
@@ -629,6 +650,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
     //
     // # Arguments
     //
+    // * `user` - The address of the user.
     // * `asset` - A vector of token addresses that the pool consists of.
     //
     // # Returns
@@ -642,7 +664,10 @@ impl IncentivesInterfaceTrait for PoolRouter {
     // * The pool does not exist.
     // * The tokens are not found in the current rewards configuration.
     // * The liquidity for the tokens has not been filled.
-    fn config_pool_rewards(e: Env, asset: Symbol) -> u128 {
+    fn config_pool_rewards(e: Env, user: Address, asset: Symbol) -> u128 {
+        user.require_auth();
+        require_rewards_admin_or_owner(&e, &user);
+
         let pool_id = get_pool(&e, &asset);
 
         let rewards_config = get_rewards_config(&e);
@@ -865,6 +890,8 @@ impl IncentivesInterfaceTrait for PoolRouter {
         user.require_auth();
         require_rewards_admin_or_owner(&e, &user);
 
+        enter(&e);
+
         let pool_id = get_pool(&e, &asset);
 
         let outstanding_reward = Self::get_total_outstanding_reward(e.clone(), asset.clone());
@@ -889,6 +916,9 @@ impl IncentivesInterfaceTrait for PoolRouter {
                 &(outstanding_reward as i128),
             );
         }
+
+        exit(&e);
+
         outstanding_reward
     }
 
@@ -907,6 +937,8 @@ impl IncentivesInterfaceTrait for PoolRouter {
     fn claim(e: Env, user: Address, asset: Symbol) -> u128 {
         user.require_auth();
 
+        enter(&e);
+
         let pool_id = get_pool(&e, &asset);
 
         let amount = e.invoke_contract(
@@ -922,6 +954,8 @@ impl IncentivesInterfaceTrait for PoolRouter {
             get_incentives_manager(&e).storage().get_reward_token(),
             amount,
         );
+
+        exit(&e);
 
         amount
     }
@@ -945,7 +979,7 @@ impl PoolsManagementTrait for PoolRouter {
     // * `admin` - The address of the admin initializing the pool.
     // * `assets` - A tuple of the base and quote asset Oracle Registry assets.
     // * `token_b` - A token address of the pool's quote token.
-    // * `synthetic_token_info` - A tuple of the Synthetic token name and symbol.
+    // * `synthetic_sac_address` - .
     // * `lp_token_info` - A tuple of the LP token name and symbol.
     // * `fee_fraction` - The fee fraction for the pool (in basis points).
     // * `tier` - The risk tier of the target asset.
@@ -961,7 +995,7 @@ impl PoolsManagementTrait for PoolRouter {
         admin: Address,
         assets: (Symbol, Symbol),
         token_b: Address,
-        synthetic_token_info: (String, String),
+        synthetic_sac_address: Address,
         lp_token_info: (String, String),
         fee_fraction: u32,
         tier: PoolTier,
@@ -982,7 +1016,7 @@ impl PoolsManagementTrait for PoolRouter {
                 &e,
                 &token_b,
                 &assets,
-                &synthetic_token_info,
+                &synthetic_sac_address,
                 &lp_token_info,
                 fee_fraction,
                 &tier,

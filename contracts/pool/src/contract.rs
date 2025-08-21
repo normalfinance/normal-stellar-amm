@@ -9,19 +9,17 @@ use crate::interface::{
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
 use crate::pool::{
-    get_amount_out_strict_receive, get_delta_a, get_last_oracle_price, get_net_liquidity_imbalance,
-    get_oracle_price, peg_price, rebalance, update_volume_30d,
+    get_amount_out_strict_receive, get_delta_a, get_net_liquidity_imbalance, get_oracle_price,
+    peg_price, rebalance, update_volume_30d, validate_oracle_price_with_pool,
 };
 use crate::storage::{
     get_is_killed_claim, get_is_killed_deposit, get_is_killed_swap, get_is_killed_withdraw,
-    get_plane, get_pool, get_reserve_a, get_reserve_b, get_router, get_token_future_wasm,
-    has_plane, set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap,
-    set_is_killed_withdraw, set_oracle_registry, set_plane, set_pool, set_reserve_a, set_reserve_b,
-    set_router, set_token_future_wasm,
+    get_mint_cap_fraction, get_plane, get_pool, get_reserve_a, get_reserve_b, get_router,
+    get_token_future_wasm, has_plane, set_is_killed_claim, set_is_killed_deposit,
+    set_is_killed_swap, set_is_killed_withdraw, set_mint_cap_fraction, set_oracle_registry,
+    set_plane, set_pool, set_reserve_a, set_reserve_b, set_router, set_token_future_wasm,
 };
-use crate::token::{
-    create_lp_token_contract, create_synthetic_token_contract, transfer_a, transfer_b,
-};
+use crate::token::{create_lp_token_contract, transfer_a, transfer_b};
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
 use access_control::errors::AccessControlError;
@@ -37,6 +35,8 @@ use access_control::utils::{
 };
 use incentives::events::Events as RewardEvents;
 use incentives::storage::{PoolIncentivesStorageTrait, RewardTokenStorageTrait};
+use reentrancy_guard::{enter, exit};
+use soroban_fixed_point_math::FixedPoint;
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{
     contract, contractimpl, contractmeta, panic_with_error, symbol_short, Address, BytesN, Env,
@@ -46,18 +46,17 @@ use token_lp::{
     burn_lp_tokens, get_token_lp, get_total_lp_tokens, get_user_balance_lp, mint_lp_tokens,
     put_token_lp, Client as LpTokenClient,
 };
-use token_synthetic::{get_token_synthetic, put_token_synthetic, Client as TokenClient};
+use token_synthetic::{get_sac_address, put_sac_address};
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::constant::{
     FEE_MULTIPLIER, INSURANCE_A_MAX, INSURANCE_B_MAX, INSURANCE_C_MAX, INSURANCE_SPECULATIVE_MAX,
-    MAX_POOL_FEE,
+    MAX_POOL_FEE, MIN_LIQUIDITY,
 };
 use utils::math::safe_math::SafeMath;
 use utils::state::oracle_registry::NormalAction;
 use utils::state::pool::{InsuranceClaim, SwapDirection};
 use utils::state::{
-    oracle_registry::OraclePriceData,
     pool::{
         InitializeAllParams, InitializeParams, Pool as PoolType, PoolInfo, PoolResponse,
         PoolStatus, PoolTier,
@@ -66,6 +65,7 @@ use utils::state::{
 };
 use utils::token::transfer_token;
 use utils::validate;
+use utils::validation::ensure_non_zero_u128;
 
 contractmeta!(
     key = "Description",
@@ -88,6 +88,53 @@ impl PoolCrunch for Pool {
         Self::init_pools_plane(e.clone(), params.plane);
         Self::initialize(e.clone(), params.base);
         Self::initialize_incentives_config(e.clone(), params.reward_config.reward_token);
+    }
+}
+
+// Validates that the share calculation prevents value extraction after synthetic minting
+//
+// This function ensures that new depositors cannot exploit synthetic Token A minting
+// by receiving shares disproportionate to their actual contribution to the pool's total value.
+//
+// # Arguments
+// * `e` - Soroban environment reference.
+// * `token_b_amount` - Amount of Token B being deposited.
+// * `shares_to_mint` - Number of shares calculated to be minted.
+// * `total_shares` - Total shares before this deposit.
+// * `reserve_a` - Current Token A reserves (including synthetic tokens).
+// * `reserve_b_before_deposit` - Token B reserves before this deposit.
+// * `base_oracle_price` - Oracle price for base asset.
+// * `quote_oracle_price` - Oracle price for quote asset.
+fn validate_fair_share_calculation(
+    e: &Env,
+    token_b_amount: u128,
+    shares_to_mint: u128,
+    total_shares: u128,
+    reserve_a: u128,
+    reserve_b_before_deposit: u128,
+    base_oracle_price: u128,
+    quote_oracle_price: u128,
+) {
+    if total_shares > 0 && reserve_a > 0 {
+        // Calculate the minimum fair shares based on pool's total value
+        let token_a_value_in_token_b = reserve_a
+            .fixed_mul_floor(base_oracle_price, quote_oracle_price)
+            .unwrap();
+
+        let total_pool_value = reserve_b_before_deposit + token_a_value_in_token_b;
+
+        // Minimum shares should be proportional to contribution vs total pool value
+        let expected_min_shares = token_b_amount
+            .fixed_mul_floor(total_shares, total_pool_value)
+            .unwrap();
+
+        // Allow for small rounding differences
+        let tolerance = expected_min_shares / 10000;
+        let min_acceptable_shares = expected_min_shares.saturating_sub(tolerance);
+
+        if shares_to_mint < min_acceptable_shares {
+            panic_with_error!(e, PoolError::UnfairShareCalculation);
+        }
     }
 }
 
@@ -126,24 +173,14 @@ impl PoolTrait for Pool {
         // validate oracle assets
         let (base_asset, quote_asset) = params.assets;
 
-        // deploy and initialize synthetic token contract
-        let synthetic_contract = create_synthetic_token_contract(
-            &e,
-            params.synthetic_token_info.token_wasm_hash,
-            &base_asset,
-        );
-        TokenClient::new(&e, &synthetic_contract).initialize(
-            &e.current_contract_address(),
-            &7u32,
-            &params.synthetic_token_info.name.into_val(&e),
-            &params.synthetic_token_info.symbol.into_val(&e),
-        );
+        get_oracle_price(&e, &base_asset, NormalAction::PoolInit);
+        get_oracle_price(&e, &quote_asset, NormalAction::PoolInit);
 
         // deploy and initialize LP token contract
         let share_contract = create_lp_token_contract(
             &e,
             params.lp_token_info.token_wasm_hash,
-            &synthetic_contract,
+            &params.synthetic_sac_address,
             &params.token_b,
         );
         LpTokenClient::new(&e, &share_contract).initialize(
@@ -158,7 +195,7 @@ impl PoolTrait for Pool {
         }
 
         put_token_lp(&e, share_contract);
-        put_token_synthetic(&e, synthetic_contract);
+        put_sac_address(&e, params.synthetic_sac_address);
 
         let pool = PoolType {
             token_b: params.token_b,
@@ -221,12 +258,17 @@ impl PoolTrait for Pool {
     // - Mints LP tokens to the user.
     // - Updates reserves, oracle-based pricing, reward checkpoints, and emits an event.
     fn deposit(e: Env, user: Address, token_b_amount: u128) -> (u128, u128) {
-        // Depositor needs to authorize the deposit
         user.require_auth();
+
+        ensure_non_zero_u128(&e, token_b_amount);
+
+        enter(&e);
 
         if get_is_killed_deposit(&e) {
             panic_with_error!(e, PoolError::PoolDepositKilled);
         }
+
+        let action = NormalAction::AddLiquidity;
 
         let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
 
@@ -244,6 +286,20 @@ impl PoolTrait for Pool {
 
         let pool = get_pool(&e);
 
+        // Fetch asset oracle prices
+        let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, action);
+        let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, action);
+
+        validate_oracle_price_with_pool(
+            &e,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
+            action,
+        );
+
+        // Increase reserves
+        set_reserve_b(&e, &(reserve_b + token_b_amount));
+
         // Deposit Token B
         transfer_token(
             &e,
@@ -253,24 +309,66 @@ impl PoolTrait for Pool {
             &(token_b_amount as i128),
         );
 
-        // Increase reserves
-        set_reserve_b(&e, &(reserve_b + token_b_amount));
-
         // Rebalance the pool
-        let base_oracle_price_data =
-            get_oracle_price(&e, &pool.base_asset, false, NormalAction::AddLiquidity);
-        let quote_oracle_price_data =
-            get_oracle_price(&e, &pool.quote_asset, false, NormalAction::AddLiquidity);
-
         rebalance(
             &e,
-            base_oracle_price_data.price,
-            quote_oracle_price_data.price,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
+            pool.is_reduce_only(),
         );
 
         // Now calculate how many new pool shares to mint
         let total_shares = get_total_lp_tokens(&e);
-        let shares_to_mint = token_b_amount;
+        let reserve_a_after_rebalance = get_reserve_a(&e);
+        let reserve_b_after_deposit = get_reserve_b(&e);
+
+        let mut shares_to_mint = if total_shares == 0 {
+            // First deposit case - initialize pool with 1:1 ratio
+            token_b_amount
+        } else if reserve_a_after_rebalance == 0 {
+            // No synthetic tokens exist - use simple proportion based on Token B
+            token_b_amount
+                .fixed_mul_floor(total_shares, reserve_b_after_deposit - token_b_amount)
+                .unwrap()
+        } else {
+            // Both tokens exist - calculate proportional shares based on total pool value
+            // Calculate Token A value in Token B terms using oracle prices
+            let token_a_value_in_token_b = reserve_a_after_rebalance
+                .fixed_mul_floor(
+                    base_oracle_price_data.last_oracle_price_twap,
+                    quote_oracle_price_data.last_oracle_price_twap,
+                )
+                .unwrap();
+
+            // Total pool value in Token B terms (before the deposit)
+            let total_pool_value_before_deposit =
+                reserve_b_after_deposit - token_b_amount + token_a_value_in_token_b;
+
+            // Calculate proportional shares
+            token_b_amount
+                .fixed_mul_floor(total_shares, total_pool_value_before_deposit)
+                .unwrap()
+        };
+
+        // Validate that the share calculation is fair and prevents value extraction
+        validate_fair_share_calculation(
+            &e,
+            token_b_amount,
+            shares_to_mint,
+            total_shares,
+            reserve_a_after_rebalance,
+            reserve_b_after_deposit - token_b_amount,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
+        );
+
+        // First deposit: mint MIN_LIQUIDITY to contract itself to prevent dust attacks
+        if total_shares == 0 {
+            mint_lp_tokens(&e, &e.current_contract_address(), MIN_LIQUIDITY as i128);
+            let events = LiquidityPoolEvents::new(&e);
+            events.permanently_locked_liquidity(MIN_LIQUIDITY);
+            shares_to_mint = shares_to_mint.saturating_sub(MIN_LIQUIDITY);
+        }
 
         mint_lp_tokens(&e, &user, shares_to_mint as i128);
 
@@ -290,6 +388,8 @@ impl PoolTrait for Pool {
             token_b_amount,
             shares_to_mint,
         );
+
+        exit(&e);
 
         (token_b_amount, shares_to_mint)
     }
@@ -334,13 +434,15 @@ impl PoolTrait for Pool {
     ) -> u128 {
         user.require_auth();
 
+        enter(&e);
+
         if get_is_killed_swap(&e) {
             panic_with_error!(e, PoolError::PoolSwapKilled);
         }
 
-        if in_amount == 0 {
-            panic_with_error!(e, PoolValidationError::ZeroAmount);
-        }
+        ensure_non_zero_u128(&e, in_amount);
+
+        let action = NormalAction::Swap;
 
         let pool = get_pool(&e);
 
@@ -355,15 +457,21 @@ impl PoolTrait for Pool {
         // Rebalance the pool before swapping
         let now = e.ledger().timestamp();
 
-        let base_oracle_price_data =
-            get_oracle_price(&e, &pool.base_asset, false, NormalAction::Swap);
-        let quote_oracle_price_data =
-            get_oracle_price(&e, &pool.quote_asset, false, NormalAction::Swap);
+        let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, action);
+        let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, action);
+
+        validate_oracle_price_with_pool(
+            &e,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
+            action,
+        );
 
         rebalance(
             &e,
-            base_oracle_price_data.price,
-            quote_oracle_price_data.price,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
+            pool.is_reduce_only(),
         );
 
         let reserve_a = get_reserve_a(&e);
@@ -390,11 +498,6 @@ impl PoolTrait for Pool {
             panic_with_error!(&e, PoolValidationError::OutMinNotSatisfied);
         }
 
-        // Transfer the amount being sold to the contract
-        let sell_token = tokens.get(in_idx).unwrap();
-        let sell_token_client = SorobanTokenClient::new(&e, &sell_token);
-        sell_token_client.transfer(&user, &e.current_contract_address(), &(in_amount as i128));
-
         if in_idx == 0 {
             set_reserve_a(&e, &(reserve_a + in_amount));
         } else {
@@ -402,6 +505,11 @@ impl PoolTrait for Pool {
         }
 
         let (new_reserve_a, new_reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
+
+        // Transfer the amount being sold to the contract
+        let sell_token = tokens.get(in_idx).unwrap();
+        let sell_token_client = SorobanTokenClient::new(&e, &sell_token);
+        sell_token_client.transfer(&user, &e.current_contract_address(), &(in_amount as i128));
 
         // residue_numerator and residue_denominator are the amount that the invariant considers after
         // deducting the fee, scaled up by FEE_MULTIPLIER to avoid fractions
@@ -436,20 +544,21 @@ impl PoolTrait for Pool {
         }
 
         if out_idx == 0 {
-            transfer_a(&e, &user, out_a);
             set_reserve_a(&e, &(reserve_a - out));
+            transfer_a(&e, &user, out_a);
             update_volume_30d(&e, in_amount, now);
         } else {
-            transfer_b(&e, &user, out_b);
             set_reserve_b(&e, &(reserve_b - out));
+            transfer_b(&e, &user, out_b);
             update_volume_30d(&e, out_b, now);
         }
 
         // After swapping, rebalance the pool
         rebalance(
             &e,
-            base_oracle_price_data.price,
-            quote_oracle_price_data.price,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
+            pool.is_reduce_only(),
         );
 
         // update plane data for every pool update
@@ -463,6 +572,8 @@ impl PoolTrait for Pool {
             out,
             fee,
         );
+
+        exit(&e);
 
         out
     }
@@ -496,16 +607,14 @@ impl PoolTrait for Pool {
             .get_amount_out(&e, in_amount, reserve_sell, reserve_buy)
             .0;
 
-        let base_oracle_price_data =
-            get_oracle_price(&e, &pool.base_asset, true, NormalAction::Swap);
-        let quote_oracle_price_data =
-            get_oracle_price(&e, &pool.quote_asset, true, NormalAction::Swap);
+        let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, NormalAction::Swap);
+        let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, NormalAction::Swap);
         let delta_a = get_delta_a(
             &e,
             reserve_a,
             reserve_b,
-            base_oracle_price_data.price,
-            quote_oracle_price_data.price,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
         );
 
         (out, delta_a)
@@ -533,26 +642,34 @@ impl PoolTrait for Pool {
     ) -> u128 {
         user.require_auth();
 
+        enter(&e);
+
         if get_is_killed_swap(&e) {
             panic_with_error!(e, PoolError::PoolSwapKilled);
         }
 
-        if out_amount == 0 {
-            panic_with_error!(e, PoolValidationError::ZeroAmount);
-        }
+        ensure_non_zero_u128(&e, out_amount);
+
+        let action = NormalAction::Swap;
 
         // Rebalance the pool
         let pool = get_pool(&e);
 
-        let base_oracle_price_data =
-            get_oracle_price(&e, &pool.base_asset, false, NormalAction::Swap);
-        let quote_oracle_price_data =
-            get_oracle_price(&e, &pool.quote_asset, false, NormalAction::Swap);
+        let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, action);
+        let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, action);
+
+        validate_oracle_price_with_pool(
+            &e,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
+            action,
+        );
 
         rebalance(
             &e,
-            base_oracle_price_data.price,
-            quote_oracle_price_data.price,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
+            pool.is_reduce_only(),
         );
 
         let (in_idx, out_idx) = if direction == SwapDirection::Buy {
@@ -584,6 +701,14 @@ impl PoolTrait for Pool {
             panic_with_error!(&e, PoolValidationError::InMaxNotSatisfied);
         }
 
+        if in_idx == 0 {
+            set_reserve_a(&e, &(reserve_a + in_amount));
+        } else {
+            set_reserve_b(&e, &(reserve_b + in_amount));
+        }
+
+        let (new_reserve_a, new_reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
+
         // Transfer the amount being sold to the contract
         let sell_token = tokens.get(in_idx).unwrap();
         let sell_token_client = SorobanTokenClient::new(&e, &sell_token);
@@ -595,14 +720,6 @@ impl PoolTrait for Pool {
             &user,
             &((in_max - in_amount) as i128),
         );
-
-        if in_idx == 0 {
-            set_reserve_a(&e, &(reserve_a + in_amount));
-        } else {
-            set_reserve_b(&e, &(reserve_b + in_amount));
-        }
-
-        let (new_reserve_a, new_reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
 
         // residue_numerator and residue_denominator are the amount that the invariant considers after
         // deducting the fee, scaled up by FEE_MULTIPLIER to avoid fractions
@@ -640,12 +757,12 @@ impl PoolTrait for Pool {
             panic_with_error!(&e, PoolError::InvariantDoesNotHold);
         }
 
-        if in_idx == 0 {
-            transfer_a(&e, &user, out_a);
+        if out_idx == 0 {
             set_reserve_a(&e, &(reserve_a - out_amount));
+            transfer_a(&e, &user, out_a);
         } else {
-            transfer_b(&e, &user, out_b);
             set_reserve_b(&e, &(reserve_b - out_amount));
+            transfer_b(&e, &user, out_b);
         }
 
         LiquidityPoolEvents::new(&e).swap(
@@ -660,12 +777,15 @@ impl PoolTrait for Pool {
         // Rebalance the pool
         rebalance(
             &e,
-            base_oracle_price_data.price,
-            quote_oracle_price_data.price,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
+            pool.is_reduce_only(),
         );
 
         // update plane data for every pool update
         update_plane(&e);
+
+        exit(&e);
 
         in_amount
     }
@@ -707,16 +827,14 @@ impl PoolTrait for Pool {
         )
         .0;
 
-        let base_oracle_price_data =
-            get_oracle_price(&e, &pool.base_asset, true, NormalAction::Swap);
-        let quote_oracle_price_data =
-            get_oracle_price(&e, &pool.quote_asset, true, NormalAction::Swap);
+        let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, NormalAction::Swap);
+        let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, NormalAction::Swap);
         let delta_a = get_delta_a(
             &e,
             reserve_a,
             reserve_b,
-            base_oracle_price_data.price,
-            quote_oracle_price_data.price,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
         );
 
         (out, delta_a)
@@ -755,9 +873,13 @@ impl PoolTrait for Pool {
     fn withdraw(e: Env, user: Address, share_amount: u128) -> u128 {
         user.require_auth();
 
+        enter(&e);
+
         if get_is_killed_withdraw(&e) {
             panic_with_error!(e, PoolError::PoolWithdrawKilled);
         }
+
+        let action = NormalAction::RemoveLiquidity;
 
         // Before actual changes were made to the pool, update total rewards data and refresh user reward
         let incentives = get_incentives_manager(&e);
@@ -771,22 +893,33 @@ impl PoolTrait for Pool {
 
         let (_, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
 
+        if total_shares - share_amount < MIN_LIQUIDITY {
+            panic_with_error!(e, PoolError::WithdrawExceedsMinLiquidity);
+        }
+
+        set_reserve_b(&e, &(reserve_b - share_amount));
+
         // Transfer any remaining to the user
         transfer_b(&e, &user, share_amount);
-        set_reserve_b(&e, &(reserve_b - share_amount));
 
         // Rebalance the pool
         let pool = get_pool(&e);
 
-        let base_oracle_price_data =
-            get_oracle_price(&e, &pool.base_asset, false, NormalAction::RemoveLiquidity);
-        let quote_oracle_price_data =
-            get_oracle_price(&e, &pool.quote_asset, false, NormalAction::RemoveLiquidity);
+        let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, action);
+        let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, action);
+
+        validate_oracle_price_with_pool(
+            &e,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
+            action,
+        );
 
         rebalance(
             &e,
-            base_oracle_price_data.price,
-            quote_oracle_price_data.price,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
+            pool.is_reduce_only(),
         );
 
         // Checkpoint resulting working balance
@@ -805,6 +938,8 @@ impl PoolTrait for Pool {
             share_amount,
             share_amount,
         );
+
+        exit(&e);
 
         share_amount
     }
@@ -828,7 +963,7 @@ impl PoolTrait for Pool {
 
     fn get_tokens(e: Env) -> Vec<Address> {
         let pool = get_pool(&e);
-        let token_synthetic = get_token_synthetic(&e);
+        let token_synthetic = get_sac_address(&e);
         Vec::from_array(&e, [token_synthetic, pool.token_b])
     }
 
@@ -867,6 +1002,10 @@ impl PoolTrait for Pool {
         pool.fee_fraction
     }
 
+    fn get_mint_cap_fraction(e: Env) -> u32 {
+        get_mint_cap_fraction(&e)
+    }
+
     fn get_insurance_coverage(e: Env) -> u128 {
         let pool = get_pool(&e);
         pool.insurance_claim.quote_max_insurance
@@ -877,7 +1016,7 @@ impl PoolTrait for Pool {
         let pool_response = PoolResponse {
             pool: pool.clone(),
             token_a: AddressAndAmount {
-                address: get_token_synthetic(&e),
+                address: get_sac_address(&e),
                 amount: get_reserve_a(&e),
             },
             token_b: AddressAndAmount {
@@ -916,18 +1055,29 @@ impl AdminInterfaceTrait for Pool {
         admin.require_auth();
         require_operations_admin_or_owner(&e, &admin);
 
+        enter(&e);
+
+        let action = NormalAction::Rebalance;
         let pool = get_pool(&e);
 
-        let base_oracle_price_data =
-            get_oracle_price(&e, &pool.base_asset, false, NormalAction::Rebalance);
-        let quote_oracle_price_data =
-            get_oracle_price(&e, &pool.quote_asset, false, NormalAction::Rebalance);
+        let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, action);
+        let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, action);
+
+        validate_oracle_price_with_pool(
+            &e,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
+            action,
+        );
 
         rebalance(
             &e,
-            base_oracle_price_data.price,
-            quote_oracle_price_data.price,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
+            pool.is_reduce_only(),
         );
+
+        exit(&e);
     }
 
     // Withdraws surplus reservess.
@@ -938,31 +1088,41 @@ impl AdminInterfaceTrait for Pool {
     // * `token` - The address of the token in reserve to withdraw.
     // * `amount` - The amount to withdraw.
     fn pay_insurance_claim(e: Env, sender: Address, insurance_vault_amount: u128) -> u128 {
+        sender.require_auth();
+
+        enter(&e);
+
         // TODO: should this function be limited to the Buffer and Insurance Fund?
 
         // check pool has liquidity deficit
 
         let now = e.ledger().timestamp();
+        let action = NormalAction::ClaimInsurance;
         let mut pool = get_pool(&e);
 
         // "Pool is in settlement mode"
         validate!(&e, !pool.is_in_settlement(now), PoolError::PoolActionPaused);
 
-        let base_oracle_price_data =
-            get_oracle_price(&e, &pool.base_asset, false, NormalAction::ClaimInsurance);
-        let quote_oracle_price_data =
-            get_oracle_price(&e, &pool.quote_asset, false, NormalAction::ClaimInsurance);
+        let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, action);
+        let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, action);
+
+        validate_oracle_price_with_pool(
+            &e,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
+            action,
+        );
 
         // TODO: validate pool balances?
 
         let excess_liquidity_imbalance = if pool.liquidity_max_imbalance > 0 {
             let net_liquidity_imbalance = get_net_liquidity_imbalance(
                 &e,
-                base_oracle_price_data.price,
-                quote_oracle_price_data.price,
+                base_oracle_price_data.last_oracle_price_twap,
+                quote_oracle_price_data.last_oracle_price_twap,
             );
 
-            net_liquidity_imbalance.safe_sub(&e, pool.liquidity_max_imbalance as i128)
+            net_liquidity_imbalance.saturating_sub(pool.liquidity_max_imbalance as i128)
         } else {
             0
         };
@@ -975,10 +1135,14 @@ impl AdminInterfaceTrait for Pool {
             PoolError::LiquidityDeficitBelowThreshold
         );
 
-        let max_insurance_withdraw = pool
-            .insurance_claim
-            .quote_max_insurance
-            .safe_sub(&e, pool.insurance_claim.quote_settled_insurance);
+        let max_insurance = pool.insurance_claim.quote_max_insurance;
+        let settled_insurance = pool.insurance_claim.quote_settled_insurance;
+        validate!(
+            &e,
+            max_insurance >= settled_insurance,
+            PoolError::SettledExceedsMax
+        );
+        let max_insurance_withdraw = max_insurance - settled_insurance;
 
         // "max_insurance_withdraw={}/{} as already been reached",
         validate!(
@@ -1014,6 +1178,10 @@ impl AdminInterfaceTrait for Pool {
 
         pool.insurance_claim.last_revenue_withdraw_ts = now;
 
+        // Update the reserves
+        let reserve_b = get_reserve_b(&e);
+        set_reserve_b(&e, &(reserve_b + insurance_withdraw));
+
         // Deposit token_b from Insurance Fund to Pool
         transfer_token(
             &e,
@@ -1023,16 +1191,15 @@ impl AdminInterfaceTrait for Pool {
             &(insurance_withdraw as i128),
         );
 
-        // Update the reserves
-        let reserve_b = get_reserve_b(&e);
-        set_reserve_b(&e, &(reserve_b + insurance_withdraw));
-
         // Rebalance
         rebalance(
             &e,
-            base_oracle_price_data.price,
-            quote_oracle_price_data.price,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
+            pool.is_reduce_only(),
         );
+
+        exit(&e);
 
         insurance_withdraw
     }
@@ -1098,9 +1265,27 @@ impl AdminInterfaceTrait for Pool {
         require_operations_admin_or_owner(&e, &admin);
 
         let mut pool = get_pool(&e);
-        pool.status = status;
+        pool.status = status.clone();
 
         set_pool(&e, &pool);
+        // Automatically recover minimum liquidity when pool is delisted
+        if status == PoolStatus::Delisted {
+            let contract_address = e.current_contract_address();
+            let locked_balance = get_user_balance_lp(&e, &contract_address);
+
+            if locked_balance > 0 {
+                burn_lp_tokens(&e, &contract_address, locked_balance);
+
+                let total_shares = get_total_lp_tokens(&e);
+                let reserve_b = get_reserve_b(&e);
+                let token_b_amount = if total_shares > 0 {
+                    (locked_balance * reserve_b) / total_shares
+                } else {
+                    locked_balance
+                };
+                transfer_b(&e, &admin, token_b_amount);
+            }
+        }
     }
 
     fn set_max_imbalances(
@@ -1144,6 +1329,13 @@ impl AdminInterfaceTrait for Pool {
         set_pool(&e, &pool);
     }
 
+    fn set_mint_cap_fraction(e: Env, admin: Address, mint_cap_fraction: u32) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+
+        set_mint_cap_fraction(&e, &mint_cap_fraction);
+    }
+
     fn set_expiry(e: Env, admin: Address, expiry_ts: u64) {
         admin.require_auth();
         require_operations_admin_or_owner(&e, &admin);
@@ -1151,17 +1343,16 @@ impl AdminInterfaceTrait for Pool {
         let now = e.ledger().timestamp();
         validate!(&e, now < expiry_ts, PoolError::DefaultError);
 
+        let action = NormalAction::UpdateTwap;
         let mut pool = get_pool(&e);
 
         // set the price from last price of oracle registry
-        let base_oracle_price_data =
-            get_oracle_price(&e, &pool.base_asset, false, NormalAction::UpdateTwap);
-        let quote_oracle_price_data =
-            get_oracle_price(&e, &pool.quote_asset, false, NormalAction::UpdateTwap);
+        let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, action);
+        let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, action);
         pool.expiry_price = peg_price(
             &e,
-            base_oracle_price_data.price,
-            quote_oracle_price_data.price,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
         );
 
         // automatically enter reduce only

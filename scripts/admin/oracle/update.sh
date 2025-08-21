@@ -1,9 +1,9 @@
-#!/bin/bash
+# Ensure the script exits on any errors
 set -e
 
 # Usage check
-if [ "$#" -ne 3 ]; then
-    echo "Usage: $0 <contract_id> [-r|-b|-i|-f|-u|-l] <value>"
+if [ "$#" -ne 5 ]; then
+    echo "Usage: $0 <identity_string> <network> <contract_id> [-r|-b|-i|-f|-u|-l] <value>"
     echo "  -r  Set router address"
     echo "  -b  Set buffer address"
     echo "  -i  Set insurance fund address"
@@ -14,14 +14,17 @@ if [ "$#" -ne 3 ]; then
 fi
 
 # Inputs
-CONTRACT_ID="$1"
-FLAG="$2"
-VALUE="$3"
+CONTRACT_ID="$3"
+FLAG="$4"
+VALUE="$5"
 
 # Config
 IDENTITY_STRING=$1
-NETWORK="testnet"
+NETWORK=$2
 ADMIN_ADDRESS=$(soroban keys address $IDENTITY_STRING)
+
+# Load env vars dynamically
+source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh" "$NETWORK"
 
 # Select function based on flag
 case "$FLAG" in
@@ -62,6 +65,9 @@ stellar contract invoke \
     --id "$CONTRACT_ID" \
     --source "$IDENTITY_STRING" \
     --network "$NETWORK" \
+    --rpc-url $STELLAR_RPC_URL \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
+    --fee $STELLAR_BASE_FEE \
     -- \
     "$FUNC" \
     --admin "$ADMIN_ADDRESS" \

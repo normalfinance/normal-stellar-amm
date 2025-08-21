@@ -1,8 +1,8 @@
-use crate::access::AccessControl;
 use crate::constants::ADMIN_ACTIONS_DELAY;
 use crate::errors::AccessControlError;
 use crate::role::Role;
 use crate::storage::StorageTrait;
+use crate::{access::AccessControl, management::SingleAddressManagementTrait};
 use soroban_sdk::{panic_with_error, Address};
 use utils::{bump::bump_instance, errors::storage_errors::StorageError};
 
@@ -46,6 +46,12 @@ impl TransferOwnershipTrait for AccessControl {
 
         if self.get_transfer_ownership_deadline(role) != 0 {
             panic_with_error!(&self.0, AccessControlError::AnotherActionActive);
+        }
+
+        if let Some(current_address) = self.get_role_safe(role) {
+            if current_address == *future_address {
+                panic_with_error!(&self.0, AccessControlError::BadRoleUsage);
+            }
         }
 
         let deadline = self.0.ledger().timestamp() + ADMIN_ACTIONS_DELAY;

@@ -30,7 +30,6 @@ enum DataKey {
     PoolsVec,
     Pools(Symbol), // Map of asset (i.e. "BTC") > Pool
     LpTokenHash,
-    SyntheticTokenHash,
     PoolHash,
     PoolPlane,
     LiquidityCalculator,
@@ -53,11 +52,6 @@ pub enum PoolError {
 
 generate_instance_storage_getter_and_setter!(pool_hash, DataKey::PoolHash, BytesN<32>);
 generate_instance_storage_getter_and_setter!(lp_token_hash, DataKey::LpTokenHash, BytesN<32>);
-generate_instance_storage_getter_and_setter!(
-    synthetic_token_hash,
-    DataKey::SyntheticTokenHash,
-    BytesN<32>
-);
 generate_instance_storage_getter_and_setter!(pool_plane, DataKey::PoolPlane, Address);
 generate_instance_storage_getter_and_setter!(
     liquidity_calculator,

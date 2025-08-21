@@ -1,9 +1,9 @@
-#!/bin/bash
+# Ensure the script exits on any errors
 set -e
 
 # Usage check
-if [ "$#" -ne 4 ]; then
-    echo "Usage: $0 <identity_string> <contract_id> [-a|-d|-f|-c] <value>"
+if [ "$#" -ne 5 ]; then
+    echo "Usage: $0 <identity_string> <network> <contract_id> [-a|-d|-f|-c] <value>"
     echo "  -a  Set oracle address"
     echo "  -d  Set decimals (u32)"
     echo "  -f  Set frozen status (bool)"
@@ -12,14 +12,17 @@ if [ "$#" -ne 4 ]; then
 fi
 
 # Inputs
-CONTRACT_ID="$2"
-FLAG="$3"
-VALUE="$4"
+CONTRACT_ID="$3"
+FLAG="$4"
+VALUE="$5"
 
 # Config
 IDENTITY_STRING=$1
-NETWORK="testnet"
+NETWORK=$s
 ADMIN_ADDRESS=$(soroban keys address $IDENTITY_STRING)
+
+# Load env vars dynamically
+source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh" "$NETWORK"
 
 # Select function based on flag
 case "$FLAG" in
@@ -60,6 +63,9 @@ stellar contract invoke \
     --id "$CONTRACT_ID" \
     --source "$IDENTITY_STRING" \
     --network "$NETWORK" \
+    --rpc-url $STELLAR_RPC_URL \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
+    --fee $STELLAR_BASE_FEE \
     -- \
     "$FUNC" \
     --admin "$ADMIN_ADDRESS" \

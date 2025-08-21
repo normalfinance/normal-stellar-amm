@@ -49,6 +49,8 @@ pub trait PoolEvents {
         delta_a: i128,
     );
 
+    fn capped_mint(&self, base_oracle_price: u128, quote_oracle_price: u128, delta_a: i128);
+
     //    _______     __       ____  ____   ________  _______  ________
     //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\
     //   (. |__) :) /    \    |   (  ) : |(:   \___/(: ______)(.  ___  :)
@@ -72,6 +74,8 @@ pub trait PoolEvents {
     fn kill_claim(&self);
 
     fn unkill_claim(&self);
+
+    fn permanently_locked_liquidity(&self, amount: u128);
 }
 
 impl PoolEvents for Events {
@@ -130,6 +134,14 @@ impl PoolEvents for Events {
         );
     }
 
+    fn capped_mint(&self, base_oracle_price: u128, quote_oracle_price: u128, delta_a: i128) {
+        let e = self.env();
+        e.events().publish(
+            (Symbol::new(e, "capped_mint"),),
+            (base_oracle_price, quote_oracle_price, delta_a),
+        );
+    }
+
     //    _______     __       ____  ____   ________  _______  ________
     //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\
     //   (. |__) :) /    \    |   (  ) : |(:   \___/(: ______)(.  ___  :)
@@ -184,5 +196,11 @@ impl PoolEvents for Events {
         self.env()
             .events()
             .publish((Symbol::new(self.env(), "unkill_claim"),), ())
+    }
+
+    fn permanently_locked_liquidity(&self, amount: u128) {
+        let e = self.env();
+        e.events()
+            .publish((Symbol::new(e, "permanently_locked_liquidity"),), amount);
     }
 }

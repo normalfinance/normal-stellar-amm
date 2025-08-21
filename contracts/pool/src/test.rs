@@ -3,7 +3,7 @@ extern crate std;
 
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
-use soroban_sdk::symbol_short;
+use soroban_sdk::{symbol_short, U256};
 use utils::constant::{PRICE_PRECISION, PRICE_PRECISION_I128};
 use utils::state::pool::SwapDirection;
 
@@ -60,9 +60,21 @@ fn test() {
     //     .fixed_div_floor(target_price, PRICE_PRECISION_I128)
     //     .unwrap();
 
-    let (x, y) = liq_pool.deposit(&admin, &10_000_0000000);
+    // setup.registry.get_price(&setup.btc_asset_id);
+    // setup.registry.get_price(&setup.xlm_asset_id);
 
-    assert_eq!(e.auths(), []);
+    let (x, y) = liq_pool.deposit(&admin, &1000_0000000);
+
+    liq_pool.deposit(&admin, &2000_0000000);
+
+    let swapped = liq_pool.swap(&admin, &SwapDirection::Buy, &10_0000000, &0);
+
+    assert_eq!(swapped, 0);
+
+    // let pools = Vec::from_array(&e, [liq_pool.address]);
+    // let total = setup.liquidity_calculator.get_liquidity(&pools);
+    // assert_eq!(total, U256::from_u128(&e, 0));
+    // assert_eq!(e.auths(), []);
     // fn print_invocation(inv: &AuthorizedInvocation, indent: usize) {
     //     let padding = "  ".repeat(indent);
     //     match &inv.function {

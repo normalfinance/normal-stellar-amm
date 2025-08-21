@@ -66,11 +66,12 @@ Normal is a synthetic asset protocol enabling investors to trade any crypto asse
 
 ## Deployment
 
-- Register a XLM oracle: `yarn oracle:register testnet CB6TCEOSXIWBE7O6EDQW3534Z35H2UB2D6TRNXKAA4AJZRVN3PYXN5NI XLM 14 0`
-- Register a BTC oracle: `yarn oracle:register testnet CB6TCEOSXIWBE7O6EDQW3534Z35H2UB2D6TRNXKAA4AJZRVN3PYXN5NI BTC 14 0`
-- Deploy a nBTC/XLM pool: `yarn pool:deploy testnet CCSNREEQ2A7RUYXNFXCZPUHTMZ3FAWUVZBUDXQYC6Q6ZWBNAXZ6NV4AV BTC Normal_Bitcoin nBTC 30 A 1000000`
-- Deposit liquidity to the pool: `yarn pool:deposit testnet CACXYRCH4D5X7SG6IR4D3ASH3F2SDQH7UMMNIO2XEXTO3JBWLBMUEPNS BTC 1000000`
-- Withdraw liquidity to the pool: `yarn pool:withdraw testnet CACXYRCH4D5X7SG6IR4D3ASH3F2SDQH7UMMNIO2XEXTO3JBWLBMUEPNS BTC 500000`
+- Register a XLM oracle: `yarn oracle:register testnet <oracle_registry_address> XLM 14 0`
+- Register a BTC oracle: `yarn oracle:register testnet <oracle_registry_address> BTC 14 0`
+- Deploy a nBTC/XLM pool: `yarn pool:deploy testnet <pool_router_address> BTC nBTC 30 A 1_000_000_0000000 <sac_address>`
+- Deposit liquidity to the pool: `yarn pool:deposit testnet <pool_router_address> BTC 10_0000000`
+- Withdraw liquidity to the pool: `yarn pool:withdraw testnet <pool_router_address> BTC 5_0000000`
+- Swap: `yarn pool:swap testnet <pool_router_address> BTC Buy 1_0000000 <out_min>`
 
 ## Getting Started
 

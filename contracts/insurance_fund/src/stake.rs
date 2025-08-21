@@ -313,8 +313,8 @@ pub fn calculate_if_shares_lost(e: &Env, stake: &Stake, insurance_vault_amount: 
         let new_n_shares = vault_amount_to_if_shares(
             e,
             stake.last_withdraw_request_value,
-            total_shares.safe_sub(e, n_shares),
-            insurance_vault_amount.safe_sub(e, stake.last_withdraw_request_value),
+            total_shares.saturating_sub(n_shares),
+            insurance_vault_amount.saturating_sub(stake.last_withdraw_request_value),
         );
 
         validate!(
@@ -323,7 +323,7 @@ pub fn calculate_if_shares_lost(e: &Env, stake: &Stake, insurance_vault_amount: 
             InsuranceFundError::InvalidIFSharesDetected
         );
 
-        n_shares.safe_sub(e, new_n_shares)
+        n_shares.saturating_sub(new_n_shares)
     } else {
         0
     };
