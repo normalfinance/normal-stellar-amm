@@ -15,4 +15,5 @@ pub enum OracleRegistryError {
     OracleInvalid = 23,
     PriceOverrideTooSoon = 24,
     OracleAlreadyRegistered = 25,
+    InvalidClampDenominator = 26,
 }

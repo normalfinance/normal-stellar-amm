@@ -35,7 +35,7 @@ fn test_get_price() {
     let oracle_price_data = setup.registry.get_price(&setup.btc_asset_id, &false);
 
     assert_eq!(oracle_price_data.price, new_oracle_price as u128);
-    assert_eq!(oracle_price_data.delay, 0);
+    assert_eq!(oracle_price_data.delay.as_seconds(), 0);
 
     // Ensure historical data is updated
     // let last_price_info = setup.registry.get_last_price(&setup.btc_asset_id);
@@ -61,7 +61,7 @@ fn test_get_price() {
 
 //     // TODO: price should come from historical oracle data
 //     assert_eq!(oracle_price_data.price, 100);
-//     assert_eq!(oracle_price_data.delay, 0);
+//     assert_eq!(oracle_price_data.delay.as_seconds(), 0);
 // }
 
 // #[test]
@@ -70,7 +70,7 @@ fn test_get_price() {
 //     let oracle_price_data = setup.registry.get_price(&setup.asset_id, &false);
 //     // TODO: price should come from historical oracle data
 //     assert_eq!(oracle_price_data.price, 100);
-//     assert_eq!(oracle_price_data.delay, 0);
+//     assert_eq!(oracle_price_data.delay.as_seconds(), 0);
 // }
 
 // #[test]
