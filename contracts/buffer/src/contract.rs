@@ -187,7 +187,7 @@ impl BufferTrait for Buffer {
 
         let reserve = get_reserve(&e, &token);
         let balance = get_buffer_reserve_amount(&e, &token);
-        let skimmed = balance.safe_sub(&e, reserve.balance) as i128;
+        let skimmed = balance.saturating_sub(reserve.balance) as i128;
         if skimmed > 0 {
             transfer_token(&e, &token, &e.current_contract_address(), &sender, &skimmed);
             Events::new(&e).skim(token, sender, skimmed);
