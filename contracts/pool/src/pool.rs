@@ -4,10 +4,7 @@ use crate::errors::PoolError;
 use crate::errors::PoolValidationError;
 use crate::events::Events as LiquidityPoolEvents;
 use crate::events::PoolEvents;
-use crate::plane::pool_plane::HistoricalOracleData;
-use crate::storage::get_last_oracle_valid;
 use crate::storage::get_last_trade_ts;
-use crate::storage::get_last_update_ts;
 use crate::storage::get_mint_cap_fraction;
 use crate::storage::get_oracle_registry;
 use crate::storage::get_volume_30d;
@@ -287,21 +284,6 @@ pub fn update_volume_30d(e: &Env, quote_asset_amount: u128, now: u64) {
     }
 
     set_last_trade_ts(e, &now);
-}
-
-// Checks whether the most recent oracle update is still valid for use.
-//
-// Compares the current timestamp to the last update timestamp and returns `true`
-// only if they match and the last oracle update was marked valid.
-//
-// # Arguments
-// * `e` - Soroban environment reference.
-// * `current_ts` - The current ledger timestamp.
-//
-// # Returns
-// * `bool` — `true` if the oracle data is recent and marked valid.
-pub fn is_recent_oracle_valid(e: &Env, current_ts: u64) -> bool {
-    get_last_oracle_valid(e) && current_ts == get_last_update_ts(e)
 }
 
 // Computes the delta needed to re-peg reserve A (synthetic base token) to match the target peg price.
