@@ -26,7 +26,8 @@ use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::math::safe_math::SafeMath;
-use utils::token::{transfer_token, validate_token_contract};
+use utils::token::{ transfer_token, validate_token_contract };
+use utils::validation::ensure_non_zero_u128;
 
 contractmeta!(
     key = "Description",
@@ -97,6 +98,8 @@ impl BufferTrait for Buffer {
     // * `BufferError::ReserveMaxBalanceThreshold` – if deposit exceeds the reserve’s `max_balance`.
     fn deposit(e: Env, sender: Address, token: Address, amount: u128) {
         sender.require_auth();
+        
+        ensure_non_zero_u128(&e, amount, BufferError::ZeroAmount);
 
         enter(&e);
 
@@ -184,7 +187,7 @@ impl BufferTrait for Buffer {
 
         let reserve = get_reserve(&e, &token);
         let balance = get_buffer_reserve_amount(&e, &token);
-        let skimmed = balance.safe_sub(&e, reserve.balance) as i128;
+        let skimmed = balance.saturating_sub(reserve.balance) as i128;
         if skimmed > 0 {
             transfer_token(&e, &token, &e.current_contract_address(), &sender, &skimmed);
             Events::new(&e).skim(token, sender, skimmed);
@@ -350,6 +353,8 @@ impl AdminInterface for Buffer {
     fn withdraw_surplus(e: Env, admin: Address, token: Address, amount: u128) {
         admin.require_auth();
         require_admin(&e, &admin);
+        
+        ensure_non_zero_u128(&e, amount, BufferError::ZeroAmount);
 
         enter(&e);
 

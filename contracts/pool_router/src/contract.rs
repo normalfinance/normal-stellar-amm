@@ -637,10 +637,18 @@ impl IncentivesInterfaceTrait for PoolRouter {
     //
     // # Arguments
     //
+    // * `user` - The address of the user.
     // * `asset` - A vector of token addresses for which to fill the liquidity.
-    fn fill_liquidity(e: Env, asset: Symbol) {
+    fn fill_liquidity(e: Env, user: Address, asset: Symbol) {
+        user.require_auth();
+        require_rewards_admin_or_owner(&e, &user);
+
         let calculator = get_liquidity_calculator(&e);
         let total_liquidity = get_total_liquidity(&e, asset.clone(), calculator);
+
+        if total_liquidity == U256::from_u32(&e, 0) {
+            return;
+        }
 
         let pool_with_processed_info = (total_liquidity.clone(), false);
 
@@ -666,6 +674,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
     //
     // # Arguments
     //
+    // * `user` - The address of the user.
     // * `asset` - A vector of token addresses that the pool consists of.
     //
     // # Returns
@@ -679,7 +688,10 @@ impl IncentivesInterfaceTrait for PoolRouter {
     // * The pool does not exist.
     // * The tokens are not found in the current rewards configuration.
     // * The liquidity for the tokens has not been filled.
-    fn config_pool_rewards(e: Env, asset: Symbol) -> u128 {
+    fn config_pool_rewards(e: Env, user: Address, asset: Symbol) -> u128 {
+        user.require_auth();
+        require_rewards_admin_or_owner(&e, &user);
+
         let pool_id = get_pool(&e, &asset);
 
         let rewards_config = get_rewards_config(&e);

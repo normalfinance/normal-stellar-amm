@@ -39,6 +39,7 @@ use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::math::safe_math::SafeMath;
 use utils::token::transfer_token;
 use utils::validate;
+use utils::validation::ensure_non_zero_u128;
 
 contractmeta!(
     key = "Description",
@@ -116,6 +117,8 @@ impl InsuranceFundTrait for InsuranceFund {
     // * If the deposit exceeds the configured optimal insurance capacity.
     fn deposit(e: Env, user: Address, amount: u128) {
         user.require_auth();
+        
+        ensure_non_zero_u128(&e, amount, InsuranceFundError::ZeroAmount);
 
         enter(&e);
 
@@ -394,7 +397,8 @@ impl InsuranceFundTrait for InsuranceFund {
 
         stake.decrease_if_shares(&e, if_shares_lost);
 
-        set_total_shares(&e, &total_shares.safe_sub(&e, if_shares_lost));
+        validate!(&e, total_shares >= if_shares_lost, InsuranceFundError::InsufficientShares);
+        set_total_shares(&e, &(total_shares - if_shares_lost));
 
         let if_shares_after = stake.checked_if_shares(&e);
 
@@ -467,7 +471,9 @@ impl InsuranceFundTrait for InsuranceFund {
         let now = e.ledger().timestamp();
         let mut stake = get_stake(&e, &user);
 
-        let time_since_withdraw_request = now.safe_sub(&e, stake.last_withdraw_request_ts);
+        // Add bounds checking to prevent underflow when system clock goes backwards
+        validate!(&e, now >= stake.last_withdraw_request_ts, InsuranceFundError::InvalidTimestamp);
+        let time_since_withdraw_request = now - stake.last_withdraw_request_ts;
 
         // Error if the unstaking period has not yet elapsed
         validate!(
@@ -505,9 +511,13 @@ impl InsuranceFundTrait for InsuranceFund {
 
         stake.decrease_if_shares(&e, n_shares);
 
-        stake.cost_basis = stake.cost_basis.safe_sub(&e, withdraw_amount);
+        // Add bounds checking to prevent underflow when withdrawing more than cost basis
+        validate!(&e, stake.cost_basis >= withdraw_amount, InsuranceFundError::CostBasisUnderflow);
+        stake.cost_basis = stake.cost_basis - withdraw_amount;
 
-        set_total_shares(&e, &total_shares.safe_sub(&e, n_shares));
+        // Add bounds checking to prevent critical share tracking underflow
+        validate!(&e, total_shares >= n_shares, InsuranceFundError::InsufficientShares);
+        set_total_shares(&e, &(total_shares - n_shares));
 
         // reset stake withdraw request info
         stake.last_withdraw_request_shares = 0;

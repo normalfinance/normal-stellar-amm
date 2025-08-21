@@ -4,6 +4,7 @@ use utils::{
     constant::{ FIVE_MINUTE, PERCENTAGE_PRECISION_U64, PRICE_PRECISION_U64 },
     math::{ pool::sanitize_new_price, safe_math::SafeMath, stats::calculate_new_twap },
     state::oracle_registry::{ NormalAction, OraclePriceData },
+    temporal::Delay,
 };
 
 use crate::{
@@ -25,6 +26,8 @@ use crate::{
 // # Returns
 // - `OraclePriceData` containing the price and delay since last update.
 pub fn get_oracle_price(e: &Env, oracle: &Address, asset: &Address, now: u64) -> OraclePriceData {
+    assert!(now > 0, "now timestamp must be positive");
+    
     let oracle_client = PriceFeedClient::new(e, oracle);
     let oracle_asset = Asset::Stellar(asset.clone());
 
@@ -36,7 +39,11 @@ pub fn get_oracle_price(e: &Env, oracle: &Address, asset: &Address, now: u64) ->
     oracle_price = oracle_price_data.price as u128;
     published_ts = oracle_price_data.timestamp;
 
-    let oracle_delay = now.safe_sub(e, published_ts);
+    let oracle_delay = Delay::from_timestamp_diff_expect(
+        now, 
+        published_ts,
+        "Oracle published timestamp cannot be in the future"
+    );
 
     OraclePriceData {
         price: oracle_price,
@@ -62,7 +69,7 @@ pub fn update_twap(
     asset: &Symbol,
     historical_oracle_data: &HistoricalOracleData,
     oracle_price_data: &OraclePriceData,
-    sanitize_clamp_denominator: i64,
+    sanitize_clamp_denominator: u64,
     now: u64,
     registering: bool
 ) {
@@ -89,7 +96,7 @@ pub fn update_twap(
             oracle_price_twap
         },
         last_oracle_price: oracle_price_data.price,
-        last_oracle_delay: oracle_price_data.delay,
+        last_oracle_delay: oracle_price_data.delay.as_seconds(),
         last_oracle_price_twap_ts: now,
     };
     put_historical_oracle_data(e, &asset, &new_historical_oracle_data);
@@ -150,10 +157,35 @@ pub fn calculate_oracle_twap_price_spread_pct(
     other_price: u128,
     last_oracle_price_twap: u128
 ) -> i64 {
-    let price_spread = (other_price as u64).safe_sub(e, last_oracle_price_twap as u64);
 
-    // price_spread_pct
-    price_spread.safe_mul(e, PRICE_PRECISION_U64).safe_div(e, other_price as u64) as i64
+    assert!(other_price > 0, "other_price must be positive for spread calculation");
+    assert!(last_oracle_price_twap >= 0, "last_oracle_price_twap must be non-negative");
+    let (price_spread, is_positive_spread) = if other_price >= last_oracle_price_twap {
+        let other_price_u64 = (other_price as u64).min(u64::MAX);
+        let twap_u64 = (last_oracle_price_twap as u64).min(u64::MAX);
+        if other_price_u64 >= twap_u64 {
+            (other_price_u64.safe_sub(e, twap_u64), true)
+        } else {
+            (0, true)  // casting changed order, treat as no spread
+        }
+    } else {
+        let other_price_u64 = (other_price as u64).min(u64::MAX);
+        let twap_u64 = (last_oracle_price_twap as u64).min(u64::MAX);
+        if twap_u64 >= other_price_u64 {
+            (twap_u64.safe_sub(e, other_price_u64), false)
+        } else {
+            (0, false)  // casting changed order, treat as no spread
+        }
+    };
+
+    let other_price_u64 = (other_price as u64).min(u64::MAX).max(1);
+    let abs_price_spread_pct = price_spread.safe_mul(e, PRICE_PRECISION_U64).safe_div(e, other_price_u64) as i64;
+    
+    if is_positive_spread {
+        abs_price_spread_pct
+    } else {
+        -abs_price_spread_pct
+    }
 }
 
 /// Determines whether the oracle data is valid for a specific contract action.

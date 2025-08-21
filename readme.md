@@ -108,6 +108,12 @@ Don't forget to give the project a star! Thanks again!
 4. Push to the Branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
+## Audits
+
+You can find audits of this codebase in the `/audits` directory. These are our most recent audits:
+
+- **Summer 2025 x Halborn** - (https://github.com/normalfinance/normal-stellar-amm/tree/master/audits/Normal x Halborn - Summer 2025 Audit.pdf)
+
 ## Contact
 
 - 📧 Email: [hello@normalfinance.io](mailto:hello@normalfinance.io)

@@ -1,11 +1,13 @@
 use core::cmp::max;
 
+use crate::errors::PoolError;
 use crate::errors::PoolValidationError;
 use crate::events::Events as LiquidityPoolEvents;
 use crate::events::PoolEvents;
 use crate::storage::get_last_oracle_valid;
 use crate::storage::get_last_trade_ts;
 use crate::storage::get_last_update_ts;
+use crate::storage::get_mint_cap_fraction;
 use crate::storage::get_router;
 use crate::storage::get_volume_30d;
 use crate::storage::set_last_trade_ts;
@@ -26,6 +28,7 @@ use utils::math::safe_math::SafeMath;
 use utils::math::stats::calculate_rolling_sum;
 use utils::state::oracle_registry::NormalAction;
 use utils::state::oracle_registry::OraclePriceData;
+use utils::state::pool::PoolStatus;
 
 // Calculates the net liquidity imbalance between base and quote assets in the pool.
 //
@@ -121,7 +124,7 @@ pub fn peg_price(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -> 
 // * `quote_asset_amount` - Amount of quote asset involved in the trade.
 // * `now` - Current ledger timestamp.
 pub fn update_volume_30d(e: &Env, quote_asset_amount: u128, now: u64) {
-    let since_last = max(1_u64, now.safe_sub(e, get_last_trade_ts(e)));
+    let since_last = max(1_u64, now.saturating_sub(get_last_trade_ts(e)));
     let volume_30d = get_volume_30d(e);
     set_volume_30d(
         e,
@@ -172,21 +175,34 @@ pub fn get_delta_a(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -
 //
 // Uses oracle prices to calculate the required change in synthetic token supply to match
 // the peg. Adjusts the pool's reserve A accordingly and emits a rebalance event.
+// In ReduceOnly mode, prevents minting new synthetic tokens to avoid increasing synthetic asset exposure.
 //
 // # Arguments
 // * `e` - Soroban environment reference.
 // * `base_oracle_price` - Oracle price of the synthetic base asset.
 // * `quote_oracle_price` - Oracle price of the quote asset.
 // * `now` - Current ledger timestamp used in the emitted event.
-pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128, now: u64) {
+// * `pool_status` - Current pool status to determine if minting should be restricted.
+pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128, now: u64, reduce_only: bool) {
     let reserve_a = get_reserve_a(&e);
 
     // Find the ideal reserve_a amount such that the pool's price is equal to the oracle price
     let delta_a = get_delta_a(&e, base_oracle_price, quote_oracle_price);
 
     if delta_a > 0 {
-        mint_synthetic_tokens(&e, &e.current_contract_address(), delta_a);
-        set_reserve_a(&e, &(reserve_a + (delta_a as u128)));
+        if reduce_only {
+            LiquidityPoolEvents::new(&e).capped_mint(base_oracle_price, quote_oracle_price, delta_a);
+
+            // allow minting up to 0.1 % of current supply per ledger
+            let mint_cap = (get_total_synthetic_tokens(&e) / get_mint_cap_fraction(&e) as u128) as i128;
+
+            if delta_a > mint_cap {
+                panic_with_error!(&e, PoolError::SwapReduceOnly);
+            }
+        } else {
+            mint_synthetic_tokens(&e, &e.current_contract_address(), delta_a);
+            set_reserve_a(&e, &(reserve_a + (delta_a as u128)));
+        }
     }
     if delta_a < 0 {
         burn_synthetic_tokens(&e, &e.current_contract_address(), delta_a.abs() as u128);
