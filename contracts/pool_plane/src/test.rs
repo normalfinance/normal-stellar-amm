@@ -1,12 +1,12 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::testutils::{ Setup };
-use crate::{ contract::PoolPlane, PoolPlaneClient };
+use crate::testutils::Setup;
+use crate::{contract::PoolPlane, PoolPlaneClient};
 use access_control::constants::ADMIN_ACTIONS_DELAY;
-use soroban_sdk::testutils::{ Address as _, Events };
-use soroban_sdk::{ symbol_short, vec, Address, Env, IntoVal, Symbol, Vec };
-use utils::test_utils::{ install_dummy_wasm, jump };
+use soroban_sdk::testutils::{Address as _, Events};
+use soroban_sdk::{symbol_short, vec, Address, Env, IntoVal, Symbol, Vec};
+use utils::test_utils::{install_dummy_wasm, jump};
 
 fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
     let client = PoolPlaneClient::new(e, &e.register(PoolPlane {}, ()));
@@ -26,7 +26,7 @@ fn test() {
     plane.update(
         &address1,
         &Vec::from_array(&e, [30_u128]),
-        &Vec::from_array(&e, [1000_u128, 1000_u128])
+        &Vec::from_array(&e, [1000_u128, 1000_u128]),
     );
 
     let data = plane.get(&Vec::from_array(&e, [address1]));
@@ -58,25 +58,35 @@ fn test_transfer_ownership_events() {
     plane.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &new_admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            plane.address.clone(),
-            (Symbol::new(&setup.env, "commit_transfer_ownership"), symbol_short!("Admin")).into_val(
-                &setup.env
-            ),
-            (new_admin.clone(),).into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                plane.address.clone(),
+                (
+                    Symbol::new(&setup.env, "commit_transfer_ownership"),
+                    symbol_short!("Admin")
+                )
+                    .into_val(&setup.env),
+                (new_admin.clone(),).into_val(&setup.env),
+            )
+        ]
     );
 
     plane.revert_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            plane.address.clone(),
-            (Symbol::new(&setup.env, "revert_transfer_ownership"), symbol_short!("Admin")).into_val(
-                &setup.env
-            ),
-            ().into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                plane.address.clone(),
+                (
+                    Symbol::new(&setup.env, "revert_transfer_ownership"),
+                    symbol_short!("Admin")
+                )
+                    .into_val(&setup.env),
+                ().into_val(&setup.env),
+            )
+        ]
     );
 
     plane.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &new_admin);
@@ -84,13 +94,18 @@ fn test_transfer_ownership_events() {
     plane.apply_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            plane.address.clone(),
-            (Symbol::new(&setup.env, "apply_transfer_ownership"), symbol_short!("Admin")).into_val(
-                &setup.env
-            ),
-            (new_admin.clone(),).into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                plane.address.clone(),
+                (
+                    Symbol::new(&setup.env, "apply_transfer_ownership"),
+                    symbol_short!("Admin")
+                )
+                    .into_val(&setup.env),
+                (new_admin.clone(),).into_val(&setup.env),
+            )
+        ]
     );
 }
 
@@ -103,21 +118,27 @@ fn test_upgrade_events() {
     contract.commit_upgrade(&setup.admin, &new_wasm_hash);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            contract.address.clone(),
-            (Symbol::new(&setup.env, "commit_upgrade"),).into_val(&setup.env),
-            (new_wasm_hash.clone(),).into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "commit_upgrade"),).into_val(&setup.env),
+                (new_wasm_hash.clone(),).into_val(&setup.env),
+            )
+        ]
     );
 
     contract.revert_upgrade(&setup.admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            contract.address.clone(),
-            (Symbol::new(&setup.env, "revert_upgrade"),).into_val(&setup.env),
-            ().into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "revert_upgrade"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            )
+        ]
     );
 
     contract.commit_upgrade(&setup.admin, &new_wasm_hash);
@@ -125,11 +146,14 @@ fn test_upgrade_events() {
     contract.apply_upgrade(&setup.admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            contract.address.clone(),
-            (Symbol::new(&setup.env, "apply_upgrade"),).into_val(&setup.env),
-            (new_wasm_hash.clone(),).into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "apply_upgrade"),).into_val(&setup.env),
+                (new_wasm_hash.clone(),).into_val(&setup.env),
+            )
+        ]
     );
 }
 
@@ -141,20 +165,26 @@ fn test_emergency_mode_events() {
     contract.set_emergency_mode(&setup.emergency_admin, &true);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            contract.address.clone(),
-            (Symbol::new(&setup.env, "enable_emergency_mode"),).into_val(&setup.env),
-            ().into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "enable_emergency_mode"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            )
+        ]
     );
     contract.set_emergency_mode(&setup.emergency_admin, &false);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            contract.address.clone(),
-            (Symbol::new(&setup.env, "disable_emergency_mode"),).into_val(&setup.env),
-            ().into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "disable_emergency_mode"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            )
+        ]
     );
 }
 

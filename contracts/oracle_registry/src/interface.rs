@@ -53,7 +53,6 @@ pub trait AdminInterface {
         admin: Address,
         asset: Symbol,
         oracle_addr: Address,
-        asset_addr: Address,
         decimals: u32,
         sanitize_clamp_denominator: u64
     ) -> OracleInfo;

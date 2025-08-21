@@ -10,9 +10,9 @@ use crate::router_interface::AdminInterface;
 use crate::storage::{
     get_liquidity_calculator, get_pool, get_pool_base, get_pool_plane, get_pools_vec,
     get_reward_tokens, get_reward_tokens_detailed, get_rewards_config, remove_pool,
-    set_liquidity_calculator, set_pool_hash, set_pool_plane, set_reward_tokens,
-    set_reward_tokens_detailed, set_rewards_config, set_token_hash, GlobalRewardsConfig,
-    PoolRewardInfo,
+    set_liquidity_calculator, set_lp_token_hash, set_oracle_registry, set_pool_hash,
+    set_pool_plane, set_reward_tokens, set_reward_tokens_detailed, set_rewards_config,
+    GlobalRewardsConfig, PoolRewardInfo,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
@@ -37,7 +37,7 @@ use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::constant::MAX_POOL_FEE;
-use utils::state::pool::{PoolInfo, PoolTier};
+use utils::state::pool::{PoolInfo, PoolTier, SwapDirection};
 use utils::token::{transfer_token, transfer_token_from};
 
 #[contract]
@@ -85,14 +85,14 @@ impl PoolInterfaceTrait for PoolRouter {
 
         enter(&e);
 
-        let pool_id = get_pool(&e, &asset);
+        let pool = get_pool(&e, &asset);
 
         let (amount, share_amount): (u128, u128) = e.invoke_contract(
-            &pool_id,
+            &pool,
             &symbol_short!("deposit"),
             Vec::from_array(&e, [user.clone().into_val(&e), token_b_amount.into_val(&e)]),
         );
-        Events::new(&e).deposit(asset, user, pool_id, amount, share_amount);
+        Events::new(&e).deposit_liquidity(asset, pool, user, amount, share_amount);
 
         exit(&e);
 
@@ -108,10 +108,9 @@ impl PoolInterfaceTrait for PoolRouter {
     // # Arguments
     // * `e` - The current Soroban environment.
     // * `user` - The address of the user performing the swap (must authorize the call).
-    // * `tokens` - A vector of token addresses, used to determine index positions in the pool.
+    // * `asset` - The synthetic asset symbol identifying the pool to use.
     // * `token_in` - The token address being sold (input).
     // * `token_out` - The token address being bought (output).
-    // * `asset` - The synthetic asset symbol identifying the pool to use.
     // * `in_amount` - The amount of the input token to swap.
     // * `out_min` - The minimum acceptable amount of the output token.
     //
@@ -132,10 +131,8 @@ impl PoolInterfaceTrait for PoolRouter {
     fn swap(
         e: Env,
         user: Address,
-        tokens: Vec<Address>,
-        token_in: Address,
-        token_out: Address,
         asset: Symbol,
+        direction: SwapDirection,
         in_amount: u128,
         out_min: u128,
     ) -> u128 {
@@ -143,36 +140,27 @@ impl PoolInterfaceTrait for PoolRouter {
 
         enter(&e);
 
-        let pool_id = get_pool(&e, &asset);
+        let pool = get_pool(&e, &asset);
 
-        let out_amt = e.invoke_contract(
-            &pool_id,
+        let out_amount = e.invoke_contract(
+            &pool,
             &symbol_short!("swap"),
             Vec::from_array(
                 &e,
                 [
                     user.clone().into_val(&e),
-                    tokens
-                        .first_index_of(token_in.clone())
-                        .unwrap()
-                        .into_val(&e),
-                    tokens
-                        .first_index_of(token_out.clone())
-                        .unwrap()
-                        .into_val(&e),
+                    direction.into_val(&e),
                     in_amount.into_val(&e),
                     out_min.into_val(&e),
                 ],
             ),
         );
 
-        Events::new(&e).swap(
-            tokens, user, pool_id, token_in, token_out, in_amount, out_amt,
-        );
+        Events::new(&e).swap(asset, pool, user, direction, in_amount, out_amount);
 
         exit(&e);
 
-        out_amt
+        out_amount
     }
 
     // Estimates the output amount and fee for a token swap without executing it.
@@ -183,9 +171,6 @@ impl PoolInterfaceTrait for PoolRouter {
     //
     // # Arguments
     // * `e` - The current Soroban environment.
-    // * `tokens` - A vector of token addresses used to map input/output tokens to pool indices.
-    // * `token_in` - The address of the token to be sold.
-    // * `token_out` - The address of the token to be received.
     // * `asset` - The synthetic asset symbol representing the target liquidity pool.
     // * `in_amount` - The amount of input token to simulate a swap for.
     //
@@ -203,10 +188,8 @@ impl PoolInterfaceTrait for PoolRouter {
     // * Token ordering must match the pool's internal ordering for index lookups to work correctly.
     fn estimate_swap(
         e: Env,
-        tokens: Vec<Address>,
-        token_in: Address,
-        token_out: Address,
         asset: Symbol,
+        direction: SwapDirection,
         in_amount: u128,
     ) -> (u128, i128) {
         let pool_id = get_pool(&e, &asset);
@@ -214,20 +197,7 @@ impl PoolInterfaceTrait for PoolRouter {
         e.invoke_contract(
             &pool_id,
             &Symbol::new(&e, "estimate_swap"),
-            Vec::from_array(
-                &e,
-                [
-                    tokens
-                        .first_index_of(token_in.clone())
-                        .unwrap()
-                        .into_val(&e),
-                    tokens
-                        .first_index_of(token_out.clone())
-                        .unwrap()
-                        .into_val(&e),
-                    in_amount.into_val(&e),
-                ],
-            ),
+            Vec::from_array(&e, [direction.into_val(&e), in_amount.into_val(&e)]),
         )
     }
 
@@ -256,15 +226,15 @@ impl PoolInterfaceTrait for PoolRouter {
 
         enter(&e);
 
-        let pool_id = get_pool(&e, &asset);
+        let pool = get_pool(&e, &asset);
 
         let amount: u128 = e.invoke_contract(
-            &pool_id,
+            &pool,
             &symbol_short!("withdraw"),
             Vec::from_array(&e, [user.clone().into_val(&e), share_amount.into_val(&e)]),
         );
 
-        Events::new(&e).withdraw(asset, user, pool_id, amount, share_amount);
+        Events::new(&e).withdraw_liquidity(asset, pool, user, share_amount, amount);
 
         exit(&e);
 
@@ -498,10 +468,10 @@ impl AdminInterface for PoolRouter {
     }
 
     // Sets the liquidity pool share token wasm hash.
-    fn set_token_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
+    fn set_lp_token_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-        set_token_hash(&e, &new_hash);
+        set_lp_token_hash(&e, &new_hash);
     }
 
     // Sets the pool wasm hash.
@@ -518,6 +488,12 @@ impl AdminInterface for PoolRouter {
         get_incentives_manager(&e)
             .storage()
             .put_reward_token(reward_token);
+    }
+
+    fn set_oracle_registry(e: Env, admin: Address, oracle_registry: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        set_oracle_registry(&e, &oracle_registry);
     }
 }
 
@@ -904,7 +880,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
         let incentives = get_incentives_manager(&e);
         let reward_token = incentives.storage().get_reward_token();
         let reward_token_client = SorobanTokenClient::new(&e, &reward_token);
-        let mut pool_reward_balance = reward_token_client.balance(&pool_id) as u128;
+        let pool_reward_balance = reward_token_client.balance(&pool_id) as u128;
 
         configured_reward.saturating_sub(claimed_reward + pool_reward_balance)
     }
@@ -1002,7 +978,8 @@ impl PoolsManagementTrait for PoolRouter {
     //
     // * `admin` - The address of the admin initializing the pool.
     // * `assets` - A tuple of the base and quote asset Oracle Registry assets.
-    // * `tokens` - A vector of token addresses that the pool consists of.
+    // * `token_b` - A token address of the pool's quote token.
+    // * `synthetic_sac_address` - .
     // * `lp_token_info` - A tuple of the LP token name and symbol.
     // * `fee_fraction` - The fee fraction for the pool (in basis points).
     // * `tier` - The risk tier of the target asset.
@@ -1017,7 +994,8 @@ impl PoolsManagementTrait for PoolRouter {
         e: Env,
         admin: Address,
         assets: (Symbol, Symbol),
-        tokens: Vec<Address>,
+        token_b: Address,
+        synthetic_sac_address: Address,
         lp_token_info: (String, String),
         fee_fraction: u32,
         tier: PoolTier,
@@ -1036,8 +1014,9 @@ impl PoolsManagementTrait for PoolRouter {
             Some(pool_address) => pool_address,
             None => deploy_pool(
                 &e,
-                &tokens,
+                &token_b,
                 &assets,
+                &synthetic_sac_address,
                 &lp_token_info,
                 fee_fraction,
                 &tier,
@@ -1063,22 +1042,21 @@ impl PoolsManagementTrait for PoolRouter {
     // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
     //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
 
-    fn query_pool_details(env: Env, pool_address: Address) -> PoolInfo {
-        let pool_response: PoolInfo = env.invoke_contract(
-            &pool_address,
-            &Symbol::new(&env, "get_info"),
-            Vec::new(&env),
-        );
+    fn query_pool_details(e: Env, asset: Symbol) -> PoolInfo {
+        let pool_id = get_pool(&e, &asset);
+
+        let pool_response: PoolInfo =
+            e.invoke_contract(&pool_id, &Symbol::new(&e, "get_info"), Vec::new(&e));
         pool_response
     }
 
-    fn query_all_pools_details(env: Env) -> Vec<PoolInfo> {
-        let pools_vec = get_pools_vec(&env);
+    fn query_all_pools_details(e: Env) -> Vec<PoolInfo> {
+        let pools_vec = get_pools_vec(&e);
 
-        let mut result = Vec::new(&env);
+        let mut result = Vec::new(&e);
         for pool in pools_vec {
             let pool_response: PoolInfo =
-                env.invoke_contract(&pool, &Symbol::new(&env, "get_info"), Vec::new(&env));
+                e.invoke_contract(&pool, &Symbol::new(&e, "get_info"), Vec::new(&e));
 
             result.push_back(pool_response);
         }

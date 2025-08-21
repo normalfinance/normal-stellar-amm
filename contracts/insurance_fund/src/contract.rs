@@ -40,6 +40,7 @@ use utils::math::safe_math::SafeMath;
 use utils::token::transfer_token;
 use utils::validate;
 use utils::validation::ensure_non_zero_u128;
+use utils::validation::validate_percentages;
 
 contractmeta!(
     key = "Description",
@@ -122,6 +123,10 @@ impl InsuranceFundTrait for InsuranceFund {
 
         enter(&e);
 
+        ensure_non_zero_u128(&e, amount);
+
+        enter(&e);
+
         if get_is_killed_deposit(&e) {
             panic_with_error!(e, InsuranceFundError::FundDepositKilled);
         }
@@ -177,7 +182,6 @@ impl InsuranceFundTrait for InsuranceFund {
         let new_total_shares = get_total_shares(&e);
 
         FundEvents::new(&e).if_stake_record(
-            now,
             user.clone(),
             StakeAction::Deposit,
             amount,
@@ -316,7 +320,6 @@ impl InsuranceFundTrait for InsuranceFund {
         let if_shares_after = stake.checked_if_shares(&e);
 
         FundEvents::new(&e).if_stake_record(
-            now,
             user.clone(),
             StakeAction::WithdrawRequest,
             stake.last_withdraw_request_value,
@@ -397,13 +400,16 @@ impl InsuranceFundTrait for InsuranceFund {
 
         stake.decrease_if_shares(&e, if_shares_lost);
 
-        validate!(&e, total_shares >= if_shares_lost, InsuranceFundError::InsufficientShares);
+        validate!(
+            &e,
+            total_shares >= if_shares_lost,
+            InsuranceFundError::InsufficientIFShares
+        );
         set_total_shares(&e, &(total_shares - if_shares_lost));
 
         let if_shares_after = stake.checked_if_shares(&e);
 
         FundEvents::new(&e).if_stake_record(
-            now,
             user.clone(),
             StakeAction::WithdrawCancelRequest,
             0,
@@ -472,7 +478,11 @@ impl InsuranceFundTrait for InsuranceFund {
         let mut stake = get_stake(&e, &user);
 
         // Add bounds checking to prevent underflow when system clock goes backwards
-        validate!(&e, now >= stake.last_withdraw_request_ts, InsuranceFundError::InvalidTimestamp);
+        validate!(
+            &e,
+            now >= stake.last_withdraw_request_ts,
+            InsuranceFundError::InvalidTimestamp
+        );
         let time_since_withdraw_request = now - stake.last_withdraw_request_ts;
 
         // Error if the unstaking period has not yet elapsed
@@ -512,11 +522,19 @@ impl InsuranceFundTrait for InsuranceFund {
         stake.decrease_if_shares(&e, n_shares);
 
         // Add bounds checking to prevent underflow when withdrawing more than cost basis
-        validate!(&e, stake.cost_basis >= withdraw_amount, InsuranceFundError::CostBasisUnderflow);
+        validate!(
+            &e,
+            stake.cost_basis >= withdraw_amount,
+            InsuranceFundError::CostBasisUnderflow
+        );
         stake.cost_basis = stake.cost_basis - withdraw_amount;
 
         // Add bounds checking to prevent critical share tracking underflow
-        validate!(&e, total_shares >= n_shares, InsuranceFundError::InsufficientShares);
+        validate!(
+            &e,
+            total_shares >= n_shares,
+            InsuranceFundError::InsufficientIFShares
+        );
         set_total_shares(&e, &(total_shares - n_shares));
 
         // reset stake withdraw request info
@@ -527,7 +545,6 @@ impl InsuranceFundTrait for InsuranceFund {
         let if_shares_after = stake.checked_if_shares(&e);
 
         FundEvents::new(&e).if_stake_record(
-            now,
             user.clone(),
             StakeAction::Withdraw,
             withdraw_amount,
@@ -680,14 +697,7 @@ impl InsuranceFundTrait for InsuranceFund {
 
         let (slope1, slope2) = (get_rate_slope_a(&e), get_rate_slope_b(&e));
 
-        calculate_rate(
-            &e,
-            utilization,
-            optimal_utilization,
-            base_rate,
-            slope1,
-            slope2,
-        )
+        calculate_rate(utilization, optimal_utilization, base_rate, slope1, slope2)
     }
 
     fn get_base_rate(e: Env) -> i32 {
@@ -889,6 +899,19 @@ impl AdminInterface for InsuranceFund {
     ) {
         admin.require_auth();
         require_admin(&e, &admin);
+
+        validate_percentages(
+            &e,
+            &Vec::from_array(
+                &e,
+                [
+                    optimal_utilization as i32,
+                    base_rate,
+                    rate_slope_a as i32,
+                    rate_slope_b as i32,
+                ],
+            ),
+        );
 
         set_optimal_utilization(&e, &optimal_utilization);
         set_base_rate(&e, &base_rate);

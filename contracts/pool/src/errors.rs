@@ -24,9 +24,10 @@ pub enum PoolError {
     DefaultError = 216,
     // other
     SwapReduceOnly = 217,
-    UnfairShareCalculation = 218,
-    PoolNotDelisted = 219,
-    WithdrawExceedsMinLiquidity = 220,
+    PoolNotDelisted = 218,
+    WithdrawExceedsMinLiquidity = 219,
+    UnfairShareCalculation = 220,
+    SettledExceedsMax = 221,
 }
 
 #[contracterror]
@@ -39,9 +40,9 @@ pub enum PoolValidationError {
     AllCoinsRequired = 2004,
     InMinNotSatisfied = 2005,
     OutMinNotSatisfied = 2006,
-    CannotSwapSameToken = 2007,
-    InTokenOutOfBounds = 2008,
-    OutTokenOutOfBounds = 2009,
+    // CannotSwapSameToken = 2007,
+    // InTokenOutOfBounds = 2008,
+    // OutTokenOutOfBounds = 2009,
     EmptyPool = 2010,
     InvalidDepositAmount = 2011,
     AdminFeeOutOfBounds = 2012,

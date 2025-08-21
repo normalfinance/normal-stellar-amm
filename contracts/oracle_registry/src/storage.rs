@@ -1,18 +1,17 @@
 use paste::paste;
-use soroban_sdk::{ contracttype, panic_with_error, Env, Symbol };
-use utils::bump::{ bump_instance, bump_persistent };
+use soroban_sdk::{contracttype, panic_with_error, Env, Symbol};
+use utils::bump::{bump_instance, bump_persistent};
 use utils::errors::storage_errors::StorageError;
-use utils::state::oracle_registry::{ HistoricalOracleData, OracleGuardRails, OracleInfo };
+use utils::state::oracle_registry::{HistoricalOracleData, OracleGuardRails, OracleInfo};
 use utils::{
-    generate_instance_storage_getter_and_setter,
+    generate_instance_storage_getter, generate_instance_storage_getter_and_setter,
     generate_instance_storage_setter,
-    generate_instance_storage_getter,
 };
 
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
-    OracleGuardRails, // a set of oracle price data validations and protections.
+    OracleGuardRails,   // a set of oracle price data validations and protections.
     OraclesSet(Symbol), // map of asset (i.e. "BTC") > OracleInfo.
     HistoricalOracleData(Symbol), // map of asset (i.e. "BTC") > HistoricalOracleData (historically witnessed oracle data).
 }
@@ -37,7 +36,7 @@ pub(crate) fn get_oracle_base(e: &Env, asset: &Symbol) -> Option<OracleInfo> {
 pub(crate) fn get_oracle(e: &Env, asset: &Symbol) -> OracleInfo {
     let result = get_oracle_base(e, asset);
     match result {
-        Some(value) => { value }
+        Some(value) => value,
         None => panic_with_error!(&e, StorageError::ValueNotInitialized),
     }
 }
@@ -58,5 +57,5 @@ pub fn get_historical_oracle_data(e: &Env, asset: &Symbol) -> HistoricalOracleDa
 
 pub fn put_historical_oracle_data(e: &Env, asset: &Symbol, data: &HistoricalOracleData) {
     let key = DataKey::HistoricalOracleData(asset.clone());
-    e.storage().instance().set(&key, data)
+    e.storage().persistent().set(&key, data)
 }

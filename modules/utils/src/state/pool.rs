@@ -1,9 +1,8 @@
+use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::contracttype;
 use soroban_sdk::Address;
+use soroban_sdk::Env;
 use soroban_sdk::Symbol;
-use soroban_sdk::Vec;
-use soroban_sdk::{ Env };
-use soroban_fixed_point_math::SorobanFixedPoint;
 
 use crate::constant::FEE_MULTIPLIER;
 use crate::state::access::PrivilegedAddresses;
@@ -13,12 +12,12 @@ use crate::state::token::TokenInitInfo;
 #[contracttype]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Pool {
-    pub token_b: Address, // the quote token address (usually XLM or USDC).
+    pub token_b: Address,    // the quote token address (usually XLM or USDC).
     pub base_asset: Symbol, // the Oracle Registry asset id for the base (synthetic) asset (i.e. nBTC).
     pub quote_asset: Symbol, // the Oracle Registry asset id for the quote asset (token_b).
     pub tier: PoolTier,
     pub status: PoolStatus,
-    pub fee_fraction: u32, // the swap fee (in basis points).
+    pub fee_fraction: u32,               // the swap fee (in basis points).
     pub insurance_claim: InsuranceClaim, // the pool's claim on the insurance fund.
     // The max liquidity imbalance before price premiums are added and/or the buffer/if is used
     // liquidity imbalance is the difference between quote token and base token value. When it's less than 0,
@@ -42,20 +41,20 @@ impl Pool {
 
     pub fn get_sanitize_clamp_denominator(&self) -> Option<i64> {
         match self.tier {
-            PoolTier::A => Some(10_i64), // 10%
-            PoolTier::B => Some(5_i64), // 20%
-            PoolTier::C => Some(2_i64), // 50%
-            PoolTier::Speculative => None, // DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR
+            PoolTier::A => Some(10_i64),         // 10%
+            PoolTier::B => Some(5_i64),          // 20%
+            PoolTier::C => Some(2_i64),          // 50%
+            PoolTier::Speculative => None,       // DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR
             PoolTier::HighlySpeculative => None, // DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR
-            PoolTier::Isolated => None, // DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR
+            PoolTier::Isolated => None,          // DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR
         }
     }
 
     pub fn get_insurance_coverage_multiplier(&self) -> u64 {
         match self.tier {
             PoolTier::A => 10_u64, // 10%
-            PoolTier::B => 5_u64, // 20%
-            PoolTier::C => 2_u64, // 50%
+            PoolTier::B => 5_u64,  // 20%
+            PoolTier::C => 2_u64,  // 50%
             PoolTier::Speculative => 10_u64,
             PoolTier::HighlySpeculative => 10_u64,
             PoolTier::Isolated => 10_u64,
@@ -67,7 +66,7 @@ impl Pool {
         e: &Env,
         in_amount: u128,
         reserve_sell: u128,
-        reserve_buy: u128
+        reserve_buy: u128,
     ) -> (u128, u128) {
         if in_amount == 0 {
             return (0, 0);
@@ -140,9 +139,9 @@ pub struct InsuranceClaim {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PoolResponse {
     pub pool: Pool,
-    pub asset_a: AddressAndAmount,
-    pub asset_b: AddressAndAmount,
-    pub asset_lp_share: AddressAndAmount,
+    pub token_a: AddressAndAmount,
+    pub token_b: AddressAndAmount,
+    pub token_share: AddressAndAmount,
 }
 
 #[contracttype]
@@ -164,10 +163,12 @@ pub struct InitializeParams {
     pub admin: Address,
     pub privileged_addrs: PrivilegedAddresses,
     pub router: Address,
+    pub oracle_registry: Address,
     pub assets: (Symbol, Symbol),
+    pub synthetic_sac_address: Address,
+    // pub synthetic_token_info: TokenInitInfo,
     pub lp_token_info: TokenInitInfo,
-    // A vector of token addresses.
-    pub tokens: Vec<Address>,
+    pub token_b: Address,
     pub fee_fraction: u32,
     pub tier: PoolTier,
     pub quote_max_insurance: u128,
@@ -179,4 +180,12 @@ pub struct InitializeAllParams {
     pub base: InitializeParams,
     pub reward_config: RewardConfig,
     pub plane: Address,
+}
+
+#[contracttype]
+#[derive(Default, Clone, PartialEq, Eq, Debug)]
+pub enum SwapDirection {
+    #[default]
+    Buy,
+    Sell,
 }

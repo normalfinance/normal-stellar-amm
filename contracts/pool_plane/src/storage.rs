@@ -1,4 +1,4 @@
-use soroban_sdk::{ contracttype, Address, Env, Vec };
+use soroban_sdk::{contracttype, Address, Env, Vec};
 
 const DAY_IN_LEDGERS: u32 = 17280;
 pub const MONTH_IN_LEDGERS: u32 = DAY_IN_LEDGERS * 30;
@@ -21,7 +21,9 @@ pub struct PoolPlaneType {
 }
 
 fn bump_persistent(e: &Env, key: &DataKey) {
-    e.storage().persistent().extend_ttl(key, PERSISTENT_TTL_THRESHOLD, MAX_PERSISTENT_TTL);
+    e.storage()
+        .persistent()
+        .extend_ttl(key, PERSISTENT_TTL_THRESHOLD, MAX_PERSISTENT_TTL);
 }
 
 fn get_default_pool(e: &Env) -> PoolPlaneType {

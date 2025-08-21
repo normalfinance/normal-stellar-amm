@@ -1,8 +1,5 @@
 use soroban_fixed_point_math::FixedPoint;
-use soroban_sdk::{ panic_with_error, Env };
-use utils::{ constant::{ PERCENTAGE_PRECISION } };
-
-use crate::errors::InsuranceFundError;
+use utils::constant::{PERCENTAGE_PRECISION, PERCENTAGE_PRECISION_I64};
 
 // Calculates the utilization percentage of the insurance fund.
 //
@@ -13,7 +10,7 @@ use crate::errors::InsuranceFundError;
 //
 // # Returns
 //
-// * The utilization percentage as a fixed-point `u32` (e.g. 1_000_000 = 100%).
+// * The utilization percentage as a fixed-point `u32` (e.g. 10_000_000 = 100%).
 //   Returns 0 if either input is zero. The result is scaled by `PERCENTAGE_PRECISION`.
 pub fn calculate_utilization(insurance_vault_amount: u128, optimal_insurance: u128) -> u32 {
     if insurance_vault_amount == 0 || optimal_insurance == 0 {
@@ -42,19 +39,14 @@ pub fn calculate_utilization(insurance_vault_amount: u128, optimal_insurance: u1
 //
 // * The calculated interest rate in basis points as an `i32`.
 pub fn calculate_rate(
-    e: &Env,
     utilization: u32,
     optimal_utilization: u32,
     base_rate: i32,
     slope1: u32,
-    slope2: u32
+    slope2: u32,
 ) -> i32 {
     if utilization == 0 {
         return base_rate;
-    }
-
-    if optimal_utilization == 0 || optimal_utilization >= 10_000 {
-        panic_with_error!(e, InsuranceFundError::InvalidOptimalUtilization);
     }
 
     let utilization = utilization as i64;
@@ -65,12 +57,14 @@ pub fn calculate_rate(
 
     let rate = if utilization <= optimal_utilization {
         // rate = base + (utilization * slope1 / optimal_utilization)
-        let variable_rate = utilization.fixed_mul_floor(slope1, optimal_utilization).unwrap();
+        let variable_rate = utilization
+            .fixed_mul_floor(slope1, optimal_utilization)
+            .unwrap();
         base_rate + variable_rate
     } else {
-        // rate = base + slope1 + ((utilization - optimal_utilization) * slope2 / (10_000 - optimal_utilization))
+        // rate = base + slope1 + ((utilization - optimal_utilization) * slope2 / (10_000_000 - optimal_utilization))
         let excess_util = utilization - optimal_utilization;
-        let remaining = 10_000 - optimal_utilization;
+        let remaining = PERCENTAGE_PRECISION_I64 - optimal_utilization;
 
         let slope2_part = excess_util.fixed_mul_floor(slope2, remaining).unwrap();
 
@@ -82,7 +76,7 @@ pub fn calculate_rate(
 
 #[cfg(test)]
 mod tests {
-    use utils::constant::{ PERCENTAGE_PRECISION_U32, PRICE_PRECISION };
+    use utils::constant::{PERCENTAGE_PRECISION_U32, PRICE_PRECISION};
 
     use super::*;
 
@@ -90,28 +84,22 @@ mod tests {
 
     #[test]
     fn test_utilization_100_percent() {
-        let utilization = calculate_utilization(
-            1_000_000 * PRICE_PRECISION,
-            1_000_000 * PRICE_PRECISION
-        );
+        let utilization =
+            calculate_utilization(1_000_000 * PRICE_PRECISION, 1_000_000 * PRICE_PRECISION);
         assert_eq!(utilization, 1 * PERCENTAGE_PRECISION_U32);
     }
 
     #[test]
     fn test_utilization_50_percent() {
-        let utilization = calculate_utilization(
-            500_000 * PRICE_PRECISION,
-            1_000_000 * PRICE_PRECISION
-        );
+        let utilization =
+            calculate_utilization(500_000 * PRICE_PRECISION, 1_000_000 * PRICE_PRECISION);
         assert_eq!(utilization, 5_000_000); // 0.5%
     }
 
     #[test]
     fn test_utilization_above_100_percent() {
-        let utilization = calculate_utilization(
-            2_000_000 * PRICE_PRECISION,
-            1_000_000 * PRICE_PRECISION
-        );
+        let utilization =
+            calculate_utilization(2_000_000 * PRICE_PRECISION, 1_000_000 * PRICE_PRECISION);
         assert_eq!(utilization, 2 * PERCENTAGE_PRECISION_U32);
     }
 
@@ -137,15 +125,13 @@ mod tests {
     #[test]
     #[should_panic(expected = "Error(Contract, #21)")]
     fn test_zero_optimal_utilization() {
-        let e = Env::default();
         // optimal_utilization = 0 could panic on division unless handled
-        calculate_rate(&e, 5000, 0, 100, 400, 1500);
+        calculate_rate(5000, 0, 100, 400, 1500);
     }
 
     #[test]
     fn test_utilization_above_100_percent_in_rate() {
-        let e = Env::default();
-        let rate = calculate_rate(&e, 11_000, 8000, 100, 400, 1500);
+        let rate = calculate_rate(11_000, 8000, 100, 400, 1500);
         // excess = 3000, remaining = 2000
         // rate = 100 + 400 + (3000 / 2000) * 1500 = 100 + 400 + 2250 = 2750
         assert_eq!(rate, 2750);
@@ -155,55 +141,48 @@ mod tests {
 
     #[test]
     fn test_zero_utilization() {
-        let e = Env::default();
-        let rate = calculate_rate(&e, 0, 8000, 100, 400, 1500);
+        let rate = calculate_rate(0, 8000, 100, 400, 1500);
         assert_eq!(rate, 100); // Only base rate should apply
     }
 
     #[test]
     fn test_negative_base_rate() {
-        let e = Env::default();
-        let rate = calculate_rate(&e, 5000, 8000, -100, 400, 1500);
+        let rate = calculate_rate(5000, 8000, -100, 400, 1500);
         // -100 + (5000 / 8000 * 400) = -100 + 250 = 150
         assert_eq!(rate, 150);
     }
 
     #[test]
     fn test_negative_rate() {
-        let e = Env::default();
-        let rate = calculate_rate(&e, 11000, 8000, -1000, 200, 1000);
+        let rate = calculate_rate(11000, 8000, -1000, 200, 1000);
         // -100 + (5000 / 8000 * 400) = -100 + 250 = 150
         assert_eq!(rate, -975);
     }
 
     #[test]
     fn test_low_utilization_rate() {
-        let e = Env::default();
-        let rate = calculate_rate(&e, 5000, 8000, 100, 400, 1500);
+        let rate = calculate_rate(5000, 8000, 100, 400, 1500);
         // 100 + (5000 / 8000 * 400) = 100 + 250 = 350
         assert_eq!(rate, 350);
     }
 
     #[test]
     fn test_utilization_at_optimal() {
-        let e = Env::default();
-        let rate = calculate_rate(&e, 8000, 8000, 100, 400, 1500);
+        let rate = calculate_rate(8000, 8000, 100, 400, 1500);
         // base + slope_a = 100 + 400 = 500
         assert_eq!(rate, 500);
     }
 
     #[test]
     fn test_high_utilization_rate() {
-        let e = Env::default();
-        let rate = calculate_rate(&e, 9500, 8000, 100, 400, 1500);
+        let rate = calculate_rate(9500, 8000, 100, 400, 1500);
         // base + slope_a + ((1500 / 2000) * 1500) = 100 + 400 + 1125 = 1625
         assert_eq!(rate, 1625);
     }
 
     #[test]
     fn test_max_utilization() {
-        let e = Env::default();
-        let rate = calculate_rate(&e, 10_000, 8000, 100, 400, 1500);
+        let rate = calculate_rate(10_000, 8000, 100, 400, 1500);
         // base + slope_a + slope_b = 100 + 400 + 1500 = 2000
         assert_eq!(rate, 2000);
     }

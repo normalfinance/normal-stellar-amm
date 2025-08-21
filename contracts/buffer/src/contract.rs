@@ -26,7 +26,7 @@ use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::math::safe_math::SafeMath;
-use utils::token::{ transfer_token, validate_token_contract };
+use utils::token::{transfer_token, validate_token_contract};
 use utils::validation::ensure_non_zero_u128;
 
 contractmeta!(
@@ -100,6 +100,10 @@ impl BufferTrait for Buffer {
         sender.require_auth();
         
         ensure_non_zero_u128(&e, amount, BufferError::ZeroAmount);
+
+        enter(&e);
+
+        ensure_non_zero_u128(&e, amount);
 
         enter(&e);
 
@@ -316,7 +320,9 @@ impl AdminInterface for Buffer {
             ),
         );
 
-        Events::new(&e).resolve_liquidity_deficit(token, admin, amount);
+        Events::new(&e).resolve_liquidity_deficit(pool_address, token, admin, amount, paid);
+
+        exit(&e);
 
         exit(&e);
 
@@ -355,6 +361,10 @@ impl AdminInterface for Buffer {
         require_admin(&e, &admin);
         
         ensure_non_zero_u128(&e, amount, BufferError::ZeroAmount);
+
+        enter(&e);
+
+        ensure_non_zero_u128(&e, amount);
 
         enter(&e);
 

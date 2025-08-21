@@ -27,14 +27,14 @@ pub fn get_oracle_price(e: &Env, oracle: &Address, asset: &Address, now: u64) ->
     assert!(now > 0, "now timestamp must be positive");
     
     let oracle_client = PriceFeedClient::new(e, oracle);
-    let oracle_asset = Asset::Stellar(asset.clone());
+    let oracle_asset = Asset::Other(asset.clone());
 
     let oracle_price: u128;
     let published_ts: u64;
 
     let oracle_price_data = oracle_client.lastprice(&oracle_asset).unwrap();
 
-    oracle_price = oracle_price_data.price as u128;
+    oracle_price = (oracle_price_data.price as u128).saturating_div(PRICE_PRECISION);
     published_ts = oracle_price_data.timestamp;
 
     let oracle_delay = Delay::from_timestamp_diff_expect(
@@ -61,7 +61,6 @@ pub fn get_oracle_price(e: &Env, oracle: &Address, asset: &Address, now: u64) ->
 // * `oracle_price_data` - The newly observed price and timestamp.
 // * `sanitize_clamp_denominator` - Clamp denominator for price sanitization.
 // * `now` - Current timestamp.
-// * `registering` - If true, initializes TWAP to 0 instead of computing it.
 pub fn update_twap(
     e: &Env,
     asset: &Symbol,
@@ -69,13 +68,12 @@ pub fn update_twap(
     oracle_price_data: &OraclePriceData,
     sanitize_clamp_denominator: u64,
     now: u64,
-    registering: bool
 ) {
     let capped_oracle_update_price = sanitize_new_price(
         e,
         oracle_price_data.price,
         historical_oracle_data.last_oracle_price_twap,
-        sanitize_clamp_denominator
+        sanitize_clamp_denominator,
     );
 
     let oracle_price_twap = calculate_new_twap(
@@ -84,20 +82,18 @@ pub fn update_twap(
         now,
         historical_oracle_data.last_oracle_price_twap,
         historical_oracle_data.last_oracle_price_twap_ts,
-        FIVE_MINUTE as u64
+        FIVE_MINUTE as u64,
     );
 
-    let new_historical_oracle_data = HistoricalOracleData {
-        last_oracle_price_twap: if registering {
-            0
-        } else {
-            oracle_price_twap
-        },
-        last_oracle_price: oracle_price_data.price,
-        last_oracle_delay: oracle_price_data.delay.as_seconds(),
-        last_oracle_price_twap_ts: now,
-    };
-    put_historical_oracle_data(e, &asset, &new_historical_oracle_data);
+    put_historical_oracle_data(
+        e,
+        &asset,
+        &(HistoricalOracleData {
+            last_oracle_price_twap: oracle_price_twap,
+            last_oracle_price: oracle_price_data.price,
+            last_oracle_price_twap_ts: now,
+        }),
+    );
 }
 
 // Classifies the current oracle price data as valid, stale, or invalid.
@@ -117,9 +113,12 @@ pub fn update_twap(
 pub fn oracle_validity(
     e: &Env,
     last_oracle_twap: u128,
-    oracle_price_data: &OraclePriceData
+    oracle_price_data: &OraclePriceData,
 ) -> OracleValidity {
-    let OraclePriceData { price: oracle_price, delay: oracle_delay } = *oracle_price_data;
+    let OraclePriceData {
+        price: oracle_price,
+        delay: oracle_delay,
+    } = *oracle_price_data;
 
     let oracle_guard_rails = get_oracle_guard_rails(e);
 
@@ -128,22 +127,24 @@ pub fn oracle_validity(
 
     // Volatility
     // if Δprice <= 0.80 or 1.20 <= Δprice → too volatile
-    let lower_bound = PERCENTAGE_PRECISION_U64.safe_sub(
-        e,
-        oracle_guard_rails.validity.too_volatile_ratio
-    );
-    let upper_bound = oracle_guard_rails.validity.too_volatile_ratio.safe_add(
-        e,
-        PERCENTAGE_PRECISION_U64
-    );
+    let lower_bound =
+        PERCENTAGE_PRECISION_U64.safe_sub(e, oracle_guard_rails.validity.too_volatile_ratio);
 
-    let price_delta = oracle_price.safe_div(e, last_oracle_twap.max(1)) as u64;
+    let upper_bound = oracle_guard_rails
+        .validity
+        .too_volatile_ratio
+        .safe_add(e, PERCENTAGE_PRECISION_U64);
+
+    // let price_delta = oracle_price.safe_div(e, last_oracle_twap.max(1)) as u64;
+    let price_delta =
+        oracle_price.fixed_div_floor(e, &last_oracle_twap, &PERCENTAGE_PRECISION) as u64;
+
     let is_oracle_price_too_volatile = price_delta <= lower_bound || upper_bound <= price_delta;
 
     // StaleForPool
-    let is_stale_for_pool = oracle_delay.gt(
-        &oracle_guard_rails.validity.seconds_before_stale_for_pool
-    );
+    let is_stale_for_pool = oracle_delay
+        .as_seconds()
+        .gt(&oracle_guard_rails.validity.seconds_before_stale_for_pool);
 
     let oracle_validity = if is_oracle_price_nonpositive {
         OracleValidity::NonPositive

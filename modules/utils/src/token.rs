@@ -1,5 +1,5 @@
-use soroban_sdk::token::{ Client as SorobanTokenClient };
-use soroban_sdk::{ panic_with_error, Address, Env, Vec };
+use soroban_sdk::token::Client as SorobanTokenClient;
+use soroban_sdk::{panic_with_error, Address, Env, Vec};
 
 use crate::errors::validation_errors::ValidationError;
 
@@ -28,7 +28,7 @@ pub fn transfer_token_from(
     spender: &Address,
     from: &Address,
     to: &Address,
-    amount: &i128
+    amount: &i128,
 ) {
     SorobanTokenClient::new(e, token).transfer_from(spender, from, to, amount);
 }

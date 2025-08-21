@@ -1,22 +1,26 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::testutils::{create_dummy_pool, create_token, Setup};
 use crate::{contract::Token, TokenClient};
-use access_control::constants::ADMIN_ACTIONS_DELAY;
-use soroban_sdk::testutils::{
-    Address as _, AuthorizedFunction, AuthorizedInvocation, Events, MockAuth, MockAuthInvoke,
+use soroban_sdk::{
+    symbol_short,
+    testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation},
+    Address, Env, IntoVal, Symbol,
 };
-use soroban_sdk::{symbol_short, vec, Address, Env, IntoVal, Symbol, Vec};
-use utils::test_utils::jump;
+
+fn create_token<'a>(e: &Env, admin: &Address) -> TokenClient<'a> {
+    let token = TokenClient::new(e, &e.register_contract(None, Token {}));
+    token.initialize(admin, &7, &"name".into_val(e), &"symbol".into_val(e));
+    token
+}
 
 #[test]
 fn test() {
     let e = Env::default();
     e.mock_all_auths();
 
-    let admin1 = create_dummy_pool(&e).address;
-    let admin2 = create_dummy_pool(&e).address;
+    let admin1 = Address::generate(&e);
+    let admin2 = Address::generate(&e);
     let user1 = Address::generate(&e);
     let user2 = Address::generate(&e);
     let user3 = Address::generate(&e);
@@ -96,7 +100,7 @@ fn test() {
     assert_eq!(token.balance(&user1), 500);
     assert_eq!(token.balance(&user3), 300);
 
-    token.commit_transfer_ownership(&admin1, &symbol_short!("Admin"), &admin2);
+    token.set_admin(&admin2);
     assert_eq!(
         e.auths(),
         std::vec![(
@@ -104,41 +108,13 @@ fn test() {
             AuthorizedInvocation {
                 function: AuthorizedFunction::Contract((
                     token.address.clone(),
-                    Symbol::new(&e, "commit_transfer_ownership"),
-                    (&admin1, &symbol_short!("Admin"), &admin2,).into_val(&e),
+                    symbol_short!("set_admin"),
+                    (&admin2,).into_val(&e),
                 )),
                 sub_invocations: std::vec![]
             }
         )]
     );
-    jump(&e, ADMIN_ACTIONS_DELAY + 1);
-    token.apply_transfer_ownership(&admin1, &symbol_short!("Admin"));
-    assert_eq!(
-        e.auths(),
-        std::vec![(
-            admin1.clone(),
-            AuthorizedInvocation {
-                function: AuthorizedFunction::Contract((
-                    token.address.clone(),
-                    Symbol::new(&e, "apply_transfer_ownership"),
-                    (&admin1, &symbol_short!("Admin")).into_val(&e),
-                )),
-                sub_invocations: std::vec![]
-            }
-        )]
-    );
-    // check new admin by calling protected method with manual auth
-    token
-        .mock_auths(&[MockAuth {
-            address: &admin2,
-            invoke: &MockAuthInvoke {
-                contract: &token.address,
-                fn_name: "mint",
-                args: Vec::from_array(&e, [user1.into_val(&e), 1000_i128.into_val(&e)]),
-                sub_invokes: &[],
-            },
-        }])
-        .mint(&user1, &1000);
 
     // Increase to 500
     token.approve(&user2, &user3, &500, &200);
@@ -166,7 +142,7 @@ fn test_burn() {
     let e = Env::default();
     e.mock_all_auths();
 
-    let admin = create_dummy_pool(&e).address;
+    let admin = Address::generate(&e);
     let user1 = Address::generate(&e);
     let user2 = Address::generate(&e);
     let token = create_token(&e, &admin);
@@ -218,12 +194,12 @@ fn test_burn() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #602)")]
+#[should_panic(expected = "insufficient balance")]
 fn transfer_insufficient_balance() {
     let e = Env::default();
     e.mock_all_auths();
 
-    let admin = create_dummy_pool(&e).address;
+    let admin = Address::generate(&e);
     let user1 = Address::generate(&e);
     let user2 = Address::generate(&e);
     let token = create_token(&e, &admin);
@@ -235,12 +211,12 @@ fn transfer_insufficient_balance() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #603)")]
+#[should_panic(expected = "insufficient allowance")]
 fn transfer_from_insufficient_allowance() {
     let e = Env::default();
     e.mock_all_auths();
 
-    let admin = create_dummy_pool(&e).address;
+    let admin = Address::generate(&e);
     let user1 = Address::generate(&e);
     let user2 = Address::generate(&e);
     let user3 = Address::generate(&e);
@@ -256,21 +232,21 @@ fn transfer_from_insufficient_allowance() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #601)")]
+#[should_panic(expected = "already initialized")]
 fn initialize_already_initialized() {
     let e = Env::default();
-    let admin = create_dummy_pool(&e).address;
+    let admin = Address::generate(&e);
     let token = create_token(&e, &admin);
 
     token.initialize(&admin, &10, &"name".into_val(&e), &"symbol".into_val(&e));
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #605)")]
+#[should_panic(expected = "Decimal must fit in a u8")]
 fn decimal_is_over_max() {
     let e = Env::default();
-    let admin = create_dummy_pool(&e).address;
-    let token = TokenClient::new(&e, &e.register(Token {}, ()));
+    let admin = Address::generate(&e);
+    let token = TokenClient::new(&e, &e.register_contract(None, Token {}));
     token.initialize(
         &admin,
         &(u32::from(u8::MAX) + 1),
@@ -280,61 +256,16 @@ fn decimal_is_over_max() {
 }
 
 #[test]
-fn test_transfer_ownership_events() {
-    let setup = Setup::default();
-    let token = setup.token;
-    let new_admin = Address::generate(&setup.env);
+fn test_zero_allowance() {
+    // Here we test that transfer_from with a 0 amount does not create an empty allowance
+    let e = Env::default();
+    e.mock_all_auths();
 
-    token.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &new_admin);
-    assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![
-            &setup.env,
-            (
-                token.address.clone(),
-                (
-                    Symbol::new(&setup.env, "commit_transfer_ownership"),
-                    symbol_short!("Admin")
-                )
-                    .into_val(&setup.env),
-                (new_admin.clone(),).into_val(&setup.env),
-            ),
-        ]
-    );
+    let admin = Address::generate(&e);
+    let spender = Address::generate(&e);
+    let from = Address::generate(&e);
+    let token = create_token(&e, &admin);
 
-    token.revert_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
-    assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![
-            &setup.env,
-            (
-                token.address.clone(),
-                (
-                    Symbol::new(&setup.env, "revert_transfer_ownership"),
-                    symbol_short!("Admin")
-                )
-                    .into_val(&setup.env),
-                ().into_val(&setup.env),
-            ),
-        ]
-    );
-
-    token.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &new_admin);
-    jump(&setup.env, ADMIN_ACTIONS_DELAY + 1);
-    token.apply_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
-    assert_eq!(
-        vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![
-            &setup.env,
-            (
-                token.address.clone(),
-                (
-                    Symbol::new(&setup.env, "apply_transfer_ownership"),
-                    symbol_short!("Admin")
-                )
-                    .into_val(&setup.env),
-                (new_admin.clone(),).into_val(&setup.env),
-            ),
-        ]
-    );
+    token.transfer_from(&spender, &from, &spender, &0);
+    // assert!(token.get_allowance(&from, &spender).is_none());
 }

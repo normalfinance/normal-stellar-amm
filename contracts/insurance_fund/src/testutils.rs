@@ -3,13 +3,26 @@ extern crate std;
 use crate::InsuranceFundClient;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::{
-    StellarAssetClient as SorobanTokenAdminClient,
-    TokenClient as SorobanTokenClient,
+    StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
-use soroban_sdk::{ Address, Env };
-use utils::constant::{ PRICE_PRECISION, PRICE_PRECISION_I128, THIRTEEN_DAY };
-use utils::test_utils::{ create_token_contract, get_token_admin_client };
+use soroban_sdk::{Address, Env};
 use std::vec;
+use utils::constant::{PRICE_PRECISION, PRICE_PRECISION_I128, THIRTEEN_DAY};
+
+pub(crate) fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanTokenClient<'a> {
+    SorobanTokenClient::new(
+        e,
+        &e.register_stellar_asset_contract_v2(admin.clone())
+            .address(),
+    )
+}
+
+pub(crate) fn get_token_admin_client<'a>(
+    e: &Env,
+    address: &Address,
+) -> SorobanTokenAdminClient<'a> {
+    SorobanTokenAdminClient::new(e, address)
+}
 
 pub(crate) struct TestConfig {
     pub(crate) users_count: u32,
@@ -26,8 +39,8 @@ impl Default for TestConfig {
             users_count: 3,
             mint_to_user: 1_000 * PRICE_PRECISION_I128,
             unstaking_period: THIRTEEN_DAY,
-            optimal_utilization: 80_00000_u32, // 80%
-            base_rate: 2_00000_i32, // 2%
+            optimal_utilization: 80_00000_u32,         // 80%
+            base_rate: 2_00000_i32,                    // 2%
             rate_slopes: (10_00000_u32, 60_00000_u32), // 10% and 60%
         }
     }
@@ -84,7 +97,7 @@ impl Setup<'_> {
             &config.unstaking_period,
             &config.optimal_utilization,
             &config.base_rate,
-            &config.rate_slopes
+            &config.rate_slopes,
         );
         insurance_fund.set_optimal_insurance(&admin, &(1_000_000 * PRICE_PRECISION));
 

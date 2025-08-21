@@ -64,6 +64,15 @@ Normal is a synthetic asset protocol enabling investors to trade any crypto asse
 - [Soroban](https://soroban.stellar.org/)
 - [Rust Soroban SDK](https://github.com/stellar/rs-soroban-sdk)
 
+## Deployment
+
+- Register a XLM oracle: `yarn oracle:register testnet <oracle_registry_address> XLM 14 0`
+- Register a BTC oracle: `yarn oracle:register testnet <oracle_registry_address> BTC 14 0`
+- Deploy a nBTC/XLM pool: `yarn pool:deploy testnet <pool_router_address> BTC nBTC 30 A 1_000_000_0000000 <sac_address>`
+- Deposit liquidity to the pool: `yarn pool:deposit testnet <pool_router_address> BTC 10_0000000`
+- Withdraw liquidity to the pool: `yarn pool:withdraw testnet <pool_router_address> BTC 5_0000000`
+- Swap: `yarn pool:swap testnet <pool_router_address> BTC Buy 1_0000000 <out_min>`
+
 ## Getting Started
 
 ### Prerequisites

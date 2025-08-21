@@ -1,6 +1,6 @@
 use core::cmp::max;
 
-use crate::errors::Error;
+use crate::errors::PoolSwapFeeError;
 use crate::events::{Events, ProviderFeeEvents};
 use crate::incentives::get_incentives_manager;
 use crate::interface::{AdminInterface, PoolSwapFeeInterface};
@@ -19,7 +19,6 @@ use access_control::role::Role;
 use access_control::role::SymbolRepresentation;
 use access_control::transfer::TransferOwnershipTrait;
 use access_control::utils::require_admin;
-use pool_tokens::{get_total_lp_tokens, get_user_balance_lp};
 use reentrancy_guard::{enter, exit};
 use soroban_fixed_point_math::FixedPoint;
 use soroban_sdk::auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation};
@@ -27,13 +26,16 @@ use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
     contract, contractimpl, panic_with_error, vec, Address, BytesN, Env, IntoVal, Symbol, Vec,
 };
+use token_lp::{get_total_lp_tokens, get_user_balance_lp};
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::constant::{FEE_DENOMINATOR, PRICE_PRECISION, THIRTY_DAY};
 use utils::math::safe_math::SafeMath;
 use utils::math::stats::calculate_rolling_sum;
+use utils::state::pool::{PoolInfo, SwapDirection};
 use utils::token::transfer_token;
+use utils::validate;
 
 #[contract]
 pub struct PoolSwapFeeCollector;
@@ -83,10 +85,8 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
     fn swap(
         e: Env,
         user: Address,
-        tokens: Vec<Address>,
-        token_in: Address,
-        token_out: Address,
         asset: Symbol,
+        direction: SwapDirection,
         in_amount: u128,
         out_min: u128,
     ) -> u128 {
@@ -96,19 +96,11 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
 
         let now = e.ledger().timestamp();
 
-        transfer_token(
-            &e,
-            &token_in,
-            &user,
-            &e.current_contract_address(),
-            &(in_amount as i128),
-        );
-
-        // Fetch the pool's fee fraction
+        // Fetch the pool
         let router = get_router(&e);
-        let pool_fee_fraction: u32 = e.invoke_contract(
+        let pool_info: PoolInfo = e.invoke_contract(
             &router,
-            &Symbol::new(&e, "get_fee_fraction"),
+            &Symbol::new(&e, "query_pool_details"),
             Vec::from_array(
                 &e,
                 [
@@ -118,6 +110,26 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
             ),
         );
 
+        let (token_in, token_out) = if direction == SwapDirection::Buy {
+            (
+                pool_info.pool_response.token_b.address,
+                pool_info.pool_response.token_a.address,
+            )
+        } else {
+            (
+                pool_info.pool_response.token_a.address,
+                pool_info.pool_response.token_b.address,
+            )
+        };
+
+        transfer_token(
+            &e,
+            &token_in,
+            &user,
+            &e.current_contract_address(),
+            &(in_amount as i128),
+        );
+
         // Always collect the fee in token_b
         let mut fee_amount = 0;
         let mut quote_asset_amount = 0;
@@ -125,10 +137,10 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         let mut amount_out_w_fee = 0;
 
         // Update fee if on token_in
-        let quote_token_in = token_in == tokens.get(1).unwrap();
-        if quote_token_in {
+        if direction == SwapDirection::Buy {
             quote_asset_amount = in_amount;
-            fee_amount = (in_amount * (pool_fee_fraction as u128)) / (FEE_DENOMINATOR as u128);
+            fee_amount = (in_amount * (pool_info.pool_response.pool.fee_fraction as u128))
+                / (FEE_DENOMINATOR as u128);
             in_amount_mut = in_amount - fee_amount;
         }
 
@@ -154,12 +166,9 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
             Vec::from_array(
                 &e,
                 [
-                    e.current_contract_address().to_val(),
                     user.clone().to_val(),
-                    tokens.clone().to_val(),
-                    token_in.clone().to_val(),
-                    token_out.clone().to_val(),
                     asset.clone().to_val(),
+                    direction.clone().into_val(&e),
                     in_amount_mut.into_val(&e),
                     out_min.into_val(&e),
                 ],
@@ -167,14 +176,15 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         );
 
         // Update fee if on token_out
-        if !quote_token_in {
+        if direction == SwapDirection::Sell {
             quote_asset_amount = amount_out;
-            fee_amount = (amount_out * (pool_fee_fraction as u128)) / (FEE_DENOMINATOR as u128);
+            fee_amount = (amount_out * (pool_info.pool_response.pool.fee_fraction as u128))
+                / (FEE_DENOMINATOR as u128);
         }
 
         amount_out_w_fee = amount_out - fee_amount;
         if amount_out_w_fee < out_min {
-            panic_with_error!(&e, Error::OutMinNotSatisfied);
+            panic_with_error!(&e, PoolSwapFeeError::OutMinNotSatisfied);
         }
 
         // Send token_out to the user
@@ -189,13 +199,8 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         // UPDATE METRICS
         let volume_30d = get_volume_30d(&e);
         let since_last = max(1_u64, now.saturating_sub(get_last_trade_ts(&e)));
-        let updated_volume_30d = calculate_rolling_sum(
-            &e,
-            volume_30d,
-            quote_asset_amount,
-            since_last,
-            THIRTY_DAY
-        );
+        let updated_volume_30d =
+            calculate_rolling_sum(&e, volume_30d, quote_asset_amount, since_last, THIRTY_DAY);
         set_volume_30d(&e, &updated_volume_30d);
 
         // LP FEES
@@ -204,7 +209,11 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
             (fee_amount * (lp_revenue_fraction as u128)) / (FEE_DENOMINATOR as u128);
 
         // Add bounds checking to prevent fee calculation underflow when LP fees exceed total fees
-        validate!(&e, fee_amount >= lp_fee_amount, PoolSwapFeeError::InvalidFeeCalculation);
+        validate!(
+            &e,
+            fee_amount >= lp_fee_amount,
+            PoolSwapFeeError::InvalidFeeCalculation
+        );
         let mut protocol_fee_amount = fee_amount - lp_fee_amount;
 
         // BUFFER
@@ -242,7 +251,6 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         );
 
         protocol_fee_amount = protocol_fee_amount - fee_amount_for_buffer;
-        Events::new(&e).buffer_deposit(token_out.clone(), fee_amount_for_buffer as u128);
 
         // INSURANCE FUND
         let insurance_fund = get_insurance_fund(&e);
@@ -263,6 +271,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
             ),
         );
 
+        let mut if_premium_paid: u128 = 0;
         if insurance_premium_rate > 0 {
             let estimated_annual_volume = updated_volume_30d.fixed_mul_floor(365, 30).unwrap();
 
@@ -279,7 +288,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
             if insurance_premium_to_pay > 0 {
                 // TODO: must we also call the Pool to update last_revenue_withdraw_ts and rev_withdraw_since_last_settle?
 
-                let _premium_paid: u128 = e.invoke_contract(
+                if_premium_paid = e.invoke_contract(
                     &insurance_fund,
                     &Symbol::new(&e, "pay_premium"),
                     Vec::from_array(
@@ -292,13 +301,22 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
                 );
 
                 protocol_fee_amount = protocol_fee_amount - insurance_premium_to_pay;
-                Events::new(&e).insurance_premium(token_out.clone(), insurance_premium_to_pay);
             }
         }
 
-        Events::new(&e).charge_provider_fee(token_out, protocol_fee_amount);
-
-        // INCENTIVES
+        Events::new(&e).swap(
+            asset,
+            pool_info.pool_address,
+            user.clone(),
+            direction,
+            in_amount,
+            amount_out,
+            fee_amount,
+            lp_fee_amount,
+            fee_amount_for_buffer,
+            if_premium_paid,
+            protocol_fee_amount,
+        );
 
         // Update total incentives data and refresh/initialize user incentive
         let out_idx = 0;
@@ -406,7 +424,7 @@ impl AdminInterface for PoolSwapFeeCollector {
             &get_fee_destination(&e),
             &amount,
         );
-        Events::new(&e).claim_fee(token, amount as u128);
+        Events::new(&e).claim_fees(token, admin, amount as u128);
 
         exit(&e);
 

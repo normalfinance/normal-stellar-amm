@@ -3,7 +3,7 @@ resolver = "2"
 members = ["contracts/*", "modules/*"]
 
 [workspace.package]
-version = "0.1.0"
+version = "1.0.0"
 rust-version = "1.84"
 
 [workspace.dependencies]
@@ -13,7 +13,8 @@ soroban-fixed-point-math = { version = "1.3.0" }
 paste = { version = "1.0.15" }
 utils = { path = "modules/utils" }
 access_control = { path = "modules/access_control" }
-pool_tokens = { path = "modules/pool_tokens" }
+token_lp = { path = "modules/token_lp" }
+token_synthetic = { path = "modules/token_synthetic" }
 incentives = { path = "modules/incentives" }
 reentrancy_guard = { path = "modules/reentrancy_guard" }
 upgrade = { path = "modules/upgrade" }

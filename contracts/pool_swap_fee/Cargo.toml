@@ -14,7 +14,7 @@ paste = { workspace = true }
 utils = { workspace = true }
 access_control = { workspace = true }
 incentives = { workspace = true }
-pool_tokens = { workspace = true }
+token_lp = { workspace = true }
 reentrancy_guard = { workspace = true }
 upgrade = { workspace = true }
 soroban-fixed-point-math = { workspace = true }

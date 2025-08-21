@@ -17,16 +17,20 @@ impl Events {
     }
 }
 
-// This trait is used to emit events related to liquidity pool operations.
-// It provides methods for emitting events when liquidity is deposited into the pool,
-//  when liquidity is withdrawn from the pool, and when a trade occurs in the pool.
-// Events structured to ease integration with third party tools.
 pub trait PoolEvents {
-    fn deposit_liquidity(&self, token: Address, amount: u128, share_amount: u128);
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
-    fn withdraw_liquidity(&self, token: Address, amount: u128, share_amount: u128);
+    fn deposit_liquidity(&self, token: Address, user: Address, amount: u128, share_amount: u128);
 
-    fn trade(
+    fn withdraw_liquidity(&self, token: Address, user: Address, share_amount: u128, amount: u128);
+
+    fn swap(
         &self,
         user: Address,
         token_in: Address,
@@ -36,7 +40,24 @@ pub trait PoolEvents {
         fee_amount: u128,
     );
 
-    fn rebalance(&self, delta_a: i128, ts: u64);
+    fn rebalance(
+        &self,
+        reserve_a: u128,
+        reserve_b: u128,
+        new_reserve_a: u128,
+        new_reserve_b: u128,
+        delta_a: i128,
+    );
+
+    fn capped_mint(&self, base_oracle_price: u128, quote_oracle_price: u128, delta_a: i128);
+
+    //    _______     __       ____  ____   ________  _______  ________
+    //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\
+    //   (. |__) :) /    \    |   (  ) : |(:   \___/(: ______)(.  ___  :)
+    //   |:  ____/ /' /\  \   (:  |  | . ) \___  \   \/    |  |: \   ) ||
+    //   (|  /    //  __'  \   \\ \__/ //   __/  \\  // ___)_ (| (___\ ||
+    //  /|__/ \  /   /  \\  \  /\\ __ //\  /" \   :)(:      "||:       :)
+    // (_______)(___/    \___)(__________)(_______/  \_______)(________/
 
     fn capped_mint(&self,  base_oracle_price: u128, quote_oracle_price: u128, delta_a: i128);
 
@@ -59,49 +80,32 @@ pub trait PoolEvents {
     fn permanently_locked_liquidity(&self, amount: u128);
 }
 
-// This trait is used to emit events related to liquidity pool operations.
-// It provides methods for emitting events when liquidity is deposited into the pool,
-//  when liquidity is withdrawn from the pool, and when a trade occurs in the pool.
 impl PoolEvents for Events {
-    fn deposit_liquidity(&self, token: Address, amount: u128, share_amount: u128) {
-        // topics
-        // [
-        //   "deposit_liquidity": Symbol, // event identifier
-        //   token: Address,   // contract addresses identifying asset deposited to the pool
-        // ]
-        //
-        // body
-        // [
-        //   share_amount: i128, // amount of pool tokens received from the pool
-        //   amount: i128,      // amount of tokens deposited to the pool for assetA
-        // ]
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
+
+    fn deposit_liquidity(&self, token: Address, user: Address, amount: u128, share_amount: u128) {
         let e = self.env();
         e.events().publish(
-            (Symbol::new(e, "deposit_liquidity"), token),
-            (share_amount as i128, amount as i128),
+            (Symbol::new(e, "deposit_liquidity"), token, user),
+            (amount, share_amount),
         );
     }
 
-    fn withdraw_liquidity(&self, token: Address, amount: u128, share_amount: u128) {
-        // topics
-        // [
-        //   "withdraw_liquidity": Symbol, // event identifier
-        //   asset: Address,   // contract addresses identifying asset withdrawn from the pool
-        // ]
-        //
-        // body
-        // [
-        //   share_amount: i128, // amount of pool tokens sent to the pool
-        //   amount: i128,      // amount of tokens withdrawn from the pool for assetA
-        // ]
+    fn withdraw_liquidity(&self, token: Address, user: Address, share_amount: u128, amount: u128) {
         let e = self.env();
         e.events().publish(
-            (Symbol::new(e, "withdraw_liquidity"), token),
-            (share_amount as i128, amount as i128),
+            (Symbol::new(e, "withdraw_liquidity"), token, user),
+            (share_amount, amount),
         );
     }
 
-    fn trade(
+    fn swap(
         &self,
         user: Address,
         token_in: Address,
@@ -110,49 +114,43 @@ impl PoolEvents for Events {
         out_amount: u128,
         fee_amount: u128,
     ) {
-        // topics
-        // [
-        //   "trade": Symbol,       // event identifier
-        //   sold_asset: Address,   // asset sent to the pool
-        //   bought_asset: Address, // asset received from the pool
-        //   trader: Address        // address of account/contract that initiated the trade
-        // ]
-        // body
-        // [
-        //   sold_amount: i128,   // amount of tokens sent to the pool
-        //   bought_amount: i128, // amount of tokens received from the pool
-        //   fee: i128            // fee charged by the protocol (asset sent to the pool) - optional
-        // ]
-
         let e = self.env();
         e.events().publish(
-            (Symbol::new(e, "trade"), token_in, token_out, user),
+            (Symbol::new(e, "swap"), token_in, token_out, user),
             (in_amount as i128, out_amount as i128, fee_amount as i128),
         );
     }
 
-    fn rebalance(&self, delta_a: i128, ts: u64) {
-        // topics
-        // [
-        //   "rebalance": Symbol, // event identifier
-        // ]
-        //
-        // body
-        // [
-        //   oracle_price: i128, // amount of pool tokens sent to the pool
-        //   pool_price: i128,      // amount of tokens withdrawn from the pool for assetA
-        // ]
+    fn rebalance(
+        &self,
+        reserve_a: u128,
+        reserve_b: u128,
+        new_reserve_a: u128,
+        new_reserve_b: u128,
+        delta_a: i128,
+    ) {
         let e = self.env();
-        e.events()
-            .publish((Symbol::new(e, "rebalance"),), (delta_a, ts));
+        e.events().publish(
+            (Symbol::new(e, "rebalance"),),
+            (reserve_a, reserve_b, new_reserve_a, new_reserve_b, delta_a),
+        );
     }
-
 
     fn capped_mint(&self, base_oracle_price: u128, quote_oracle_price: u128, delta_a: i128) {
         let e = self.env();
-        e.events()
-            .publish((Symbol::new(e, "capped_mint"),), (base_oracle_price, quote_oracle_price, delta_a));
+        e.events().publish(
+            (Symbol::new(e, "capped_mint"),),
+            (base_oracle_price, quote_oracle_price, delta_a),
+        );
     }
+
+    //    _______     __       ____  ____   ________  _______  ________
+    //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\
+    //   (. |__) :) /    \    |   (  ) : |(:   \___/(: ______)(.  ___  :)
+    //   |:  ____/ /' /\  \   (:  |  | . ) \___  \   \/    |  |: \   ) ||
+    //   (|  /    //  __'  \   \\ \__/ //   __/  \\  // ___)_ (| (___\ ||
+    //  /|__/ \  /   /  \\  \  /\\ __ //\  /" \   :)(:      "||:       :)
+    // (_______)(___/    \___)(__________)(_______/  \_______)(________/
 
     fn kill_deposit(&self) {
         self.env()
@@ -204,9 +202,7 @@ impl PoolEvents for Events {
 
     fn permanently_locked_liquidity(&self, amount: u128) {
         let e = self.env();
-        e.events().publish(
-            (Symbol::new(e, "permanently_locked_liquidity"),),
-            amount
-        );
+        e.events()
+            .publish((Symbol::new(e, "permanently_locked_liquidity"),), amount);
     }
 }

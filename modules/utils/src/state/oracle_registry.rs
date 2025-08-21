@@ -1,8 +1,8 @@
-use soroban_sdk::{ contracttype, Address };
 use crate::temporal::Delay;
+use soroban_sdk::{contracttype, Address};
 
 use crate::{
-    constant::{ FIVE_MINUTE, PERCENTAGE_PRECISION_U64, PRICE_PRECISION },
+    constant::{FIVE_MINUTE, PERCENTAGE_PRECISION_U64, PRICE_PRECISION},
     errors::oracle_error::OracleError,
 };
 
@@ -25,7 +25,6 @@ pub enum OracleSource {
 pub struct OracleInfo {
     pub address: Address,
     // pub source: OracleSource, // coming soon
-    pub asset_addr: Address,
     pub decimals: u32,
     pub frozen: bool,
     pub sanitize_clamp_denominator: u64, // zero if not set
@@ -56,10 +55,11 @@ impl MutableOracleInfo {
 #[derive(Clone, Copy, PartialEq, Debug, Eq)]
 #[contracttype]
 pub enum NormalAction {
+    PoolInit,
     AddLiquidity,
     RemoveLiquidity,
     Swap,
-    UpdateTwap, // Save time-weighted average price to historical oracle data
+    UpdateTwap,     // Save time-weighted average price to historical oracle data
     Rebalance, // Mint or burn synthetic tokens (token_a) in a Pool to peg its price to an oracle
     ClaimInsurance, // Cover a pool liquidity deficit with a Buffer reserve and/or Insurance Fund stakes
 }
@@ -100,7 +100,9 @@ impl Default for OracleGuardRails {
 
 impl OracleGuardRails {
     pub fn max_oracle_twap_percent_divergence(&self) -> u64 {
-        self.price_divergence.oracle_twap_percent_divergence.max(PERCENTAGE_PRECISION_U64 / 2)
+        self.price_divergence
+            .oracle_twap_percent_divergence
+            .max(PERCENTAGE_PRECISION_U64 / 2)
     }
 }
 
@@ -132,7 +134,6 @@ impl OracleValidity {
 #[derive(Default, Clone, Copy, Eq, PartialEq, Debug)]
 pub struct HistoricalOracleData {
     pub last_oracle_price: u128,
-    pub last_oracle_delay: u64, // amount of time since last update.
     pub last_oracle_price_twap: u128,
     pub last_oracle_price_twap_ts: u64, // unix_timestamp of last snapshot.
 }
@@ -141,7 +142,6 @@ impl HistoricalOracleData {
     pub fn default_quote_oracle() -> Self {
         HistoricalOracleData {
             last_oracle_price: PRICE_PRECISION,
-            last_oracle_delay: 0,
             last_oracle_price_twap: PRICE_PRECISION,
             ..HistoricalOracleData::default()
         }
@@ -150,7 +150,6 @@ impl HistoricalOracleData {
     pub fn default_price(price: u128) -> Self {
         HistoricalOracleData {
             last_oracle_price: price,
-            last_oracle_delay: 10,
             last_oracle_price_twap: price,
             ..HistoricalOracleData::default()
         }
@@ -159,7 +158,6 @@ impl HistoricalOracleData {
     pub fn default_with_current_oracle(oracle_price_data: OraclePriceData) -> Self {
         HistoricalOracleData {
             last_oracle_price: oracle_price_data.price,
-            last_oracle_delay: oracle_price_data.delay,
             last_oracle_price_twap: oracle_price_data.price,
             ..HistoricalOracleData::default()
         }

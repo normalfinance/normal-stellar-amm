@@ -1,4 +1,4 @@
-use soroban_sdk::{ Address, Env };
+use soroban_sdk::{Address, Env};
 
 use crate::reserve::Reserve;
 
@@ -8,7 +8,7 @@ pub trait BufferTrait {
         admin: Address,
         emergency_admin: Address,
         time_bt_payouts: u64,
-        min_reserve_ratio: u32
+        min_reserve_ratio: u32,
     );
 
     //  ___      ___       __        __    _____  ___
@@ -74,7 +74,7 @@ pub trait AdminInterface {
         admin: Address,
         token: Address,
         amount: u128,
-        pool_address: Address
+        pool_address: Address,
     ) -> u128;
 
     // Withdraw surplus reserves

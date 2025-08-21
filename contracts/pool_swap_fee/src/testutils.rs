@@ -3,12 +3,25 @@ extern crate std;
 use crate::PoolSwapFeeCollectorClient;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::{
-    StellarAssetClient as SorobanTokenAdminClient,
-    TokenClient as SorobanTokenClient,
+    StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
-use soroban_sdk::{ Address, Env };
-use utils::test_utils::{ create_token_contract, get_token_admin_client };
+use soroban_sdk::{Address, Env};
 use std::vec;
+
+pub(crate) fn create_token_contract<'a>(e: &Env, admin: &Address) -> SorobanTokenClient<'a> {
+    SorobanTokenClient::new(
+        e,
+        &e.register_stellar_asset_contract_v2(admin.clone())
+            .address(),
+    )
+}
+
+pub(crate) fn get_token_admin_client<'a>(
+    e: &Env,
+    address: &Address,
+) -> SorobanTokenAdminClient<'a> {
+    SorobanTokenAdminClient::new(e, address)
+}
 
 pub(crate) struct TestConfig {
     pub(crate) users_count: u32,
@@ -16,9 +29,7 @@ pub(crate) struct TestConfig {
 
 impl Default for TestConfig {
     fn default() -> Self {
-        TestConfig {
-            users_count: 3,
-        }
+        TestConfig { users_count: 3 }
     }
 }
 

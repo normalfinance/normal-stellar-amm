@@ -1,9 +1,9 @@
 use crate::storage::get_pool;
-use pool_tokens::get_token_synthetic;
 use soroban_sdk::{xdr::ToXdr, Address, Bytes, BytesN, Env};
+use token_synthetic::get_sac_address;
 use utils::token::transfer_token;
 
-pub fn create_contract(
+pub fn create_lp_token_contract(
     e: &Env,
     token_wasm_hash: BytesN<32>,
     token_a: &Address,
@@ -21,7 +21,7 @@ pub fn create_contract(
 pub fn transfer_a(e: &Env, to: &Address, amount: u128) {
     transfer_token(
         e,
-        &get_token_synthetic(e),
+        &get_sac_address(e),
         &e.current_contract_address(),
         &to,
         &(amount as i128),

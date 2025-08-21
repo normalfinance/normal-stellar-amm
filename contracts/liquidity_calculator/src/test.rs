@@ -1,12 +1,12 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::testutils::{ Setup };
-use crate::{ contract::LiquidityCalculator, LiquidityCalculatorClient };
+use crate::testutils::Setup;
+use crate::{contract::LiquidityCalculator, LiquidityCalculatorClient};
 use access_control::constants::ADMIN_ACTIONS_DELAY;
-use soroban_sdk::testutils::{ Address as _, Events };
-use soroban_sdk::{ symbol_short, vec, Address, Env, IntoVal, Symbol, Vec, U256 };
-use utils::test_utils::{ install_dummy_wasm, jump };
+use soroban_sdk::testutils::{Address as _, Events};
+use soroban_sdk::{symbol_short, vec, Address, Env, IntoVal, Symbol, Vec, U256};
+use utils::test_utils::{install_dummy_wasm, jump};
 
 fn create_contract<'a>(e: &Env) -> LiquidityCalculatorClient<'a> {
     let client = LiquidityCalculatorClient::new(e, &e.register(LiquidityCalculator {}, ()));
@@ -37,17 +37,17 @@ fn test() {
     plane.update(
         &address1,
         &Vec::from_array(&e, [30_u128]),
-        &Vec::from_array(&e, [1000_0000000_u128, 1000_0000000_u128])
+        &Vec::from_array(&e, [1000_0000000_u128, 1000_0000000_u128]),
     );
     plane.update(
         &address2,
         &Vec::from_array(&e, [10_u128]),
-        &Vec::from_array(&e, [1500_0000000_u128, 1500_0000000_u128])
+        &Vec::from_array(&e, [1500_0000000_u128, 1500_0000000_u128]),
     );
     plane.update(
         &address3,
         &Vec::from_array(&e, [100_u128]),
-        &Vec::from_array(&e, [150_0000000_u128, 150_0000000_u128])
+        &Vec::from_array(&e, [150_0000000_u128, 150_0000000_u128]),
     );
 
     let calculator = create_contract(&e);
@@ -55,18 +55,22 @@ fn test() {
     calculator.set_pools_plane(&admin, &plane.address);
 
     e.cost_estimate().budget().reset_default();
-    let results = calculator.get_liquidity(
-        &Vec::from_array(&e, [address1.clone(), address2.clone(), address3.clone()])
-    );
+    let results = calculator.get_liquidity(&Vec::from_array(
+        &e,
+        [address1.clone(), address2.clone(), address3.clone()],
+    ));
     e.cost_estimate().budget().print();
     e.cost_estimate().budget().reset_unlimited();
     assert_eq!(
         results,
-        Vec::from_array(&e, [
-            U256::from_u128(&e, 358217508),
-            U256::from_u128(&e, 536250536),
-            U256::from_u128(&e, 54112554),
-        ])
+        Vec::from_array(
+            &e,
+            [
+                U256::from_u128(&e, 358217508),
+                U256::from_u128(&e, 536250536),
+                U256::from_u128(&e, 54112554),
+            ]
+        )
     );
 }
 
@@ -88,17 +92,21 @@ fn test_bad_math() {
     jump(&e, 1813808460);
 
     let plane = create_plane_contract(&e);
-    plane.update(&address1, &Vec::from_array(&e, [100]), &Vec::from_array(&e, [0, 0]));
+    plane.update(
+        &address1,
+        &Vec::from_array(&e, [100]),
+        &Vec::from_array(&e, [0, 0]),
+    );
 
     plane.update(
         &address2, //4
         &Vec::from_array(&e, [30]),
-        &Vec::from_array(&e, [0, 0])
+        &Vec::from_array(&e, [0, 0]),
     );
     plane.update(
         &address3, //5
         &Vec::from_array(&e, [10]),
-        &Vec::from_array(&e, [485714287, 210000000000000])
+        &Vec::from_array(&e, [485714287, 210000000000000]),
     );
 
     let calculator = create_contract(&e);
@@ -106,21 +114,25 @@ fn test_bad_math() {
     calculator.set_pools_plane(&admin, &plane.address);
 
     e.cost_estimate().budget().reset_default();
-    let results = calculator.get_liquidity(
-        &Vec::from_array(&e, [address1.clone(), address2.clone(), address3.clone()])
-    );
+    let results = calculator.get_liquidity(&Vec::from_array(
+        &e,
+        [address1.clone(), address2.clone(), address3.clone()],
+    ));
     e.cost_estimate().budget().print();
     e.cost_estimate().budget().reset_unlimited();
     assert_eq!(
         results,
-        Vec::from_array(&e, [
-            U256::from_u128(&e, 0),
-            // U256::from_u128(&e, 12208000),
-            // U256::from_u128(&e, 131221069311),
-            U256::from_u128(&e, 0),
-            U256::from_u128(&e, 3753762435904),
-            // U256::from_u128(&e, 630244655854000),
-        ])
+        Vec::from_array(
+            &e,
+            [
+                U256::from_u128(&e, 0),
+                // U256::from_u128(&e, 12208000),
+                // U256::from_u128(&e, 131221069311),
+                U256::from_u128(&e, 0),
+                U256::from_u128(&e, 3753762435904),
+                // U256::from_u128(&e, 630244655854000),
+            ]
+        )
     );
 }
 
@@ -140,7 +152,7 @@ fn test_bad_math_2() {
     plane.update(
         &address2,
         &Vec::from_array(&e, [30]),
-        &Vec::from_array(&e, [107478636, 222947860089606])
+        &Vec::from_array(&e, [107478636, 222947860089606]),
     );
 
     jump(&e, 1918465537);
@@ -150,14 +162,16 @@ fn test_bad_math_2() {
     calculator.set_pools_plane(&admin, &plane.address);
 
     e.cost_estimate().budget().reset_default();
-    let results = calculator.get_liquidity(
-        &Vec::from_array(&e, [address1.clone(), address2.clone()])
-    );
+    let results =
+        calculator.get_liquidity(&Vec::from_array(&e, [address1.clone(), address2.clone()]));
     e.cost_estimate().budget().print();
     e.cost_estimate().budget().reset_unlimited();
     assert_eq!(
         results,
-        Vec::from_array(&e, [U256::from_u128(&e, 0), U256::from_u128(&e, 3993193286434)])
+        Vec::from_array(
+            &e,
+            [U256::from_u128(&e, 0), U256::from_u128(&e, 3993193286434)]
+        )
     );
 }
 
@@ -176,12 +190,12 @@ fn test_bad_math_big_tokens_value_difference() {
     plane.update(
         &address1,
         &Vec::from_array(&e, [30]),
-        &Vec::from_array(&e, [43388242405299_u128, 18833770_u128])
+        &Vec::from_array(&e, [43388242405299_u128, 18833770_u128]),
     );
     plane.update(
         &address2,
         &Vec::from_array(&e, [30]),
-        &Vec::from_array(&e, [107478636, 222947860089606])
+        &Vec::from_array(&e, [107478636, 222947860089606]),
     );
 
     jump(&e, 1918465537);
@@ -191,14 +205,19 @@ fn test_bad_math_big_tokens_value_difference() {
     calculator.set_pools_plane(&admin, &plane.address);
 
     e.budget().reset_default();
-    let results = calculator.get_liquidity(
-        &Vec::from_array(&e, [address1.clone(), address2.clone()])
-    );
+    let results =
+        calculator.get_liquidity(&Vec::from_array(&e, [address1.clone(), address2.clone()]));
     e.budget().print();
     e.budget().reset_unlimited();
     assert_eq!(
         results,
-        Vec::from_array(&e, [U256::from_u128(&e, 777121744502), U256::from_u128(&e, 3993193286434)])
+        Vec::from_array(
+            &e,
+            [
+                U256::from_u128(&e, 777121744502),
+                U256::from_u128(&e, 3993193286434)
+            ]
+        )
     );
 }
 
@@ -253,17 +272,17 @@ fn test_norm() {
     plane.update(
         &address1,
         &Vec::from_array(&e, [30_u128]),
-        &Vec::from_array(&e, [250_500_000_0000_u128, 50_000_000_0000_u128])
+        &Vec::from_array(&e, [250_500_000_0000_u128, 50_000_000_0000_u128]),
     );
     plane.update(
         &address2,
         &Vec::from_array(&e, [30_u128]),
-        &Vec::from_array(&e, [25_000_000_0000_u128, 5_000_000_0000_u128])
+        &Vec::from_array(&e, [25_000_000_0000_u128, 5_000_000_0000_u128]),
     );
     plane.update(
         &address3,
         &Vec::from_array(&e, [300_u128]),
-        &Vec::from_array(&e, [2_500_000_0000_u128, 0_500_000_0000_u128])
+        &Vec::from_array(&e, [2_500_000_0000_u128, 0_500_000_0000_u128]),
     );
 
     let calculator = create_contract(&e);
@@ -271,18 +290,22 @@ fn test_norm() {
     calculator.set_pools_plane(&admin, &plane.address);
 
     e.cost_estimate().budget().reset_default();
-    let results = calculator.get_liquidity(
-        &Vec::from_array(&e, [address1.clone(), address2.clone(), address3.clone()])
-    );
+    let results = calculator.get_liquidity(&Vec::from_array(
+        &e,
+        [address1.clone(), address2.clone(), address3.clone()],
+    ));
     e.cost_estimate().budget().print();
     e.cost_estimate().budget().reset_unlimited();
     assert_eq!(
         results,
-        Vec::from_array(&e, [
-            U256::from_u128(&e, 53822180827),
-            U256::from_u128(&e, 5373262644),
-            U256::from_u128(&e, 552282768),
-        ])
+        Vec::from_array(
+            &e,
+            [
+                U256::from_u128(&e, 53822180827),
+                U256::from_u128(&e, 5373262644),
+                U256::from_u128(&e, 552282768),
+            ]
+        )
     );
 }
 
@@ -305,17 +328,17 @@ fn test_small() {
     plane.update(
         &address1,
         &Vec::from_array(&e, [30_u128]),
-        &Vec::from_array(&e, [10_u128, 10_u128])
+        &Vec::from_array(&e, [10_u128, 10_u128]),
     );
     plane.update(
         &address2,
         &Vec::from_array(&e, [30_u128]),
-        &Vec::from_array(&e, [100_u128, 100_u128])
+        &Vec::from_array(&e, [100_u128, 100_u128]),
     );
     plane.update(
         &address3,
         &Vec::from_array(&e, [300_u128]),
-        &Vec::from_array(&e, [1000_u128, 1000_u128])
+        &Vec::from_array(&e, [1000_u128, 1000_u128]),
     );
 
     let calculator = create_contract(&e);
@@ -323,17 +346,21 @@ fn test_small() {
     calculator.set_pools_plane(&admin, &plane.address);
 
     e.cost_estimate().budget().reset_default();
-    let results = calculator.get_liquidity(
-        &Vec::from_array(&e, [address1.clone(), address2.clone(), address3.clone()])
-    );
+    let results = calculator.get_liquidity(&Vec::from_array(
+        &e,
+        [address1.clone(), address2.clone(), address3.clone()],
+    ));
     e.cost_estimate().budget().reset_unlimited();
     assert_eq!(
         results,
-        Vec::from_array(&e, [
-            U256::from_u128(&e, 0),
-            U256::from_u128(&e, 2),
-            U256::from_u128(&e, 36),
-        ])
+        Vec::from_array(
+            &e,
+            [
+                U256::from_u128(&e, 0),
+                U256::from_u128(&e, 2),
+                U256::from_u128(&e, 36),
+            ]
+        )
     );
 }
 
@@ -352,12 +379,12 @@ fn test_reversed() {
     plane.update(
         &address1,
         &Vec::from_array(&e, [30_u128]),
-        &Vec::from_array(&e, [1000_u128, 3000_u128])
+        &Vec::from_array(&e, [1000_u128, 3000_u128]),
     );
     plane.update(
         &address2,
         &Vec::from_array(&e, [30_u128]),
-        &Vec::from_array(&e, [3000_u128, 1000_u128])
+        &Vec::from_array(&e, [3000_u128, 1000_u128]),
     );
 
     let calculator = create_contract(&e);
@@ -365,11 +392,13 @@ fn test_reversed() {
     calculator.set_pools_plane(&admin, &plane.address);
 
     e.cost_estimate().budget().reset_default();
-    let results = calculator.get_liquidity(
-        &Vec::from_array(&e, [address1.clone(), address2.clone()])
-    );
+    let results =
+        calculator.get_liquidity(&Vec::from_array(&e, [address1.clone(), address2.clone()]));
     e.cost_estimate().budget().reset_unlimited();
-    assert_eq!(results, Vec::from_array(&e, [U256::from_u128(&e, 70), U256::from_u128(&e, 70)]));
+    assert_eq!(
+        results,
+        Vec::from_array(&e, [U256::from_u128(&e, 70), U256::from_u128(&e, 70)])
+    );
 }
 
 #[test]
@@ -387,7 +416,7 @@ fn test_liquidity_overflow() {
     plane.update(
         &address1,
         &Vec::from_array(&e, [30_u128]),
-        &Vec::from_array(&e, [u128::MAX, u128::MAX])
+        &Vec::from_array(&e, [u128::MAX, u128::MAX]),
     );
 
     let calculator = create_contract(&e);
@@ -400,7 +429,10 @@ fn test_liquidity_overflow() {
     e.cost_estimate().budget().reset_unlimited();
     assert_eq!(
         results,
-        Vec::from_array(&e, [U256::from_u128(&e, 12189510206366902975475519681607974332)])
+        Vec::from_array(
+            &e,
+            [U256::from_u128(&e, 12189510206366902975475519681607974332)]
+        )
     );
 }
 
@@ -506,7 +538,7 @@ fn test_empty_pool() {
     plane.update(
         &address1,
         &Vec::from_array(&e, [30_u128]),
-        &Vec::from_array(&e, [0_u128, 0_u128])
+        &Vec::from_array(&e, [0_u128, 0_u128]),
     );
 
     let calculator = create_contract(&e);
@@ -514,12 +546,14 @@ fn test_empty_pool() {
     calculator.set_pools_plane(&admin, &plane.address);
 
     e.cost_estimate().budget().reset_default();
-    let results = calculator.get_liquidity(
-        &Vec::from_array(&e, [address1.clone(), address2.clone()])
-    );
+    let results =
+        calculator.get_liquidity(&Vec::from_array(&e, [address1.clone(), address2.clone()]));
     e.cost_estimate().budget().print();
     e.cost_estimate().budget().reset_unlimited();
-    assert_eq!(results, Vec::from_array(&e, [U256::from_u128(&e, 0), U256::from_u128(&e, 0)]));
+    assert_eq!(
+        results,
+        Vec::from_array(&e, [U256::from_u128(&e, 0), U256::from_u128(&e, 0)])
+    );
 }
 
 #[test]
@@ -537,7 +571,7 @@ fn test_bad_address() {
     plane.update(
         &address2,
         &Vec::from_array(&e, [30_u128]),
-        &Vec::from_array(&e, [0_u128, 0_u128])
+        &Vec::from_array(&e, [0_u128, 0_u128]),
     );
 
     let calculator = create_contract(&e);
@@ -545,12 +579,14 @@ fn test_bad_address() {
     calculator.set_pools_plane(&admin, &plane.address);
 
     e.cost_estimate().budget().reset_default();
-    let results = calculator.get_liquidity(
-        &Vec::from_array(&e, [address1.clone(), address2.clone()])
-    );
+    let results =
+        calculator.get_liquidity(&Vec::from_array(&e, [address1.clone(), address2.clone()]));
     e.cost_estimate().budget().print();
     e.cost_estimate().budget().reset_unlimited();
-    assert_eq!(results, Vec::from_array(&e, [U256::from_u128(&e, 0), U256::from_u128(&e, 0)]));
+    assert_eq!(
+        results,
+        Vec::from_array(&e, [U256::from_u128(&e, 0), U256::from_u128(&e, 0)])
+    );
 }
 
 #[test]
@@ -562,25 +598,35 @@ fn test_transfer_ownership_events() {
     calculator.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &new_admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            calculator.address.clone(),
-            (Symbol::new(&setup.env, "commit_transfer_ownership"), symbol_short!("Admin")).into_val(
-                &setup.env
-            ),
-            (new_admin.clone(),).into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                calculator.address.clone(),
+                (
+                    Symbol::new(&setup.env, "commit_transfer_ownership"),
+                    symbol_short!("Admin")
+                )
+                    .into_val(&setup.env),
+                (new_admin.clone(),).into_val(&setup.env),
+            )
+        ]
     );
 
     calculator.revert_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            calculator.address.clone(),
-            (Symbol::new(&setup.env, "revert_transfer_ownership"), symbol_short!("Admin")).into_val(
-                &setup.env
-            ),
-            ().into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                calculator.address.clone(),
+                (
+                    Symbol::new(&setup.env, "revert_transfer_ownership"),
+                    symbol_short!("Admin")
+                )
+                    .into_val(&setup.env),
+                ().into_val(&setup.env),
+            )
+        ]
     );
 
     calculator.commit_transfer_ownership(&setup.admin, &symbol_short!("Admin"), &new_admin);
@@ -588,13 +634,18 @@ fn test_transfer_ownership_events() {
     calculator.apply_transfer_ownership(&setup.admin, &symbol_short!("Admin"));
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            calculator.address.clone(),
-            (Symbol::new(&setup.env, "apply_transfer_ownership"), symbol_short!("Admin")).into_val(
-                &setup.env
-            ),
-            (new_admin.clone(),).into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                calculator.address.clone(),
+                (
+                    Symbol::new(&setup.env, "apply_transfer_ownership"),
+                    symbol_short!("Admin")
+                )
+                    .into_val(&setup.env),
+                (new_admin.clone(),).into_val(&setup.env),
+            )
+        ]
     );
 }
 
@@ -607,21 +658,27 @@ fn test_upgrade_events() {
     contract.commit_upgrade(&setup.admin, &new_wasm_hash);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            contract.address.clone(),
-            (Symbol::new(&setup.env, "commit_upgrade"),).into_val(&setup.env),
-            (new_wasm_hash.clone(),).into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "commit_upgrade"),).into_val(&setup.env),
+                (new_wasm_hash.clone(),).into_val(&setup.env),
+            )
+        ]
     );
 
     contract.revert_upgrade(&setup.admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            contract.address.clone(),
-            (Symbol::new(&setup.env, "revert_upgrade"),).into_val(&setup.env),
-            ().into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "revert_upgrade"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            )
+        ]
     );
 
     contract.commit_upgrade(&setup.admin, &new_wasm_hash);
@@ -629,11 +686,14 @@ fn test_upgrade_events() {
     contract.apply_upgrade(&setup.admin);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            contract.address.clone(),
-            (Symbol::new(&setup.env, "apply_upgrade"),).into_val(&setup.env),
-            (new_wasm_hash.clone(),).into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "apply_upgrade"),).into_val(&setup.env),
+                (new_wasm_hash.clone(),).into_val(&setup.env),
+            )
+        ]
     );
 }
 
@@ -645,20 +705,26 @@ fn test_emergency_mode_events() {
     contract.set_emergency_mode(&setup.emergency_admin, &true);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            contract.address.clone(),
-            (Symbol::new(&setup.env, "enable_emergency_mode"),).into_val(&setup.env),
-            ().into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "enable_emergency_mode"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            )
+        ]
     );
     contract.set_emergency_mode(&setup.emergency_admin, &false);
     assert_eq!(
         vec![&setup.env, setup.env.events().all().last().unwrap()],
-        vec![&setup.env, (
-            contract.address.clone(),
-            (Symbol::new(&setup.env, "disable_emergency_mode"),).into_val(&setup.env),
-            ().into_val(&setup.env),
-        )]
+        vec![
+            &setup.env,
+            (
+                contract.address.clone(),
+                (Symbol::new(&setup.env, "disable_emergency_mode"),).into_val(&setup.env),
+                ().into_val(&setup.env),
+            )
+        ]
     );
 }
 

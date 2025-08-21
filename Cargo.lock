@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "access_control"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "soroban-sdk",
  "utils",
@@ -205,7 +205,7 @@ dependencies = [
 
 [[package]]
 name = "buffer"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "access_control",
  "paste",
@@ -668,7 +668,7 @@ checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
 name = "incentives"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "soroban-fixed-point-math",
  "soroban-sdk",
@@ -705,7 +705,7 @@ checksum = "8e04e2fd2b8188ea827b32ef11de88377086d690286ab35747ef7f9bf3ccb590"
 
 [[package]]
 name = "insurance-fund"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "access_control",
  "paste",
@@ -718,11 +718,11 @@ dependencies = [
 
 [[package]]
 name = "integration-tests"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
- "pool_tokens",
  "sep-40-oracle",
  "soroban-sdk",
+ "token_lp",
  "utils",
 ]
 
@@ -785,7 +785,7 @@ checksum = "4ec2a862134d2a7d32d7983ddcdd1c4923530833c9f2ea1a44fc5fa473989058"
 
 [[package]]
 name = "liquidity-calculator"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "access_control",
  "soroban-fixed-point-math",
@@ -799,6 +799,17 @@ name = "log"
 version = "0.4.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5e6163cb8c49088c2c36f57875e58ccd8c87c7427f7fbd50ea6710b2f3f2e8f"
+
+[[package]]
+name = "lp-token"
+version = "1.0.0"
+dependencies = [
+ "access_control",
+ "soroban-sdk",
+ "soroban-token-sdk",
+ "upgrade",
+ "utils",
+]
 
 [[package]]
 name = "num-bigint"
@@ -849,7 +860,7 @@ checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
 
 [[package]]
 name = "oracle-registry"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "access_control",
  "paste",
@@ -891,24 +902,25 @@ dependencies = [
 
 [[package]]
 name = "pool"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "access_control",
  "incentives",
  "paste",
- "pool_tokens",
  "rand",
  "reentrancy_guard",
  "sep-40-oracle",
  "soroban-fixed-point-math",
  "soroban-sdk",
+ "token_lp",
+ "token_synthetic",
  "upgrade",
  "utils",
 ]
 
 [[package]]
 name = "pool-plane"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "access_control",
  "soroban-sdk",
@@ -918,40 +930,32 @@ dependencies = [
 
 [[package]]
 name = "pool-router"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "access_control",
  "incentives",
  "paste",
- "pool_tokens",
  "reentrancy_guard",
  "sep-40-oracle",
  "soroban-sdk",
+ "token_lp",
  "upgrade",
  "utils",
 ]
 
 [[package]]
 name = "pool-swap-fee"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "access_control",
  "incentives",
  "paste",
- "pool_tokens",
  "reentrancy_guard",
  "sep-40-oracle",
  "soroban-fixed-point-math",
  "soroban-sdk",
+ "token_lp",
  "upgrade",
- "utils",
-]
-
-[[package]]
-name = "pool_tokens"
-version = "0.1.0"
-dependencies = [
- "soroban-sdk",
  "utils",
 ]
 
@@ -1036,7 +1040,7 @@ dependencies = [
 
 [[package]]
 name = "reentrancy_guard"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "soroban-sdk",
  "utils",
@@ -1379,7 +1383,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-token-contract"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "access_control",
  "soroban-sdk",
@@ -1543,6 +1547,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "token_lp"
+version = "1.0.0"
+dependencies = [
+ "soroban-sdk",
+ "utils",
+]
+
+[[package]]
+name = "token_synthetic"
+version = "1.0.0"
+dependencies = [
+ "soroban-sdk",
+ "utils",
+]
+
+[[package]]
 name = "typenum"
 version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1556,7 +1576,7 @@ checksum = "3354b9ac3fae1ff6755cb6db53683adb661634f67557942dea4facebec0fee4b"
 
 [[package]]
 name = "upgrade"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "access_control",
  "soroban-sdk",
@@ -1565,7 +1585,7 @@ dependencies = [
 
 [[package]]
 name = "utils"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "sep-40-oracle",
  "soroban-fixed-point-math",
