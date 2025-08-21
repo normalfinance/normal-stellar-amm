@@ -23,6 +23,7 @@ pub enum InsuranceFundError {
     InsufficientCollateral = 18,
     InvalidIFDetected = 19,
     TooMuchInsurance = 20,
+    ZeroAmount = 22,
     
     InvalidOptimalUtilization = 21,
 

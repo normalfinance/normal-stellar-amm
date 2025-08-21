@@ -4,6 +4,7 @@ use utils::{
     constant::{ FIVE_MINUTE, PERCENTAGE_PRECISION_U64, PRICE_PRECISION_U64 },
     math::{ pool::sanitize_new_price, safe_math::SafeMath, stats::calculate_new_twap },
     state::oracle_registry::{ NormalAction, OraclePriceData },
+    temporal::Delay,
 };
 
 use crate::{
@@ -38,7 +39,12 @@ pub fn get_oracle_price(e: &Env, oracle: &Address, asset: &Address, now: u64) ->
     oracle_price = oracle_price_data.price as u128;
     published_ts = oracle_price_data.timestamp;
 
-    let oracle_delay = now.saturating_sub(published_ts);
+    let oracle_delay = Delay::from_timestamp_diff_expect(
+        now, 
+        published_ts,
+        "Oracle published timestamp cannot be in the future"
+    );
+
     OraclePriceData {
         price: oracle_price,
         delay: oracle_delay,
@@ -63,7 +69,7 @@ pub fn update_twap(
     asset: &Symbol,
     historical_oracle_data: &HistoricalOracleData,
     oracle_price_data: &OraclePriceData,
-    sanitize_clamp_denominator: i64,
+    sanitize_clamp_denominator: u64,
     now: u64,
     registering: bool
 ) {
@@ -90,7 +96,7 @@ pub fn update_twap(
             oracle_price_twap
         },
         last_oracle_price: oracle_price_data.price,
-        last_oracle_delay: oracle_price_data.delay,
+        last_oracle_delay: oracle_price_data.delay.as_seconds(),
         last_oracle_price_twap_ts: now,
     };
     put_historical_oracle_data(e, &asset, &new_historical_oracle_data);

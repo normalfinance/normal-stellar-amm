@@ -38,6 +38,8 @@ pub trait PoolEvents {
 
     fn rebalance(&self, delta_a: i128, ts: u64);
 
+    fn capped_mint(&self,  base_oracle_price: u128, quote_oracle_price: u128, delta_a: i128);
+
     fn kill_deposit(&self);
 
     fn unkill_deposit(&self);
@@ -53,6 +55,8 @@ pub trait PoolEvents {
     fn kill_claim(&self);
 
     fn unkill_claim(&self);
+
+    fn permanently_locked_liquidity(&self, amount: u128);
 }
 
 // This trait is used to emit events related to liquidity pool operations.
@@ -143,6 +147,13 @@ impl PoolEvents for Events {
             .publish((Symbol::new(e, "rebalance"),), (delta_a, ts));
     }
 
+
+    fn capped_mint(&self, base_oracle_price: u128, quote_oracle_price: u128, delta_a: i128) {
+        let e = self.env();
+        e.events()
+            .publish((Symbol::new(e, "capped_mint"),), (base_oracle_price, quote_oracle_price, delta_a));
+    }
+
     fn kill_deposit(&self) {
         self.env()
             .events()
@@ -189,5 +200,13 @@ impl PoolEvents for Events {
         self.env()
             .events()
             .publish((Symbol::new(self.env(), "unkill_claim"),), ())
+    }
+
+    fn permanently_locked_liquidity(&self, amount: u128) {
+        let e = self.env();
+        e.events().publish(
+            (Symbol::new(e, "permanently_locked_liquidity"),),
+            amount
+        );
     }
 }
