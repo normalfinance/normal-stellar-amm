@@ -118,6 +118,10 @@ impl InsuranceFundTrait for InsuranceFund {
     // * If the deposit exceeds the configured optimal insurance capacity.
     fn deposit(e: Env, user: Address, amount: u128) {
         user.require_auth();
+        
+        ensure_non_zero_u128(&e, amount, InsuranceFundError::ZeroAmount);
+
+        enter(&e);
 
         ensure_non_zero_u128(&e, amount);
 

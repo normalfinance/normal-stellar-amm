@@ -9,6 +9,7 @@ pub enum BufferError {
     PayoutTooSoon = 3,
     InsufficentFunds = 4,
     WithdrawalOverMinimumReserve = 5,
+    ZeroAmount = 8,
     AlreadyInitialized = 15,
 
     // Paused Ops

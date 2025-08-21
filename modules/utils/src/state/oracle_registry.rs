@@ -142,7 +142,6 @@ impl HistoricalOracleData {
     pub fn default_quote_oracle() -> Self {
         HistoricalOracleData {
             last_oracle_price: PRICE_PRECISION,
-
             last_oracle_price_twap: PRICE_PRECISION,
             ..HistoricalOracleData::default()
         }

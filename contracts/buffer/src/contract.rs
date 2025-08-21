@@ -98,6 +98,10 @@ impl BufferTrait for Buffer {
     // * `BufferError::ReserveMaxBalanceThreshold` – if deposit exceeds the reserve’s `max_balance`.
     fn deposit(e: Env, sender: Address, token: Address, amount: u128) {
         sender.require_auth();
+        
+        ensure_non_zero_u128(&e, amount, BufferError::ZeroAmount);
+
+        enter(&e);
 
         ensure_non_zero_u128(&e, amount);
 
@@ -320,6 +324,8 @@ impl AdminInterface for Buffer {
 
         exit(&e);
 
+        exit(&e);
+
         paid
     }
 
@@ -353,6 +359,10 @@ impl AdminInterface for Buffer {
     fn withdraw_surplus(e: Env, admin: Address, token: Address, amount: u128) {
         admin.require_auth();
         require_admin(&e, &admin);
+        
+        ensure_non_zero_u128(&e, amount, BufferError::ZeroAmount);
+
+        enter(&e);
 
         ensure_non_zero_u128(&e, amount);
 
