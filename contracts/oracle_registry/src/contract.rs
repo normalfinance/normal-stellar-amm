@@ -26,6 +26,7 @@ use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
 use utils::state::oracle_registry::{ MutableOracleInfo, NormalAction, OracleInfo, OraclePriceData };
+use utils::temporal::Delay;
 
 #[contract]
 pub struct OracleRegistry;
@@ -78,7 +79,11 @@ impl OracleRegistryTrait for OracleRegistry {
         if cached || oracle.frozen {
             return OraclePriceData {
                 price: historical_oracle_data.last_oracle_price_twap,
-                delay: historical_oracle_data.last_oracle_delay,
+                delay: Delay::from_timestamp_diff_expect(
+                    now, 
+                    historical_oracle_data.last_oracle_price_twap_ts,
+                    "Historical oracle timestamp cannot be in the future"
+                ),
             };
         }
 
@@ -416,7 +421,11 @@ impl AdminInterface for OracleRegistry {
                 historical_oracle_data.last_oracle_price_twap,
                 &(OraclePriceData {
                     price,
-                    delay: now - historical_oracle_data.last_oracle_price_twap_ts,
+                    delay: Delay::from_timestamp_diff_expect(
+                        now,
+                        historical_oracle_data.last_oracle_price_twap_ts,
+                        "Historical TWAP timestamp cannot be in the future"
+                    ),
                 })
             ) == OracleValidity::Valid;
 
@@ -435,7 +444,7 @@ impl AdminInterface for OracleRegistry {
             &e,
             &asset,
             &historical_oracle_data,
-            &(OraclePriceData { price: price, delay: 0 }),
+            &(OraclePriceData { price: price, delay: Delay::ZERO }),
             oracle.sanitize_clamp_denominator,
             now,
             false

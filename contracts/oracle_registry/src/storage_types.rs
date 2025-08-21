@@ -36,7 +36,7 @@ impl HistoricalOracleData {
     pub fn default_with_current_oracle(oracle_price_data: OraclePriceData) -> Self {
         HistoricalOracleData {
             last_oracle_price: oracle_price_data.price,
-            last_oracle_delay: oracle_price_data.delay,
+            last_oracle_delay: oracle_price_data.delay.as_seconds(),
             last_oracle_price_twap: oracle_price_data.price,
             ..HistoricalOracleData::default()
         }
