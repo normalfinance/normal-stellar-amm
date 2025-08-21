@@ -67,7 +67,7 @@ pub fn update_twap(
     asset: &Symbol,
     historical_oracle_data: &HistoricalOracleData,
     oracle_price_data: &OraclePriceData,
-    sanitize_clamp_denominator: i64,
+    sanitize_clamp_denominator: u64,
     now: u64,
     registering: bool
 ) {
