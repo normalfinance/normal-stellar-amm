@@ -2,18 +2,18 @@
 set -e
 
 # Check if the arguments are provided
-# Required: identity_string, pool_swap_fee_address
+# Required: identity_string,
 if [ "$#" -lt 3 ]; then
-    echo "Usage: $0 <identity_string> <network> <pool_swap_fee_address>"
+    echo "Usage: $0 <identity_string> <network>"
     exit 1
 fi
 
 IDENTITY_STRING=$1
 NETWORK=$2
-POOL_SWAP_FEE_ADDR=$3
 
 # Load env vars dynamically
-source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh" "$NETWORK"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+source "$REPO_ROOT/scripts/load-env.sh" "$NETWORK"
 
 stellar contract invoke \
     --id $POOL_SWAP_FEE_ADDR \

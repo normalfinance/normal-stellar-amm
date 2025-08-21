@@ -4,31 +4,30 @@ set -e
 # Usage
 usage() {
     echo "Usage:"
-    echo "  $0 <identity_string> <network> <pool_router_address> <token_target> <token_symbol> <fee_fraction> <pool_tier> <max_insurance> <sac_address>"
+    echo "  $0 <identity_string> <network> <token_target> <token_symbol> <fee_fraction> <pool_tier> <max_insurance>"
     echo ""
     echo "Example:"
-    echo "  $0 josh CAS123 BTC 'Normal Bitcoin' nBTC 30 A 1000000 CAS123"
+    echo "  $0 admin testnet BTC nBTC 30 A 1000000"
     exit 1
 }
 
 # Validate args
-if [ "$#" -ne 9 ]; then
+if [ "$#" -ne 7 ]; then
     usage
 fi
 
 # Parse arguments
 IDENTITY_STRING="$1"
 NETWORK=$2
-POOL_ROUTER_ADDR="$3"
-NORMAL_TOKEN_TARGET="$4"
-NORMAL_TOKEN_SYMBOL="$5"
-FEE_FRACTION="$6"
-POOL_TIER="$7"
-MAX_INSURANCE="$8"
-SYNTHETIC_SAC_ADDRESS="$9"
+NORMAL_TOKEN_TARGET="$3"
+NORMAL_TOKEN_SYMBOL="$4"
+FEE_FRACTION="$5"
+POOL_TIER="$6"
+MAX_INSURANCE="$7"
 
 # Load env vars dynamically
-source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh" "$NETWORK"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+source "$REPO_ROOT/scripts/load-env.sh" "$NETWORK"
 
 # Derive LP token info
 LP_TOKEN_NAME="$NORMAL_TOKEN_SYMBOL-XLM LP Token"
@@ -53,8 +52,8 @@ stellar contract invoke \
     init_pool \
     --admin "$ADMIN_ADDRESS" \
     --assets "[\"$NORMAL_TOKEN_TARGET\", \"XLM\"]" \
-    --token_b "$XLM" \
-    --synthetic_sac_address "$SYNTHETIC_SAC_ADDRESS" \
+    --token_b "$XLM_ADDRESS" \
+    --synthetic_sac_address "$ASSET_SAC_ADDRESS" \
     --lp_token_info "[\"$LP_TOKEN_NAME\", \"$LP_TOKEN_SYMBOL\"]" \
     --fee_fraction "$FEE_FRACTION" \
     --tier "$POOL_TIER" \

@@ -2,20 +2,20 @@
 set -e
 
 # Check if the argument is provided
-if [ "$#" -lt 6 ]; then
-    echo "Usage: $0 <identity_string> <network> <oracle_registry_address> <asset> <decimals> <clamp>"
+if [ "$#" -lt 5 ]; then
+    echo "Usage: $0 <identity_string> <network> <asset> <decimals> <clamp>"
     exit 1
 fi
 
 IDENTITY_STRING="$1"
 NETWORK="$2"
-ORACLE_REGISTRY_ADDR="$3"
-ASSET="$4"
-DECIMALS="$5"
-CLAMP="$6"
+ASSET="$3"
+DECIMALS="$4"
+CLAMP="$5"
 
 # Load env vars dynamically
-source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh" "$NETWORK"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+source "$REPO_ROOT/scripts/load-env.sh" "$NETWORK"
 
 # Get admin address
 ADMIN_ADDRESS=$(soroban keys address "$IDENTITY_STRING")

@@ -9,10 +9,10 @@ fi
 
 IDENTITY_STRING=$1
 NETWORK=$2
-POOL_ROUTER_ADDR=$3
 
 # Load env vars dynamically
-source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh" "$NETWORK"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+source "$REPO_ROOT/scripts/load-env.sh" "$NETWORK"
 
 echo "Build and optimize the contracts..."
 
@@ -33,7 +33,10 @@ ADMIN_ADDRESS=$(soroban keys address $IDENTITY_STRING)
 POOL_WASM_HASH=$(soroban contract upload \
     --wasm pool.optimized.wasm \
     --source $IDENTITY_STRING \
-    --network $NETWORK)
+    --network $NETWORK
+    --rpc-url $STELLAR_RPC_URL \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
+    --fee $STELLAR_BASE_FEE)
 
 echo "Pool contracts deployed."
 

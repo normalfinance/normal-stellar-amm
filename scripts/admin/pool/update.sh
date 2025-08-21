@@ -32,7 +32,8 @@ ADMIN_ADDRESS=$(soroban keys address $IDENTITY_STRING)
 IDENTITY_STRING="$1"
 
 # Load env vars dynamically
-source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh" "$NETWORK"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+source "$REPO_ROOT/scripts/load-env.sh" "$NETWORK"
 
 case "$FLAG" in
 -p)

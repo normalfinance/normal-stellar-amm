@@ -21,7 +21,8 @@ ISSUER=$1
 NETWORK=$2
 
 # Load env vars dynamically
-source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh" "$NETWORK"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+source "$REPO_ROOT/scripts/load-env.sh" "$NETWORK"
 
 # Get admin address
 ISSUER_ADDRESS=$(soroban keys address "$ISSUER")

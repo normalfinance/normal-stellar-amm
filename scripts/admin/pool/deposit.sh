@@ -2,20 +2,20 @@
 set -e
 
 # Check if the arguments are provided
-# Required: identity_string, network, pool_router_address, asset, amount
-if [ "$#" -lt 5 ]; then
-    echo "Usage: $0 <identity_string> <network> <pool_router_address> <asset> <amount>"
+# Required: identity_string, network, asset, amount
+if [ "$#" -lt 4 ]; then
+    echo "Usage: $0 <identity_string> <network> <asset> <amount>"
     exit 1
 fi
 
 IDENTITY_STRING=$1
 NETWORK=$2
-POOL_ROUTER_ADDR=$3
-ASSET=$4
-AMOUNT=$5
+ASSET=$3
+AMOUNT=$4
 
 # Load env vars dynamically
-source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh" "$NETWORK"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+source "$REPO_ROOT/scripts/load-env.sh" "$NETWORK"
 
 # Fetch the admin's address
 ADMIN_ADDRESS=$(soroban keys address $IDENTITY_STRING)

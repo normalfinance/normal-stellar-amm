@@ -2,7 +2,7 @@
 set -e
 
 # Check if the arguments are provided
-# Required: identity_string, pool_address, fund_type, fund_address
+# Required: identity_string, network, pool_address, fund_type, fund_address
 if [ "$#" -lt 4 ]; then
     echo "Usage: $0 <identity_string> <network> <pool_address> <fund_type> <fund_address>"
     exit 1
@@ -15,7 +15,8 @@ FUND_TYPE=""
 FUND_ADDR=$4
 
 # Load env vars dynamically
-source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh" "$NETWORK"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+source "$REPO_ROOT/scripts/load-env.sh" "$NETWORK"
 
 # Parse input flags
 while [[ "$#" -gt 0 ]]; do

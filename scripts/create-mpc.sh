@@ -1,12 +1,12 @@
 # Ensure the script exits on any errors
 set -e
 
+# TODO: this script is not complete!
+
 # Load env vars dynamically
 source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh" "$NETWORK"
 
 # ---------- Config ----------
-
-
 BASE_SECRET="<MAIN_ACCOUNT_SECRET>"          # G... secret of the original account
 SIGNER_1_PUBLIC="<SIGNER_1_PUBLIC_KEY>"      # G... of new signer 1
 SIGNER_2_PUBLIC="<SIGNER_2_PUBLIC_KEY>"      # G... of new signer 2
