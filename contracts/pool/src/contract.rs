@@ -340,6 +340,14 @@ impl PoolTrait for Pool {
         let total_shares = get_total_lp_tokens(&e);
         let shares_to_mint = token_b_amount;
 
+        // First deposit: mint MIN_LIQUIDITY to contract itself to prevent dust attacks
+        if total_shares == 0 {
+            mint_lp_tokens(&e, &e.current_contract_address(), MIN_LIQUIDITY as i128);
+            let events = LiquidityPoolEvents::new(&e);
+            events.permanently_locked_liquidity(MIN_LIQUIDITY);
+            shares_to_mint = shares_to_mint.saturating_sub(MIN_LIQUIDITY);
+        }
+
         mint_lp_tokens(&e, &user, shares_to_mint as i128);
 
         // Checkpoint resulting working balance
@@ -871,6 +879,10 @@ impl PoolTrait for Pool {
 
         let (_, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
 
+        if total_shares - share_amount < MIN_LIQUIDITY {
+            panic_with_error!(e, PoolError::WithdrawExceedsMinLiquidity);
+        }
+
         // Transfer any remaining to the user
         transfer_b(&e, &user, share_amount);
         set_reserve_b(&e, &(reserve_b - share_amount));
@@ -1190,6 +1202,24 @@ impl AdminInterfaceTrait for Pool {
         pool.status = status;
 
         set_pool(&e, &pool);
+                // Automatically recover minimum liquidity when pool is delisted
+        if status == PoolStatus::Delisted {
+                let contract_address = e.current_contract_address();
+                let locked_balance = get_user_balance_lp(&e, &contract_address);
+        
+                if locked_balance > 0 {
+                        burn_lp_tokens(&e, &contract_address, locked_balance as i128);
+        
+                    let total_shares = get_total_lp_tokens(&e);
+                    let reserve_b = get_reserve_b(&e);
+                    let token_b_amount = if total_shares > 0 {
+                        (locked_balance * reserve_b) / total_shares
+                    } else {
+                        locked_balance 
+                    };
+                    transfer_b(&e, &admin, token_b_amount);
+                    }
+                }
     }
 
     fn set_max_imbalances(
