@@ -69,6 +69,7 @@ use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
 use utils::math::safe_math::SafeMath;
 use utils::token::transfer_token;
 use utils::validate;
+use utils::validation::ensure_non_zero_u128;
 
 contractmeta!(
     key = "Description",
@@ -146,6 +147,8 @@ impl InsuranceFundTrait for InsuranceFund {
     // * If the deposit exceeds the configured optimal insurance capacity.
     fn deposit(e: Env, user: Address, amount: u128) {
         user.require_auth();
+        
+        ensure_non_zero_u128(&e, amount, InsuranceFundError::ZeroAmount);
 
         if get_is_killed_deposit(&e) {
             panic_with_error!(e, InsuranceFundError::FundDepositKilled);
