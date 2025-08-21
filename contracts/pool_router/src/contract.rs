@@ -177,7 +177,7 @@ impl PoolInterfaceTrait for PoolRouter {
     // # Returns
     // * `(u128, i128)` - A tuple containing:
     //     - The estimated amount of output token received.
-    //     - The estimated fee (can be negative or positive depending on implementation).
+    //     - The estimated delta_a (can be negative or positive depending on implementation).
     //
     // # Panics
     // * If `token_in` or `token_out` are not found in the `tokens` vector.
