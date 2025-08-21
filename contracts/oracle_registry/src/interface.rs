@@ -1,7 +1,11 @@
 use soroban_sdk::{ Address, Env, Symbol };
-use utils::state::oracle_registry::{ MutableOracleInfo, NormalAction, OracleInfo, OraclePriceData };
-
-use crate::storage_types::{ HistoricalOracleData, OracleGuardRails };
+use utils::state::oracle_registry::{
+    HistoricalOracleData,
+    MutableOracleInfo,
+    OracleGuardRails,
+    OracleInfo,
+    OracleValidity,
+};
 
 pub trait OracleRegistryTrait {
     fn initialize(e: Env, admin: Address, emergency_admin: Address);
@@ -15,7 +19,7 @@ pub trait OracleRegistryTrait {
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
     // Get the oracle price
-    fn get_price(e: Env, asset: Symbol, cached: bool, action: NormalAction) -> OraclePriceData;
+    fn get_price(e: Env, asset: Symbol) -> (HistoricalOracleData, OracleValidity);
 
     // Get the historical oracle info
     fn get_last_price(e: Env, asset: Symbol) -> HistoricalOracleData;

@@ -7,8 +7,5 @@ pub enum OracleError {
     #[doc = "OracleError: OracleNonPositive"]
     OracleNonPositive = 601,
     OracleTooVolatile = 602,
-    OracleTooUncertain = 603,
-    OracleStaleForMargin = 604,
-    OracleInsufficientDataPoints = 605,
-    OracleStaleForPool = 606,
+    OracleStaleForPool = 603,
 }
