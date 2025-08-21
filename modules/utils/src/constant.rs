@@ -51,7 +51,10 @@ pub const PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO_I128: i128 =
 
 // Pool
 pub const FEE_MULTIPLIER: u128 = 10_000;
-pub const DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR: i64 = 3; // '3' here means clamp new data point to 33% (1/3) divergence from current twap (if twap > 0)
+pub const DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR: u64 = 3; // '3' here means clamp new data point to 33% (1/3) divergence from current twap (if twap > 0)
+
+// Minimum liquidity locked permanently on first deposit to prevent dust attacks
+pub const MIN_LIQUIDITY: u128 = 1_000;
 
 // Pool Router
 pub const MAX_POOL_FEE: u32 = 100; // 1%
@@ -63,6 +66,7 @@ pub const FEE_DENOMINATOR: u32 = 10000;
 pub const REWARD_PRECISION: u128 = 1_000_000_000_000_000_0000000;
 
 // TIME PERIODS
+pub const FIVE_SECONDS: u64 = 5;
 pub const ONE_MINUTE: i128 = 60_i128;
 pub const FIVE_MINUTE: i128 = (60 * 5) as i128;
 pub const ONE_HOUR: u64 = 3600;

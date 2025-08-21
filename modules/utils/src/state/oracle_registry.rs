@@ -1,10 +1,11 @@
 use soroban_sdk::{ contracttype, Address };
+use crate::temporal::Delay;
 
 #[contracttype]
 #[derive(Default, Clone, Copy, Debug)]
 pub struct OraclePriceData {
     pub price: u128,
-    pub delay: u64,
+    pub delay: Delay,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug, Default)]
@@ -22,7 +23,7 @@ pub struct OracleInfo {
     pub asset_addr: Address,
     pub decimals: u32,
     pub frozen: bool,
-    pub sanitize_clamp_denominator: i64, // zero if not set
+    pub sanitize_clamp_denominator: u64, // zero if not set
     pub last_updated: u64,
 }
 
@@ -32,7 +33,7 @@ pub struct MutableOracleInfo {
     pub address: Option<Address>,
     pub decimals: Option<u32>,
     pub frozen: Option<bool>,
-    pub sanitize_clamp_denominator: Option<i64>,
+    pub sanitize_clamp_denominator: Option<u64>,
 }
 
 impl MutableOracleInfo {
