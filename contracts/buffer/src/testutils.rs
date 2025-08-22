@@ -5,7 +5,7 @@ use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{Address, Env, Symbol};
 use std::vec;
 use utils::constant::ONE_HOUR;
 
@@ -47,7 +47,6 @@ pub(crate) struct Setup<'a> {
     pub(crate) admin: Address,
     pub(crate) emergency_admin: Address,
     pub(crate) users: vec::Vec<Address>,
-    pub(crate) pool_address: Address,
 
     // contracts
     pub(crate) buffer: BufferClient<'a>,
@@ -55,6 +54,9 @@ pub(crate) struct Setup<'a> {
     // tokens
     pub(crate) token_a: SorobanTokenClient<'a>,
     pub(crate) token_a_admin_client: SorobanTokenAdminClient<'a>,
+
+    // other
+    pub(crate) asset: Symbol,
 }
 
 impl Default for Setup<'_> {
@@ -79,28 +81,31 @@ impl Setup<'_> {
         let users = Self::generate_random_users(&e, config.users_count);
         let admin = users[0].clone();
         let emergency_admin = Address::generate(&e);
-        let pool_address = Address::generate(&e);
 
         let token_a = create_token_contract(&e, &admin);
         let token_a_admin_client = get_token_admin_client(&e, &token_a.address.clone());
 
+        let pool_router = Address::generate(&e);
         let buffer = create_buffer_contract(&e);
         buffer.initialize(
             &admin,
             &emergency_admin,
+            &pool_router,
             &config.min_time_between_payouts,
             &config.min_reserve_ratio,
         );
+
+        let asset = Symbol::new(&e, "BTC");
 
         Self {
             env: e,
             admin,
             emergency_admin,
-            pool_address,
             buffer,
             users,
             token_a,
             token_a_admin_client,
+            asset,
         }
     }
 

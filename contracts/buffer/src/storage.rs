@@ -12,7 +12,8 @@ use crate::reserve::Reserve;
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
-    FeeCollector,          // the address of the Pool Swap Fee contract.
+    FeeCollector, // the address of the Pool Swap Fee contract.
+    PoolRouter,   // the address of the Pool Router.
 
     Reserve(Address),      // map of Buffer reserve state for each token.
     MinTimeBetweenPayouts, // the minimum time between payouts to prevent repeated or too-frequent payouts (rate limiting).
@@ -27,6 +28,12 @@ enum DataKey {
 generate_instance_storage_getter_and_setter_with_default!(
     fee_collector,
     DataKey::FeeCollector,
+    Address,
+    Address::from_str(&Env::default(), "")
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    pool_router,
+    DataKey::PoolRouter,
     Address,
     Address::from_str(&Env::default(), "")
 );

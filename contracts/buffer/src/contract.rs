@@ -5,9 +5,9 @@ use crate::reserve::Reserve;
 use crate::storage::{
     get_buffer_reserve_amount, get_fee_collector, get_is_killed_deposit,
     get_is_killed_resolve_liquidity_deficit, get_last_payout_timestamp, get_min_reserve_ratio,
-    get_min_time_between_payouts, get_reserve, put_reserve, set_fee_collector,
+    get_min_time_between_payouts, get_pool_router, get_reserve, put_reserve, set_fee_collector,
     set_is_killed_deposit, set_is_killed_resolve_liquidity_deficit, set_last_payout_timestamp,
-    set_min_reserve_ratio, set_min_time_between_payouts,
+    set_min_reserve_ratio, set_min_time_between_payouts, set_pool_router,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
@@ -26,6 +26,7 @@ use soroban_sdk::{
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
+use utils::state::pool::PoolInfo;
 use utils::token::{transfer_token, validate_token_contract};
 use utils::validation::ensure_non_zero_u128;
 
@@ -44,7 +45,8 @@ impl BufferTrait for Buffer {
         e: Env,
         admin: Address,
         emergency_admin: Address,
-        time_bt_payouts: u64,
+        pool_router: Address,
+        time_between_payouts: u64,
         min_reserve_ratio: u32,
     ) {
         admin.require_auth();
@@ -56,7 +58,8 @@ impl BufferTrait for Buffer {
         access_control.set_role_address(&Role::Admin, &admin);
         access_control.set_role_address(&Role::EmergencyAdmin, &emergency_admin);
 
-        set_min_time_between_payouts(&e, &time_bt_payouts);
+        set_pool_router(&e, &pool_router);
+        set_min_time_between_payouts(&e, &time_between_payouts);
         set_min_reserve_ratio(&e, &min_reserve_ratio);
     }
 
@@ -195,6 +198,10 @@ impl BufferTrait for Buffer {
         get_fee_collector(&e)
     }
 
+    fn get_pool_router(e: Env) -> Address {
+        get_pool_router(&e)
+    }
+
     fn get_min_time_between_payouts(e: Env) -> u64 {
         get_min_time_between_payouts(&e)
     }
@@ -232,9 +239,9 @@ impl AdminInterface for Buffer {
     // # Arguments
     // * `e` - The Soroban environment.
     // * `admin` - The admin authorized to trigger the resolution (must be authenticated).
+    // * `asset` - The asset of the Pool requesting liquidity.
     // * `token` - The token address of the reserve used for payout.
     // * `amount` - The amount of tokens to send to the Pool.
-    // * `pool_address` - The address of the Pool contract requesting liquidity.
     //
     // # Behavior
     // * Verifies that the caller is the authorized Buffer admin.
@@ -260,13 +267,11 @@ impl AdminInterface for Buffer {
     fn resolve_liquidity_deficit(
         e: Env,
         admin: Address,
+        asset: Symbol,
         token: Address,
         amount: u128,
-        pool_address: Address,
     ) -> u128 {
         admin.require_auth();
-        /* Currently, only the Buffer admin may resolve deficits, however, our goal
-        is to either: a) automate within `Pool.swap()` itself; or b) decentralize via the Normal DAO */
         require_admin(&e, &admin);
 
         ensure_non_zero_u128(&e, amount);
@@ -279,41 +284,71 @@ impl AdminInterface for Buffer {
 
         validate_token_contract(&e, &token);
 
-        // TODO: validate pool_address - probably by checking against `PoolRouter.pools_vec`
-
-        // Enforce the minimum time between payouts
-        let now = e.ledger().timestamp();
-        let last_payout_ts = get_last_payout_timestamp(&e);
-        let min_time_bt_payouts = get_min_time_between_payouts(&e);
-        if now - last_payout_ts <= min_time_bt_payouts {
-            panic_with_error!(&e, BufferError::PayoutTooSoon);
-        }
-
-        // Ensure the Buffer Reserve has a sufficient balance
-        let reserve = get_reserve(&e, &token);
-        if amount > reserve.balance {
-            panic_with_error!(&e, BufferError::InsufficentFunds);
-        }
-
-        // Update the Buffer Reserve
-        put_reserve(&e, &token, &reserve.payout(&e, amount, now));
-        set_last_payout_timestamp(&e, &now);
-
-        // Invoke `pay_insurance_claim()` on the Pool to cover the deficit
-        let paid: u128 = e.invoke_contract(
-            &pool_address,
-            &Symbol::new(&e, "pay_insurance_claim"),
-            Vec::from_array(
-                &e,
-                [e.current_contract_address().to_val(), amount.into_val(&e)],
-            ),
+        let pool_details_result = e.try_invoke_contract::<PoolInfo, soroban_sdk::Error>(
+            &get_pool_router(&e),
+            &Symbol::new(&e, "query_pool_details"),
+            Vec::from_array(&e, [asset.into_val(&e)]),
         );
 
-        Events::new(&e).resolve_liquidity_deficit(pool_address, token, admin, amount, paid);
+        match pool_details_result {
+            Ok(Err(_pool_error)) => {
+                panic_with_error!(&e, BufferError::QueryPoolFailed);
+            }
+            Err(_contract_error) => {
+                panic_with_error!(&e, BufferError::QueryPoolFailed);
+            }
+            Ok(Ok(pool_info)) => {
+                // Enforce the minimum time between payouts
+                let now = e.ledger().timestamp();
+                let last_payout_ts = get_last_payout_timestamp(&e);
+                let min_time_bt_payouts = get_min_time_between_payouts(&e);
+                if now - last_payout_ts <= min_time_bt_payouts {
+                    panic_with_error!(&e, BufferError::PayoutTooSoon);
+                }
 
-        exit(&e);
+                // Ensure the Buffer Reserve has a sufficient balance
+                let reserve = get_reserve(&e, &token);
+                if amount > reserve.balance {
+                    panic_with_error!(&e, BufferError::InsufficentFunds);
+                }
 
-        paid
+                // Update the Buffer Reserve
+                put_reserve(&e, &token, &reserve.payout(&e, amount, now));
+                set_last_payout_timestamp(&e, &now);
+
+                // Invoke `pay_insurance_claim()` on the Pool to cover the deficit
+                let pay_insurance_claim_result = e.try_invoke_contract::<u128, soroban_sdk::Error>(
+                    &pool_info.pool_address,
+                    &Symbol::new(&e, "pay_insurance_claim"),
+                    Vec::from_array(
+                        &e,
+                        [e.current_contract_address().to_val(), amount.into_val(&e)],
+                    ),
+                );
+
+                match pay_insurance_claim_result {
+                    Ok(Ok(paid)) => {
+                        Events::new(&e).resolve_liquidity_deficit(
+                            pool_info.pool_address,
+                            token,
+                            admin,
+                            amount,
+                            paid,
+                        );
+
+                        exit(&e);
+
+                        paid
+                    }
+                    Ok(Err(_pool_error)) => {
+                        panic_with_error!(&e, BufferError::PayInsuranceClaimFailed);
+                    }
+                    Err(_contract_error) => {
+                        panic_with_error!(&e, BufferError::PayInsuranceClaimFailed);
+                    }
+                }
+            }
+        }
     }
 
     // Allows the admin to withdraw surplus tokens from the Buffer reserve, above the required minimum.
@@ -396,6 +431,13 @@ impl AdminInterface for Buffer {
         require_admin(&e, &admin);
 
         set_fee_collector(&e, &fee_collector);
+    }
+
+    fn set_pool_router(e: Env, admin: Address, pool_router: Address) {
+        admin.require_auth();
+        require_admin(&e, &admin);
+
+        set_pool_router(&e, &pool_router);
     }
 
     fn set_min_time_between_payouts(e: Env, admin: Address, min_time: u64) {

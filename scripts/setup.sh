@@ -194,7 +194,8 @@ stellar contract invoke \
     initialize \
     --admin $ADMIN_ADDRESS \
     --emergency_admin $ADMIN_ADDRESS \
-    --time_bt_payouts $ONE_HOUR \
+    --pool_router $POOL_ROUTER_ADDR \
+    --time_between_payouts $ONE_HOUR \
     --min_reserve_ratio 1000
 
 #   __    _____  ___    ________  ____  ____   _______        __      _____  ___    ______    _______
