@@ -3,10 +3,9 @@ use crate::storage::{get_shares_base, get_total_shares, set_shares_base, set_tot
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{contracttype, panic_with_error, Address, Env};
 use utils::bump::bump_persistent;
-use utils::errors::math_errors::MathError;
 use utils::helpers::log10_iter;
 use utils::math::safe_math::SafeMath;
-use utils::{safe_decrement, safe_increment, validate};
+use utils::validate;
 
 #[contracttype]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -60,12 +59,12 @@ impl Stake {
 
     pub fn increase_if_shares(&mut self, e: &Env, delta: u128) {
         self.validate_base(e);
-        safe_increment!(e, self.if_shares, delta);
+        self.if_shares = self.if_shares.saturating_add(delta);
     }
 
     pub fn decrease_if_shares(&mut self, e: &Env, delta: u128) {
         self.validate_base(e);
-        safe_decrement!(e, self.if_shares, delta);
+        self.if_shares = self.if_shares.saturating_sub(delta);
     }
 
     pub fn update_if_shares(&mut self, e: &Env, new_shares: u128) {
