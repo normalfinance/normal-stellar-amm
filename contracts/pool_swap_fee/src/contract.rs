@@ -36,6 +36,7 @@ use utils::math::stats::calculate_rolling_sum;
 use utils::state::pool::{PoolInfo, SwapDirection};
 use utils::token::transfer_token;
 use utils::validate;
+use utils::validation::ensure_non_zero_u128;
 
 #[contract]
 pub struct PoolSwapFeeCollector;
@@ -91,6 +92,8 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         out_min: u128,
     ) -> u128 {
         user.require_auth();
+
+        ensure_non_zero_u128(&e, in_amount);
 
         enter(&e);
 
@@ -282,7 +285,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
 
             let premium_per_dollar_swapped =
                 total_annual_premium.safe_div(&e, estimated_annual_volume);
-                
+
             // Lesser of premium or what's left of protocol fee
             let insurance_premium_to_pay = quote_asset_amount
                 .safe_mul(&e, premium_per_dollar_swapped)

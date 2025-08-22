@@ -234,6 +234,8 @@ impl InsuranceFundTrait for InsuranceFund {
     fn request_withdraw(e: Env, user: Address, amount: u128) {
         user.require_auth();
 
+        ensure_non_zero_u128(&e, amount);
+
         enter(&e);
 
         if get_is_killed_request_withdraw(&e) {

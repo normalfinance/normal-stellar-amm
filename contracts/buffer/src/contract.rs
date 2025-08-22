@@ -277,6 +277,8 @@ impl AdminInterface for Buffer {
         is to either: a) automate within `Pool.swap()` itself; or b) decentralize via the Normal DAO */
         require_admin(&e, &admin);
 
+        ensure_non_zero_u128(&e, amount);
+
         enter(&e);
 
         if get_is_killed_resolve_liquidity_deficit(&e) {

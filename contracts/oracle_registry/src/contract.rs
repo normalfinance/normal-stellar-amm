@@ -25,7 +25,7 @@ use utils::state::oracle_registry::{
     OracleValidity,
 };
 use utils::temporal::Delay;
-use utils::validation::validate_positive_denominator;
+use utils::validation::{ensure_non_zero_u128, validate_positive_denominator};
 
 #[contract]
 pub struct OracleRegistry;
@@ -418,6 +418,8 @@ impl AdminInterface for OracleRegistry {
     fn set_oracle_price(e: Env, admin: Address, asset: Symbol, price: u128) {
         admin.require_auth();
         require_admin(&e, &admin);
+
+        ensure_non_zero_u128(&e, price);
 
         enter(&e);
 
