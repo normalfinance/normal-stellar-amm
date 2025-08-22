@@ -36,6 +36,8 @@ pub trait BufferTrait {
     // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
     //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
 
+    fn get_fee_collector(e: Env) -> Address;
+
     fn get_min_time_between_payouts(e: Env) -> u64;
 
     fn get_reserve(e: Env, token: Address) -> Reserve;
@@ -53,6 +55,8 @@ pub trait AdminInterface {
     //   __/  \\  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
     //  /" \   :)(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
     // (_______/  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
+
+    fn set_fee_collector(e: Env, admin: Address, fee_collector: Address);
 
     fn set_min_time_between_payouts(e: Env, admin: Address, min_time: u64);
 
