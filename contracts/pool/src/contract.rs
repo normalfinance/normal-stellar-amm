@@ -446,14 +446,6 @@ impl PoolTrait for Pool {
 
         let pool = get_pool(&e);
 
-        // Error if Pool is in reduce only status and swap is attempting to buy
-        // TODO: should this be the implementation of ReduceOnly, or should
-        // token_a being minted be considered "increasing risk"?
-        if pool.is_reduce_only() && direction == SwapDirection::Buy {
-            // in_idx == 1
-            panic_with_error!(&e, PoolError::SwapReduceOnly);
-        }
-
         // Rebalance the pool before swapping
         let now = e.ledger().timestamp();
 
@@ -491,7 +483,6 @@ impl PoolTrait for Pool {
             panic_with_error!(&e, PoolValidationError::EmptyPool);
         }
 
-        // TODO: how do we augment the amount_out when in ReduceOnly mode?
         let (out, fee) = pool.get_amount_out(&e, in_amount, reserve_sell, reserve_buy);
 
         if out < out_min {
