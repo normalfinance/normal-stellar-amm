@@ -222,6 +222,7 @@ stellar contract invoke \
     --admin $ADMIN_ADDRESS \
     --emergency_admin $ADMIN_ADDRESS \
     --token $XLM_ADDRESS \
+    --pool_router $POOL_ROUTER_ADDR \
     --unstaking_period $THIRTEEN_DAYS \
     --optimal_utilization 8000 \
     --base_rate 200 \

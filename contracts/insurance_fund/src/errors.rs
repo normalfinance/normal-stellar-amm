@@ -26,6 +26,8 @@ pub enum InsuranceFundError {
     InvalidOptimalUtilization = 21,
     InvalidTimestamp = 22,
     CostBasisUnderflow = 23,
+    QueryPoolFailed = 24,
+    PayInsuranceClaimFailed = 25,
 
     // paused ops
     FundDepositKilled = 30,

@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{Address, Env, Symbol};
 
 use crate::stake::Stake;
 
@@ -8,6 +8,7 @@ pub trait InsuranceFundTrait {
         admin: Address,
         emergency_admin: Address,
         token: Address,
+        pool_router: Address,
         unstaking_period: u64,
         optimal_utilization: u32,
         base_rate: i32,
@@ -42,6 +43,8 @@ pub trait InsuranceFundTrait {
 
     fn get_token(e: Env) -> Address;
 
+    fn get_pool_router(e: Env) -> Address;
+
     fn get_unstaking_period(e: Env) -> u64;
 
     fn get_optimal_insurance(e: Env) -> u128;
@@ -74,7 +77,7 @@ pub trait AdminInterface {
 
     fn sync_optimal_insurance(e: Env, admin: Address);
 
-    fn resolve_liquidity_deficit(e: Env, admin: Address, pool_address: Address);
+    fn resolve_liquidity_deficit(e: Env, admin: Address, asset: Symbol);
 
     //   ________  _______  ___________  ___________  _______   _______    ________
     //  /"       )/"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
@@ -83,6 +86,8 @@ pub trait AdminInterface {
     //   __/  \\  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
     //  /" \   :)(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
     // (_______/  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
+
+    fn set_pool_router(e: Env, admin: Address, pool_router: Address);
 
     fn set_unstaking_period(e: Env, admin: Address, unstaking_period: u64);
 
