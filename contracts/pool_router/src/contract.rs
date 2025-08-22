@@ -8,11 +8,11 @@ use crate::pool_interface::{
 use crate::pool_utils::{deploy_pool, get_total_liquidity};
 use crate::router_interface::AdminInterface;
 use crate::storage::{
-    get_liquidity_calculator, get_pool, get_pool_base, get_pool_plane, get_pools_vec,
-    get_reward_tokens, get_reward_tokens_detailed, get_rewards_config, remove_pool,
-    set_liquidity_calculator, set_lp_token_hash, set_oracle_registry, set_pool_hash,
-    set_pool_plane, set_reward_tokens, set_reward_tokens_detailed, set_rewards_config,
-    GlobalRewardsConfig, PoolRewardInfo,
+    get_buffer, get_insurance_fund, get_liquidity_calculator, get_pool, get_pool_base,
+    get_pool_plane, get_pools_vec, get_reward_tokens, get_reward_tokens_detailed,
+    get_rewards_config, remove_pool, set_buffer, set_insurance_fund, set_liquidity_calculator,
+    set_lp_token_hash, set_oracle_registry, set_pool_hash, set_pool_plane, set_reward_tokens,
+    set_reward_tokens_detailed, set_rewards_config, GlobalRewardsConfig, PoolRewardInfo,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
@@ -460,11 +460,28 @@ impl AdminInterface for PoolRouter {
         );
     }
 
+    fn set_buffer(e: Env, admin: Address, buffer: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        set_buffer(&e, &buffer);
+    }
+
+    fn set_insurance_fund(e: Env, admin: Address, insurance_fund: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        set_insurance_fund(&e, &insurance_fund);
+    }
+
     fn set_liquidity_calculator(e: Env, admin: Address, calculator: Address) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-
         set_liquidity_calculator(&e, &calculator);
+    }
+
+    fn set_oracle_registry(e: Env, admin: Address, oracle_registry: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        set_oracle_registry(&e, &oracle_registry);
     }
 
     // Sets the liquidity pool share token wasm hash.
@@ -490,10 +507,20 @@ impl AdminInterface for PoolRouter {
             .put_reward_token(reward_token);
     }
 
-    fn set_oracle_registry(e: Env, admin: Address, oracle_registry: Address) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-        set_oracle_registry(&e, &oracle_registry);
+    //   _______    _______  ___________  ___________  _______   _______    ________
+    //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
+    // (: ( \___) (: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
+    //  \/ \       \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
+    //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
+    // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
+    //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
+
+    fn get_buffer(e: Env) -> Address {
+        get_buffer(&e)
+    }
+
+    fn get_insurance_fund(e: Env) -> Address {
+        get_insurance_fund(&e)
     }
 }
 
