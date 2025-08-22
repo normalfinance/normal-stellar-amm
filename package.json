@@ -26,6 +26,7 @@
     "pool:swap": "./scripts/admin/pool/swap.sh",
     "oracle:register": "./scripts/admin/oracle/register.sh",
     "oracle:update": "./scripts/admin/oracle/update.sh",
+    "oracle:delete": "./scripts/admin/oracle/delete.sh",
     "buffer:resolve": "./scripts/admin/buffer/resolve.sh",
     "buffer:update": "./scripts/admin/buffer/update.sh",
     "if:resolve": "./scripts/admin/buffer/resolve.sh",
