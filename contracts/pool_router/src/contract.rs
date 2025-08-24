@@ -39,6 +39,7 @@ use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::constant::MAX_POOL_FEE;
 use utils::state::pool::{PoolInfo, PoolTier, SwapDirection};
 use utils::token::{transfer_token, transfer_token_from};
+use utils::validation::ensure_non_zero_u128;
 
 #[contract]
 pub struct PoolRouter;
@@ -82,6 +83,8 @@ impl PoolInterfaceTrait for PoolRouter {
 
     fn deposit(e: Env, user: Address, asset: Symbol, token_b_amount: u128) -> (u128, u128) {
         user.require_auth();
+
+        ensure_non_zero_u128(&e, token_b_amount);
 
         enter(&e);
 
@@ -138,6 +141,8 @@ impl PoolInterfaceTrait for PoolRouter {
     ) -> u128 {
         user.require_auth();
 
+        ensure_non_zero_u128(&e, in_amount);
+
         enter(&e);
 
         let pool = get_pool(&e, &asset);
@@ -192,6 +197,8 @@ impl PoolInterfaceTrait for PoolRouter {
         direction: SwapDirection,
         in_amount: u128,
     ) -> (u128, i128) {
+        ensure_non_zero_u128(&e, in_amount);
+
         let pool_id = get_pool(&e, &asset);
 
         e.invoke_contract(
@@ -223,6 +230,8 @@ impl PoolInterfaceTrait for PoolRouter {
     // * A `withdraw` event recording the asset, user, pool, withdrawn amount, and share amount.
     fn withdraw(e: Env, user: Address, asset: Symbol, share_amount: u128) -> u128 {
         user.require_auth();
+
+        ensure_non_zero_u128(&e, share_amount);
 
         enter(&e);
 

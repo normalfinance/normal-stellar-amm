@@ -580,6 +580,8 @@ impl PoolTrait for Pool {
     //
     // A tuple containing the estimated amount of the output token that would be received and the amount of token_a to mint/burn.
     fn estimate_swap(e: Env, direction: SwapDirection, in_amount: u128) -> (u128, i128) {
+        ensure_non_zero_u128(&e, in_amount);
+
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
 
@@ -796,6 +798,8 @@ impl PoolTrait for Pool {
         direction: SwapDirection,
         out_amount: u128,
     ) -> (u128, i128) {
+        ensure_non_zero_u128(&e, out_amount);
+
         let (in_idx, out_idx) = if direction == SwapDirection::Buy {
             (1, 0)
         } else {
@@ -863,6 +867,8 @@ impl PoolTrait for Pool {
     // - Emits a liquidity withdrawal event.
     fn withdraw(e: Env, user: Address, share_amount: u128) -> u128 {
         user.require_auth();
+
+        ensure_non_zero_u128(&e, share_amount);
 
         enter(&e);
 
