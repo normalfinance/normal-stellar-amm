@@ -47,6 +47,15 @@ pub(crate) trait InsuranceFundEvents {
         new_insurance: u128,
     );
 
+    fn premium_whitelist_status_updated(
+        &self,
+        ts: u64,
+        admin: Address,
+        user: Address,
+        old_status: bool,
+        new_status: bool,
+    );
+
     //    _______     __       ____  ____   ________  _______  ________
     //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\
     //   (. |__) :) /    \    |   (  ) : |(:   \___/(: ______)(.  ___  :)
@@ -116,6 +125,27 @@ impl InsuranceFundEvents for Events {
         self.env().events().publish(
             (Symbol::new(self.env(), "sync_optimal_insurance"), sender),
             (previous_insurance, new_insurance),
+        );
+    }
+
+    fn premium_whitelist_status_updated(
+        &self,
+        ts: u64,
+        admin: Address,
+        user: Address,
+        old_status: bool,
+        new_status: bool,
+    ) {
+        self.env().events().publish(
+            (
+                Symbol::new(self.env(), "premium_whitelist_status_updated"),
+                ts,
+                admin,
+                user,
+                old_status,
+                new_status,
+            ),
+            (),
         );
     }
 

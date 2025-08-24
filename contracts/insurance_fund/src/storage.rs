@@ -1,7 +1,7 @@
 use paste::paste;
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{contracttype, panic_with_error, Address, Env};
-use utils::bump::bump_instance;
+use utils::bump::{bump_instance, bump_persistent};
 use utils::constant::THIRTEEN_DAY;
 use utils::errors::storage_errors::StorageError;
 use utils::{
@@ -27,6 +27,8 @@ enum DataKey {
     BaseRate,           // the base interest rate when utilization is 0%
     RateSlopeA,         // the slope before hitting optimal utilization (gradual increase)
     RateSlopeB,         // the slope after optimal utilization (steep increase)
+
+    PremiumWhitelist(Address), // List of accounts explicitly allowed to pay premium
 
     // paused ops
     IsKilledDeposit,
@@ -107,4 +109,34 @@ generate_instance_storage_getter_and_setter_with_default!(
 // Utils
 pub fn get_insurance_vault_amount(e: &Env) -> u128 {
     SorobanTokenClient::new(e, &get_token(e)).balance(&e.current_contract_address()) as u128
+}
+
+// Whitelist functions
+// Note: These use manual implementation (not macros) because they are keyed storage patterns
+// that require persistent storage, custom TTL management, and Address-based keys.
+// This follows the same pattern as Component(Address) and ComponentBalance(Address) storage.
+
+/// Checks if an address is whitelisted
+/// Returns true if whitelisted, false if not (missing entries are treated as not whitelisted)
+pub fn get_premium_whitelist_status(e: &Env, address: &Address) -> bool {
+    let key = DataKey::PremiumWhitelist(address.clone());
+    match e.storage().persistent().get::<DataKey, Address>(&key) {
+        Some(_) => {
+            bump_persistent(e, &key);
+            true
+        }
+        None => false,
+    }
+}
+
+/// Sets whitelist status for an address
+/// If status is true, adds the address to whitelist; if false, removes it
+pub fn set_premium_whitelist_status(e: &Env, address: &Address, status: bool) {
+    let key = DataKey::PremiumWhitelist(address.clone());
+    if status {
+        e.storage().persistent().set(&key, address);
+        e.storage().persistent().extend_ttl(&key, 100000, 100000);
+    } else {
+        e.storage().persistent().remove(&key);
+    }
 }

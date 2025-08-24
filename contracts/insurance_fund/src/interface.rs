@@ -64,6 +64,8 @@ pub trait InsuranceFundTrait {
     fn get_base_rate(e: Env) -> i32;
 
     fn get_rate_slopes(e: Env) -> (u32, u32);
+
+    fn get_premium_whitelist_status(e: Env, address: Address) -> bool;
 }
 
 pub trait AdminInterface {
@@ -99,6 +101,8 @@ pub trait AdminInterface {
         rate_slope_a: u32,
         rate_slope_b: u32,
     );
+
+    fn set_whitelist_status(e: Env, admin: Address, address: Address, status: bool);
 
     //    _______     __       ____  ____   ________  _______  ________
     //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\

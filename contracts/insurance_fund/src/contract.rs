@@ -10,6 +10,7 @@ use crate::stake::{
     if_shares_to_vault_amount, save_stake, vault_amount_to_if_shares, StakeAction,
 };
 use crate::storage::get_pool_router;
+use crate::storage::get_premium_whitelist_status;
 use crate::storage::set_pool_router;
 use crate::storage::{
     get_base_rate, get_insurance_vault_amount, get_is_killed_deposit,
@@ -610,16 +611,9 @@ impl InsuranceFundTrait for InsuranceFund {
 
         enter(&e);
 
-        /* @Halborn
-        The `Pool.insurance_claim` property defines how much coverage each Pool
-        receives from the Insurance Fund. Pools pay a premium for this insurance
-        via a portion of swap fees as defined in `PoolSwapFee.swap()` - where this
-        function is invoked to pay premiums.
-
-        Access to this function has been left open (not restricted to only the
-        PoolSwapFee contract) to allow other methods of protocol revenue to
-        eventually contribute to premium payments.
-         */
+        if !get_premium_whitelist_status(&e, &sender) {
+            panic_with_error!(&e, InsuranceFundError::NotAuthorized)
+        }
 
         transfer_token(
             &e,
@@ -711,6 +705,10 @@ impl InsuranceFundTrait for InsuranceFund {
 
     fn get_rate_slopes(e: Env) -> (u32, u32) {
         (get_rate_slope_a(&e), get_rate_slope_b(&e))
+    }
+
+    fn get_premium_whitelist_status(e: Env, address: Address) -> bool {
+        crate::storage::get_premium_whitelist_status(&e, &address)
     }
 }
 
@@ -1015,6 +1013,25 @@ impl AdminInterface for InsuranceFund {
         set_base_rate(&e, &base_rate);
         set_rate_slope_a(&e, &rate_slope_a);
         set_rate_slope_b(&e, &rate_slope_b);
+    }
+
+    fn set_whitelist_status(e: Env, admin: Address, address: Address, status: bool) {
+        admin.require_auth();
+        let access_control = AccessControl::new(&e);
+        access_control.assert_address_has_role(&admin, &Role::Admin);
+
+        let old_status = get_premium_whitelist_status(&e, &address);
+        crate::storage::set_premium_whitelist_status(&e, &address, status);
+
+        let current_time = e.ledger().timestamp();
+        // Emit enhanced event
+        FundEvents::new(&e).premium_whitelist_status_updated(
+            current_time,
+            admin,
+            address,
+            old_status,
+            status,
+        );
     }
 
     //    _______     __       ____  ____   ________  _______  ________
