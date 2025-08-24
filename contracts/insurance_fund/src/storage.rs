@@ -1,6 +1,6 @@
 use paste::paste;
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
-use soroban_sdk::{contracttype, panic_with_error, Address, Env};
+use soroban_sdk::{contracttype, panic_with_error, Address, Env, Vec};
 use utils::bump::{bump_instance, bump_persistent};
 use utils::constant::THIRTEEN_DAY;
 use utils::errors::storage_errors::StorageError;
@@ -10,14 +10,22 @@ use utils::{
     generate_instance_storage_getter_with_default, generate_instance_storage_setter,
 };
 
+use crate::errors::InsuranceFundError;
+use crate::reserve::InsuranceFundReserve;
+
 // TODO: must we track the interest paid to avoid counting uncollected interest as insurance?
 
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
-    OracleRegistry,
-    Token,      // the token address of supported deposits.
-    PoolRouter, // the address of the Pool Router.
+    OracleRegistry, // the address of the Oracle Registry.
+    PoolRouter,     // the address of the Pool Router.
+    PremiumToken,   // the address of the token used to pay premiums.
+
+    WhitelistToken(Address),
+    DeletionQueue(Address),
+
+    Reserve(Address),
 
     UnstakingPeriod, // a period of time stakers must wait once requesting withdrawal to actually withdraw.
     OptimalInsurance, // the maximum amount of insurance (in Token amount) to adequately insure the protocol.
@@ -44,19 +52,49 @@ generate_instance_storage_getter_and_setter_with_default!(
     Address::from_str(&Env::default(), "")
 );
 generate_instance_storage_getter_and_setter_with_default!(
-    token,
-    DataKey::Token,
-    Address,
-    Address::from_str(&Env::default(), "")
-);
-generate_instance_storage_getter_and_setter_with_default!(
     pool_router,
     DataKey::PoolRouter,
     Address,
     Address::from_str(&Env::default(), "")
 );
+generate_instance_storage_getter_and_setter_with_default!(
+    premium_token,
+    DataKey::PremiumToken,
+    Address,
+    Address::from_str(&Env::default(), "")
+);
 
 // Config
+generate_instance_storage_getter_and_setter_with_default!(
+    whitelist_tokens,
+    DataKey::WhitelistToken,
+    Vec<Address>,
+    Vec::new(&Env::default())
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    deletion_queue,
+    DataKey::DeletionQueue,
+    Vec<Address>,
+    Vec::new(&Env::default())
+);
+
+pub(crate) fn get_reserve(e: &Env, token: &Address) -> InsuranceFundReserve {
+    let key = DataKey::Reserve(token.clone());
+    match e.storage().persistent().get(&key) {
+        Some(value) => {
+            bump_persistent(e, &key);
+            value
+        }
+        None => InsuranceFundReserve::new(token.clone(), e.ledger().timestamp()),
+    }
+}
+
+pub(crate) fn put_reserve(e: &Env, token: &Address, reserve_info: &InsuranceFundReserve) {
+    let key = DataKey::Reserve(token.clone());
+    e.storage().persistent().set(&key, reserve_info);
+    bump_persistent(e, &key);
+}
+
 generate_instance_storage_getter_and_setter_with_default!(
     unstaking_period,
     DataKey::UnstakingPeriod,
@@ -69,18 +107,8 @@ generate_instance_storage_getter_and_setter_with_default!(
     u128,
     0
 );
-generate_instance_storage_getter_and_setter_with_default!(
-    total_shares,
-    DataKey::TotalShares,
-    u128,
-    0
-);
-generate_instance_storage_getter_and_setter_with_default!(
-    shares_base,
-    DataKey::SharesBase,
-    u128,
-    0
-);
+
+// Interest
 generate_instance_storage_getter_and_setter!(optimal_utilization, DataKey::OptimalUtilization, u32);
 generate_instance_storage_getter_and_setter!(base_rate, DataKey::BaseRate, i32);
 generate_instance_storage_getter_and_setter!(rate_slope_a, DataKey::RateSlopeA, u32);
@@ -107,8 +135,16 @@ generate_instance_storage_getter_and_setter_with_default!(
 );
 
 // Utils
-pub fn get_insurance_vault_amount(e: &Env) -> u128 {
-    SorobanTokenClient::new(e, &get_token(e)).balance(&e.current_contract_address()) as u128
+pub fn get_insurance_vault_amount(e: &Env, token: &Address) -> u128 {
+    SorobanTokenClient::new(e, token).balance(&e.current_contract_address()) as u128
+}
+
+pub fn validate_whitelisted_token(e: &Env, token: &Address) {
+    let whitelisted_tokens = get_whitelist_tokens(&e);
+
+    if !whitelisted_tokens.contains(token) {
+        panic_with_error!(e, InsuranceFundError::UnsupportedToken)
+    }
 }
 
 // Whitelist functions

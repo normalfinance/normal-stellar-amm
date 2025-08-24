@@ -194,8 +194,10 @@ stellar contract invoke \
     initialize \
     --admin $ADMIN_ADDRESS \
     --emergency_admin $ADMIN_ADDRESS \
-    --token $XLM_ADDRESS \
+    --oracle_registry $ORACLE_REGISTRY_ADDR \
     --pool_router $POOL_ROUTER_ADDR \
+    --premium_token $XLM_ADDRESS \
+    --whitelist_tokens "[\"$XLM_ADDRESS\"]" \
     --unstaking_period $THIRTEEN_DAYS \
     --optimal_utilization 8000 \
     --base_rate 200 \

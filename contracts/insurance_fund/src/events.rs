@@ -29,6 +29,7 @@ pub(crate) trait InsuranceFundEvents {
     fn if_stake_record(
         &self,
         user: Address,
+        token: Address,
         action: StakeAction,
         amount: u128,
         insurance_vault_amount_before: u128,
@@ -38,7 +39,11 @@ pub(crate) trait InsuranceFundEvents {
         total_if_shares_after: u128,
     );
 
-    fn collect_premium(&self, sender: Address, amount: u128);
+    fn collect_premium(&self, sender: Address, token: Address, amount: u128);
+
+    fn whitelist_token(&self, sender: Address, token: Address);
+
+    fn remove_whitelist_token(&self, sender: Address, token: Address, reserve_amount: u128);
 
     fn sync_optimal_insurance(
         &self,
@@ -89,6 +94,7 @@ impl InsuranceFundEvents for Events {
     fn if_stake_record(
         &self,
         user: Address,
+        token: Address,
         action: StakeAction,
         amount: u128,
         insurance_vault_amount_before: u128,
@@ -110,10 +116,24 @@ impl InsuranceFundEvents for Events {
         );
     }
 
-    fn collect_premium(&self, sender: Address, amount: u128) {
+    fn collect_premium(&self, sender: Address, token: Address, amount: u128) {
+        self.env().events().publish(
+            (Symbol::new(self.env(), "collect_premium"), sender),
+            (token, amount),
+        );
+    }
+
+    fn whitelist_token(&self, sender: Address, token: Address) {
         self.env()
             .events()
-            .publish((Symbol::new(self.env(), "collect_premium"), sender), amount);
+            .publish((Symbol::new(self.env(), "whitelist_token"), sender), token);
+    }
+
+    fn remove_whitelist_token(&self, sender: Address, token: Address, reserve_amount: u128) {
+        self.env().events().publish(
+            (Symbol::new(self.env(), "remove_whitelist_token"), sender),
+            (token, reserve_amount),
+        );
     }
 
     fn sync_optimal_insurance(

@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, Env, Symbol};
+use soroban_sdk::{Address, Env, Symbol, Vec};
 
 use crate::stake::Stake;
 
@@ -7,8 +7,10 @@ pub trait InsuranceFundTrait {
         e: Env,
         admin: Address,
         emergency_admin: Address,
-        token: Address,
+        oracle_registry: Address,
         pool_router: Address,
+        premium_token: Address,
+        whitelisted_tokens: Vec<Address>,
         unstaking_period: u64,
         optimal_utilization: u32,
         base_rate: i32,
@@ -23,13 +25,13 @@ pub trait InsuranceFundTrait {
     // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
-    fn deposit(e: Env, user: Address, amount: u128);
+    fn deposit(e: Env, user: Address, token: Address, amount: u128);
 
-    fn request_withdraw(e: Env, user: Address, amount: u128);
+    fn request_withdraw(e: Env, user: Address, token: Address, amount: u128);
 
-    fn cancel_request_withdraw(e: Env, user: Address);
+    fn cancel_request_withdraw(e: Env, user: Address, token: Address);
 
-    fn withdraw(e: Env, user: Address);
+    fn withdraw(e: Env, user: Address, token: Address);
 
     fn pay_premium(e: Env, sender: Address, amount: u128);
 
@@ -41,7 +43,9 @@ pub trait InsuranceFundTrait {
     // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
     //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
 
-    fn get_token(e: Env) -> Address;
+    fn get_whitelist_tokens(e: Env) -> Vec<Address>;
+
+    fn get_deletion_queue_tokens(e: Env) -> Vec<Address>;
 
     fn get_pool_router(e: Env) -> Address;
 
@@ -90,6 +94,7 @@ pub trait AdminInterface {
     // (_______/  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
 
     fn set_pool_router(e: Env, admin: Address, pool_router: Address);
+    fn add_whitelist_token(e: Env, admin: Address, token: Address);
 
     fn set_unstaking_period(e: Env, admin: Address, unstaking_period: u64);
 
@@ -103,6 +108,8 @@ pub trait AdminInterface {
     );
 
     fn set_whitelist_status(e: Env, admin: Address, address: Address, status: bool);
+
+    fn remove_whitelist_token(e: Env, admin: Address, token: Address);
 
     //    _______     __       ____  ____   ________  _______  ________
     //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\

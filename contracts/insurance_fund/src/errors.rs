@@ -28,6 +28,8 @@ pub enum InsuranceFundError {
     CostBasisUnderflow = 23,
     QueryPoolFailed = 24,
     PayInsuranceClaimFailed = 25,
+    UnsupportedToken = 26,
+    TokenAlreadyDeleted = 27,
 
     // paused ops
     FundDepositKilled = 30,
