@@ -135,7 +135,7 @@ generate_instance_storage_getter_and_setter_with_default!(
 );
 
 // Utils
-pub fn get_insurance_vault_amount(e: &Env, token: &Address) -> u128 {
+pub fn get_contract_token_balance(e: &Env, token: &Address) -> u128 {
     SorobanTokenClient::new(e, token).balance(&e.current_contract_address()) as u128
 }
 

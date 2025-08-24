@@ -61,6 +61,10 @@ pub(crate) trait InsuranceFundEvents {
         new_status: bool,
     );
 
+    fn sync(&self, sender: Address, token: Address, amount: i128);
+
+    fn skim(&self, sender: Address, token: Address, amount: i128);
+
     //    _______     __       ____  ____   ________  _______  ________
     //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\
     //   (. |__) :) /    \    |   (  ) : |(:   \___/(: ______)(.  ___  :)
@@ -167,6 +171,18 @@ impl InsuranceFundEvents for Events {
             ),
             (),
         );
+    }
+
+    fn sync(&self, user: Address, token: Address, amount: i128) {
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "sync"), token), (user, amount));
+    }
+
+    fn skim(&self, user: Address, token: Address, amount: i128) {
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "skim"), token), (user, amount));
     }
 
     //    _______     __       ____  ____   ________  _______  ________

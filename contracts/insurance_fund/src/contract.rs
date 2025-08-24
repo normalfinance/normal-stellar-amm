@@ -10,6 +10,7 @@ use crate::stake::{
     apply_rebase_to_insurance_fund, apply_rebase_to_stake, calculate_shares_lost, get_stake,
     reserve_amount_to_shares, save_stake, shares_to_reserve_amount, StakeAction,
 };
+use crate::storage::get_contract_token_balance;
 use crate::storage::get_deletion_queue;
 use crate::storage::get_pool_router;
 use crate::storage::get_premium_token;
@@ -653,6 +654,52 @@ impl InsuranceFundTrait for InsuranceFund {
         );
 
         FundEvents::new(&e).collect_premium(sender, premium_token, amount);
+
+        exit(&e);
+    }
+
+    // Sync token balances with reserves.
+    //
+    // # Arguments
+    //
+    // * `sender` - The address of the sender.
+    // * `token` - The address of the token to sync.
+    fn sync(e: Env, sender: Address, token: Address) {
+        sender.require_auth();
+
+        enter(&e);
+
+        validate_token_contract(&e, &token);
+
+        let now = e.ledger().timestamp();
+        let reserve = get_reserve(&e, &token);
+        let balance = get_contract_token_balance(&e, &token);
+        put_reserve(&e, &token, &reserve.update_balance(balance, now));
+        FundEvents::new(&e).sync(sender, token, 0);
+
+        exit(&e);
+    }
+
+    // Skim excess token balances.
+    //
+    // # Arguments
+    //
+    // * `sender` - The address of the sender.
+    // * `token` - The address of the token to skim.
+    fn skim(e: Env, sender: Address, token: Address) {
+        sender.require_auth();
+
+        enter(&e);
+
+        validate_token_contract(&e, &token);
+
+        let reserve = get_reserve(&e, &token);
+        let balance = get_contract_token_balance(&e, &token);
+        let skimmed = balance.saturating_sub(reserve.balance) as i128;
+        if skimmed > 0 {
+            transfer_token(&e, &token, &e.current_contract_address(), &sender, &skimmed);
+            FundEvents::new(&e).skim(sender, token, skimmed);
+        }
 
         exit(&e);
     }

@@ -35,6 +35,12 @@ pub trait InsuranceFundTrait {
 
     fn pay_premium(e: Env, sender: Address, amount: u128);
 
+    // Sync token balances with reserves
+    fn sync(e: Env, sender: Address, token: Address);
+
+    // Skim excess token balances
+    fn skim(e: Env, sender: Address, token: Address);
+
     //   _______    _______  ___________  ___________  _______   _______    ________
     //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
     // (: ( \___) (: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
