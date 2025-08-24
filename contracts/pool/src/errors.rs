@@ -28,6 +28,7 @@ pub enum PoolError {
     WithdrawExceedsMinLiquidity = 219,
     UnfairShareCalculation = 220,
     SettledExceedsMax = 221,
+    Unauthorized = 222,
 }
 
 #[contracterror]

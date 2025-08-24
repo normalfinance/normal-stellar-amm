@@ -1,5 +1,5 @@
 use paste::paste;
-use soroban_sdk::{contracttype, panic_with_error, Address, BytesN, Env};
+use soroban_sdk::{contracttype, panic_with_error, Address, BytesN, Env, Symbol, Vec};
 pub use utils::bump::bump_instance;
 use utils::errors::storage_errors::StorageError;
 use utils::state::pool::Pool as PoolType;
@@ -108,4 +108,24 @@ pub(crate) fn get_token_future_wasm(e: &Env) -> BytesN<32> {
         Some(v) => v,
         None => panic_with_error!(e, StorageError::ValueNotInitialized),
     }
+}
+
+/// Get Buffer address from PoolRouter contract
+pub fn get_buffer_from_router(e: &Env) -> Address {
+    // Call PoolRouter's get_buffer() function
+    e.invoke_contract::<Address>(
+        &get_router(e),
+        &Symbol::new(e, "get_buffer"),
+        Vec::from_array(e, []),
+    )
+}
+
+/// Get Insurance Fund address from PoolRouter contract
+pub fn get_insurance_fund_from_router(e: &Env) -> Address {
+    // Call PoolRouter's get_insurance_fund() function
+    e.invoke_contract::<Address>(
+        &get_router(e),
+        &Symbol::new(e, "get_insurance_fund"),
+        Vec::from_array(e, []),
+    )
 }
