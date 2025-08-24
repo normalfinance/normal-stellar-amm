@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, BytesN, String};
+use soroban_sdk::{contracttype, Address, BytesN, String, Symbol};
 
 #[contracttype]
 #[derive(Clone)]
@@ -16,4 +16,11 @@ pub struct AddressAndAmount {
     pub address: Address,
     // The total amount of those tokens in the pool
     pub amount: u128,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DetailedToken {
+    pub address: Address, // Address of the token
+    pub symbol: Symbol,  // Symbol of the token
 }

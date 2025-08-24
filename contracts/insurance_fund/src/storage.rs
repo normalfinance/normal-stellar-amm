@@ -1,17 +1,16 @@
+use crate::reserve::InsuranceFundReserve;
 use paste::paste;
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{contracttype, panic_with_error, Address, Env, Vec};
 use utils::bump::{bump_instance, bump_persistent};
 use utils::constant::THIRTEEN_DAY;
 use utils::errors::storage_errors::StorageError;
+use utils::state::token::DetailedToken;
 use utils::{
     generate_instance_storage_getter, generate_instance_storage_getter_and_setter,
     generate_instance_storage_getter_and_setter_with_default,
     generate_instance_storage_getter_with_default, generate_instance_storage_setter,
 };
-
-use crate::errors::InsuranceFundError;
-use crate::reserve::InsuranceFundReserve;
 
 // TODO: must we track the interest paid to avoid counting uncollected interest as insurance?
 
@@ -22,7 +21,7 @@ enum DataKey {
     PoolRouter,     // the address of the Pool Router.
     PremiumToken,   // the address of the token used to pay premiums.
 
-    WhitelistToken(Address),
+    TokenWhitelist(Address),
     DeletionQueue(Address),
 
     Reserve(Address),
@@ -45,6 +44,31 @@ enum DataKey {
 }
 
 // Addresses
+/// Checks if an address is whitelisted
+/// Returns true if whitelisted, false if not (missing entries are treated as not whitelisted)
+pub fn get_token_whitelist_status(e: &Env, address: &Address) -> bool {
+    let key = DataKey::TokenWhitelist(address.clone());
+    match e.storage().persistent().get::<DataKey, DetailedToken>(&key) {
+        Some(_) => {
+            bump_persistent(e, &key);
+            true
+        }
+        None => false,
+    }
+}
+
+/// Sets whitelist status for an address
+/// If status is true, adds the address to whitelist; if false, removes it
+pub fn set_token_whitelist_status(e: &Env, token: &DetailedToken, status: bool) {
+    let key = DataKey::TokenWhitelist(token.address.clone());
+    if status {
+        e.storage().persistent().set(&key, token);
+        bump_persistent(e, &key);
+    } else {
+        e.storage().persistent().remove(&key);
+    }
+}
+
 generate_instance_storage_getter_and_setter_with_default!(
     oracle_registry,
     DataKey::OracleRegistry,

@@ -1,6 +1,6 @@
 use crate::errors::InsuranceFundError;
 use crate::reserve::InsuranceFundReserve;
-use crate::storage::get_reserve;
+use crate::storage::{get_reserve, put_reserve};
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{contracttype, panic_with_error, Address, Env};
 use utils::bump::bump_persistent;
@@ -30,8 +30,9 @@ pub struct Stake {
 }
 
 impl Stake {
-    pub fn new() -> Self {
+    pub fn new(token: Address) -> Self {
         Stake {
+            token,
             last_withdraw_request_shares: 0,
             last_withdraw_request_value: 0,
             last_withdraw_request_ts: 0,
@@ -42,10 +43,10 @@ impl Stake {
     }
 
     fn validate_base(&self, e: &Env) {
-        let shares_base = get_shares_base(e);
+        let reserve = get_reserve(e, &self.token);
         validate!(
             e,
-            self.if_base == shares_base,
+            self.if_base == reserve.shares_base,
             InsuranceFundError::InvalidIFRebase
         );
     }
@@ -75,20 +76,22 @@ impl Stake {
     }
 }
 
-pub fn get_stake(e: &Env, key: &Address) -> Stake {
-    let stake_info = match e.storage().persistent().get::<_, Stake>(key) {
+pub fn get_stake(e: &Env, user: &Address, token: &Address) -> Stake {
+    let key = (user, token);
+    let stake_info = match e.storage().persistent().get::<_, Stake>(&key) {
         Some(stake) => {
             bump_persistent(e, &key);
             stake
         }
-        None => Stake::new(),
+        None => Stake::new(token.clone()),
     };
 
     stake_info
 }
 
-pub fn save_stake(e: &Env, key: &Address, stake_info: &Stake) {
-    e.storage().persistent().set(key, stake_info);
+pub fn save_stake(e: &Env, user: &Address, token: &Address, stake_info: &Stake) {
+    let key = (user, token);
+    e.storage().persistent().set(&key, stake_info);
     bump_persistent(e, &key);
 }
 
@@ -114,20 +117,22 @@ pub fn save_stake(e: &Env, key: &Address, stake_info: &Stake) {
 //
 // # Side Effects
 // - Updates `total_shares` and `shares_base` in contract storage.
-pub fn apply_rebase_to_insurance_fund(e: &Env, token: Address) {
-    let reserve = get_reserve(e, &token);
+pub fn apply_rebase_to_insurance_fund(e: &Env, token: &Address) {
+    let mut reserve = get_reserve(e, token);
 
     if reserve.balance != 0 && reserve.balance < reserve.total_shares {
         let (expo_diff, rebase_divisor) =
             calculate_rebase_info(e, reserve.total_shares, reserve.balance);
 
-        set_total_shares(e, &reserve.total_shares.safe_div(e, rebase_divisor));
-        set_shares_base(e, &reserve.shares_base.safe_add(e, expo_diff as u128));
+        reserve.total_shares = reserve.total_shares.safe_div(e, rebase_divisor);
+        reserve.shares_base = reserve.shares_base.safe_add(e, expo_diff as u128);
     }
 
     if reserve.balance != 0 && reserve.total_shares == 0 {
-        set_total_shares(e, &(reserve.balance as u128));
+        reserve.total_shares = reserve.balance;
     }
+
+    put_reserve(e, token, &reserve);
 }
 
 // Applies a rebase to an individual stake's insurance fund shares to align with the global share base.
@@ -191,7 +196,7 @@ pub fn apply_rebase_to_stake(e: &Env, stake: &mut Stake) {
 // # Validation
 // - If `insurance_vault_amount == 0`, then `total_if_shares` must also be zero.
 // - Falls back to 1:1 minting when vault is empty.
-pub fn reserve_amount_to_shares(e: &Env, amount: u128, reserve: InsuranceFundReserve) -> u128 {
+pub fn reserve_amount_to_shares(e: &Env, amount: u128, reserve: &InsuranceFundReserve) -> u128 {
     // relative to the entire pool + total amount minted
     let n_shares = if reserve.balance > 0 {
         // assumes total_if_shares != 0 (in most cases) for nice result for user
@@ -225,7 +230,7 @@ pub fn reserve_amount_to_shares(e: &Env, amount: u128, reserve: InsuranceFundRes
 // # Validation
 // - Ensures `n_shares <= total_if_shares`.
 // - Returns `0` if total shares are zero (vault is empty).
-pub fn shares_to_reserve_amount(e: &Env, n_shares: u128, reserve: InsuranceFundReserve) -> u128 {
+pub fn shares_to_reserve_amount(e: &Env, n_shares: u128, reserve: &InsuranceFundReserve) -> u128 {
     validate!(
         e,
         n_shares <= reserve.total_shares,
@@ -295,16 +300,19 @@ pub fn calculate_rebase_info(
 pub fn calculate_shares_lost(e: &Env, stake: &Stake, reserve: &InsuranceFundReserve) -> u128 {
     let n_shares = stake.last_withdraw_request_shares;
 
-    let amount = shares_to_reserve_amount(e, n_shares, total_shares, reserve.balance);
+    let amount = shares_to_reserve_amount(e, n_shares, reserve);
 
     let if_shares_lost = if amount > stake.last_withdraw_request_value {
         let new_n_shares = reserve_amount_to_shares(
             e,
             stake.last_withdraw_request_value,
-            reserve.total_shares.saturating_sub(n_shares),
-            reserve
-                .balance
-                .saturating_sub(stake.last_withdraw_request_value),
+            &(InsuranceFundReserve {
+                total_shares: reserve.total_shares.saturating_sub(n_shares),
+                balance: reserve
+                    .balance
+                    .saturating_sub(stake.last_withdraw_request_value),
+                ..reserve.clone()
+            }),
         );
 
         validate!(
@@ -421,6 +429,7 @@ pub fn basic_stake_if_test() {
 #[test]
 pub fn if_shares_lost_test() {
     use crate::testutils::Setup;
+    use soroban_sdk::testutils::Address;
     use utils::constant::QUOTE_PRECISION;
 
     let setup = Setup::default();
@@ -429,7 +438,9 @@ pub fn if_shares_lost_test() {
 
     let mut total_shares = 1000 * QUOTE_PRECISION;
 
-    let mut if_stake = Stake::new();
+    let token = Address::generate(&setup.env);
+
+    let mut if_stake = Stake::new(token);
     if_stake.update_if_shares(&setup.env, 100 * QUOTE_PRECISION);
     if_stake.last_withdraw_request_shares = 100 * QUOTE_PRECISION;
     if_stake.last_withdraw_request_value = 100 * QUOTE_PRECISION - 1;

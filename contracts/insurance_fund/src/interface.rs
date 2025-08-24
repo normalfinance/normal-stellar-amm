@@ -1,6 +1,8 @@
 use soroban_sdk::{Address, Env, Symbol, Vec};
+use soroban_sdk::{Address, Env, Vec};
+use utils::state::token::DetailedToken;
 
-use crate::stake::Stake;
+use crate::{reserve::InsuranceFundReserve, stake::Stake};
 
 pub trait InsuranceFundTrait {
     fn initialize(
@@ -11,6 +13,7 @@ pub trait InsuranceFundTrait {
         pool_router: Address,
         premium_token: Address,
         whitelisted_tokens: Vec<Address>,
+        oracle_registry: Address,
         unstaking_period: u64,
         optimal_utilization: u32,
         base_rate: i32,
@@ -59,11 +62,9 @@ pub trait InsuranceFundTrait {
 
     fn get_optimal_insurance(e: Env) -> u128;
 
-    fn get_total_shares(e: Env) -> u128;
+    fn get_reserve(e: Env, token: Address) -> InsuranceFundReserve;
 
-    fn get_share_base(e: Env) -> u128;
-
-    fn get_stake(e: Env, user: Address) -> Stake;
+    fn get_stake(e: Env, user: Address, token: Address) -> Stake;
 
     fn get_optimal_utilization(e: Env) -> u32;
 
@@ -101,6 +102,10 @@ pub trait AdminInterface {
 
     fn set_pool_router(e: Env, admin: Address, pool_router: Address);
     fn add_whitelist_token(e: Env, admin: Address, token: Address);
+
+    fn add_whitelist_token(e: Env, admin: Address, token: DetailedToken);
+
+    fn remove_whitelist_token(e: Env, admin: Address, token: DetailedToken);
 
     fn set_unstaking_period(e: Env, admin: Address, unstaking_period: u64);
 

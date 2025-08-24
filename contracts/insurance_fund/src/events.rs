@@ -108,7 +108,12 @@ impl InsuranceFundEvents for Events {
         total_if_shares_after: u128,
     ) {
         self.env().events().publish(
-            (Symbol::new(self.env(), "if_stake_record"), user, action),
+            (
+                Symbol::new(self.env(), "if_stake_record"),
+                user,
+                token,
+                action,
+            ),
             (
                 amount,
                 insurance_vault_amount_before,
