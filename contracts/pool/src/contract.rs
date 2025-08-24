@@ -13,12 +13,12 @@ use crate::pool::{
     peg_price, rebalance, update_volume_30d, validate_oracle_price_with_pool,
 };
 use crate::storage::{
-    get_buffer_from_router, get_insurance_fund_from_router, get_is_killed_claim,
-    get_is_killed_deposit, get_is_killed_swap, get_is_killed_withdraw, get_mint_cap_fraction,
-    get_plane, get_pool, get_reserve_a, get_reserve_b, get_router, get_token_future_wasm,
-    has_plane, set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap,
-    set_is_killed_withdraw, set_mint_cap_fraction, set_oracle_registry, set_plane, set_pool,
-    set_reserve_a, set_reserve_b, set_router, set_token_future_wasm,
+    get_insurance_fund_from_router, get_is_killed_claim, get_is_killed_deposit, get_is_killed_swap,
+    get_is_killed_withdraw, get_mint_cap_fraction, get_plane, get_pool, get_reserve_a,
+    get_reserve_b, get_router, get_token_future_wasm, has_plane, set_is_killed_claim,
+    set_is_killed_deposit, set_is_killed_swap, set_is_killed_withdraw, set_mint_cap_fraction,
+    set_oracle_registry, set_plane, set_pool, set_reserve_a, set_reserve_b, set_router,
+    set_token_future_wasm,
 };
 use crate::token::{create_lp_token_contract, transfer_a, transfer_b};
 use access_control::access::{AccessControl, AccessControlTrait};
@@ -1103,7 +1103,7 @@ impl AdminInterfaceTrait for Pool {
     //
     // # Arguments
     // * `e` - Soroban environment reference.
-    // * `sender` - The address of the caller (can only be the Buffer or Insurance Fund).
+    // * `sender` - The address of the caller (can only be the Insurance Fund).
     // * `insurance_vault_amount` - The balance of the calling contract's holdings.
     //
     // # Returns
@@ -1114,10 +1114,9 @@ impl AdminInterfaceTrait for Pool {
 
         enter(&e);
 
-        let buffer = get_buffer_from_router(&e);
         let insurance_fund = get_insurance_fund_from_router(&e);
 
-        if sender != buffer && sender != insurance_fund {
+        if sender != insurance_fund {
             panic_with_error!(&e, PoolError::Unauthorized);
         }
 

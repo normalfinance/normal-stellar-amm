@@ -171,33 +171,6 @@ stellar contract invoke \
 
 echo "Tokens and pool router deployed."
 
-#  _______   ____  ____   _______   _______   _______   _______
-# |   _  "\ ("  _||_ " | /"     "| /"     "| /"     "| /"      \
-# (. |_)  :)|   (  ) : |(: ______)(: ______)(: ______)|:        |
-# |:     \/ (:  |  | . ) \/    |   \/    |   \/    |  |_____/   )
-# (|  _  \\  \\ \__/ //  // ___)   // ___)   // ___)_  //      /
-# |: |_)  :) /\\ __ //\ (:  (     (:  (     (:      "||:  __   \
-# (_______/ (__________) \__/      \__/      \_______)|__|  \___)
-
-echo "Setup buffer..."
-
-ONE_HOUR=$((3600))
-
-stellar contract invoke \
-    --id $BUFFER_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
-    --fee $STELLAR_BASE_FEE \
-    -- \
-    initialize \
-    --admin $ADMIN_ADDRESS \
-    --emergency_admin $ADMIN_ADDRESS \
-    --pool_router $POOL_ROUTER_ADDR \
-    --time_between_payouts $ONE_HOUR \
-    --min_reserve_ratio 1000
-
 #   __    _____  ___    ________  ____  ____   _______        __      _____  ___    ______    _______
 #  |" \  (\"   \|"  \  /"       )("  _||_ " | /"      \      /""\    (\"   \|"  \  /" _  "\  /"     "|
 #  ||  | |.\\   \    |(:   \___/ |   (  ) : ||:        |    /    \   |.\\   \    |(: ( \___)(: ______)

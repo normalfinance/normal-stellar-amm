@@ -19,11 +19,6 @@ pub(crate) mod pool_plane {
 pub(crate) mod liquidity_calculator {
     soroban_sdk::contractimport!(file = "../../wasm/liquidity_calculator.wasm");
 }
-
-pub(crate) mod buffer {
-    soroban_sdk::contractimport!(file = "../../wasm/buffer.wasm");
-}
-
 pub(crate) mod insurance_fund {
     soroban_sdk::contractimport!(file = "../../wasm/insurance_fund.wasm");
 }

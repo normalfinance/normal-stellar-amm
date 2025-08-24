@@ -12,11 +12,7 @@ pub trait PoolSwapFeeInterface {
 
     fn get_router(e: Env) -> Address;
 
-    fn get_buffer(e: Env) -> Address;
-
     fn get_fee_destination(e: Env) -> Address;
-
-    fn get_buffer_fraction(e: Env) -> u32;
 
     fn get_lp_revenue_fraction(e: Env) -> u32;
 
@@ -67,13 +63,9 @@ pub trait AdminInterface {
 
     fn set_router(e: Env, admin: Address, router: Address);
 
-    fn set_buffer(e: Env, admin: Address, buffer: Address);
-
     fn set_insurance_fund(e: Env, admin: Address, insurance_fund: Address);
 
     fn set_fee_destination(e: Env, admin: Address, fee_destination: Address);
-
-    fn set_buffer_fraction(e: Env, admin: Address, fraction: u32);
 
     fn set_lp_revenue_fraction(e: Env, admin: Address, fraction: u32);
 

@@ -22,7 +22,6 @@ tasks:
       - task -d contracts/pool_router build || exit 1
       - task -d contracts/pool_swap_fee build || exit 1
       - task -d contracts/oracle_registry build || exit 1
-      - task -d contracts/buffer build || exit 1
       - task -d contracts/insurance_fund build || exit 1
       - cp ./target/wasm32v1-none/release/*.wasm ./wasm
 

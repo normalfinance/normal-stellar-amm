@@ -30,7 +30,6 @@ Normal is a synthetic asset protocol enabling investors to trade any crypto asse
 
 - **pool** - A constant product AMM for synthetic assets that automatically mints/burns the synthetic asset to maintain an oracle price peg
 - **pool_router** - entry point and catalogue of liquidity pools which is capable to deploy new pools if necessary
-- **buffer** - Initial backstop to cover pool liquidity deficits. Receives a portion of all protocol revenue
 - **insurance_fund** - Additional backstop for liquidity deficits. Funded via liquidity provider staking deposits
 - **oracle_registry** - Oracle aggegation and price validation making it easier for pools to source reliable oracle prices
 - **pool_swap_fee** - A proxy for the `PoolRouter` that handles swap fee collection and distribution.

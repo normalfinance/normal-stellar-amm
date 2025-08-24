@@ -68,7 +68,6 @@ pub(crate) struct Setup<'a> {
     pub(crate) oracle_registry: contracts::oracle_registry::Client<'a>,
     pub(crate) router: contracts::pool_router::Client<'a>,
     // pub(crate) fee_collector: contracts::pool_swap_fee::Client<'a>,
-    pub(crate) buffer: contracts::buffer::Client<'a>,
     pub(crate) insurance_fund: contracts::insurance_fund::Client<'a>,
     pub(crate) plane: contracts::pool_plane::Client<'a>,
     pub(crate) liquidity_calculator: contracts::liquidity_calculator::Client<'a>,
@@ -331,11 +330,6 @@ impl Setup<'_> {
         // Register BTC oralce
         registry.register_oracle(&admin, &xlm_asset_id, &oracle_id, &14, &0);
 
-        // Buffer
-        let buffer = create_buffer_contract(&e);
-        buffer.initialize(&admin, &emergency_admin, &1000, &1000);
-        // buffer.set_fee_collector(&admin, &fee_collector);
-
         // Insurance Fund
         let insurance_fund = create_insurance_fund_contract(&e);
         insurance_fund.initialize(
@@ -373,7 +367,6 @@ impl Setup<'_> {
             oracle_registry: registry,
             // fee_collector: '',
             router,
-            buffer,
             insurance_fund,
             plane,
             liquidity_calculator,
@@ -444,10 +437,6 @@ fn create_plane_contract<'a>(e: &Env) -> contracts::pool_plane::Client<'a> {
 
 fn create_pool_swap_fee_contract<'a>(e: &Env) -> contracts::pool_swap_fee::Client<'a> {
     contracts::pool_swap_fee::Client::new(e, &e.register(contracts::pool_swap_fee::WASM, ()))
-}
-
-fn create_buffer_contract<'a>(e: &Env) -> contracts::buffer::Client<'a> {
-    contracts::buffer::Client::new(e, &e.register(contracts::buffer::WASM, ()))
 }
 
 fn create_insurance_fund_contract<'a>(e: &Env) -> contracts::insurance_fund::Client<'a> {

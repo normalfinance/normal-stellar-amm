@@ -110,16 +110,6 @@ pub(crate) fn get_token_future_wasm(e: &Env) -> BytesN<32> {
     }
 }
 
-/// Get Buffer address from PoolRouter contract
-pub fn get_buffer_from_router(e: &Env) -> Address {
-    // Call PoolRouter's get_buffer() function
-    e.invoke_contract::<Address>(
-        &get_router(e),
-        &Symbol::new(e, "get_buffer"),
-        Vec::from_array(e, []),
-    )
-}
-
 /// Get Insurance Fund address from PoolRouter contract
 pub fn get_insurance_fund_from_router(e: &Env) -> Address {
     // Call PoolRouter's get_insurance_fund() function

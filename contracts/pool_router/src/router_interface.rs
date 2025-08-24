@@ -13,8 +13,6 @@ pub trait AdminInterface {
         emergency_pause_admins: Vec<Address>,
     );
 
-    fn set_buffer(e: Env, admin: Address, buffer: Address);
-
     fn set_insurance_fund(e: Env, admin: Address, insurance_fund: Address);
 
     fn set_liquidity_calculator(e: Env, admin: Address, calculator: Address);
@@ -34,8 +32,6 @@ pub trait AdminInterface {
     //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
     // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
     //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
-
-    fn get_buffer(e: Env) -> Address;
 
     fn get_insurance_fund(e: Env) -> Address;
 }
