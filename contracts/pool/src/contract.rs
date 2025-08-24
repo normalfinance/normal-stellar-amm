@@ -1037,6 +1037,21 @@ impl PoolTrait for Pool {
             pool_response,
         }
     }
+
+    fn get_liquidity_imbalance(e: Env) -> i128 {
+        let pool = get_pool(&e);
+
+        let action = NormalAction::Rebalance;
+
+        let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, action);
+        let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, action);
+
+        get_net_liquidity_imbalance(
+            &e,
+            base_oracle_price_data.last_oracle_price_twap,
+            quote_oracle_price_data.last_oracle_price_twap,
+        )
+    }
 }
 
 #[contractimpl]

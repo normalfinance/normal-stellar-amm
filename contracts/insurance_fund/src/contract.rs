@@ -9,6 +9,8 @@ use crate::stake::{
     apply_rebase_to_insurance_fund, apply_rebase_to_stake, calculate_if_shares_lost, get_stake,
     if_shares_to_vault_amount, save_stake, vault_amount_to_if_shares, StakeAction,
 };
+use crate::storage::get_oracle_registry;
+use crate::storage::get_pool_router;
 use crate::storage::{
     get_base_rate, get_insurance_vault_amount, get_is_killed_deposit,
     get_is_killed_request_withdraw, get_is_killed_withdraw, get_optimal_insurance,
@@ -37,6 +39,9 @@ use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::math::safe_math::SafeMath;
+use utils::state::oracle_registry::HistoricalOracleData;
+use utils::state::oracle_registry::OracleValidity;
+use utils::state::pool::PoolInfoForCoverage;
 use utils::token::transfer_token;
 use utils::validate;
 use utils::validation::ensure_non_zero_u128;
@@ -126,8 +131,6 @@ impl InsuranceFundTrait for InsuranceFund {
         if get_is_killed_deposit(&e) {
             panic_with_error!(e, InsuranceFundError::FundDepositKilled);
         }
-
-        // TODO: Automically update optimal insurance instead of relying on manual admin updates
 
         let optimal_insurance = get_optimal_insurance(&e);
         let insurance_vault_amount = get_insurance_vault_amount(&e);
@@ -796,6 +799,75 @@ impl AdminInterface for InsuranceFund {
     // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
+    // Synchronizes the target “optimal insurance” level with current system-wide liquidity imbalance.
+    //
+    // This admin-only function queries the Pool Router for the aggregate liquidity imbalance across
+    // all pools and updates the Insurance Fund’s `optimal_insurance` value accordingly. The target is
+    // set to zero when the system is balanced (≤ 0) and to the positive imbalance otherwise.
+    //
+    // # Arguments
+    // * `e` - The Soroban environment.
+    // * `admin` - The address that must authorize the sync operation.
+    //
+    // # Behavior
+    // * Requires admin authentication (`admin.require_auth()` + `require_admin()`).
+    // * Reads the current `optimal_insurance`.
+    // * Invokes the Pool Router’s `get_total_liquidity_imbalance()` (no args) to fetch the latest
+    //   system-wide imbalance as an `i128`.
+    // * Computes `updated_optimal_insurance` as:
+    //   * `0` if `total_liquidity_imbalance <= 0`,
+    //   * `total_liquidity_imbalance as u128` otherwise.
+    // * Persists the new `optimal_insurance`.
+    // * Emits a `FundEvents::sync_optimal_insurance(admin, old, new)` event for observability.
+    //
+    // # Rationale
+    // * Using `max(0, imbalance)` prevents negative targets and ensures the stored value fits in
+    //   `u128`.
+    // * Centralizing the read (`Pool Router`) and write (`Insurance Fund`) keeps calculation logic
+    //   composable and auditable.
+    //
+    // # Security
+    // * Restricted to the Insurance Fund admin; unauthorized callers are rejected.
+    // * The function performs a single external call to the Pool Router; any failure there aborts
+    //   the update and leaves state unchanged.
+    // * No tokens are moved; this only updates a configuration/target value.
+    //
+    // # Panics / Errors
+    // * Authorization fails if `admin` does not sign or is not recognized by `require_admin()`.
+    // * Any error from the Pool Router `get_total_liquidity_imbalance` call is bubbled up.
+    // * Storage write errors (e.g., out-of-budget) will abort the transaction.
+    //
+    // # Events
+    // * `sync_optimal_insurance(admin, previous_optimal, updated_optimal)` is emitted after a
+    //   successful update to aid indexers and off-chain monitoring.
+    fn sync_optimal_insurance(e: Env, admin: Address) {
+        admin.require_auth();
+        require_admin(&e, &admin);
+
+        let current_optimal_insurance = get_optimal_insurance(&e);
+
+        // Fetch the total liquidity imbalance from the Pool Router
+        let total_liquidity_imbalance: i128 = e.invoke_contract(
+            &get_pool_router(&e),
+            &Symbol::new(&e, "get_total_liquidity_imbalance"),
+            Vec::from_array(&e, []),
+        );
+
+        let updated_optimal_insurance = if total_liquidity_imbalance <= 0 {
+            0_u128
+        } else {
+            total_liquidity_imbalance as u128
+        };
+
+        set_optimal_insurance(&e, &updated_optimal_insurance);
+
+        FundEvents::new(&e).sync_optimal_insurance(
+            admin,
+            current_optimal_insurance,
+            updated_optimal_insurance,
+        );
+    }
+
     // Resolves a liquidity deficit in a pool by transferring insurance coverage from the Insurance Fund.
     //
     // This function is invoked by the Insurance Fund admin when a liquidity pool reports a deficit
@@ -878,13 +950,6 @@ impl AdminInterface for InsuranceFund {
         require_admin(&e, &admin);
 
         set_unstaking_period(&e, &unstaking_period);
-    }
-
-    fn set_optimal_insurance(e: Env, admin: Address, optimal_insurance: u128) {
-        admin.require_auth();
-        require_admin(&e, &admin);
-
-        set_optimal_insurance(&e, &optimal_insurance);
     }
 
     fn set_rate_config(

@@ -64,6 +64,18 @@ pub trait InsuranceFundTrait {
 }
 
 pub trait AdminInterface {
+    //  ___      ___       __        __    _____  ___
+    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
+    //  \   \  //   |    /    \     ||  | |.\\   \    |
+    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
+    // |: \.        |  //  __'  \   |.  | |.  \    \. |
+    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
+    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
+
+    fn sync_optimal_insurance(e: Env, admin: Address);
+
+    fn resolve_liquidity_deficit(e: Env, admin: Address, pool_address: Address);
+
     //   ________  _______  ___________  ___________  _______   _______    ________
     //  /"       )/"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
     // (:   \___/(: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
@@ -74,8 +86,6 @@ pub trait AdminInterface {
 
     fn set_unstaking_period(e: Env, admin: Address, unstaking_period: u64);
 
-    fn set_optimal_insurance(e: Env, admin: Address, optimal_insurance: u128);
-
     fn set_rate_config(
         e: Env,
         admin: Address,
@@ -84,8 +94,6 @@ pub trait AdminInterface {
         rate_slope_a: u32,
         rate_slope_b: u32,
     );
-
-    fn resolve_liquidity_deficit(e: Env, admin: Address, pool_address: Address);
 
     //    _______     __       ____  ____   ________  _______  ________
     //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\

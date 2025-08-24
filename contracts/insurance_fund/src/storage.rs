@@ -15,8 +15,9 @@ use utils::{
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
+    OracleRegistry,
     Token,              // the token address of supported deposits.
-    Router,             // the address of the Pool Router.
+    PoolRouter,         // the address of the Pool Router.
     UnstakingPeriod, // a period of time stakers must wait once requesting withdrawal to actually withdraw.
     OptimalInsurance, // the maximum amount of insurance (in Token amount) to adequately insure the protocol.
     TotalShares,      // the total amount of issued shares.
@@ -32,8 +33,9 @@ enum DataKey {
     IsKilledWithdraw,
 }
 
+generate_instance_storage_getter_and_setter!(oracle_registry, DataKey::OracleRegistry, Address);
 generate_instance_storage_getter_and_setter!(token, DataKey::Token, Address);
-generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
+generate_instance_storage_getter_and_setter!(pool_router, DataKey::PoolRouter, Address);
 generate_instance_storage_getter_and_setter_with_default!(
     unstaking_period,
     DataKey::UnstakingPeriod,
