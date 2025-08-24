@@ -204,20 +204,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "buffer"
-version = "1.0.0"
-dependencies = [
- "access_control",
- "paste",
- "reentrancy_guard",
- "sep-40-oracle",
- "soroban-fixed-point-math",
- "soroban-sdk",
- "upgrade",
- "utils",
-]
-
-[[package]]
 name = "bumpalo"
 version = "3.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
