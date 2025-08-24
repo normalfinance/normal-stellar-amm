@@ -19,7 +19,7 @@ pub struct Pool {
     pub status: PoolStatus,
     pub fee_fraction: u32,               // the swap fee (in basis points).
     pub insurance_claim: InsuranceClaim, // the pool's claim on the insurance fund.
-    // The max liquidity imbalance before price premiums are added and/or the buffer/if is used
+    // The max liquidity imbalance before price premiums are added and/or the Insurance Fund is used
     // liquidity imbalance is the difference between quote token and base token value. When it's less than 0,
     // the pool does not have enough liquidity to fill all orders and will apply a price premium to new swaps.
     // precision = QUOTE_PRECISION

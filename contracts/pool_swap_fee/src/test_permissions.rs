@@ -378,18 +378,6 @@ fn test_set_router() {
 }
 
 #[test]
-fn test_set_buffer() {
-    let setup = Setup::default();
-    let fee_collector = setup.fee_collector;
-    let user = Address::generate(&setup.env);
-    let buffer = Address::generate(&setup.env);
-
-    for (addr, is_ok) in [(user, false), (setup.admin, true)] {
-        assert_eq!(fee_collector.try_set_buffer(&addr, &buffer).is_ok(), is_ok);
-    }
-}
-
-#[test]
 fn test_set_insurance_fund() {
     let setup = Setup::default();
     let fee_collector = setup.fee_collector;
@@ -418,20 +406,6 @@ fn test_set_fee_destination() {
             fee_collector
                 .try_set_fee_destination(&addr, &fee_destination)
                 .is_ok(),
-            is_ok
-        );
-    }
-}
-
-#[test]
-fn test_set_buffer_fraction() {
-    let setup = Setup::default();
-    let fee_collector = setup.fee_collector;
-    let user = Address::generate(&setup.env);
-
-    for (addr, is_ok) in [(user, false), (setup.admin, true)] {
-        assert_eq!(
-            fee_collector.try_set_buffer_fraction(&addr, &200).is_ok(),
             is_ok
         );
     }

@@ -75,7 +75,6 @@ impl Setup<'_> {
         // contracts
 
         let router = Address::generate(&e);
-        let buffer = Address::generate(&e);
         let insurance_fund = Address::generate(&e);
 
         // tokens
@@ -88,7 +87,6 @@ impl Setup<'_> {
         let fee_collector = create_pool_swap_fee_contract(&e);
         fee_collector.init_admin(&admin, &emergency_admin);
         fee_collector.set_router(&admin, &router);
-        fee_collector.set_buffer(&admin, &buffer);
         fee_collector.set_insurance_fund(&admin, &insurance_fund);
         fee_collector.set_fee_destination(&admin, &fee_destination);
 

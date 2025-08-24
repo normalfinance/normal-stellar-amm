@@ -35,7 +35,6 @@ pub(crate) trait ProviderFeeEvents {
         out_amount: u128,
         fee_amount: u128,
         lp_fee: u128,
-        buffer_fee: u128,
         if_premium: u128,
         revenue_fee: u128,
     );
@@ -62,7 +61,6 @@ impl ProviderFeeEvents for Events {
         out_amount: u128,
         fee_amount: u128,
         lp_fee: u128,
-        buffer_fee: u128,
         if_premium: u128,
         revenue_fee: u128,
     ) {
@@ -74,7 +72,6 @@ impl ProviderFeeEvents for Events {
                 out_amount,
                 fee_amount,
                 lp_fee,
-                buffer_fee,
                 if_premium,
                 revenue_fee,
             ),

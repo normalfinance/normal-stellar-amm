@@ -16,15 +16,6 @@ VERSION_TAG=$3
 # Load env vars dynamically
 source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh" "$NETWORK"
 
-# Buffer
-soroban contract deploy \
-    --wasm "buffer_$VERSION_TAG.wasm" \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase $STELLAR_NETWORK_PASSPHRASE \
-    --fee $STELLAR_BASE_FEE
-
 # Insurance Fund
 soroban contract deploy \
     --wasm "insurance-fund_$VERSION_TAG.wasm"\

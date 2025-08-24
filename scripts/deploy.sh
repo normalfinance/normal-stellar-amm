@@ -28,7 +28,6 @@ soroban contract optimize --wasm soroban_token_contract.wasm
 soroban contract optimize --wasm lp_token.wasm
 soroban contract optimize --wasm pool.wasm
 soroban contract optimize --wasm pool_router.wasm
-soroban contract optimize --wasm buffer.wasm
 soroban contract optimize --wasm insurance_fund.wasm
 soroban contract optimize --wasm oracle_registry.wasm
 soroban contract optimize --wasm pool_swap_fee.wasm
@@ -123,25 +122,6 @@ echo "LP token contract deployed."
 #     )
 
 # echo "Tokens and pool router deployed."
-
-# #  _______   ____  ____   _______   _______   _______   _______
-# # |   _  "\ ("  _||_ " | /"     "| /"     "| /"     "| /"      \
-# # (. |_)  :)|   (  ) : |(: ______)(: ______)(: ______)|:        |
-# # |:     \/ (:  |  | . ) \/    |   \/    |   \/    |  |_____/   )
-# # (|  _  \\  \\ \__/ //  // ___)   // ___)   // ___)_  //      /
-# # |: |_)  :) /\\ __ //\ (:  (     (:  (     (:      "||:  __   \
-# # (_______/ (__________) \__/      \__/      \_______)|__|  \___)
-
-# echo "Initialize buffer..."
-
-# BUFFER_ADDR=$(soroban contract deploy \
-#     --wasm buffer.optimized.wasm \
-#     --source $IDENTITY_STRING \
-#     --network $NETWORK \
-#     --rpc-url $STELLAR_RPC_URL \
-#     --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
-#     --fee $STELLAR_BASE_FEE
-#     )
 
 # #   __    _____  ___    ________  ____  ____   _______        __      _____  ___    ______    _______
 # #  |" \  (\"   \|"  \  /"       )("  _||_ " | /"      \      /""\    (\"   \|"  \  /" _  "\  /"     "|

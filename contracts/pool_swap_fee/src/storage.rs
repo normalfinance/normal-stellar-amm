@@ -12,11 +12,9 @@ use utils::{
 #[contracttype]
 enum DataKey {
     Router,            // Address of the Pool Router.
-    Buffer,            // Address of the Buffer.
     InsuranceFund,     // Address of the Insurance Fund.
     FeeDestination,    // Fee destination address
     LPRevenueFraction, // The portion of fees to give back to LPs as yield in basis points (100 = 1%)
-    BufferFraction,    // The portion of fees to deposit to the Buffer in basis points (100 = 1%)
 
     // metrics
     LastTradeTs, // the timestamp of the last swap.
@@ -26,15 +24,8 @@ enum DataKey {
 }
 
 generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
-generate_instance_storage_getter_and_setter!(buffer, DataKey::Buffer, Address);
 generate_instance_storage_getter_and_setter!(insurance_fund, DataKey::InsuranceFund, Address);
 generate_instance_storage_getter_and_setter!(fee_destination, DataKey::FeeDestination, Address);
-generate_instance_storage_getter_and_setter_with_default!(
-    buffer_fraction,
-    DataKey::BufferFraction,
-    u32,
-    500 // 5%
-);
 generate_instance_storage_getter_and_setter_with_default!(
     lp_revenue_fraction,
     DataKey::LPRevenueFraction,

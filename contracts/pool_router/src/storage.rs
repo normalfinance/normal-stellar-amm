@@ -28,7 +28,6 @@ pub struct PoolRewardInfo {
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
-    Buffer,              // the address of the Buffer contract.
     InsuranceFund,       // the address of the Insurnace Fund contract.
     PoolPlane,           // the address of the PoolPlane contract.
     LiquidityCalculator, // the address of the Liquidity Calculator contract.
@@ -55,12 +54,6 @@ pub enum PoolError {
 }
 
 // Addresses
-generate_instance_storage_getter_and_setter_with_default!(
-    buffer,
-    DataKey::Buffer,
-    Address,
-    Address::from_str(&Env::default(), "")
-);
 generate_instance_storage_getter_and_setter_with_default!(
     insurance_fund,
     DataKey::InsuranceFund,

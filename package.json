@@ -27,10 +27,8 @@
     "oracle:register": "./scripts/admin/oracle/register.sh",
     "oracle:update": "./scripts/admin/oracle/update.sh",
     "oracle:delete": "./scripts/admin/oracle/delete.sh",
-    "buffer:resolve": "./scripts/admin/buffer/resolve.sh",
-    "buffer:update": "./scripts/admin/buffer/update.sh",
-    "if:resolve": "./scripts/admin/buffer/resolve.sh",
-    "if:update": "./scripts/admin/if/update.sh",
+    "insurnace:resolve": "./scripts/admin/insurnace/resolve.sh",
+    "insurnace:update": "./scripts/admin/insurnace/update.sh",
     "fees:collect": "./scripts/admin/fees/collect.sh"
   },
   "repository": {
