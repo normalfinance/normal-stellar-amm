@@ -3,10 +3,11 @@ use crate::events::{BufferEvents, Events};
 use crate::interface::{AdminInterface, BufferTrait};
 use crate::reserve::Reserve;
 use crate::storage::{
-    get_buffer_reserve_amount, get_is_killed_deposit, get_is_killed_resolve_liquidity_deficit,
-    get_last_payout_timestamp, get_min_reserve_ratio, get_min_time_between_payouts, get_reserve,
-    put_reserve, set_is_killed_deposit, set_is_killed_resolve_liquidity_deficit,
-    set_last_payout_timestamp, set_min_reserve_ratio, set_min_time_between_payouts,
+    get_buffer_reserve_amount, get_fee_collector, get_is_killed_deposit,
+    get_is_killed_resolve_liquidity_deficit, get_last_payout_timestamp, get_min_reserve_ratio,
+    get_min_time_between_payouts, get_reserve, put_reserve, set_fee_collector,
+    set_is_killed_deposit, set_is_killed_resolve_liquidity_deficit, set_last_payout_timestamp,
+    set_min_reserve_ratio, set_min_time_between_payouts,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
@@ -88,11 +89,10 @@ impl BufferTrait for Buffer {
     // * Emits a `deposit` event.
     //
     // # Access
-    // * Currently unrestricted; any address may deposit.
-    // * Typically used by `PoolSwapFee.swap()`.
-    // * [Future Consideration]: Restrict to Pool or Router only.
+    // * Restricted to the PoolSwapFee contract only.
     //
     // # Panics / Errors
+    // * `BufferError::Unauthorized` – if caller is not PoolSwapFee.
     // * `BufferError::BufferDepositKilled` – if deposits are disabled.
     // * `BufferError::ReserveMaxBalanceThreshold` – if deposit exceeds the reserve’s `max_balance`.
     fn deposit(e: Env, sender: Address, token: Address, amount: u128) {
@@ -102,21 +102,9 @@ impl BufferTrait for Buffer {
 
         enter(&e);
 
-        /* @Halborn
-        Currently, anyone can deposit into the Buffer. The only structured deposits
-        are from `PoolSwapFee.swap()` when the buffer fraction is removed from the
-        total fee amount.
-
-        If a user deposits into the Buffer and later wishes to remove their funds,
-        there is no direct function to do this other than `skim()`. However, timing
-        would be of essence.
-
-        The Insurance Fund is specifically designed to raise funds from users, whereas
-        the Buffer is for protocol revenue deposits only.
-
-        [ ] Would it be reasonable to restrict this function to the PoolSwapFee only?
-        [ ] Are `sync()` and `skim()` necessary functions?
-          */
+        if sender != get_fee_collector(&e) {
+            panic_with_error!(&e, BufferError::Unauthorized);
+        }
 
         // Ensure deposits are active
         if get_is_killed_deposit(&e) {
@@ -202,6 +190,10 @@ impl BufferTrait for Buffer {
     //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
     // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
     //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
+
+    fn get_fee_collector(e: Env) -> Address {
+        get_fee_collector(&e)
+    }
 
     fn get_min_time_between_payouts(e: Env) -> u64 {
         get_min_time_between_payouts(&e)
@@ -398,6 +390,13 @@ impl AdminInterface for Buffer {
     //   __/  \\  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
     //  /" \   :)(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
     // (_______/  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
+
+    fn set_fee_collector(e: Env, admin: Address, fee_collector: Address) {
+        admin.require_auth();
+        require_admin(&e, &admin);
+
+        set_fee_collector(&e, &fee_collector);
+    }
 
     fn set_min_time_between_payouts(e: Env, admin: Address, min_time: u64) {
         admin.require_auth();

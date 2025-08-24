@@ -11,6 +11,7 @@ pub enum BufferError {
     WithdrawalOverMinimumReserve = 5,
     ZeroAmount = 8,
     AlreadyInitialized = 15,
+    Unauthorized = 16,
 
     // Paused Ops
     BufferDepositKilled = 6,
