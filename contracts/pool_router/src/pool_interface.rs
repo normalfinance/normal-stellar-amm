@@ -205,6 +205,8 @@ pub trait PoolsManagementTrait {
     fn query_all_pools_details(e: Env) -> Vec<PoolInfo>;
 
     fn get_pools(e: Env) -> Vec<Address>;
+
+    fn get_total_liquidity_imbalance(e: Env) -> i128;
 }
 
 pub trait PoolPlaneInterface {

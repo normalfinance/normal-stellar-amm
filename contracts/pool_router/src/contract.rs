@@ -37,7 +37,7 @@ use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::constant::MAX_POOL_FEE;
-use utils::state::pool::{PoolInfo, PoolTier, SwapDirection};
+use utils::state::pool::{PoolInfo, PoolInfoForCoverage, PoolTier, SwapDirection};
 use utils::token::{transfer_token, transfer_token_from};
 
 #[contract]
@@ -1066,6 +1066,25 @@ impl PoolsManagementTrait for PoolRouter {
 
     fn get_pools(e: Env) -> Vec<Address> {
         get_pools_vec(&e)
+    }
+
+    fn get_total_liquidity_imbalance(e: Env) -> i128 {
+        let pools = get_pools_vec(&e);
+
+        let mut total_liquidity_imbalance = 0_i128;
+
+        for idx in 0..pools.len() {
+            let pool_address = pools.get(idx).unwrap();
+            let pool_liquidity_imbalance: i128 = e.invoke_contract(
+                &pool_address,
+                &Symbol::new(&e, "get_liquidity_imbalance"),
+                Vec::new(&e),
+            );
+            total_liquidity_imbalance =
+                total_liquidity_imbalance.saturating_add(pool_liquidity_imbalance);
+        }
+
+        total_liquidity_imbalance
     }
 }
 

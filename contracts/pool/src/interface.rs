@@ -89,6 +89,8 @@ pub trait PoolTrait {
     fn get_info(e: Env) -> PoolInfo;
 
     fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>>;
+
+    fn get_liquidity_imbalance(e: Env) -> i128;
 }
 
 pub trait AdminInterfaceTrait {

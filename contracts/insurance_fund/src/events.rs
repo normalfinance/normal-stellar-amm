@@ -40,6 +40,13 @@ pub(crate) trait InsuranceFundEvents {
 
     fn collect_premium(&self, sender: Address, amount: u128);
 
+    fn sync_optimal_insurance(
+        &self,
+        sender: Address,
+        previous_insurance: u128,
+        new_insurance: u128,
+    );
+
     //    _______     __       ____  ____   ________  _______  ________
     //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\
     //   (. |__) :) /    \    |   (  ) : |(:   \___/(: ______)(.  ___  :)
@@ -98,6 +105,18 @@ impl InsuranceFundEvents for Events {
         self.env()
             .events()
             .publish((Symbol::new(self.env(), "collect_premium"), sender), amount);
+    }
+
+    fn sync_optimal_insurance(
+        &self,
+        sender: Address,
+        previous_insurance: u128,
+        new_insurance: u128,
+    ) {
+        self.env().events().publish(
+            (Symbol::new(self.env(), "sync_optimal_insurance"), sender),
+            (previous_insurance, new_insurance),
+        );
     }
 
     //    _______     __       ____  ____   ________  _______  ________
