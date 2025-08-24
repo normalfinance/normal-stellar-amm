@@ -61,6 +61,9 @@ pub trait AdminInterface {
         params: MutableOracleInfo,
     ) -> OracleInfo;
 
+    //
+    fn delete_oracle(e: Env, admin: Address, asset: Symbol);
+
     // Admin failsafe to manually set the oracle price
     fn set_oracle_price(e: Env, admin: Address, asset: Symbol, price: u128);
 

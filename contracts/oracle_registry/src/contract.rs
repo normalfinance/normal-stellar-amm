@@ -3,7 +3,7 @@ use crate::interface::{AdminInterface, OracleRegistryTrait};
 use crate::oracle::{get_oracle_price, oracle_validity, update_twap};
 use crate::storage::{
     get_historical_oracle_data, get_oracle, get_oracle_base, get_oracle_guard_rails, put_oracle,
-    set_oracle_guard_rails,
+    remove_oracle, set_oracle_guard_rails,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
@@ -390,6 +390,33 @@ impl AdminInterface for OracleRegistry {
         }
     }
 
+    // Deletes an oracle for a given asset.
+    //
+    //
+    // # Arguments
+    // * `e` - The Soroban environment.
+    // * `admin` - The authorized admin address initiating the deletion.
+    // * `asset` - The symbol representing the asset whose oracle should be deleted.
+    fn delete_oracle(e: Env, admin: Address, asset: Symbol) {
+        admin.require_auth();
+        require_admin(&e, &admin);
+
+        enter(&e);
+
+        let oracle = get_oracle_base(&e, &asset);
+
+        match oracle {
+            Some(oracle_info) => {
+                remove_oracle(&e, &asset);
+            }
+            None => {
+                panic_with_error!(&e, OracleRegistryError::OracleNotFound);
+            }
+        }
+
+        exit(&e);
+    }
+
     // Manually sets a new oracle price for a given asset.
     //
     // This function is intended for administrative overrides of oracle prices, with safeguards
@@ -474,8 +501,6 @@ impl AdminInterface for OracleRegistry {
 
         exit(&e);
     }
-
-    // TODO: Add unregister oracle function - what does this mean for pools using that oracle?
 
     //   ________  _______  ___________  ___________  _______   _______    ________
     //  /"       )/"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
