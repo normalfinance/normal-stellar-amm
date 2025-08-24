@@ -282,7 +282,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
 
             let premium_per_dollar_swapped =
                 total_annual_premium.safe_div(&e, estimated_annual_volume);
-                
+
             // Lesser of premium or what's left of protocol fee
             let insurance_premium_to_pay = quote_asset_amount
                 .safe_mul(&e, premium_per_dollar_swapped)
