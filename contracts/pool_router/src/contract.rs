@@ -1051,13 +1051,19 @@ impl PoolsManagementTrait for PoolRouter {
         }
     }
 
-    fn remove_pool(e: Env, user: Address, asset: Symbol) {
-        user.require_auth();
-        require_operations_admin_or_owner(&e, &user);
+    fn delist_pool(e: Env, admin: Address, asset: Symbol) {
+        admin.require_auth();
+        require_admin(&e, &admin);
 
-        if get_pool_base(&e, asset.clone()).is_some() {
-            remove_pool(&e, asset)
-        }
+        let pool = get_pool(&e, &asset);
+
+        let response: u128 = e.invoke_contract(
+            &pool,
+            &Symbol::new(&e, "delist"),
+            Vec::from_array(&e, [admin.clone().into_val(&e), asset.into_val(&e)]),
+        );
+
+        Events::new(&e).delist_pool(asset, pool);
     }
 
     //   _______    _______  ___________  ___________  _______   _______    ________

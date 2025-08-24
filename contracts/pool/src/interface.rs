@@ -106,6 +106,8 @@ pub trait AdminInterfaceTrait {
 
     fn pay_insurance_claim(e: Env, sender: Address, insurance_vault_amount: u128) -> u128;
 
+    fn delist(e: Env, admin: Address);
+
     //   ________  _______  ___________  ___________  _______   _______    ________
     //  /"       )/"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
     // (:   \___/(: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
@@ -138,7 +140,7 @@ pub trait AdminInterfaceTrait {
 
     fn set_mint_cap_fraction(e: Env, admin: Address, mint_cap_fraction: u32);
 
-    fn set_expiry(e: Env, admin: Address, expiry_ts: u64);
+    // fn set_expiry(e: Env, admin: Address, expiry_ts: u64);
 
     //    _______     __       ____  ____   ________  _______  ________
     //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\
