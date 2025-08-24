@@ -9,8 +9,8 @@ use crate::stake::{
     apply_rebase_to_insurance_fund, apply_rebase_to_stake, calculate_if_shares_lost, get_stake,
     if_shares_to_vault_amount, save_stake, vault_amount_to_if_shares, StakeAction,
 };
-use crate::storage::get_oracle_registry;
 use crate::storage::get_pool_router;
+use crate::storage::set_pool_router;
 use crate::storage::{
     get_base_rate, get_insurance_vault_amount, get_is_killed_deposit,
     get_is_killed_request_withdraw, get_is_killed_withdraw, get_optimal_insurance,
@@ -39,9 +39,7 @@ use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::math::safe_math::SafeMath;
-use utils::state::oracle_registry::HistoricalOracleData;
-use utils::state::oracle_registry::OracleValidity;
-use utils::state::pool::PoolInfoForCoverage;
+use utils::state::pool::PoolInfo;
 use utils::token::transfer_token;
 use utils::validate;
 use utils::validation::ensure_non_zero_u128;
@@ -63,6 +61,7 @@ impl InsuranceFundTrait for InsuranceFund {
         admin: Address,
         emergency_admin: Address,
         token: Address,
+        pool_router: Address,
         unstaking_period: u64,
         optimal_utilization: u32,
         base_rate: i32,
@@ -78,6 +77,7 @@ impl InsuranceFundTrait for InsuranceFund {
         access_control.set_role_address(&Role::EmergencyAdmin, &emergency_admin);
 
         set_token(&e, &token);
+        set_pool_router(&e, &pool_router);
         set_unstaking_period(&e, &unstaking_period);
         set_optimal_utilization(&e, &optimal_utilization);
         set_base_rate(&e, &base_rate);
@@ -646,6 +646,10 @@ impl InsuranceFundTrait for InsuranceFund {
         get_token(&e)
     }
 
+    fn get_pool_router(e: Env) -> Address {
+        get_pool_router(&e)
+    }
+
     fn get_unstaking_period(e: Env) -> u64 {
         get_unstaking_period(&e)
     }
@@ -877,7 +881,7 @@ impl AdminInterface for InsuranceFund {
     // # Arguments
     // * `e` - The Soroban environment.
     // * `admin` - The address authorized to trigger the resolution.
-    // * `pool_address` - The contract address of the affected pool requesting coverage.
+    // * `asset` - The asset of the affected pool requesting coverage.
     //
     // # Behavior
     // * Requires admin authentication.
@@ -893,48 +897,72 @@ impl AdminInterface for InsuranceFund {
     // # Panics / Errors
     // * `InsuranceFundError::InsufficientCollateral` if the claim exceeds vault balance.
     // * `InsuranceFundError::InvalidIFDetected` if the payout fully depletes the Insurance Fund.
-    fn resolve_liquidity_deficit(e: Env, admin: Address, pool_address: Address) {
+    fn resolve_liquidity_deficit(e: Env, admin: Address, asset: Symbol) {
         admin.require_auth();
-        /* Currently, only the Insurance Fund admin may resolve deficits, however, our goal
-        is to either: a) automate within `Pool.swap()` itself; or b) decentralize via the Normal DAO */
         require_admin(&e, &admin);
 
         enter(&e);
 
-        let insurance_vault_amount = get_insurance_vault_amount(&e);
-
-        // Call `Pool.pay_insurance_claim()` to calculate how much insurance is needed
-        // and to update the `Pool.insurance_claim`
-        let pay_from_insurance: u128 = e.invoke_contract(
-            &pool_address,
-            &Symbol::new(&e, "pay_insurance_claim"),
-            Vec::from_array(
-                &e,
-                [
-                    e.current_contract_address().to_val(),
-                    insurance_vault_amount.into_val(&e),
-                ],
-            ),
+        let pool_details_result = e.try_invoke_contract::<PoolInfo, soroban_sdk::Error>(
+            &get_pool_router(&e),
+            &Symbol::new(&e, "query_pool_details"),
+            Vec::from_array(&e, [asset.into_val(&e)]),
         );
 
-        if pay_from_insurance > 0 {
-            // Error if there is not enough insurance to cover the claim
-            validate!(
-                &e,
-                pay_from_insurance < insurance_vault_amount,
-                InsuranceFundError::InsufficientCollateral
-            );
+        match pool_details_result {
+            Ok(Err(_pool_error)) => {
+                panic_with_error!(&e, InsuranceFundError::QueryPoolFailed);
+            }
+            Err(_contract_error) => {
+                panic_with_error!(&e, InsuranceFundError::QueryPoolFailed);
+            }
+            Ok(Ok(pool_info)) => {
+                let insurance_vault_amount = get_insurance_vault_amount(&e);
 
-            // Error if a claim leaves removes all insurance
-            let new_insurance_vault_amount = get_insurance_vault_amount(&e);
-            validate!(
-                &e,
-                new_insurance_vault_amount > 0,
-                InsuranceFundError::InvalidIFDetected
-            );
+                // Call `Pool.pay_insurance_claim()` to calculate how much insurance is needed
+                // and to update the `Pool.insurance_claim`
+                let pay_from_insurance_result = e.try_invoke_contract::<u128, soroban_sdk::Error>(
+                    &pool_info.pool_address,
+                    &Symbol::new(&e, "pay_insurance_claim"),
+                    Vec::from_array(
+                        &e,
+                        [
+                            e.current_contract_address().to_val(),
+                            insurance_vault_amount.into_val(&e),
+                        ],
+                    ),
+                );
+
+                match pay_from_insurance_result {
+                    Ok(Err(_pool_error)) => {
+                        panic_with_error!(&e, InsuranceFundError::PayInsuranceClaimFailed);
+                    }
+                    Err(_contract_error) => {
+                        panic_with_error!(&e, InsuranceFundError::PayInsuranceClaimFailed);
+                    }
+                    Ok(Ok(pay_from_insurance)) => {
+                        if pay_from_insurance > 0 {
+                            // Error if there is not enough insurance to cover the claim
+                            validate!(
+                                &e,
+                                pay_from_insurance < insurance_vault_amount,
+                                InsuranceFundError::InsufficientCollateral
+                            );
+
+                            // Error if a claim leaves removes all insurance
+                            let new_insurance_vault_amount = get_insurance_vault_amount(&e);
+                            validate!(
+                                &e,
+                                new_insurance_vault_amount > 0,
+                                InsuranceFundError::InvalidIFDetected
+                            );
+                        }
+
+                        exit(&e);
+                    }
+                }
+            }
         }
-
-        exit(&e);
     }
 
     //   ________  _______  ___________  ___________  _______   _______    ________
@@ -944,6 +972,13 @@ impl AdminInterface for InsuranceFund {
     //   __/  \\  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
     //  /" \   :)(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
     // (_______/  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
+
+    fn set_pool_router(e: Env, admin: Address, pool_router: Address) {
+        admin.require_auth();
+        require_admin(&e, &admin);
+
+        set_pool_router(&e, &pool_router);
+    }
 
     fn set_unstaking_period(e: Env, admin: Address, unstaking_period: u64) {
         admin.require_auth();

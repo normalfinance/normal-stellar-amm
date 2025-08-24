@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{Address, Env, Symbol};
 
 use crate::reserve::Reserve;
 
@@ -7,7 +7,8 @@ pub trait BufferTrait {
         e: Env,
         admin: Address,
         emergency_admin: Address,
-        time_bt_payouts: u64,
+        pool_router: Address,
+        time_between_payouts: u64,
         min_reserve_ratio: u32,
     );
 
@@ -38,6 +39,8 @@ pub trait BufferTrait {
 
     fn get_fee_collector(e: Env) -> Address;
 
+    fn get_pool_router(e: Env) -> Address;
+
     fn get_min_time_between_payouts(e: Env) -> u64;
 
     fn get_reserve(e: Env, token: Address) -> Reserve;
@@ -58,6 +61,8 @@ pub trait AdminInterface {
 
     fn set_fee_collector(e: Env, admin: Address, fee_collector: Address);
 
+    fn set_pool_router(e: Env, admin: Address, pool_router: Address);
+
     fn set_min_time_between_payouts(e: Env, admin: Address, min_time: u64);
 
     fn set_min_reserve_ratio(e: Env, admin: Address, min_ratio: u32);
@@ -76,9 +81,9 @@ pub trait AdminInterface {
     fn resolve_liquidity_deficit(
         e: Env,
         admin: Address,
+        asset: Symbol,
         token: Address,
         amount: u128,
-        pool_address: Address,
     ) -> u128;
 
     // Withdraw surplus reserves

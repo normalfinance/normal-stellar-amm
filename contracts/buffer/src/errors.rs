@@ -12,6 +12,8 @@ pub enum BufferError {
     ZeroAmount = 8,
     AlreadyInitialized = 15,
     Unauthorized = 16,
+    QueryPoolFailed = 17,
+    PayInsuranceClaimFailed = 18,
 
     // Paused Ops
     BufferDepositKilled = 6,

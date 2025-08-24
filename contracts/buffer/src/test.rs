@@ -20,9 +20,14 @@ function can only truly be done setting up all other contracts */
 #[should_panic(expected = "Error(Contract, #103)")]
 fn test_initialize_twice() {
     let setup = Setup::default();
-    setup
-        .buffer
-        .initialize(&setup.admin, &setup.emergency_admin, &ONE_HOUR, &100_u32);
+    let pool_router = Address::generate(&setup.env);
+    setup.buffer.initialize(
+        &setup.admin,
+        &setup.emergency_admin,
+        &pool_router,
+        &ONE_HOUR,
+        &100_u32,
+    );
 }
 
 #[test]
@@ -153,9 +158,9 @@ fn test_resolve_liquidity_deficit_invalid_token() {
 
     setup.buffer.resolve_liquidity_deficit(
         &setup.admin,
+        &setup.asset,
         &bogus_token,
         &100_0000000_u128,
-        &setup.pool_address,
     );
 }
 
@@ -176,9 +181,9 @@ fn test_resolve_liquidity_deficit_too_soon() {
 
     setup.buffer.resolve_liquidity_deficit(
         &setup.admin,
+        &setup.asset,
         &setup.token_a.address,
         &amount_to_payout,
-        &setup.pool_address,
     );
     assert_eq!(
         setup.token_a.balance(&setup.admin),
@@ -189,9 +194,9 @@ fn test_resolve_liquidity_deficit_too_soon() {
 
     setup.buffer.resolve_liquidity_deficit(
         &setup.admin,
+        &setup.asset,
         &setup.token_a.address,
         &amount_to_payout,
-        &setup.pool_address,
     );
 }
 
@@ -214,9 +219,9 @@ fn test_resolve_liquidity_deficit_insufficient_balance() {
 
     setup.buffer.resolve_liquidity_deficit(
         &setup.admin,
+        &setup.asset,
         &setup.token_a.address,
         &101_0000000_u128,
-        &setup.pool_address,
     );
 }
 
@@ -246,9 +251,9 @@ fn test_resolve_liquidity_deficit_unsynced() {
 
     setup.buffer.resolve_liquidity_deficit(
         &setup.admin,
+        &setup.asset,
         &setup.token_a.address,
         &110_0000000_u128,
-        &setup.pool_address,
     );
 }
 
@@ -656,9 +661,9 @@ fn test_resolve_liquidity_deficit_killed() {
         buffer
             .try_resolve_liquidity_deficit(
                 &admin,
+                &setup.asset,
                 &setup.token_a.address,
                 &desired_amount,
-                &setup.pool_address
             )
             .unwrap_err(),
         Ok(Error::from_contract_error(7))
