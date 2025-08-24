@@ -5,7 +5,6 @@ use crate::constant::{
 use soroban_sdk::{Env, IntoVal, Val};
 
 pub fn bump_instance(e: &Env) {
-    // TODO: Enforce authorization on TTL extension operations. For example, require that the caller is the contract owner or that the key being bumped belongs to the caller. Add explicit access checks (e.g., verify signer’s public key) before calling extend_ttl.
     e.storage()
         .instance()
         .extend_ttl(INSTANCE_TTL_THRESHOLD, MAX_INSTANCE_TTL);

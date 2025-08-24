@@ -473,9 +473,6 @@ impl AdminInterface for OracleRegistry {
         }
 
         // Rate limit
-        // @dev The timestamp of the last override is not tracked, meaning any
-        // update to the oracle will reset this counter. May be changed in the future.
-        // Update: Fixed this, now lst_updated is updated to the current time.
         if now - oracle.last_updated <= oracle_guard_rails.validity.seconds_before_stale_for_pool {
             panic_with_error!(&e, OracleRegistryError::PriceOverrideTooSoon);
         }
