@@ -30,6 +30,7 @@ pub enum InsuranceFundError {
     PayInsuranceClaimFailed = 25,
     UnsupportedToken = 26,
     TokenAlreadyDeleted = 27,
+    InvalidOracle = 28,
 
     // paused ops
     FundDepositKilled = 30,

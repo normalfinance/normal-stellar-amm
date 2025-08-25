@@ -442,49 +442,50 @@ pub fn if_shares_lost_test() {
 
     let token = Address::generate(&setup.env);
 
+    let reserve = InsuranceFundReserve::new(token, setup.env.ledger().timestamp());
     let mut if_stake = Stake::new(setup.admin, token);
-    if_stake.update_if_shares(&setup.env, 100 * QUOTE_PRECISION);
+    if_stake.update_shares(&setup.env, 100 * QUOTE_PRECISION);
     if_stake.last_withdraw_request_shares = 100 * QUOTE_PRECISION;
     if_stake.last_withdraw_request_value = 100 * QUOTE_PRECISION - 1;
 
     let if_balance = 1000 * QUOTE_PRECISION;
 
     // unchanged balance
-    let lost_shares = calculate_shares_lost(&setup.env, &if_stake, if_balance);
+    let lost_shares = calculate_shares_lost(&setup.env, &if_stake, &reserve);
     assert_eq!(lost_shares, 2);
 
     let if_balance = if_balance + 100 * QUOTE_PRECISION;
     total_shares += 100 * QUOTE_PRECISION;
-    let lost_shares = calculate_shares_lost(&setup.env, &if_stake, if_balance);
+    let lost_shares = calculate_shares_lost(&setup.env, &if_stake, &reserve);
     assert_eq!(lost_shares, 2); // giving up $5 of gains
 
     let if_balance = if_balance - 100 * QUOTE_PRECISION;
     total_shares -= 100 * QUOTE_PRECISION;
-    let lost_shares = calculate_shares_lost(&setup.env, &if_stake, if_balance);
+    let lost_shares = calculate_shares_lost(&setup.env, &if_stake, &reserve);
     assert_eq!(lost_shares, 2); // giving up $5 of gains
 
     // take back gain
     let if_balance = 1100 * QUOTE_PRECISION;
-    let lost_shares = calculate_shares_lost(&setup.env, &if_stake, if_balance);
+    let lost_shares = calculate_shares_lost(&setup.env, &if_stake, &reserve);
     assert_eq!(lost_shares, 10_000_001); // giving up $10 of gains
 
     // doesnt matter if theres a loss
     if_stake.last_withdraw_request_value = 200 * QUOTE_PRECISION;
-    let lost_shares = calculate_shares_lost(&setup.env, &if_stake, if_balance);
+    let lost_shares = calculate_shares_lost(&setup.env, &if_stake, &reserve);
     assert_eq!(lost_shares, 0);
     if_stake.last_withdraw_request_value = 100 * QUOTE_PRECISION - 1;
 
     // take back gain and total_if_shares alter w/o user alter
     let if_balance = 2100 * QUOTE_PRECISION;
     total_shares *= 2;
-    let lost_shares = calculate_shares_lost(&setup.env, &if_stake, if_balance);
+    let lost_shares = calculate_shares_lost(&setup.env, &if_stake, &reserve);
     assert_eq!(lost_shares, 5_000_001); // giving up $5 of gains
 
     let if_balance = 2100 * QUOTE_PRECISION * 10;
 
     let expected_gain_if_no_loss = (if_balance * 100) / 2000;
     assert_eq!(expected_gain_if_no_loss, 1_050_000_000);
-    let lost_shares = calculate_shares_lost(&setup.env, &if_stake, if_balance);
+    let lost_shares = calculate_shares_lost(&setup.env, &if_stake, &reserve);
     assert_eq!(lost_shares, 90_909_092); // giving up $5 of gains
     assert_eq!(
         (9090908 * if_balance) / (total_shares - lost_shares)

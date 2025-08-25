@@ -522,9 +522,6 @@ impl InsuranceFundTrait for InsuranceFund {
 
         get_token_whitelist(&e, &token);
 
-        // TODO: Do we need to check IF utilization and/or overall pool liquidity imbalance for edge
-        // cases before authorizing a withdrawal?
-
         let now = e.ledger().timestamp();
         let mut stake = get_stake(&e, &user, &token);
 
@@ -578,7 +575,7 @@ impl InsuranceFundTrait for InsuranceFund {
             stake.cost_basis >= withdraw_amount,
             InsuranceFundError::CostBasisUnderflow
         );
-        stake.cost_basis = stake.cost_basis - withdraw_amount;
+        stake.cost_basis = stake.cost_basis.saturating_sub(withdraw_amount);
 
         // Add bounds checking to prevent critical share tracking underflow
         validate!(
@@ -589,7 +586,7 @@ impl InsuranceFundTrait for InsuranceFund {
 
         reserve.remove_total_shares(n_shares, now);
 
-        // reset stake withdraw request info
+        // Reset stake withdraw request info
         stake.last_withdraw_request_shares = 0;
         stake.last_withdraw_request_value = 0;
         stake.last_withdraw_request_ts = now;
@@ -598,7 +595,7 @@ impl InsuranceFundTrait for InsuranceFund {
         reserve.save(&e);
         stake.save(&e);
 
-        // Send tokens from the fund to the user
+        // Send tokens from the Fund to the user
         transfer_token(
             &e,
             &token,
@@ -723,8 +720,10 @@ impl InsuranceFundTrait for InsuranceFund {
         get_token_whitelist(&e, &token);
 
         let reserve = get_reserve(&e, &token);
+
         let balance = get_contract_token_balance(&e, &token);
         let skimmed = balance.saturating_sub(reserve.balance) as i128;
+
         if skimmed > 0 {
             transfer_token(&e, &token, &e.current_contract_address(), &sender, &skimmed);
             FundEvents::new(&e).skim(sender, token, skimmed);

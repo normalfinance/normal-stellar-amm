@@ -1,8 +1,9 @@
-use crate::storage::{
-    get_oracle_registry, get_reserve, get_token_whitelist, get_token_whitelist_vec,
+use crate::{
+    errors::InsuranceFundError,
+    storage::{get_oracle_registry, get_reserve, get_token_whitelist, get_token_whitelist_vec},
 };
 use soroban_fixed_point_math::FixedPoint;
-use soroban_sdk::{Env, Symbol, Vec};
+use soroban_sdk::{panic_with_error, Env, Symbol, Vec};
 use utils::{
     constant::{PERCENTAGE_PRECISION, PERCENTAGE_PRECISION_I64},
     state::oracle_registry::{HistoricalOracleData, OracleValidity},
@@ -26,6 +27,11 @@ pub fn calculate_total_reserve_value(e: &Env) -> u128 {
                 &Symbol::new(&e, "get_price"),
                 Vec::from_array(&e, [whitelist_token.symbol.to_val()]),
             );
+
+        // Check oracle validity
+        if oracle_validity != OracleValidity::Valid {
+            panic_with_error!(e, InsuranceFundError::InvalidOracle);
+        }
 
         let reserve_value = reserve
             .balance
