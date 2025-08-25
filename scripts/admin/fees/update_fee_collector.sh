@@ -30,10 +30,6 @@ case "$FLAG" in
     FUNC="set_router"
     ARG_NAME="--router"
     ;;
--b)
-    FUNC="set_buffer"
-    ARG_NAME="--buffer"
-    ;;
 -i)
     FUNC="set_insurance_fund"
     ARG_NAME="--insurance_fund"
@@ -41,10 +37,6 @@ case "$FLAG" in
 -f)
     FUNC="set_fee_destination"
     ARG_NAME="--fee_destination"
-    ;;
--u)
-    FUNC="set_buffer_fraction"
-    ARG_NAME="--fraction"
     ;;
 -l)
     FUNC="set_lp_revenue_fraction"
