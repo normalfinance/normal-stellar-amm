@@ -1,5 +1,6 @@
 use crate::errors::InsuranceFundError;
-use crate::storage::{get_shares_base, get_total_shares, set_shares_base, set_total_shares};
+use crate::reserve::InsuranceFundReserve;
+use crate::storage::{get_reserve, put_reserve};
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{contracttype, panic_with_error, Address, Env};
 use utils::bump::bump_persistent;
@@ -19,74 +20,84 @@ pub enum StakeAction {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Stake {
-    pub if_shares: u128,                    // the number of shares the user owns.
+    pub user: Address,
+    pub token: Address,                     //
+    pub shares: u128,                       // the number of shares the user owns.
     pub last_withdraw_request_shares: u128, //
-    pub if_base: u128, // the exponent for if_shares decimal places (for rebase).
-    pub last_withdraw_request_value: u128, // the token amount of the last user withdrawal request.
+    pub base: u128,                         // the exponent for shares decimal places (for rebase).
+    pub last_withdraw_request_value: u128,  // the token amount of the last user withdrawal request.
     pub last_withdraw_request_ts: u64, // the timestamp when the user last requested a withdrawal.
-    pub cost_basis: u128, //
+    pub cost_basis: u128,              //
 }
 
 impl Stake {
-    pub fn new() -> Self {
+    pub fn new(user: Address, token: Address) -> Self {
         Stake {
+            user,
+            token,
             last_withdraw_request_shares: 0,
             last_withdraw_request_value: 0,
             last_withdraw_request_ts: 0,
             cost_basis: 0,
-            if_base: 0,
-            if_shares: 0,
+            base: 0,
+            shares: 0,
         }
     }
 
+    pub fn save(&mut self, e: &Env) {
+        save_stake(e, &self.user, &self.token, &self);
+    }
+
     fn validate_base(&self, e: &Env) {
-        let shares_base = get_shares_base(e);
+        let reserve = get_reserve(e, &self.token);
         validate!(
             e,
-            self.if_base == shares_base,
+            self.base == reserve.shares_base,
             InsuranceFundError::InvalidIFRebase
         );
     }
 
-    pub fn checked_if_shares(&self, e: &Env) -> u128 {
+    pub fn checked_shares(&self, e: &Env) -> u128 {
         self.validate_base(e);
-        self.if_shares
+        self.shares
     }
 
-    pub fn unchecked_if_shares(&self) -> u128 {
-        self.if_shares
+    pub fn unchecked_shares(&self) -> u128 {
+        self.shares
     }
 
-    pub fn increase_if_shares(&mut self, e: &Env, delta: u128) {
+    pub fn increase_shares(&mut self, e: &Env, delta: u128) {
         self.validate_base(e);
-        self.if_shares = self.if_shares.saturating_add(delta);
+        self.shares = self.shares.saturating_add(delta);
     }
 
-    pub fn decrease_if_shares(&mut self, e: &Env, delta: u128) {
+    pub fn decrease_shares(&mut self, e: &Env, delta: u128) {
         self.validate_base(e);
-        self.if_shares = self.if_shares.saturating_sub(delta);
+        self.shares = self.shares.saturating_sub(delta);
     }
 
-    pub fn update_if_shares(&mut self, e: &Env, new_shares: u128) {
+    pub fn update_shares(&mut self, e: &Env, new_shares: u128) {
         self.validate_base(e);
-        self.if_shares = new_shares;
+        self.shares = new_shares;
     }
 }
 
-pub fn get_stake(e: &Env, key: &Address) -> Stake {
-    let stake_info = match e.storage().persistent().get::<_, Stake>(key) {
+pub fn get_stake(e: &Env, user: &Address, token: &Address) -> Stake {
+    let key = (user, token);
+    let stake_info = match e.storage().persistent().get::<_, Stake>(&key) {
         Some(stake) => {
             bump_persistent(e, &key);
             stake
         }
-        None => Stake::new(),
+        None => Stake::new(user.clone(), token.clone()),
     };
 
     stake_info
 }
 
-pub fn save_stake(e: &Env, key: &Address, stake_info: &Stake) {
-    e.storage().persistent().set(key, stake_info);
+pub fn save_stake(e: &Env, user: &Address, token: &Address, stake_info: &Stake) {
+    let key = (user, token);
+    e.storage().persistent().set(&key, stake_info);
     bump_persistent(e, &key);
 }
 
@@ -112,20 +123,17 @@ pub fn save_stake(e: &Env, key: &Address, stake_info: &Stake) {
 //
 // # Side Effects
 // - Updates `total_shares` and `shares_base` in contract storage.
-pub fn apply_rebase_to_insurance_fund(e: &Env, insurance_vault_amount: u128) {
-    let total_shares = get_total_shares(e);
-    let shares_base = get_shares_base(e);
-
-    if insurance_vault_amount != 0 && insurance_vault_amount < total_shares {
+pub fn apply_rebase_to_insurance_fund(e: &Env, reserve: &mut InsuranceFundReserve) {
+    if reserve.balance != 0 && reserve.balance < reserve.total_shares {
         let (expo_diff, rebase_divisor) =
-            calculate_rebase_info(e, total_shares, insurance_vault_amount);
+            calculate_rebase_info(e, reserve.total_shares, reserve.balance);
 
-        set_total_shares(e, &total_shares.safe_div(e, rebase_divisor));
-        set_shares_base(e, &shares_base.safe_add(e, expo_diff as u128));
+        reserve.total_shares = reserve.total_shares.safe_div(e, rebase_divisor);
+        reserve.shares_base = reserve.shares_base.safe_add(e, expo_diff as u128);
     }
 
-    if insurance_vault_amount != 0 && total_shares == 0 {
-        set_total_shares(e, &(insurance_vault_amount as u128));
+    if reserve.balance != 0 && reserve.total_shares == 0 {
+        reserve.total_shares = reserve.balance;
     }
 }
 
@@ -147,26 +155,26 @@ pub fn apply_rebase_to_insurance_fund(e: &Env, insurance_vault_amount: u128) {
 // # Side Effects
 // - Mutates the `stake` struct in-place.
 pub fn apply_rebase_to_stake(e: &Env, stake: &mut Stake) {
-    let shares_base = get_shares_base(e);
+    let reserve = get_reserve(e, &stake.token);
 
-    if shares_base != stake.if_base {
+    if reserve.shares_base != stake.base {
         //  "Rebase expo out of bounds"
         validate!(
             e,
-            shares_base > stake.if_base,
+            reserve.shares_base > stake.base,
             InsuranceFundError::InvalidIFRebase
         );
 
-        let expo_diff = (shares_base - stake.if_base) as u32;
+        let expo_diff = (reserve.shares_base - stake.base) as u32;
 
         let rebase_divisor = (10_u128).pow(expo_diff);
 
-        stake.if_base = shares_base;
+        stake.base = reserve.shares_base;
 
-        let old_if_shares = stake.unchecked_if_shares();
-        let new_if_shares = old_if_shares.safe_div(e, rebase_divisor);
+        let old_shares = stake.unchecked_shares();
+        let new_shares = old_shares.safe_div(e, rebase_divisor);
 
-        stake.update_if_shares(e, new_if_shares);
+        stake.update_shares(e, new_shares);
 
         stake.last_withdraw_request_shares = stake
             .last_withdraw_request_shares
@@ -182,8 +190,7 @@ pub fn apply_rebase_to_stake(e: &Env, stake: &mut Stake) {
 // # Arguments
 // * `e` - Soroban environment reference.
 // * `amount` - Vault amount to convert.
-// * `total_if_shares` - Total outstanding insurance fund shares.
-// * `insurance_vault_amount` - Total assets in the insurance vault.
+// * `reserve` - .
 //
 // # Returns
 // - The number of shares that correspond to the input amount.
@@ -191,21 +198,16 @@ pub fn apply_rebase_to_stake(e: &Env, stake: &mut Stake) {
 // # Validation
 // - If `insurance_vault_amount == 0`, then `total_if_shares` must also be zero.
 // - Falls back to 1:1 minting when vault is empty.
-pub fn vault_amount_to_if_shares(
-    e: &Env,
-    amount: u128,
-    total_if_shares: u128,
-    insurance_vault_amount: u128,
-) -> u128 {
+pub fn reserve_amount_to_shares(e: &Env, amount: u128, reserve: &InsuranceFundReserve) -> u128 {
     // relative to the entire pool + total amount minted
-    let n_shares = if insurance_vault_amount > 0 {
+    let n_shares = if reserve.balance > 0 {
         // assumes total_if_shares != 0 (in most cases) for nice result for user
-        amount.fixed_mul_floor(e, &total_if_shares, &insurance_vault_amount)
+        amount.fixed_mul_floor(e, &reserve.total_shares, &reserve.balance)
     } else {
         // must be case that total_if_shares == 0 for nice result for user
         validate!(
             e,
-            total_if_shares == 0,
+            reserve.total_shares == 0,
             InsuranceFundError::InvalidIFSharesDetected
         );
 
@@ -222,8 +224,7 @@ pub fn vault_amount_to_if_shares(
 // # Arguments
 // * `e` - Soroban environment reference.
 // * `n_shares` - Number of insurance fund shares to convert.
-// * `total_if_shares` - Total outstanding insurance fund shares.
-// * `insurance_vault_amount` - Total assets in the insurance vault.
+// * `reserve` -
 //
 // # Returns
 // - The proportional vault amount corresponding to the shares.
@@ -231,20 +232,17 @@ pub fn vault_amount_to_if_shares(
 // # Validation
 // - Ensures `n_shares <= total_if_shares`.
 // - Returns `0` if total shares are zero (vault is empty).
-pub fn if_shares_to_vault_amount(
-    e: &Env,
-    n_shares: u128,
-    total_if_shares: u128,
-    insurance_vault_amount: u128,
-) -> u128 {
+pub fn shares_to_reserve_amount(e: &Env, n_shares: u128, reserve: &InsuranceFundReserve) -> u128 {
     validate!(
         e,
-        n_shares <= total_if_shares,
+        n_shares <= reserve.total_shares,
         InsuranceFundError::InvalidIFSharesDetected
     );
 
-    let amount = if total_if_shares > 0 {
-        insurance_vault_amount.fixed_mul_floor(e, &n_shares, &total_if_shares)
+    let amount = if reserve.total_shares > 0 {
+        reserve
+            .balance
+            .fixed_mul_floor(e, &n_shares, &reserve.total_shares)
     } else {
         0
     };
@@ -301,19 +299,22 @@ pub fn calculate_rebase_info(
 //
 // # Validation
 // - Ensures recalculated shares are not greater than the original request.
-pub fn calculate_if_shares_lost(e: &Env, stake: &Stake, insurance_vault_amount: u128) -> u128 {
-    let total_shares = get_total_shares(e);
-
+pub fn calculate_shares_lost(e: &Env, stake: &Stake, reserve: &InsuranceFundReserve) -> u128 {
     let n_shares = stake.last_withdraw_request_shares;
 
-    let amount = if_shares_to_vault_amount(e, n_shares, total_shares, insurance_vault_amount);
+    let amount = shares_to_reserve_amount(e, n_shares, reserve);
 
     let if_shares_lost = if amount > stake.last_withdraw_request_value {
-        let new_n_shares = vault_amount_to_if_shares(
+        let new_n_shares = reserve_amount_to_shares(
             e,
             stake.last_withdraw_request_value,
-            total_shares.saturating_sub(n_shares),
-            insurance_vault_amount.saturating_sub(stake.last_withdraw_request_value),
+            &(InsuranceFundReserve {
+                total_shares: reserve.total_shares.saturating_sub(n_shares),
+                balance: reserve
+                    .balance
+                    .saturating_sub(stake.last_withdraw_request_value),
+                ..reserve.clone()
+            }),
         );
 
         validate!(
@@ -430,6 +431,7 @@ pub fn basic_stake_if_test() {
 #[test]
 pub fn if_shares_lost_test() {
     use crate::testutils::Setup;
+    use soroban_sdk::testutils::Address;
     use utils::constant::QUOTE_PRECISION;
 
     let setup = Setup::default();
@@ -438,49 +440,52 @@ pub fn if_shares_lost_test() {
 
     let mut total_shares = 1000 * QUOTE_PRECISION;
 
-    let mut if_stake = Stake::new();
-    if_stake.update_if_shares(&setup.env, 100 * QUOTE_PRECISION);
+    let token = Address::generate(&setup.env);
+
+    let reserve = InsuranceFundReserve::new(token, setup.env.ledger().timestamp());
+    let mut if_stake = Stake::new(setup.admin, token);
+    if_stake.update_shares(&setup.env, 100 * QUOTE_PRECISION);
     if_stake.last_withdraw_request_shares = 100 * QUOTE_PRECISION;
     if_stake.last_withdraw_request_value = 100 * QUOTE_PRECISION - 1;
 
     let if_balance = 1000 * QUOTE_PRECISION;
 
     // unchanged balance
-    let lost_shares = calculate_if_shares_lost(&setup.env, &if_stake, if_balance);
+    let lost_shares = calculate_shares_lost(&setup.env, &if_stake, &reserve);
     assert_eq!(lost_shares, 2);
 
     let if_balance = if_balance + 100 * QUOTE_PRECISION;
     total_shares += 100 * QUOTE_PRECISION;
-    let lost_shares = calculate_if_shares_lost(&setup.env, &if_stake, if_balance);
+    let lost_shares = calculate_shares_lost(&setup.env, &if_stake, &reserve);
     assert_eq!(lost_shares, 2); // giving up $5 of gains
 
     let if_balance = if_balance - 100 * QUOTE_PRECISION;
     total_shares -= 100 * QUOTE_PRECISION;
-    let lost_shares = calculate_if_shares_lost(&setup.env, &if_stake, if_balance);
+    let lost_shares = calculate_shares_lost(&setup.env, &if_stake, &reserve);
     assert_eq!(lost_shares, 2); // giving up $5 of gains
 
     // take back gain
     let if_balance = 1100 * QUOTE_PRECISION;
-    let lost_shares = calculate_if_shares_lost(&setup.env, &if_stake, if_balance);
+    let lost_shares = calculate_shares_lost(&setup.env, &if_stake, &reserve);
     assert_eq!(lost_shares, 10_000_001); // giving up $10 of gains
 
     // doesnt matter if theres a loss
     if_stake.last_withdraw_request_value = 200 * QUOTE_PRECISION;
-    let lost_shares = calculate_if_shares_lost(&setup.env, &if_stake, if_balance);
+    let lost_shares = calculate_shares_lost(&setup.env, &if_stake, &reserve);
     assert_eq!(lost_shares, 0);
     if_stake.last_withdraw_request_value = 100 * QUOTE_PRECISION - 1;
 
     // take back gain and total_if_shares alter w/o user alter
     let if_balance = 2100 * QUOTE_PRECISION;
     total_shares *= 2;
-    let lost_shares = calculate_if_shares_lost(&setup.env, &if_stake, if_balance);
+    let lost_shares = calculate_shares_lost(&setup.env, &if_stake, &reserve);
     assert_eq!(lost_shares, 5_000_001); // giving up $5 of gains
 
     let if_balance = 2100 * QUOTE_PRECISION * 10;
 
     let expected_gain_if_no_loss = (if_balance * 100) / 2000;
     assert_eq!(expected_gain_if_no_loss, 1_050_000_000);
-    let lost_shares = calculate_if_shares_lost(&setup.env, &if_stake, if_balance);
+    let lost_shares = calculate_shares_lost(&setup.env, &if_stake, &reserve);
     assert_eq!(lost_shares, 90_909_092); // giving up $5 of gains
     assert_eq!(
         (9090908 * if_balance) / (total_shares - lost_shares)

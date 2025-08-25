@@ -5,6 +5,7 @@ pub mod errors;
 mod events;
 mod interest;
 mod interface;
+mod reserve;
 mod stake;
 mod storage;
 mod test;
