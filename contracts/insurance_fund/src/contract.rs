@@ -12,24 +12,21 @@ use crate::stake::{
     reserve_amount_to_shares, save_stake, shares_to_reserve_amount, StakeAction,
 };
 use crate::storage::get_contract_token_balance;
-use crate::storage::get_deletion_queue;
-use crate::storage::get_pool_router;
 use crate::storage::get_oracle_registry;
+use crate::storage::get_pool_router;
+use crate::storage::get_premium_payer_status;
 use crate::storage::get_premium_token;
-use crate::storage::get_premium_whitelist_status;
 use crate::storage::get_reserve;
+use crate::storage::get_token_whitelist;
 use crate::storage::get_token_whitelist_status;
 use crate::storage::put_reserve;
 use crate::storage::set_oracle_registry;
 use crate::storage::set_pool_router;
+use crate::storage::set_premium_payer_status;
 use crate::storage::set_premium_token;
+use crate::storage::set_token_whitelist;
+use crate::storage::WhitelistToken;
 use crate::storage::{
-    get_base_rate, get_is_killed_deposit,
-    get_is_killed_request_withdraw, get_is_killed_withdraw, get_optimal_insurance,
-    get_optimal_utilization, get_rate_slope_a, get_rate_slope_b, get_unstaking_period,
-    set_base_rate, set_is_killed_deposit, set_is_killed_request_withdraw, set_is_killed_withdraw,
-    set_optimal_insurance, set_optimal_utilization, set_rate_slope_a, set_rate_slope_b,
-    set_unstaking_period,
     get_base_rate, get_is_killed_deposit, get_is_killed_request_withdraw, get_is_killed_withdraw,
     get_optimal_insurance, get_optimal_utilization, get_rate_slope_a, get_rate_slope_b,
     get_unstaking_period, set_base_rate, set_is_killed_deposit, set_is_killed_request_withdraw,
@@ -56,7 +53,6 @@ use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::math::safe_math::SafeMath;
 use utils::state::pool::PoolInfo;
-use utils::state::token::DetailedToken;
 use utils::token::transfer_token;
 use utils::token::validate_token_contract;
 use utils::token::validate_token_contracts;
@@ -82,8 +78,7 @@ impl InsuranceFundTrait for InsuranceFund {
         oracle_registry: Address,
         pool_router: Address,
         premium_token: Address,
-        whitelisted_tokens: Vec<Address>,
-        oracle_registry: Address,
+        whitelisted_tokens: Vec<WhitelistToken>,
         unstaking_period: u64,
         optimal_utilization: u32,
         base_rate: i32,
@@ -98,20 +93,23 @@ impl InsuranceFundTrait for InsuranceFund {
         access_control.set_role_address(&Role::Admin, &admin);
         access_control.set_role_address(&Role::EmergencyAdmin, &emergency_admin);
 
-        set_oracle_registry(&e, &token);
+        set_oracle_registry(&e, &oracle_registry);
         set_pool_router(&e, &pool_router);
+
         validate_token_contract(&e, &premium_token);
-        validate_token_contracts(&e, &whitelisted_tokens);
+        set_premium_token(&e, &premium_token);
 
         for i in 0..whitelisted_tokens.len() {
             let token = whitelisted_tokens.get(i).unwrap();
-            let reserve = get_reserve(&e, &token);
-            put_reserve(&e, &token, &reserve);
+
+            validate_token_contract(&e, &token.address);
+
+            set_token_whitelist(&e, &token);
+
+            let reserve = get_reserve(&e, &token.address);
+            put_reserve(&e, &token.address, &reserve);
         }
 
-        set_oracle_registry(&e, &oracle_registry);
-        set_premium_token(&e, &premium_token);
-        set_whitelist_tokens(&e, &whitelisted_tokens);
         set_unstaking_period(&e, &unstaking_period);
         set_optimal_utilization(&e, &optimal_utilization);
         set_base_rate(&e, &base_rate);
@@ -286,9 +284,9 @@ impl InsuranceFundTrait for InsuranceFund {
             panic_with_error!(e, InsuranceFundError::FundRequestWithdrawKilled);
         }
 
-        if !get_token_whitelist_status(&e, &token) {
-            panic_with_error!(e, InsuranceFundError::UnsupportedToken);
-        }
+        // Withdrawals do not require a whitelist token to be active. Inactive tokens
+        // must be withdrawn so the reserve.balance equals zero before they can be removed.
+        get_token_whitelist(&e, &token);
 
         let now = e.ledger().timestamp();
         let mut stake = get_stake(&e, &user, &token);
@@ -409,9 +407,7 @@ impl InsuranceFundTrait for InsuranceFund {
 
         enter(&e);
 
-        if !get_token_whitelist_status(&e, &token) {
-            panic_with_error!(e, InsuranceFundError::UnsupportedToken);
-        }
+        get_token_whitelist(&e, &token);
 
         let now = e.ledger().timestamp();
         let mut stake = get_stake(&e, &user, &token);
@@ -516,9 +512,7 @@ impl InsuranceFundTrait for InsuranceFund {
             panic_with_error!(e, InsuranceFundError::FundWithdrawKilled);
         }
 
-        if !get_token_whitelist_status(&e, &token) {
-            panic_with_error!(e, InsuranceFundError::UnsupportedToken);
-        }
+        get_token_whitelist(&e, &token);
 
         // TODO: Do we need to check IF utilization and/or overall pool liquidity imbalance for edge
         // cases before authorizing a withdrawal?
@@ -540,8 +534,6 @@ impl InsuranceFundTrait for InsuranceFund {
             time_since_withdraw_request >= get_unstaking_period(&e),
             InsuranceFundError::TryingToRemoveLiquidityTooFast
         );
-
-        let insurance_vault_amount = get_insurance_vault_amount(&e, &token);
 
         apply_rebase_to_insurance_fund(&e, &token);
         apply_rebase_to_stake(&e, &mut stake);
@@ -662,8 +654,8 @@ impl InsuranceFundTrait for InsuranceFund {
 
         enter(&e);
 
-        if !get_premium_whitelist_status(&e, &sender) {
-            panic_with_error!(&e, InsuranceFundError::NotAuthorized)
+        if !get_premium_payer_status(&e, &sender) {
+            panic_with_error!(&e, InsuranceFundError::NotAuthorized);
         }
 
         let premium_token = get_premium_token(&e);
@@ -691,9 +683,7 @@ impl InsuranceFundTrait for InsuranceFund {
 
         enter(&e);
 
-        if !get_token_whitelist_status(&e, &token) {
-            panic_with_error!(e, InsuranceFundError::UnsupportedToken);
-        }
+        get_token_whitelist(&e, &token);
 
         let now = e.ledger().timestamp();
         let reserve = get_reserve(&e, &token);
@@ -715,9 +705,7 @@ impl InsuranceFundTrait for InsuranceFund {
 
         enter(&e);
 
-        if !get_token_whitelist_status(&e, &token) {
-            panic_with_error!(e, InsuranceFundError::UnsupportedToken);
-        }
+        get_token_whitelist(&e, &token);
 
         let reserve = get_reserve(&e, &token);
         let balance = get_contract_token_balance(&e, &token);
@@ -738,16 +726,16 @@ impl InsuranceFundTrait for InsuranceFund {
     // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
     //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
 
-    fn get_whitelist_tokens(e: Env) -> Vec<Address> {
-        get_whitelist_tokens(&e)
-    }
-
-    fn get_deletion_queue_tokens(e: Env) -> Vec<Address> {
-        get_deletion_queue(&e)
+    fn get_oracle_registry(e: Env) -> Address {
+        get_oracle_registry(&e)
     }
 
     fn get_pool_router(e: Env) -> Address {
         get_pool_router(&e)
+    }
+
+    fn get_premium_token(e: Env) -> Address {
+        get_premium_token(&e)
     }
 
     fn get_unstaking_period(e: Env) -> u64 {
@@ -810,8 +798,12 @@ impl InsuranceFundTrait for InsuranceFund {
         (get_rate_slope_a(&e), get_rate_slope_b(&e))
     }
 
-    fn get_premium_whitelist_status(e: Env, address: Address) -> bool {
-        crate::storage::get_premium_whitelist_status(&e, &address)
+    fn get_token_whitelist(e: Env, token: Address) -> WhitelistToken {
+        get_token_whitelist(&e, &token)
+    }
+
+    fn get_premium_payer_status(e: Env, address: Address) -> bool {
+        get_premium_payer_status(&e, &address)
     }
 }
 
@@ -998,7 +990,7 @@ impl AdminInterface for InsuranceFund {
     // # Panics / Errors
     // * `InsuranceFundError::InsufficientCollateral` if the claim exceeds vault balance.
     // * `InsuranceFundError::InvalidIFDetected` if the payout fully depletes the Insurance Fund.
-    fn resolve_liquidity_deficit(e: Env, admin: Address, asset: Symbol) {
+    fn resolve_liquidity_deficit(e: Env, admin: Address, token: Address, asset: Symbol) {
         admin.require_auth();
         require_admin(&e, &admin);
 
@@ -1046,15 +1038,15 @@ impl AdminInterface for InsuranceFund {
                             // Error if there is not enough insurance to cover the claim
                             validate!(
                                 &e,
-                                pay_from_insurance < insurance_vault_amount,
+                                pay_from_insurance < reserve.balance,
                                 InsuranceFundError::InsufficientCollateral
                             );
 
                             // Error if a claim leaves removes all insurance
-                            let new_insurance_vault_amount = get_insurance_vault_amount(&e);
+                            let updated_reserve = get_reserve(&e, &token);
                             validate!(
                                 &e,
-                                new_insurance_vault_amount > 0,
+                                updated_reserve.balance > 0,
                                 InsuranceFundError::InvalidIFDetected
                             );
                         }
@@ -1074,6 +1066,13 @@ impl AdminInterface for InsuranceFund {
     //  /" \   :)(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
     // (_______/  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
 
+    fn set_oracle_registry(e: Env, admin: Address, oracle_registry: Address) {
+        admin.require_auth();
+        require_admin(&e, &admin);
+
+        set_oracle_registry(&e, &oracle_registry);
+    }
+
     fn set_pool_router(e: Env, admin: Address, pool_router: Address) {
         admin.require_auth();
         require_admin(&e, &admin);
@@ -1081,51 +1080,22 @@ impl AdminInterface for InsuranceFund {
         set_pool_router(&e, &pool_router);
     }
 
-    fn add_whitelist_token(e: Env, admin: Address, token: DetailedToken) {
+    fn set_premium_payer_status(e: Env, admin: Address, payer: Address, status: bool) {
         admin.require_auth();
         require_admin(&e, &admin);
 
-        validate_token_contract(&e, &token.address);
+        let old_status = get_premium_payer_status(&e, &payer);
+        set_premium_payer_status(&e, &payer, status);
 
-        // Validate oracle
-        e.invoke_contract(
-            &get_oracle_registry(&e),
-            &Symbol::new(&e, "get_price"),
-            Vec::from_array(&e, [token.symbol.to_val()]),
+        let current_time = e.ledger().timestamp();
+
+        FundEvents::new(&e).premium_payer_status_updated(
+            current_time,
+            admin,
+            payer,
+            old_status,
+            status,
         );
-
-        let whitelist = get_whitelist_tokens(&e);
-        let deletion_queue = get_deletion_queue(&e);
-
-        if deletion_queue.contains(&token.address) {}
-
-        if whitelist.contains(&token.address) {}
-
-        FundEvents::new(&e).whitelist_token(admin, token);
-    }
-
-    fn remove_whitelist_token(e: Env, admin: Address, token: DetailedToken) {
-        admin.require_auth();
-        require_admin(&e, &admin);
-
-        let deletion_queue = get_deletion_queue(&e);
-
-        if deletion_queue.contains(&token) {
-            panic_with_error!(&e, InsuranceFundError::TokenAlreadyDeleted);
-        }
-
-        let whitelist = get_whitelist_tokens(&e);
-
-        if !whitelist.contains(&token) {
-            panic_with_error!(&e, InsuranceFundError::TokenAlreadyDeleted);
-        }
-
-        let reserve = get_reserve(&e, &token);
-
-        // remove from whitelist
-        // add to queue
-
-        FundEvents::new(&e).remove_whitelist_token(admin, token, reserve.balance);
     }
 
     fn set_unstaking_period(e: Env, admin: Address, unstaking_period: u64) {
@@ -1165,23 +1135,63 @@ impl AdminInterface for InsuranceFund {
         set_rate_slope_b(&e, &rate_slope_b);
     }
 
-    fn set_whitelist_status(e: Env, admin: Address, address: Address, status: bool) {
+    fn add_token_whitelist(e: Env, admin: Address, token: WhitelistToken) {
         admin.require_auth();
-        let access_control = AccessControl::new(&e);
-        access_control.assert_address_has_role(&admin, &Role::Admin);
+        require_admin(&e, &admin);
 
-        let old_status = get_premium_whitelist_status(&e, &address);
-        crate::storage::set_premium_whitelist_status(&e, &address, status);
+        // Error if token already exists
+        if get_token_whitelist_status(&e, &token.address) {
+            panic_with_error!(&e, InsuranceFundError::AdminNotSet);
+        }
 
-        let current_time = e.ledger().timestamp();
-        // Emit enhanced event
-        FundEvents::new(&e).premium_whitelist_status_updated(
-            current_time,
-            admin,
-            address,
-            old_status,
-            status,
+        validate_token_contract(&e, &token.address);
+
+        // Validate oracle
+        e.invoke_contract(
+            &get_oracle_registry(&e),
+            &Symbol::new(&e, "get_price"),
+            Vec::from_array(&e, [token.symbol.to_val()]),
         );
+
+        set_token_whitelist(&e, &token);
+
+        FundEvents::new(&e).whitelist_token(admin, token.address, token.symbol);
+    }
+
+    fn set_token_whitelist_status(e: Env, admin: Address, token: Address, status: bool) {
+        admin.require_auth();
+        require_admin(&e, &admin);
+
+        let token = get_token_whitelist(&e, &token);
+
+        set_token_whitelist(
+            &e,
+            &(WhitelistToken {
+                active: status,
+                ..token
+            }),
+        );
+    }
+
+    fn remove_whitelist_token(e: Env, admin: Address, token: Address) {
+        admin.require_auth();
+        require_admin(&e, &admin);
+
+        let token = get_token_whitelist(&e, &token);
+
+        // Error if not inactive token
+        if token.active {
+            panic_with_error!(&e, InsuranceFundError::AdminNotSet);
+        }
+
+        let reserve = get_reserve(&e, &token.address);
+
+        // Error if reserve has not been depleted yet
+        if reserve.balance != 0 {
+            panic_with_error!(&e, InsuranceFundError::AdminNotSet);
+        }
+
+        FundEvents::new(&e).remove_whitelist_token(admin, token.address, reserve.balance);
     }
 
     //    _______     __       ____  ____   ________  _______  ________

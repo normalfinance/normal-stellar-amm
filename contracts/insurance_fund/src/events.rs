@@ -41,7 +41,7 @@ pub(crate) trait InsuranceFundEvents {
 
     fn collect_premium(&self, sender: Address, token: Address, amount: u128);
 
-    fn whitelist_token(&self, sender: Address, token: Address);
+    fn whitelist_token(&self, sender: Address, token: Address, symbol: Symbol);
 
     fn remove_whitelist_token(&self, sender: Address, token: Address, reserve_amount: u128);
 
@@ -52,7 +52,7 @@ pub(crate) trait InsuranceFundEvents {
         new_insurance: u128,
     );
 
-    fn premium_whitelist_status_updated(
+    fn premium_payer_status_updated(
         &self,
         ts: u64,
         admin: Address,
@@ -132,10 +132,11 @@ impl InsuranceFundEvents for Events {
         );
     }
 
-    fn whitelist_token(&self, sender: Address, token: Address) {
-        self.env()
-            .events()
-            .publish((Symbol::new(self.env(), "whitelist_token"), sender), token);
+    fn whitelist_token(&self, sender: Address, token: Address, symbol: Symbol) {
+        self.env().events().publish(
+            (Symbol::new(self.env(), "whitelist_token"), sender),
+            (token, symbol),
+        );
     }
 
     fn remove_whitelist_token(&self, sender: Address, token: Address, reserve_amount: u128) {
@@ -157,7 +158,7 @@ impl InsuranceFundEvents for Events {
         );
     }
 
-    fn premium_whitelist_status_updated(
+    fn premium_payer_status_updated(
         &self,
         ts: u64,
         admin: Address,
@@ -167,7 +168,7 @@ impl InsuranceFundEvents for Events {
     ) {
         self.env().events().publish(
             (
-                Symbol::new(self.env(), "premium_whitelist_status_updated"),
+                Symbol::new(self.env(), "premium_payer_status_updated"),
                 ts,
                 admin,
                 user,

@@ -1,7 +1,6 @@
 use soroban_sdk::{Address, Env, Symbol, Vec};
-use soroban_sdk::{Address, Env, Vec};
-use utils::state::token::DetailedToken;
 
+use crate::storage::WhitelistToken;
 use crate::{reserve::InsuranceFundReserve, stake::Stake};
 
 pub trait InsuranceFundTrait {
@@ -13,7 +12,6 @@ pub trait InsuranceFundTrait {
         pool_router: Address,
         premium_token: Address,
         whitelisted_tokens: Vec<Address>,
-        oracle_registry: Address,
         unstaking_period: u64,
         optimal_utilization: u32,
         base_rate: i32,
@@ -52,19 +50,33 @@ pub trait InsuranceFundTrait {
     // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
     //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
 
-    fn get_whitelist_tokens(e: Env) -> Vec<Address>;
+    // Addresses
 
-    fn get_deletion_queue_tokens(e: Env) -> Vec<Address>;
+    fn get_oracle_registry(e: Env) -> Address;
 
     fn get_pool_router(e: Env) -> Address;
+
+    fn get_premium_token(e: Env) -> Address;
+
+    // Access
+
+    fn get_premium_payer_status(e: Env, address: Address) -> bool;
+
+    fn get_token_whitelist(e: Env, token: Address) -> WhitelistToken;
+
+    // Config
 
     fn get_unstaking_period(e: Env) -> u64;
 
     fn get_optimal_insurance(e: Env) -> u128;
 
+    // Reserve
+
     fn get_reserve(e: Env, token: Address) -> InsuranceFundReserve;
 
     fn get_stake(e: Env, user: Address, token: Address) -> Stake;
+
+    // Interest
 
     fn get_optimal_utilization(e: Env) -> u32;
 
@@ -75,8 +87,6 @@ pub trait InsuranceFundTrait {
     fn get_base_rate(e: Env) -> i32;
 
     fn get_rate_slopes(e: Env) -> (u32, u32);
-
-    fn get_premium_whitelist_status(e: Env, address: Address) -> bool;
 }
 
 pub trait AdminInterface {
@@ -90,7 +100,7 @@ pub trait AdminInterface {
 
     fn sync_optimal_insurance(e: Env, admin: Address);
 
-    fn resolve_liquidity_deficit(e: Env, admin: Address, asset: Symbol);
+    fn resolve_liquidity_deficit(e: Env, admin: Address, token: Address, asset: Symbol);
 
     //   ________  _______  ___________  ___________  _______   _______    ________
     //  /"       )/"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
@@ -100,12 +110,11 @@ pub trait AdminInterface {
     //  /" \   :)(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
     // (_______/  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
 
+    fn set_oracle_registry(e: Env, admin: Address, oracle_registry: Address);
+
     fn set_pool_router(e: Env, admin: Address, pool_router: Address);
-    fn add_whitelist_token(e: Env, admin: Address, token: Address);
 
-    fn add_whitelist_token(e: Env, admin: Address, token: DetailedToken);
-
-    fn remove_whitelist_token(e: Env, admin: Address, token: DetailedToken);
+    fn set_premium_payer_status(e: Env, admin: Address, payer: Address, status: bool);
 
     fn set_unstaking_period(e: Env, admin: Address, unstaking_period: u64);
 
@@ -118,7 +127,11 @@ pub trait AdminInterface {
         rate_slope_b: u32,
     );
 
-    fn set_whitelist_status(e: Env, admin: Address, address: Address, status: bool);
+    // Token whitelist
+
+    fn add_token_whitelist(e: Env, admin: Address, token: WhitelistToken);
+
+    fn set_token_whitelist_status(e: Env, admin: Address, token: Address, status: bool);
 
     fn remove_whitelist_token(e: Env, admin: Address, token: Address);
 
@@ -130,17 +143,14 @@ pub trait AdminInterface {
     //  /|__/ \  /   /  \\  \  /\\ __ //\  /" \   :)(:      "||:       :)
     // (_______)(___/    \___)(__________)(_______/  \_______)(________/
 
-    // Stop staking instantly
     fn kill_deposit(e: Env, admin: Address);
     fn kill_request_withdraw(e: Env, admin: Address);
     fn kill_withdraw(e: Env, admin: Address);
 
-    // Resume staking
     fn unkill_deposit(e: Env, admin: Address);
     fn unkill_request_withdraw(e: Env, admin: Address);
     fn unkill_withdraw(e: Env, admin: Address);
 
-    // Get killswitch status
     fn get_is_killed_deposit(e: Env) -> bool;
     fn get_is_killed_request_withdraw(e: Env) -> bool;
     fn get_is_killed_withdraw(e: Env) -> bool;

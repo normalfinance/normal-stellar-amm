@@ -1,11 +1,10 @@
 use crate::reserve::InsuranceFundReserve;
 use paste::paste;
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
-use soroban_sdk::{contracttype, panic_with_error, Address, Env, Vec};
+use soroban_sdk::{contracttype, panic_with_error, Address, Env, Symbol};
 use utils::bump::{bump_instance, bump_persistent};
 use utils::constant::THIRTEEN_DAY;
 use utils::errors::storage_errors::StorageError;
-use utils::state::token::DetailedToken;
 use utils::{
     generate_instance_storage_getter, generate_instance_storage_getter_and_setter,
     generate_instance_storage_getter_and_setter_with_default,
@@ -19,23 +18,20 @@ use utils::{
 enum DataKey {
     OracleRegistry, // the address of the Oracle Registry.
     PoolRouter,     // the address of the Pool Router.
-    PremiumToken,   // the address of the token used to pay premiums.
 
-    TokenWhitelist(Address),
-    DeletionQueue(Address),
+    PremiumToken,           // the address of the token used to pay premiums.
+    PremiumPayers(Address), // list of accounts allowed to pay premium.
 
-    Reserve(Address),
+    TokenWhitelist(Address), // map of token address to WhitelistTokenStatus.
+
+    Reserve(Address), // map of token address to InsuranceFundReserve.
 
     UnstakingPeriod, // a period of time stakers must wait once requesting withdrawal to actually withdraw.
-    OptimalInsurance, // the maximum amount of insurance (in Token amount) to adequately insure the protocol.
-    TotalShares,      // the total amount of issued shares.
-    SharesBase,       // exponent for lp shares (for rebasing).
+    OptimalInsurance, // the maximum amount of insurance to adequately insure the protocol.
     OptimalUtilization, // the optimal utilization point (utilization = current insurance / optimal insurance)
     BaseRate,           // the base interest rate when utilization is 0%
     RateSlopeA,         // the slope before hitting optimal utilization (gradual increase)
     RateSlopeB,         // the slope after optimal utilization (steep increase)
-
-    PremiumWhitelist(Address), // List of accounts explicitly allowed to pay premium
 
     // paused ops
     IsKilledDeposit,
@@ -44,31 +40,6 @@ enum DataKey {
 }
 
 // Addresses
-/// Checks if an address is whitelisted
-/// Returns true if whitelisted, false if not (missing entries are treated as not whitelisted)
-pub fn get_token_whitelist_status(e: &Env, address: &Address) -> bool {
-    let key = DataKey::TokenWhitelist(address.clone());
-    match e.storage().persistent().get::<DataKey, DetailedToken>(&key) {
-        Some(_) => {
-            bump_persistent(e, &key);
-            true
-        }
-        None => false,
-    }
-}
-
-/// Sets whitelist status for an address
-/// If status is true, adds the address to whitelist; if false, removes it
-pub fn set_token_whitelist_status(e: &Env, token: &DetailedToken, status: bool) {
-    let key = DataKey::TokenWhitelist(token.address.clone());
-    if status {
-        e.storage().persistent().set(&key, token);
-        bump_persistent(e, &key);
-    } else {
-        e.storage().persistent().remove(&key);
-    }
-}
-
 generate_instance_storage_getter_and_setter_with_default!(
     oracle_registry,
     DataKey::OracleRegistry,
@@ -88,20 +59,7 @@ generate_instance_storage_getter_and_setter_with_default!(
     Address::from_str(&Env::default(), "")
 );
 
-// Config
-generate_instance_storage_getter_and_setter_with_default!(
-    whitelist_tokens,
-    DataKey::WhitelistToken,
-    Vec<Address>,
-    Vec::new(&Env::default())
-);
-generate_instance_storage_getter_and_setter_with_default!(
-    deletion_queue,
-    DataKey::DeletionQueue,
-    Vec<Address>,
-    Vec::new(&Env::default())
-);
-
+// Reserve
 pub(crate) fn get_reserve(e: &Env, token: &Address) -> InsuranceFundReserve {
     let key = DataKey::Reserve(token.clone());
     match e.storage().persistent().get(&key) {
@@ -119,6 +77,7 @@ pub(crate) fn put_reserve(e: &Env, token: &Address, reserve_info: &InsuranceFund
     bump_persistent(e, &key);
 }
 
+// Config
 generate_instance_storage_getter_and_setter_with_default!(
     unstaking_period,
     DataKey::UnstakingPeriod,
@@ -138,7 +97,7 @@ generate_instance_storage_getter_and_setter!(base_rate, DataKey::BaseRate, i32);
 generate_instance_storage_getter_and_setter!(rate_slope_a, DataKey::RateSlopeA, u32);
 generate_instance_storage_getter_and_setter!(rate_slope_b, DataKey::RateSlopeB, u32);
 
-// paused ops
+// Paused Ops
 generate_instance_storage_getter_and_setter_with_default!(
     is_killed_deposit,
     DataKey::IsKilledDeposit,
@@ -163,23 +122,12 @@ pub fn get_contract_token_balance(e: &Env, token: &Address) -> u128 {
     SorobanTokenClient::new(e, token).balance(&e.current_contract_address()) as u128
 }
 
-pub fn validate_whitelisted_token(e: &Env, token: &Address) {
-    let whitelisted_tokens = get_whitelist_tokens(&e);
-
-    if !whitelisted_tokens.contains(token) {
-        panic_with_error!(e, InsuranceFundError::UnsupportedToken)
-    }
-}
-
-// Whitelist functions
-// Note: These use manual implementation (not macros) because they are keyed storage patterns
-// that require persistent storage, custom TTL management, and Address-based keys.
-// This follows the same pattern as Component(Address) and ComponentBalance(Address) storage.
+// Premium Payers
 
 /// Checks if an address is whitelisted
 /// Returns true if whitelisted, false if not (missing entries are treated as not whitelisted)
-pub fn get_premium_whitelist_status(e: &Env, address: &Address) -> bool {
-    let key = DataKey::PremiumWhitelist(address.clone());
+pub fn get_premium_payer_status(e: &Env, address: &Address) -> bool {
+    let key = DataKey::PremiumPayers(address.clone());
     match e.storage().persistent().get::<DataKey, Address>(&key) {
         Some(_) => {
             bump_persistent(e, &key);
@@ -191,12 +139,67 @@ pub fn get_premium_whitelist_status(e: &Env, address: &Address) -> bool {
 
 /// Sets whitelist status for an address
 /// If status is true, adds the address to whitelist; if false, removes it
-pub fn set_premium_whitelist_status(e: &Env, address: &Address, status: bool) {
-    let key = DataKey::PremiumWhitelist(address.clone());
+pub fn set_premium_payer_status(e: &Env, address: &Address, status: bool) {
+    let key = DataKey::PremiumPayers(address.clone());
     if status {
         e.storage().persistent().set(&key, address);
-        e.storage().persistent().extend_ttl(&key, 100000, 100000);
+        bump_persistent(e, &key);
     } else {
         e.storage().persistent().remove(&key);
     }
+}
+
+// Whitelist Token
+
+/// Checks if an address is whitelisted
+/// Returns true if whitelisted, false if not (missing entries are treated as not whitelisted)
+pub fn get_token_whitelist_status(e: &Env, address: &Address) -> bool {
+    let key = DataKey::TokenWhitelist(address.clone());
+    match e
+        .storage()
+        .persistent()
+        .get::<DataKey, WhitelistToken>(&key)
+    {
+        Some(token) => {
+            bump_persistent(e, &key);
+            token.active
+        }
+        None => false,
+    }
+}
+
+pub fn get_token_whitelist(e: &Env, address: &Address) -> WhitelistToken {
+    let key = DataKey::TokenWhitelist(address.clone());
+    match e
+        .storage()
+        .persistent()
+        .get::<DataKey, WhitelistToken>(&key)
+    {
+        Some(token) => {
+            bump_persistent(e, &key);
+            token
+        }
+        None => panic_with_error!(e, StorageError::ValueNotInitialized),
+    }
+}
+
+/// Sets whitelist status for an address
+/// If status is true, adds the address to whitelist; if false, removes it
+pub fn set_token_whitelist(e: &Env, token: &WhitelistToken) {
+    let key = DataKey::TokenWhitelist(token.address.clone());
+    e.storage().persistent().set(&key, token);
+    bump_persistent(e, &key);
+}
+
+pub fn remove_token_whitelist(e: &Env, token: &Address) {
+    let key = DataKey::TokenWhitelist(token.clone());
+    e.storage().persistent().remove(&key);
+}
+
+#[contracttype]
+#[derive(Clone, PartialEq, Eq)]
+pub struct WhitelistToken {
+    pub address: Address, // Address of the token
+    pub symbol: Symbol,   // Symbol of the token
+    pub active: bool,
 }
