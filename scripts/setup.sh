@@ -243,18 +243,6 @@ stellar contract invoke \
     --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     -- \
-    set_buffer \
-    --admin $ADMIN_ADDRESS \
-    --buffer $BUFFER_ADDR
-
-stellar contract invoke \
-    --id $POOL_SWAP_FEE \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
-    --fee $STELLAR_BASE_FEE \
-    -- \
     set_insurance_fund \
     --admin $ADMIN_ADDRESS \
     --insurance_fund $INSURANCE_FUND_ADDR
