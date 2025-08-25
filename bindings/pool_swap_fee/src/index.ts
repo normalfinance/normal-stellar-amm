@@ -192,8 +192,6 @@ export interface HistoricalOracleData {
 
 export interface Pool {
   base_asset: string;
-  expiry_price: u128;
-  expiry_ts: u64;
   fee_fraction: u32;
   insurance_claim: InsuranceClaim;
   liquidity_max_imbalance: u128;
@@ -283,7 +281,7 @@ export interface Client {
    * - Token transfer from user to router
    * - Routing the swap to the pool via the router contract
    * - Applying protocol-level fees
-   * - Distributing LP revenue, buffer reserves, and insurance fund premiums
+   * - Distributing LP revenue and insurance fund premiums
    * - Tracking long-term metrics like volume and incentives
    * 
    * # Arguments
@@ -297,7 +295,7 @@ export interface Client {
    * * `out_min` - Minimum acceptable output token amount (slippage protection).
    * 
    * # Returns
-   * * `u128`
+   * * `u128` - The actual amou
    */
   swap: ({user, asset, direction, in_amount, out_min}: {user: string, asset: string, direction: SwapDirection, in_amount: u128, out_min: u128}, options?: {
     /**
@@ -337,26 +335,6 @@ export interface Client {
   }) => Promise<AssembledTransaction<string>>
 
   /**
-   * Construct and simulate a get_buffer transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   */
-  get_buffer: (options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<string>>
-
-  /**
    * Construct and simulate a get_fee_destination transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    */
   get_fee_destination: (options?: {
@@ -375,26 +353,6 @@ export interface Client {
      */
     simulate?: boolean;
   }) => Promise<AssembledTransaction<string>>
-
-  /**
-   * Construct and simulate a get_buffer_fraction transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   */
-  get_buffer_fraction: (options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<u32>>
 
   /**
    * Construct and simulate a get_lp_revenue_fraction transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -496,26 +454,6 @@ export interface Client {
   }) => Promise<AssembledTransaction<null>>
 
   /**
-   * Construct and simulate a set_buffer transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   */
-  set_buffer: ({admin, buffer}: {admin: string, buffer: string}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<null>>
-
-  /**
    * Construct and simulate a set_insurance_fund transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    */
   set_insurance_fund: ({admin, insurance_fund}: {admin: string, insurance_fund: string}, options?: {
@@ -539,26 +477,6 @@ export interface Client {
    * Construct and simulate a set_fee_destination transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    */
   set_fee_destination: ({admin, fee_destination}: {admin: string, fee_destination: string}, options?: {
-    /**
-     * The fee to pay for the transaction. Default: BASE_FEE
-     */
-    fee?: number;
-
-    /**
-     * The maximum amount of time to wait for the transaction to complete. Default: DEFAULT_TIMEOUT
-     */
-    timeoutInSeconds?: number;
-
-    /**
-     * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
-     */
-    simulate?: boolean;
-  }) => Promise<AssembledTransaction<null>>
-
-  /**
-   * Construct and simulate a set_buffer_fraction transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   */
-  set_buffer_fraction: ({admin, fraction}: {admin: string, fraction: u32}, options?: {
     /**
      * The fee to pay for the transaction. Default: BASE_FEE
      */
@@ -813,19 +731,15 @@ export class Client extends ContractClient {
   }
   constructor(public readonly options: ContractClientOptions) {
     super(
-      new ContractSpec([ "AAAAAAAABABFeGVjdXRlcyBhIHRva2VuIHN3YXAgdGhyb3VnaCBhIGRlbGVnYXRlZCBwb29sIGNvbnRyYWN0IHdpdGggaW50ZWdyYXRlZCBmZWUgcm91dGluZywgcmV3YXJkcywgYW5kIGFjY291bnRpbmcuCgpUaGlzIGZ1bmN0aW9uIGZhY2lsaXRhdGVzIHRoZSB1c2VyIHN3YXBwaW5nIG9uZSB0b2tlbiBmb3IgYW5vdGhlciB1c2luZyB0aGUgYXBwcm9wcmlhdGUgcG9vbApsaW5rZWQgdG8gYSBzeW50aGV0aWMgYXNzZXQgc3ltYm9sLiBJdCBoYW5kbGVzOgotIFRva2VuIHRyYW5zZmVyIGZyb20gdXNlciB0byByb3V0ZXIKLSBSb3V0aW5nIHRoZSBzd2FwIHRvIHRoZSBwb29sIHZpYSB0aGUgcm91dGVyIGNvbnRyYWN0Ci0gQXBwbHlpbmcgcHJvdG9jb2wtbGV2ZWwgZmVlcwotIERpc3RyaWJ1dGluZyBMUCByZXZlbnVlLCBidWZmZXIgcmVzZXJ2ZXMsIGFuZCBpbnN1cmFuY2UgZnVuZCBwcmVtaXVtcwotIFRyYWNraW5nIGxvbmctdGVybSBtZXRyaWNzIGxpa2Ugdm9sdW1lIGFuZCBpbmNlbnRpdmVzCgojIEFyZ3VtZW50cwoqIGBlYCAtIFRoZSBTb3JvYmFuIGVudmlyb25tZW50LgoqIGB1c2VyYCAtIFRoZSBhZGRyZXNzIG9mIHRoZSB1c2VyIHBlcmZvcm1pbmcgdGhlIHN3YXAuCiogYHRva2Vuc2AgLSBBIHZlY3RvciBvZiB0b2tlbiBhZGRyZXNzZXMsIHR5cGljYWxseSBbVG9rZW4gQSwgVG9rZW4gQl0uCiogYHRva2VuX2luYCAtIFRoZSBhZGRyZXNzIG9mIHRoZSBpbnB1dCB0b2tlbiAoc29sZCBieSB0aGUgdXNlcikuCiogYHRva2VuX291dGAgLSBUaGUgYWRkcmVzcyBvZiB0aGUgb3V0cHV0IHRva2VuIChyZWNlaXZlZCBieSB0aGUgdXNlcikuCiogYGFzc2V0YCAtIFRoZSBzeW50aGV0aWMgYXNzZXQgc3ltYm9sIHRpZWQgdG8gdGhlIHBvb2wuCiogYGluX2Ftb3VudGAgLSBBbW91bnQgb2YgdGhlIGlucHV0IHRva2VuIGJlaW5nIHN3YXBwZWQuCiogYG91dF9taW5gIC0gTWluaW11bSBhY2NlcHRhYmxlIG91dHB1dCB0b2tlbiBhbW91bnQgKHNsaXBwYWdlIHByb3RlY3Rpb24pLgoKIyBSZXR1cm5zCiogYHUxMjhgAAAABHN3YXAAAAAFAAAAAAAAAAR1c2VyAAAAEwAAAAAAAAAFYXNzZXQAAAAAAAARAAAAAAAAAAlkaXJlY3Rpb24AAAAAAAfQAAAADVN3YXBEaXJlY3Rpb24AAAAAAAAAAAAACWluX2Ftb3VudAAAAAAAAAoAAAAAAAAAB291dF9taW4AAAAACgAAAAEAAAAK",
+      new ContractSpec([ "AAAAAAAABABFeGVjdXRlcyBhIHRva2VuIHN3YXAgdGhyb3VnaCBhIGRlbGVnYXRlZCBwb29sIGNvbnRyYWN0IHdpdGggaW50ZWdyYXRlZCBmZWUgcm91dGluZywgcmV3YXJkcywgYW5kIGFjY291bnRpbmcuCgpUaGlzIGZ1bmN0aW9uIGZhY2lsaXRhdGVzIHRoZSB1c2VyIHN3YXBwaW5nIG9uZSB0b2tlbiBmb3IgYW5vdGhlciB1c2luZyB0aGUgYXBwcm9wcmlhdGUgcG9vbApsaW5rZWQgdG8gYSBzeW50aGV0aWMgYXNzZXQgc3ltYm9sLiBJdCBoYW5kbGVzOgotIFRva2VuIHRyYW5zZmVyIGZyb20gdXNlciB0byByb3V0ZXIKLSBSb3V0aW5nIHRoZSBzd2FwIHRvIHRoZSBwb29sIHZpYSB0aGUgcm91dGVyIGNvbnRyYWN0Ci0gQXBwbHlpbmcgcHJvdG9jb2wtbGV2ZWwgZmVlcwotIERpc3RyaWJ1dGluZyBMUCByZXZlbnVlIGFuZCBpbnN1cmFuY2UgZnVuZCBwcmVtaXVtcwotIFRyYWNraW5nIGxvbmctdGVybSBtZXRyaWNzIGxpa2Ugdm9sdW1lIGFuZCBpbmNlbnRpdmVzCgojIEFyZ3VtZW50cwoqIGBlYCAtIFRoZSBTb3JvYmFuIGVudmlyb25tZW50LgoqIGB1c2VyYCAtIFRoZSBhZGRyZXNzIG9mIHRoZSB1c2VyIHBlcmZvcm1pbmcgdGhlIHN3YXAuCiogYHRva2Vuc2AgLSBBIHZlY3RvciBvZiB0b2tlbiBhZGRyZXNzZXMsIHR5cGljYWxseSBbVG9rZW4gQSwgVG9rZW4gQl0uCiogYHRva2VuX2luYCAtIFRoZSBhZGRyZXNzIG9mIHRoZSBpbnB1dCB0b2tlbiAoc29sZCBieSB0aGUgdXNlcikuCiogYHRva2VuX291dGAgLSBUaGUgYWRkcmVzcyBvZiB0aGUgb3V0cHV0IHRva2VuIChyZWNlaXZlZCBieSB0aGUgdXNlcikuCiogYGFzc2V0YCAtIFRoZSBzeW50aGV0aWMgYXNzZXQgc3ltYm9sIHRpZWQgdG8gdGhlIHBvb2wuCiogYGluX2Ftb3VudGAgLSBBbW91bnQgb2YgdGhlIGlucHV0IHRva2VuIGJlaW5nIHN3YXBwZWQuCiogYG91dF9taW5gIC0gTWluaW11bSBhY2NlcHRhYmxlIG91dHB1dCB0b2tlbiBhbW91bnQgKHNsaXBwYWdlIHByb3RlY3Rpb24pLgoKIyBSZXR1cm5zCiogYHUxMjhgIC0gVGhlIGFjdHVhbCBhbW91AAAABHN3YXAAAAAFAAAAAAAAAAR1c2VyAAAAEwAAAAAAAAAFYXNzZXQAAAAAAAARAAAAAAAAAAlkaXJlY3Rpb24AAAAAAAfQAAAADVN3YXBEaXJlY3Rpb24AAAAAAAAAAAAACWluX2Ftb3VudAAAAAAAAAoAAAAAAAAAB291dF9taW4AAAAACgAAAAEAAAAK",
         "AAAAAAAAAAAAAAAKZ2V0X3JvdXRlcgAAAAAAAAAAAAEAAAAT",
-        "AAAAAAAAAAAAAAAKZ2V0X2J1ZmZlcgAAAAAAAAAAAAEAAAAT",
         "AAAAAAAAAAAAAAATZ2V0X2ZlZV9kZXN0aW5hdGlvbgAAAAAAAAAAAQAAABM=",
-        "AAAAAAAAAAAAAAATZ2V0X2J1ZmZlcl9mcmFjdGlvbgAAAAAAAAAAAQAAAAQ=",
         "AAAAAAAAAAAAAAAXZ2V0X2xwX3JldmVudWVfZnJhY3Rpb24AAAAAAAAAAAEAAAAE",
         "AAAAAAAAAAAAAAAKaW5pdF9hZG1pbgAAAAAAAgAAAAAAAAAFYWRtaW4AAAAAAAATAAAAAAAAAA9lbWVyZ2VuY3lfYWRtaW4AAAAAEwAAAAA=",
         "AAAAAAAAAuBDbGFpbXMgYW5kIHRyYW5zZmVycyBhbGwgYWNjdW11bGF0ZWQgcHJvdG9jb2wgZmVlcyBvZiBhIGdpdmVuIHRva2VuIHRvIHRoZSBmZWUgZGVzdGluYXRpb24uCgpUaGlzIGZ1bmN0aW9uIGlzIHJlc3RyaWN0ZWQgdG8gdGhlIGFkbWluIGFuZCBpcyB1c2VkIHRvIG1vdmUgYWxsIGNvbGxlY3RlZCBmZWVzIChpbiBgdG9rZW5gKQpmcm9tIHRoZSBjb250cmFjdCdzIGJhbGFuY2UgdG8gdGhlIGRlc2lnbmF0ZWQgZmVlIHJlY2lwaWVudCBhZGRyZXNzLgoKIyBBcmd1bWVudHMKKiBgZWAgLSBUaGUgU29yb2JhbiBlbnZpcm9ubWVudC4KKiBgYWRtaW5gIC0gVGhlIGFkbWluIGFkZHJlc3MgYXV0aG9yaXplZCB0byBjbGFpbSBmZWVzLgoqIGB0b2tlbmAgLSBUaGUgdG9rZW4gYWRkcmVzcyByZXByZXNlbnRpbmcgdGhlIGFzc2V0IHdob3NlIGZlZXMgYXJlIGJlaW5nIGNsYWltZWQuCgojIFJldHVybnMKKiBgdTEyOGAgLSBUaGUgdG90YWwgYW1vdW50IG9mIHRoZSB0b2tlbiB0cmFuc2ZlcnJlZCB0byB0aGUgZmVlIGRlc3RpbmF0aW9uLgoKIyBQYW5pY3MKKiBJZiB0aGUgY2FsbGVyIGlzIG5vdCBhdXRob3JpemVkIGFzIGFkbWluLgoKIyBTaWRlIEVmZmVjdHMKKiBUcmFuc2ZlcnMgdGhlIGZ1bGwgdG9rZW4gYmFsYW5jZSBmcm9tIHRoZSBjb250cmFjdCB0byB0aGUgYGZlZV9kZXN0aW5hdGlvbmAuCiogRW1pdHMgYSBgY2xhaW1fZmVlYCBldmVudCByZWNvcmRpbmcgdGhlIHRva2VuIGFuZCBhbW91bnQuAAAACmNsYWltX2ZlZXMAAAAAAAIAAAAAAAAABWFkbWluAAAAAAAAEwAAAAAAAAAFdG9rZW4AAAAAAAATAAAAAQAAAAo=",
         "AAAAAAAAAAAAAAAKc2V0X3JvdXRlcgAAAAAAAgAAAAAAAAAFYWRtaW4AAAAAAAATAAAAAAAAAAZyb3V0ZXIAAAAAABMAAAAA",
-        "AAAAAAAAAAAAAAAKc2V0X2J1ZmZlcgAAAAAAAgAAAAAAAAAFYWRtaW4AAAAAAAATAAAAAAAAAAZidWZmZXIAAAAAABMAAAAA",
         "AAAAAAAAAAAAAAASc2V0X2luc3VyYW5jZV9mdW5kAAAAAAACAAAAAAAAAAVhZG1pbgAAAAAAABMAAAAAAAAADmluc3VyYW5jZV9mdW5kAAAAAAATAAAAAA==",
         "AAAAAAAAAAAAAAATc2V0X2ZlZV9kZXN0aW5hdGlvbgAAAAACAAAAAAAAAAVhZG1pbgAAAAAAABMAAAAAAAAAD2ZlZV9kZXN0aW5hdGlvbgAAAAATAAAAAA==",
-        "AAAAAAAAAAAAAAATc2V0X2J1ZmZlcl9mcmFjdGlvbgAAAAACAAAAAAAAAAVhZG1pbgAAAAAAABMAAAAAAAAACGZyYWN0aW9uAAAABAAAAAA=",
         "AAAAAAAAAAAAAAAXc2V0X2xwX3JldmVudWVfZnJhY3Rpb24AAAAAAgAAAAAAAAAFYWRtaW4AAAAAAAATAAAAAAAAAAhmcmFjdGlvbgAAAAQAAAAA",
         "AAAAAAAAAAAAAAAHdmVyc2lvbgAAAAAAAAAAAQAAAAQ=",
         "AAAAAAAAAAAAAAAOY29tbWl0X3VwZ3JhZGUAAAAAAAIAAAAAAAAABWFkbWluAAAAAAAAEwAAAAAAAAANbmV3X3dhc21faGFzaAAAAAAAA+4AAAAgAAAAAA==",
@@ -858,7 +772,7 @@ export class Client extends ContractClient {
         "AAAAAQAAAAAAAAAAAAAAEE9yYWNsZUd1YXJkUmFpbHMAAAACAAAAAAAAABBwcmljZV9kaXZlcmdlbmNlAAAH0AAAABlQcmljZURpdmVyZ2VuY2VHdWFyZFJhaWxzAAAAAAAAAAAAAAh2YWxpZGl0eQAAB9AAAAASVmFsaWRpdHlHdWFyZFJhaWxzAAA=",
         "AAAAAgAAAAAAAAAAAAAADk9yYWNsZVZhbGlkaXR5AAAAAAAFAAAAAAAAAAAAAAALTm9uUG9zaXRpdmUAAAAAAAAAAAAAAAALVG9vVm9sYXRpbGUAAAAAAAAAAAAAAAAMU3RhbGVGb3JQb29sAAAAAAAAAAAAAAAGRnJvemVuAAAAAAAAAAAAAAAAAAVWYWxpZAAAAA==",
         "AAAAAQAAAAAAAAAAAAAAFEhpc3RvcmljYWxPcmFjbGVEYXRhAAAAAwAAAAAAAAARbGFzdF9vcmFjbGVfcHJpY2UAAAAAAAAKAAAAAAAAABZsYXN0X29yYWNsZV9wcmljZV90d2FwAAAAAAAKAAAAAAAAABlsYXN0X29yYWNsZV9wcmljZV90d2FwX3RzAAAAAAAABg==",
-        "AAAAAQAAAAAAAAAAAAAABFBvb2wAAAAKAAAAAAAAAApiYXNlX2Fzc2V0AAAAAAARAAAAAAAAAAxleHBpcnlfcHJpY2UAAAAKAAAAAAAAAAlleHBpcnlfdHMAAAAAAAAGAAAAAAAAAAxmZWVfZnJhY3Rpb24AAAAEAAAAAAAAAA9pbnN1cmFuY2VfY2xhaW0AAAAH0AAAAA5JbnN1cmFuY2VDbGFpbQAAAAAAAAAAABdsaXF1aWRpdHlfbWF4X2ltYmFsYW5jZQAAAAAKAAAAAAAAAAtxdW90ZV9hc3NldAAAAAARAAAAAAAAAAZzdGF0dXMAAAAAB9AAAAAKUG9vbFN0YXR1cwAAAAAAAAAAAAR0aWVyAAAH0AAAAAhQb29sVGllcgAAAAAAAAAHdG9rZW5fYgAAAAAT",
+        "AAAAAQAAAAAAAAAAAAAABFBvb2wAAAAIAAAAAAAAAApiYXNlX2Fzc2V0AAAAAAARAAAAAAAAAAxmZWVfZnJhY3Rpb24AAAAEAAAAAAAAAA9pbnN1cmFuY2VfY2xhaW0AAAAH0AAAAA5JbnN1cmFuY2VDbGFpbQAAAAAAAAAAABdsaXF1aWRpdHlfbWF4X2ltYmFsYW5jZQAAAAAKAAAAAAAAAAtxdW90ZV9hc3NldAAAAAARAAAAAAAAAAZzdGF0dXMAAAAAB9AAAAAKUG9vbFN0YXR1cwAAAAAAAAAAAAR0aWVyAAAH0AAAAAhQb29sVGllcgAAAAAAAAAHdG9rZW5fYgAAAAAT",
         "AAAAAgAAAAAAAAAAAAAAClBvb2xTdGF0dXMAAAAAAAYAAAAAAAAAAAAAAAtJbml0aWFsaXplZAAAAAAAAAAAAAAAAAZBY3RpdmUAAAAAAAAAAAAAAAAABkZyb3plbgAAAAAAAAAAAAAAAAAKUmVkdWNlT25seQAAAAAAAAAAAAAAAAAKU2V0dGxlbWVudAAAAAAAAAAAAAAAAAAIRGVsaXN0ZWQ=",
         "AAAAAgAAAAAAAAAAAAAACFBvb2xUaWVyAAAABgAAAAAAAAAAAAAAAUEAAAAAAAAAAAAAAAAAAAFCAAAAAAAAAAAAAAAAAAABQwAAAAAAAAAAAAAAAAAAC1NwZWN1bGF0aXZlAAAAAAAAAAAAAAAAEUhpZ2hseVNwZWN1bGF0aXZlAAAAAAAAAAAAAAAAAAAISXNvbGF0ZWQ=",
         "AAAAAQAAAAAAAAAAAAAADkluc3VyYW5jZUNsYWltAAAAAAAEAAAAAAAAABhsYXN0X3JldmVudWVfd2l0aGRyYXdfdHMAAAAGAAAAAAAAABNxdW90ZV9tYXhfaW5zdXJhbmNlAAAAAAoAAAAAAAAAF3F1b3RlX3NldHRsZWRfaW5zdXJhbmNlAAAAAAoAAAAAAAAAHnJldl93aXRoZHJhd19zaW5jZV9sYXN0X3NldHRsZQAAAAAACw==",
@@ -877,17 +791,13 @@ export class Client extends ContractClient {
   public readonly fromJSON = {
     swap: this.txFromJSON<u128>,
         get_router: this.txFromJSON<string>,
-        get_buffer: this.txFromJSON<string>,
         get_fee_destination: this.txFromJSON<string>,
-        get_buffer_fraction: this.txFromJSON<u32>,
         get_lp_revenue_fraction: this.txFromJSON<u32>,
         init_admin: this.txFromJSON<null>,
         claim_fees: this.txFromJSON<u128>,
         set_router: this.txFromJSON<null>,
-        set_buffer: this.txFromJSON<null>,
         set_insurance_fund: this.txFromJSON<null>,
         set_fee_destination: this.txFromJSON<null>,
-        set_buffer_fraction: this.txFromJSON<null>,
         set_lp_revenue_fraction: this.txFromJSON<null>,
         version: this.txFromJSON<u32>,
         commit_upgrade: this.txFromJSON<null>,
