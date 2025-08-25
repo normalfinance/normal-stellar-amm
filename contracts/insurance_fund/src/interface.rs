@@ -11,7 +11,6 @@ pub trait InsuranceFundTrait {
         oracle_registry: Address,
         pool_router: Address,
         premium_token: Address,
-        whitelisted_tokens: Vec<Address>,
         unstaking_period: u64,
         optimal_utilization: u32,
         base_rate: i32,
@@ -100,7 +99,7 @@ pub trait AdminInterface {
 
     fn sync_optimal_insurance(e: Env, admin: Address);
 
-    fn resolve_liquidity_deficit(e: Env, admin: Address, token: Address, asset: Symbol);
+    fn file_claim(e: Env, admin: Address, token: Address, asset: Symbol);
 
     //   ________  _______  ___________  ___________  _______   _______    ________
     //  /"       )/"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )

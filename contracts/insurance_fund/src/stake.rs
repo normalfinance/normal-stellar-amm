@@ -20,59 +20,65 @@ pub enum StakeAction {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Stake {
+    pub user: Address,
     pub token: Address,                     //
-    pub if_shares: u128,                    // the number of shares the user owns.
+    pub shares: u128,                       // the number of shares the user owns.
     pub last_withdraw_request_shares: u128, //
-    pub if_base: u128, // the exponent for if_shares decimal places (for rebase).
-    pub last_withdraw_request_value: u128, // the token amount of the last user withdrawal request.
+    pub base: u128,                         // the exponent for shares decimal places (for rebase).
+    pub last_withdraw_request_value: u128,  // the token amount of the last user withdrawal request.
     pub last_withdraw_request_ts: u64, // the timestamp when the user last requested a withdrawal.
-    pub cost_basis: u128, //
+    pub cost_basis: u128,              //
 }
 
 impl Stake {
-    pub fn new(token: Address) -> Self {
+    pub fn new(user: Address, token: Address) -> Self {
         Stake {
+            user,
             token,
             last_withdraw_request_shares: 0,
             last_withdraw_request_value: 0,
             last_withdraw_request_ts: 0,
             cost_basis: 0,
-            if_base: 0,
-            if_shares: 0,
+            base: 0,
+            shares: 0,
         }
+    }
+
+    pub fn save(&mut self, e: &Env) {
+        save_stake(e, &self.user, &self.token, &self);
     }
 
     fn validate_base(&self, e: &Env) {
         let reserve = get_reserve(e, &self.token);
         validate!(
             e,
-            self.if_base == reserve.shares_base,
+            self.base == reserve.shares_base,
             InsuranceFundError::InvalidIFRebase
         );
     }
 
-    pub fn checked_if_shares(&self, e: &Env) -> u128 {
+    pub fn checked_shares(&self, e: &Env) -> u128 {
         self.validate_base(e);
-        self.if_shares
+        self.shares
     }
 
-    pub fn unchecked_if_shares(&self) -> u128 {
-        self.if_shares
+    pub fn unchecked_shares(&self) -> u128 {
+        self.shares
     }
 
-    pub fn increase_if_shares(&mut self, e: &Env, delta: u128) {
+    pub fn increase_shares(&mut self, e: &Env, delta: u128) {
         self.validate_base(e);
-        self.if_shares = self.if_shares.saturating_add(delta);
+        self.shares = self.shares.saturating_add(delta);
     }
 
-    pub fn decrease_if_shares(&mut self, e: &Env, delta: u128) {
+    pub fn decrease_shares(&mut self, e: &Env, delta: u128) {
         self.validate_base(e);
-        self.if_shares = self.if_shares.saturating_sub(delta);
+        self.shares = self.shares.saturating_sub(delta);
     }
 
-    pub fn update_if_shares(&mut self, e: &Env, new_shares: u128) {
+    pub fn update_shares(&mut self, e: &Env, new_shares: u128) {
         self.validate_base(e);
-        self.if_shares = new_shares;
+        self.shares = new_shares;
     }
 }
 
@@ -83,7 +89,7 @@ pub fn get_stake(e: &Env, user: &Address, token: &Address) -> Stake {
             bump_persistent(e, &key);
             stake
         }
-        None => Stake::new(token.clone()),
+        None => Stake::new(user.clone(), token.clone()),
     };
 
     stake_info
@@ -117,9 +123,7 @@ pub fn save_stake(e: &Env, user: &Address, token: &Address, stake_info: &Stake) 
 //
 // # Side Effects
 // - Updates `total_shares` and `shares_base` in contract storage.
-pub fn apply_rebase_to_insurance_fund(e: &Env, token: &Address) {
-    let mut reserve = get_reserve(e, token);
-
+pub fn apply_rebase_to_insurance_fund(e: &Env, reserve: &mut InsuranceFundReserve) {
     if reserve.balance != 0 && reserve.balance < reserve.total_shares {
         let (expo_diff, rebase_divisor) =
             calculate_rebase_info(e, reserve.total_shares, reserve.balance);
@@ -131,8 +135,6 @@ pub fn apply_rebase_to_insurance_fund(e: &Env, token: &Address) {
     if reserve.balance != 0 && reserve.total_shares == 0 {
         reserve.total_shares = reserve.balance;
     }
-
-    put_reserve(e, token, &reserve);
 }
 
 // Applies a rebase to an individual stake's insurance fund shares to align with the global share base.
@@ -155,24 +157,24 @@ pub fn apply_rebase_to_insurance_fund(e: &Env, token: &Address) {
 pub fn apply_rebase_to_stake(e: &Env, stake: &mut Stake) {
     let reserve = get_reserve(e, &stake.token);
 
-    if reserve.shares_base != stake.if_base {
+    if reserve.shares_base != stake.base {
         //  "Rebase expo out of bounds"
         validate!(
             e,
-            reserve.shares_base > stake.if_base,
+            reserve.shares_base > stake.base,
             InsuranceFundError::InvalidIFRebase
         );
 
-        let expo_diff = (reserve.shares_base - stake.if_base) as u32;
+        let expo_diff = (reserve.shares_base - stake.base) as u32;
 
         let rebase_divisor = (10_u128).pow(expo_diff);
 
-        stake.if_base = reserve.shares_base;
+        stake.base = reserve.shares_base;
 
-        let old_if_shares = stake.unchecked_if_shares();
-        let new_if_shares = old_if_shares.safe_div(e, rebase_divisor);
+        let old_shares = stake.unchecked_shares();
+        let new_shares = old_shares.safe_div(e, rebase_divisor);
 
-        stake.update_if_shares(e, new_if_shares);
+        stake.update_shares(e, new_shares);
 
         stake.last_withdraw_request_shares = stake
             .last_withdraw_request_shares
@@ -440,7 +442,7 @@ pub fn if_shares_lost_test() {
 
     let token = Address::generate(&setup.env);
 
-    let mut if_stake = Stake::new(token);
+    let mut if_stake = Stake::new(setup.admin, token);
     if_stake.update_if_shares(&setup.env, 100 * QUOTE_PRECISION);
     if_stake.last_withdraw_request_shares = 100 * QUOTE_PRECISION;
     if_stake.last_withdraw_request_value = 100 * QUOTE_PRECISION - 1;

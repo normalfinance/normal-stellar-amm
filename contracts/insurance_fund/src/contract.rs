@@ -5,6 +5,7 @@ use crate::interest::calculate_rate;
 use crate::interest::calculate_total_reserve_value;
 use crate::interest::calculate_utilization;
 use crate::interface::{AdminInterface, InsuranceFundTrait};
+use crate::reserve;
 use crate::reserve::InsuranceFundReserve;
 use crate::stake::Stake;
 use crate::stake::{
@@ -19,12 +20,15 @@ use crate::storage::get_premium_token;
 use crate::storage::get_reserve;
 use crate::storage::get_token_whitelist;
 use crate::storage::get_token_whitelist_status;
+use crate::storage::get_token_whitelist_vec;
 use crate::storage::put_reserve;
+use crate::storage::remove_token_whitelist;
 use crate::storage::set_oracle_registry;
 use crate::storage::set_pool_router;
 use crate::storage::set_premium_payer_status;
 use crate::storage::set_premium_token;
 use crate::storage::set_token_whitelist;
+use crate::storage::set_token_whitelist_vec;
 use crate::storage::WhitelistToken;
 use crate::storage::{
     get_base_rate, get_is_killed_deposit, get_is_killed_request_withdraw, get_is_killed_withdraw,
@@ -55,14 +59,13 @@ use utils::math::safe_math::SafeMath;
 use utils::state::pool::PoolInfo;
 use utils::token::transfer_token;
 use utils::token::validate_token_contract;
-use utils::token::validate_token_contracts;
 use utils::validate;
 use utils::validation::ensure_non_zero_u128;
 use utils::validation::validate_percentages;
 
 contractmeta!(
     key = "Description",
-    val = "Junior tranche (last payout) backstop fund to cover pool liquidity deficits using user staked funds"
+    val = "Backstop fund to cover pool liquidity deficits"
 );
 
 #[contract]
@@ -78,7 +81,6 @@ impl InsuranceFundTrait for InsuranceFund {
         oracle_registry: Address,
         pool_router: Address,
         premium_token: Address,
-        whitelisted_tokens: Vec<WhitelistToken>,
         unstaking_period: u64,
         optimal_utilization: u32,
         base_rate: i32,
@@ -98,17 +100,6 @@ impl InsuranceFundTrait for InsuranceFund {
 
         validate_token_contract(&e, &premium_token);
         set_premium_token(&e, &premium_token);
-
-        for i in 0..whitelisted_tokens.len() {
-            let token = whitelisted_tokens.get(i).unwrap();
-
-            validate_token_contract(&e, &token.address);
-
-            set_token_whitelist(&e, &token);
-
-            let reserve = get_reserve(&e, &token.address);
-            put_reserve(&e, &token.address, &reserve);
-        }
 
         set_unstaking_period(&e, &unstaking_period);
         set_optimal_utilization(&e, &optimal_utilization);
@@ -157,84 +148,88 @@ impl InsuranceFundTrait for InsuranceFund {
     fn deposit(e: Env, user: Address, token: Address, amount: u128) {
         user.require_auth();
 
+        // Validations
+        validate_token_contract(&e, &token);
         ensure_non_zero_u128(&e, amount);
 
+        // Re-entrancy check
         enter(&e);
 
+        // Status check
         if get_is_killed_deposit(&e) {
             panic_with_error!(e, InsuranceFundError::FundDepositKilled);
         }
 
+        // Whitelisted token check
         if !get_token_whitelist_status(&e, &token) {
             panic_with_error!(e, InsuranceFundError::UnsupportedToken);
         }
 
+        let now = e.ledger().timestamp();
         let optimal_insurance = get_optimal_insurance(&e);
-        let reserve = get_reserve(&e, &token);
+
+        let mut reserve = get_reserve(&e, &token);
+        let reserve_balance_before = reserve.balance;
 
         // Ensure the new stake will not exceed the optimal insurance
         validate!(
             e,
-            reserve.balance + amount <= optimal_insurance,
+            reserve_balance_before + amount <= optimal_insurance,
             InsuranceFundError::TooMuchInsurance
         );
 
         let mut stake = get_stake(&e, &user, &token);
 
-        // Error if a withdrawal request is in progress
+        // Error if a withdrawal request is already in progress
         validate!(
             &e,
             stake.last_withdraw_request_shares == 0 && stake.last_withdraw_request_value == 0,
             InsuranceFundError::IFWithdrawRequestInProgress
         );
 
-        // Rebase Insurance Fund and Stake
-        apply_rebase_to_insurance_fund(&e, &token);
+        // Rebase the Insurance Fund and Stake
+        apply_rebase_to_insurance_fund(&e, &mut reserve);
         apply_rebase_to_stake(&e, &mut stake);
 
-        // Get updated Reserve after rebase
-        let reserve = get_reserve(&e, &token);
-
-        let if_shares_before = stake.checked_if_shares(&e);
-        let total_if_shares_before = reserve.total_shares;
+        let stake_shares_before = stake.checked_shares(&e);
+        let total_shares_before = reserve.total_shares;
 
         let n_shares = reserve_amount_to_shares(&e, amount, &reserve);
 
-        // reset cost basis if no shares
-        stake.cost_basis = if if_shares_before == 0 {
+        // Reset cost basis if no shares
+        stake.cost_basis = if stake_shares_before == 0 {
             amount
         } else {
-            stake.cost_basis.safe_add(&e, amount)
+            stake.cost_basis.saturating_add(amount)
         };
 
-        stake.increase_if_shares(&e, n_shares);
+        // Increase the Fund and Stake shares
+        stake.increase_shares(&e, n_shares);
+        reserve.add_total_shares(n_shares, now);
 
-        set_total_shares(&e, &(reserve.total_shares + n_shares));
+        // Update the Reserve and Stake
+        reserve.save(&e);
+        stake.save(&e);
 
-        let if_shares_after = stake.checked_if_shares(&e);
-
-        let new_total_shares = get_total_shares(&e);
-
-        FundEvents::new(&e).if_stake_record(
-            user.clone(),
-            token.clone(),
-            StakeAction::Deposit,
-            amount,
-            reserve.balance,
-            if_shares_before,
-            total_if_shares_before,
-            if_shares_after,
-            new_total_shares,
-        );
-
-        save_stake(&e, &user, &token, &stake);
-
+        // Deposit tokens from the user to the Fund
         transfer_token(
             &e,
             &token,
             &user,
             &e.current_contract_address(),
             &(amount as i128),
+        );
+
+        FundEvents::new(&e).insurance_stake_record(
+            user.clone(),
+            token.clone(),
+            StakeAction::Deposit,
+            amount,
+            reserve_balance_before,
+            stake_shares_before,
+            total_shares_before,
+            stake.shares,
+            reserve.total_shares,
         );
 
         exit(&e);
@@ -276,10 +271,14 @@ impl InsuranceFundTrait for InsuranceFund {
     fn request_withdraw(e: Env, user: Address, token: Address, amount: u128) {
         user.require_auth();
 
+        // Validations
+        validate_token_contract(&e, &token);
         ensure_non_zero_u128(&e, amount);
 
+        // Re-entrancy check
         enter(&e);
 
+        // Status check
         if get_is_killed_request_withdraw(&e) {
             panic_with_error!(e, InsuranceFundError::FundRequestWithdrawKilled);
         }
@@ -298,8 +297,10 @@ impl InsuranceFundTrait for InsuranceFund {
             InsuranceFundError::IFWithdrawRequestInProgress
         );
 
+        let mut reserve = get_reserve(&e, &token);
+        let reserve_balance_before = reserve.balance;
+
         // Convert token amount to # of shares
-        let reserve = get_reserve(&e, &token);
         let n_shares = reserve_amount_to_shares(&e, amount, &reserve);
 
         validate!(
@@ -309,44 +310,38 @@ impl InsuranceFundTrait for InsuranceFund {
         );
 
         // Error if user does not have enough shares to satisfy the request
-        let user_if_shares = stake.checked_if_shares(&e);
+        let stake_shares = stake.checked_shares(&e);
         validate!(
             &e,
-            user_if_shares >= n_shares,
+            stake_shares >= n_shares,
             InsuranceFundError::InsufficientIFShares
         );
 
-        // Update the user stake
+        // Update the Stake
         stake.last_withdraw_request_shares = n_shares;
 
-        apply_rebase_to_insurance_fund(&e, &token);
+        // Rebase the Insurance Fund and Stake
+        apply_rebase_to_insurance_fund(&e, &mut reserve);
         apply_rebase_to_stake(&e, &mut stake);
 
-        // Get post rebase values
-        let reserve_after_rebase = get_reserve(&e, &token);
-        let stake_after_rebase = get_stake(&e, &user, &token);
-
-        let if_shares_before = stake_after_rebase.checked_if_shares(&e);
-        let total_if_shares_before = reserve_after_rebase.total_shares;
+        let stake_shares_before = stake.checked_shares(&e);
+        let total_shares_before = reserve.total_shares;
 
         validate!(
             &e,
-            stake.last_withdraw_request_shares <= stake.checked_if_shares(&e),
+            stake.last_withdraw_request_shares <= stake.checked_shares(&e),
             InsuranceFundError::InvalidInsuranceUnstakeSize
         );
 
         validate!(
             &e,
-            stake.if_base == reserve_after_rebase.shares_base,
+            stake.base == reserve.shares_base,
             InsuranceFundError::InvalidIFRebase
         );
 
-        stake.last_withdraw_request_value = shares_to_reserve_amount(
-            &e,
-            stake.last_withdraw_request_shares,
-            &reserve_after_rebase,
-        )
-        .min(reserve_after_rebase.balance.saturating_sub(1));
+        stake.last_withdraw_request_value =
+            shares_to_reserve_amount(&e, stake.last_withdraw_request_shares, &reserve)
+                .min(reserve.balance.saturating_sub(1));
 
         validate!(
             &e,
@@ -355,23 +350,23 @@ impl InsuranceFundTrait for InsuranceFund {
             InsuranceFundError::InvalidIFUnstakeSize
         );
 
-        let if_shares_after = stake.checked_if_shares(&e);
+        stake.last_withdraw_request_ts = now;
 
-        FundEvents::new(&e).if_stake_record(
+        // Update the Reserve and Stake
+        reserve.save(&e);
+        stake.save(&e);
+
+        FundEvents::new(&e).insurance_stake_record(
             user.clone(),
             token.clone(),
             StakeAction::WithdrawRequest,
             stake.last_withdraw_request_value,
-            reserve.balance,
-            if_shares_before,
-            total_if_shares_before,
-            if_shares_after,
-            reserve_after_rebase.total_shares,
+            reserve_balance_before,
+            stake_shares_before,
+            total_shares_before,
+            stake.shares,
+            reserve.total_shares,
         );
-
-        stake.last_withdraw_request_ts = now;
-
-        save_stake(&e, &user, &token, &stake);
 
         exit(&e);
     }
@@ -405,67 +400,75 @@ impl InsuranceFundTrait for InsuranceFund {
     fn cancel_request_withdraw(e: Env, user: Address, token: Address) {
         user.require_auth();
 
+        // Validations
+        validate_token_contract(&e, &token);
+
+        // Re-entrancy check
         enter(&e);
 
+        // Whitelist token check
         get_token_whitelist(&e, &token);
 
         let now = e.ledger().timestamp();
         let mut stake = get_stake(&e, &user, &token);
 
-        //  "No withdraw request in progress"
+        // No withdraw request in progress
         validate!(
             &e,
             stake.last_withdraw_request_shares != 0,
             InsuranceFundError::NoIFWithdrawRequestInProgress
         );
 
-        let reserve = get_reserve(&e, &token);
+        let mut reserve = get_reserve(&e, &token);
+        let reserve_balance_before = reserve.balance;
 
-        apply_rebase_to_insurance_fund(&e, &token);
+        // Rebase the Insurance Fund and Stake
+        apply_rebase_to_insurance_fund(&e, &mut reserve);
         apply_rebase_to_stake(&e, &mut stake);
 
-        let reserve_after_rebase = get_reserve(&e, &token);
+        let stake_shares_before = stake.checked_shares(&e);
+        let total_shares_before = reserve.total_shares;
 
-        let if_shares_before = stake.checked_if_shares(&e);
-        let total_if_shares_before = reserve_after_rebase.total_shares;
-
-        //  "if stake base != base"
+        // if stake base != base
         validate!(
             &e,
-            stake.if_base == reserve_after_rebase.shares_base,
+            stake.base == reserve.shares_base,
             InsuranceFundError::InvalidIFRebase
         );
 
-        let if_shares_lost = calculate_shares_lost(&e, &stake, &reserve);
+        // Decrease the Stake shares
+        let stake_shares_lost = calculate_shares_lost(&e, &stake, &reserve);
 
-        stake.decrease_if_shares(&e, if_shares_lost);
+        stake.decrease_shares(&e, stake_shares_lost);
 
         validate!(
             &e,
-            reserve_after_rebase.total_shares >= if_shares_lost,
+            reserve.total_shares >= stake_shares_lost,
             InsuranceFundError::InsufficientIFShares
         );
-        set_total_shares(&e, &(total_shares - if_shares_lost)); // FIXME:
 
-        let if_shares_after = stake.checked_if_shares(&e);
-
-        FundEvents::new(&e).if_stake_record(
-            user.clone(),
-            token.clone(),
-            StakeAction::WithdrawCancelRequest,
-            0,
-            reserve_after_rebase.balance,
-            if_shares_before,
-            total_if_shares_before,
-            if_shares_after,
-            reserve_after_rebase.total_shares,
-        );
+        // Decrease the Fund shares
+        reserve.remove_total_shares(stake_shares_lost, now);
 
         stake.last_withdraw_request_shares = 0;
         stake.last_withdraw_request_value = 0;
         stake.last_withdraw_request_ts = now;
 
-        save_stake(&e, &user, &token, &stake);
+        // Update the Reserve and Stake
+        reserve.save(&e);
+        stake.save(&e);
+
+        FundEvents::new(&e).insurance_stake_record(
+            user.clone(),
+            token.clone(),
+            StakeAction::WithdrawCancelRequest,
+            0,
+            reserve_balance_before,
+            stake_shares_before,
+            total_shares_before,
+            stake.shares,
+            reserve.total_shares,
+        );
 
         exit(&e);
     }
@@ -506,8 +509,13 @@ impl InsuranceFundTrait for InsuranceFund {
     fn withdraw(e: Env, user: Address, token: Address) {
         user.require_auth();
 
+        // Validations
+        validate_token_contract(&e, &token);
+
+        // Re-entrancy check
         enter(&e);
 
+        // Status check
         if get_is_killed_withdraw(&e) {
             panic_with_error!(e, InsuranceFundError::FundWithdrawKilled);
         }
@@ -535,33 +543,34 @@ impl InsuranceFundTrait for InsuranceFund {
             InsuranceFundError::TryingToRemoveLiquidityTooFast
         );
 
-        apply_rebase_to_insurance_fund(&e, &token);
+        let mut reserve = get_reserve(&e, &token);
+        let reserve_balance_before = reserve.balance;
+
+        // Rebase the Insurance Fund and Stake
+        apply_rebase_to_insurance_fund(&e, &mut reserve);
         apply_rebase_to_stake(&e, &mut stake);
 
-        // let total_shares = get_total_shares(&e);
-        let reserve_after_rebase = get_reserve(&e, &token);
-
-        let if_shares_before = stake.checked_if_shares(&e);
-        let total_if_shares_before = reserve_after_rebase.total_shares;
+        let stake_shares_before = stake.checked_shares(&e);
+        let total_shares_before = reserve.total_shares;
 
         let n_shares = stake.last_withdraw_request_shares;
 
-        //  "Must submit withdraw request and wait the escrow period"
+        // Must submit withdraw request and wait the escrow period
         validate!(&e, n_shares > 0, InsuranceFundError::InvalidIFUnstake);
 
         validate!(
             &e,
-            if_shares_before >= n_shares,
+            stake_shares_before >= n_shares,
             InsuranceFundError::InsufficientIFShares
         );
 
-        let amount = shares_to_reserve_amount(&e, n_shares, &reserve_after_rebase);
+        let amount = shares_to_reserve_amount(&e, n_shares, &reserve);
 
-        let _if_shares_lost = calculate_shares_lost(&e, &stake, &reserve_after_rebase);
+        let _if_shares_lost = calculate_shares_lost(&e, &stake, &reserve);
 
         let withdraw_amount = amount.min(stake.last_withdraw_request_value);
 
-        stake.decrease_if_shares(&e, n_shares);
+        stake.decrease_shares(&e, n_shares);
 
         // Add bounds checking to prevent underflow when withdrawing more than cost basis
         validate!(
@@ -574,32 +583,22 @@ impl InsuranceFundTrait for InsuranceFund {
         // Add bounds checking to prevent critical share tracking underflow
         validate!(
             &e,
-            reserve_after_rebase.total_shares >= n_shares,
+            reserve.total_shares >= n_shares,
             InsuranceFundError::InsufficientIFShares
         );
-        set_total_shares(&e, &(total_shares - n_shares));
+
+        reserve.remove_total_shares(n_shares, now);
 
         // reset stake withdraw request info
         stake.last_withdraw_request_shares = 0;
         stake.last_withdraw_request_value = 0;
         stake.last_withdraw_request_ts = now;
 
-        let if_shares_after = stake.checked_if_shares(&e);
+        // Update the Reserve and Stake
+        reserve.save(&e);
+        stake.save(&e);
 
-        FundEvents::new(&e).if_stake_record(
-            user.clone(),
-            token.clone(),
-            StakeAction::Withdraw,
-            withdraw_amount,
-            insurance_vault_amount,
-            if_shares_before,
-            total_if_shares_before,
-            if_shares_after,
-            reserve_after_rebase.total_shares,
-        );
-
-        save_stake(&e, &user, &token, &stake);
-
+        // Send tokens from the fund to the user
         transfer_token(
             &e,
             &token,
@@ -608,8 +607,20 @@ impl InsuranceFundTrait for InsuranceFund {
             &(withdraw_amount as i128),
         );
 
-        let new_reserve = get_reserve(&e, &token);
+        FundEvents::new(&e).insurance_stake_record(
+            user.clone(),
+            token.clone(),
+            StakeAction::Withdraw,
+            withdraw_amount,
+            reserve_balance_before,
+            stake_shares_before,
+            total_shares_before,
+            stake.shares,
+            reserve.total_shares,
+        );
 
+        // Additional validation
+        let new_reserve = get_reserve(&e, &token);
         validate!(
             &e,
             new_reserve.balance > 0,
@@ -686,9 +697,13 @@ impl InsuranceFundTrait for InsuranceFund {
         get_token_whitelist(&e, &token);
 
         let now = e.ledger().timestamp();
-        let reserve = get_reserve(&e, &token);
+
         let balance = get_contract_token_balance(&e, &token);
-        put_reserve(&e, &token, &reserve.update_balance(balance, now));
+
+        let mut reserve = get_reserve(&e, &token);
+        reserve.update_balance(balance, now);
+        reserve.save(&e);
+
         FundEvents::new(&e).sync(sender, token, 0);
 
         exit(&e);
@@ -807,84 +822,6 @@ impl InsuranceFundTrait for InsuranceFund {
     }
 }
 
-// The `UpgradeableContract` trait provides the interface for upgrading the contract.
-#[contractimpl]
-impl UpgradeableContract for InsuranceFund {
-    // Returns the version of the contract.
-    //
-    // # Returns
-    //
-    // The version of the contract as a u32.
-    fn version() -> u32 {
-        100
-    }
-
-    // Commits a new wasm hash for a future upgrade.
-    // The upgrade will be available through `apply_upgrade` after the standard upgrade delay
-    // unless the system is in emergency mode.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `new_wasm_hash` - The new wasm hash to commit.
-    fn commit_upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32>) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-        commit_upgrade(&e, &new_wasm_hash);
-        UpgradeEvents::new(&e).commit_upgrade(Vec::from_array(&e, [new_wasm_hash.clone()]));
-    }
-
-    // Applies the committed upgrade.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    fn apply_upgrade(e: Env, admin: Address) -> BytesN<32> {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-        let new_wasm_hash = apply_upgrade(&e);
-        UpgradeEvents::new(&e).apply_upgrade(Vec::from_array(&e, [new_wasm_hash.clone()]));
-        new_wasm_hash
-    }
-
-    // Reverts the committed upgrade.
-    // This can be used to cancel a previously committed upgrade.
-    // The upgrade will be canceled only if it has not been applied yet.
-    // If the upgrade has already been applied, it cannot be reverted.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    fn revert_upgrade(e: Env, admin: Address) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-        revert_upgrade(&e);
-        UpgradeEvents::new(&e).revert_upgrade();
-    }
-
-    // Sets the emergency mode.
-    // When the emergency mode is set to true, the contract will allow instant upgrades without the delay.
-    // This is useful in case of critical issues that need to be fixed immediately.
-    // When the emergency mode is set to false, the contract will require the standard upgrade delay.
-    // The emergency mode can only be set by the emergency admin.
-    //
-    // # Arguments
-    //
-    // * `emergency_admin` - The address of the emergency admin.
-    // * `value` - The value to set the emergency mode to.
-    fn set_emergency_mode(e: Env, emergency_admin: Address, value: bool) {
-        emergency_admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&emergency_admin, &Role::EmergencyAdmin);
-        set_emergency_mode(&e, &value);
-        AccessControlEvents::new(&e).set_emergency_mode(value);
-    }
-
-    // Returns the emergency mode flag value.
-    fn get_emergency_mode(e: Env) -> bool {
-        get_emergency_mode(&e)
-    }
-}
-
 // The `AdminInterface` trait provides the interface for administrative actions.
 #[contractimpl]
 impl AdminInterface for InsuranceFund {
@@ -990,7 +927,7 @@ impl AdminInterface for InsuranceFund {
     // # Panics / Errors
     // * `InsuranceFundError::InsufficientCollateral` if the claim exceeds vault balance.
     // * `InsuranceFundError::InvalidIFDetected` if the payout fully depletes the Insurance Fund.
-    fn resolve_liquidity_deficit(e: Env, admin: Address, token: Address, asset: Symbol) {
+    fn file_claim(e: Env, admin: Address, token: Address, asset: Symbol) {
         admin.require_auth();
         require_admin(&e, &admin);
 
@@ -1147,13 +1084,21 @@ impl AdminInterface for InsuranceFund {
         validate_token_contract(&e, &token.address);
 
         // Validate oracle
-        e.invoke_contract(
+        let _: u128 = e.invoke_contract(
             &get_oracle_registry(&e),
             &Symbol::new(&e, "get_price"),
             Vec::from_array(&e, [token.symbol.to_val()]),
         );
 
         set_token_whitelist(&e, &token);
+
+        let mut token_vec = get_token_whitelist_vec(&e);
+        token_vec.push_back(token.address.clone());
+        set_token_whitelist_vec(&e, &token_vec);
+
+        // Setup reserve
+        let reserve = get_reserve(&e, &token.address);
+        put_reserve(&e, &token.address, &reserve);
 
         FundEvents::new(&e).whitelist_token(admin, token.address, token.symbol);
     }
@@ -1177,21 +1122,34 @@ impl AdminInterface for InsuranceFund {
         admin.require_auth();
         require_admin(&e, &admin);
 
-        let token = get_token_whitelist(&e, &token);
+        let whitelist_token = get_token_whitelist(&e, &token);
 
         // Error if not inactive token
-        if token.active {
+        if whitelist_token.active {
             panic_with_error!(&e, InsuranceFundError::AdminNotSet);
         }
 
-        let reserve = get_reserve(&e, &token.address);
+        let reserve = get_reserve(&e, &whitelist_token.address);
 
         // Error if reserve has not been depleted yet
         if reserve.balance != 0 {
             panic_with_error!(&e, InsuranceFundError::AdminNotSet);
         }
 
-        FundEvents::new(&e).remove_whitelist_token(admin, token.address, reserve.balance);
+        remove_token_whitelist(&e, &whitelist_token.address);
+
+        let mut token_vec = get_token_whitelist_vec(&e);
+
+        for i in 0..token_vec.len() {
+            if let Some(existing) = token_vec.get(i) {
+                if existing == whitelist_token.address {
+                    token_vec.remove_unchecked(i);
+                }
+            }
+        }
+        set_token_whitelist_vec(&e, &token_vec);
+
+        FundEvents::new(&e).remove_whitelist_token(admin, whitelist_token.address, reserve.balance);
     }
 
     //    _______     __       ____  ____   ________  _______  ________
@@ -1260,6 +1218,84 @@ impl AdminInterface for InsuranceFund {
 
     fn get_is_killed_withdraw(e: Env) -> bool {
         get_is_killed_withdraw(&e)
+    }
+}
+
+// The `UpgradeableContract` trait provides the interface for upgrading the contract.
+#[contractimpl]
+impl UpgradeableContract for InsuranceFund {
+    // Returns the version of the contract.
+    //
+    // # Returns
+    //
+    // The version of the contract as a u32.
+    fn version() -> u32 {
+        100
+    }
+
+    // Commits a new wasm hash for a future upgrade.
+    // The upgrade will be available through `apply_upgrade` after the standard upgrade delay
+    // unless the system is in emergency mode.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `new_wasm_hash` - The new wasm hash to commit.
+    fn commit_upgrade(e: Env, admin: Address, new_wasm_hash: BytesN<32>) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        commit_upgrade(&e, &new_wasm_hash);
+        UpgradeEvents::new(&e).commit_upgrade(Vec::from_array(&e, [new_wasm_hash.clone()]));
+    }
+
+    // Applies the committed upgrade.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn apply_upgrade(e: Env, admin: Address) -> BytesN<32> {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        let new_wasm_hash = apply_upgrade(&e);
+        UpgradeEvents::new(&e).apply_upgrade(Vec::from_array(&e, [new_wasm_hash.clone()]));
+        new_wasm_hash
+    }
+
+    // Reverts the committed upgrade.
+    // This can be used to cancel a previously committed upgrade.
+    // The upgrade will be canceled only if it has not been applied yet.
+    // If the upgrade has already been applied, it cannot be reverted.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    fn revert_upgrade(e: Env, admin: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        revert_upgrade(&e);
+        UpgradeEvents::new(&e).revert_upgrade();
+    }
+
+    // Sets the emergency mode.
+    // When the emergency mode is set to true, the contract will allow instant upgrades without the delay.
+    // This is useful in case of critical issues that need to be fixed immediately.
+    // When the emergency mode is set to false, the contract will require the standard upgrade delay.
+    // The emergency mode can only be set by the emergency admin.
+    //
+    // # Arguments
+    //
+    // * `emergency_admin` - The address of the emergency admin.
+    // * `value` - The value to set the emergency mode to.
+    fn set_emergency_mode(e: Env, emergency_admin: Address, value: bool) {
+        emergency_admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&emergency_admin, &Role::EmergencyAdmin);
+        set_emergency_mode(&e, &value);
+        AccessControlEvents::new(&e).set_emergency_mode(value);
+    }
+
+    // Returns the emergency mode flag value.
+    fn get_emergency_mode(e: Env) -> bool {
+        get_emergency_mode(&e)
     }
 }
 

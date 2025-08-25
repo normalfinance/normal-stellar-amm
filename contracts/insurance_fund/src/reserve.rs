@@ -1,4 +1,6 @@
-use soroban_sdk::{contracttype, Address};
+use soroban_sdk::{contracttype, Address, Env};
+
+use crate::storage::put_reserve;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -33,40 +35,42 @@ impl InsuranceFundReserve {
         }
     }
 
-    pub fn deposit(self, amount: u128, now: u64) -> Self {
-        InsuranceFundReserve {
-            balance: self.balance.saturating_add(amount),
-            total_deposits: self.total_deposits.saturating_add(amount),
-            last_update_ts: now,
-            ..self
-        }
+    pub fn save(&mut self, e: &Env) {
+        put_reserve(e, &self.token, &self);
     }
 
-    pub fn withdraw(self, amount: u128, now: u64) -> Self {
-        InsuranceFundReserve {
-            balance: self.balance.saturating_sub(amount),
-            total_withdrawals: self.total_withdrawals.saturating_add(amount),
-            last_update_ts: now,
-            ..self
-        }
+    pub fn deposit(&mut self, amount: u128, now: u64) {
+        self.balance = self.balance.saturating_add(amount);
+        self.total_deposits = self.total_deposits.saturating_add(amount);
+        self.last_update_ts = now;
     }
 
-    pub fn claim(self, amount: u128, now: u64) -> Self {
-        InsuranceFundReserve {
-            balance: self.balance.saturating_sub(amount),
-            total_claims: self.total_claims.saturating_add(amount),
-            last_claim: amount,
-            last_claim_ts: now,
-            last_update_ts: now,
-            ..self
-        }
+    pub fn withdraw(&mut self, amount: u128, now: u64) {
+        self.balance = self.balance.saturating_sub(amount);
+        self.total_withdrawals = self.total_withdrawals.saturating_add(amount);
+        self.last_update_ts = now;
     }
 
-    pub fn update_balance(self, amount: u128, now: u64) -> Self {
-        InsuranceFundReserve {
-            balance: amount,
-            last_update_ts: now,
-            ..self
-        }
+    pub fn claim(&mut self, amount: u128, now: u64) {
+        self.balance = self.balance.saturating_sub(amount);
+        self.total_claims = self.total_claims.saturating_add(amount);
+        self.last_claim = amount;
+        self.last_claim_ts = now;
+        self.last_update_ts = now;
+    }
+
+    pub fn update_balance(&mut self, amount: u128, now: u64) {
+        self.balance = amount;
+        self.last_update_ts = now;
+    }
+
+    pub fn add_total_shares(&mut self, amount: u128, now: u64) {
+        self.total_shares = self.total_shares.saturating_add(amount);
+        self.last_update_ts = now;
+    }
+
+    pub fn remove_total_shares(&mut self, amount: u128, now: u64) {
+        self.total_shares = self.total_shares.saturating_sub(amount);
+        self.last_update_ts = now;
     }
 }

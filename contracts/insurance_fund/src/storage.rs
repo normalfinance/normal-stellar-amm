@@ -1,7 +1,7 @@
 use crate::reserve::InsuranceFundReserve;
 use paste::paste;
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
-use soroban_sdk::{contracttype, panic_with_error, Address, Env, Symbol};
+use soroban_sdk::{contracttype, panic_with_error, Address, Env, Symbol, Vec};
 use utils::bump::{bump_instance, bump_persistent};
 use utils::constant::THIRTEEN_DAY;
 use utils::errors::storage_errors::StorageError;
@@ -22,6 +22,7 @@ enum DataKey {
     PremiumToken,           // the address of the token used to pay premiums.
     PremiumPayers(Address), // list of accounts allowed to pay premium.
 
+    TokenWhitelistVec,
     TokenWhitelist(Address), // map of token address to WhitelistTokenStatus.
 
     Reserve(Address), // map of token address to InsuranceFundReserve.
@@ -149,7 +150,7 @@ pub fn set_premium_payer_status(e: &Env, address: &Address, status: bool) {
     }
 }
 
-// Whitelist Token
+// Token Whitelist
 
 /// Checks if an address is whitelisted
 /// Returns true if whitelisted, false if not (missing entries are treated as not whitelisted)
@@ -194,6 +195,23 @@ pub fn set_token_whitelist(e: &Env, token: &WhitelistToken) {
 pub fn remove_token_whitelist(e: &Env, token: &Address) {
     let key = DataKey::TokenWhitelist(token.clone());
     e.storage().persistent().remove(&key);
+}
+
+pub fn get_token_whitelist_vec(e: &Env) -> Vec<Address> {
+    let key = DataKey::TokenWhitelistVec;
+    match e.storage().persistent().get(&key) {
+        Some(v) => {
+            bump_persistent(e, &key);
+            v
+        }
+        None => Vec::new(e),
+    }
+}
+
+pub fn set_token_whitelist_vec(e: &Env, pools: &Vec<Address>) {
+    let key = DataKey::TokenWhitelistVec;
+    e.storage().persistent().set(&key, pools);
+    bump_persistent(e, &key);
 }
 
 #[contracttype]

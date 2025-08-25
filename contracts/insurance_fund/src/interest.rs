@@ -1,3 +1,6 @@
+use crate::storage::{
+    get_oracle_registry, get_reserve, get_token_whitelist, get_token_whitelist_vec,
+};
 use soroban_fixed_point_math::FixedPoint;
 use soroban_sdk::{Env, Symbol, Vec};
 use utils::{
@@ -5,24 +8,23 @@ use utils::{
     state::oracle_registry::{HistoricalOracleData, OracleValidity},
 };
 
-use crate::storage::{get_oracle_registry, get_reserve};
-
 pub fn calculate_total_reserve_value(e: &Env) -> u128 {
-    let token_whitelist = get_whitelist_tokens(&e);
+    let tokens = get_token_whitelist_vec(&e);
 
-    let total_reserve_value: u128 = 0;
+    let mut total_reserve_value: u128 = 0;
 
-    for i in 0..token_whitelist.len() {
-        let token = token_whitelist.get(i).unwrap();
+    for i in 0..tokens.len() {
+        let token = tokens.get(i).unwrap();
+        let whitelist_token = get_token_whitelist(e, &token);
 
-        let reserve = get_reserve(&e, &token.address);
+        let reserve = get_reserve(&e, &whitelist_token.address);
 
         // Fetch price
         let (historical_oracle_data, oracle_validity): (HistoricalOracleData, OracleValidity) = e
             .invoke_contract(
                 &get_oracle_registry(&e),
                 &Symbol::new(&e, "get_price"),
-                Vec::from_array(&e, [token.symbol.to_val()]),
+                Vec::from_array(&e, [whitelist_token.symbol.to_val()]),
             );
 
         let reserve_value = reserve
