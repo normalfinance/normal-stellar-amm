@@ -108,8 +108,8 @@ pub fn put_pool(e: &Env, asset: Symbol, pool_address: &Address) {
     bump_persistent(e, &key);
 }
 
-pub fn remove_pool(e: &Env, asset: Symbol) {
-    let key = DataKey::Pools(asset);
+pub fn remove_pool(e: &Env, asset: &Symbol) {
+    let key = DataKey::Pools(asset.clone());
     e.storage().persistent().remove(&key);
 }
 
@@ -178,8 +178,8 @@ pub fn get_reward_tokens_detailed(e: &Env, asset: Symbol) -> (U256, bool) {
     }
 }
 
-pub fn set_reward_tokens_detailed(e: &Env, asset: Symbol, value: &(U256, bool)) {
-    let key = DataKey::RewardTokensPoolsLiquidity(asset);
+pub fn set_reward_tokens_detailed(e: &Env, asset: &Symbol, value: &(U256, bool)) {
+    let key = DataKey::RewardTokensPoolsLiquidity(asset.clone());
     let result = e.storage().temporary().set(&key, value);
     bump_temporary(e, &key);
     result

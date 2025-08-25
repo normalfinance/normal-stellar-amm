@@ -11,7 +11,7 @@ use crate::storage::{
     get_insurance_fund, get_liquidity_calculator, get_pool, get_pool_base, get_pool_plane,
     get_pools_vec, get_reward_tokens, get_reward_tokens_detailed, get_rewards_config, remove_pool,
     set_insurance_fund, set_liquidity_calculator, set_lp_token_hash, set_oracle_registry,
-    set_pool_hash, set_pool_plane, set_reward_tokens, set_reward_tokens_detailed,
+    set_pool_hash, set_pool_plane, set_pools_vec, set_reward_tokens, set_reward_tokens_detailed,
     set_rewards_config, GlobalRewardsConfig, PoolRewardInfo,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
@@ -666,7 +666,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
         token_data.total_liquidity = total_liquidity;
         tokens_with_liquidity.set(asset.clone(), token_data);
         set_reward_tokens(&e, &tokens_with_liquidity);
-        set_reward_tokens_detailed(&e, asset, &pool_with_processed_info);
+        set_reward_tokens_detailed(&e, &asset, &pool_with_processed_info);
     }
 
     // Configures the rewards for a specific pool.
@@ -751,7 +751,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
 
         if pool_tps > 0 {
             // mark pool as configured to avoid reentrancy
-            set_reward_tokens_detailed(&e, asset.clone(), &(pool_liquidity, true));
+            set_reward_tokens_detailed(&e, &asset, &(pool_liquidity, true));
         }
 
         Events::new(&e).config_rewards(asset, pool_id, pool_tps, rewards_config.expired_at);
@@ -1051,13 +1051,53 @@ impl PoolsManagementTrait for PoolRouter {
         }
     }
 
-    fn remove_pool(e: Env, user: Address, asset: Symbol) {
-        user.require_auth();
-        require_operations_admin_or_owner(&e, &user);
+    fn delist_pool(e: Env, admin: Address, asset: Symbol) {
+        admin.require_auth();
+        require_admin(&e, &admin);
 
-        if get_pool_base(&e, asset.clone()).is_some() {
-            remove_pool(&e, asset)
+        let pool = get_pool(&e, &asset);
+
+        let response: u128 = e.invoke_contract(
+            &pool,
+            &Symbol::new(&e, "delist"),
+            Vec::from_array(&e, [admin.clone().into_val(&e), asset.into_val(&e)]),
+        );
+
+        Events::new(&e).delist_pool(asset, pool);
+    }
+
+    fn remove_pool(e: Env, admin: Address, asset: Symbol) {
+        admin.require_auth();
+        require_admin(&e, &admin);
+
+        let now = e.ledger().timestamp();
+        let pool = get_pool(&e, &asset);
+
+        let pool_info: PoolInfo =
+            e.invoke_contract(&pool, &Symbol::new(&e, "get_info"), Vec::from_array(&e, []));
+
+        let pool_in_settlement = pool_info.pool_response.pool.is_in_settlement(now);
+        let pool_reserves_empty = pool_info.pool_response.token_a.amount == 0
+            && pool_info.pool_response.token_b.amount == 0;
+
+        // Only remove the Pool if it's in settlement and has emptied it's reserves
+        if pool_in_settlement && pool_reserves_empty {
+            remove_pool(&e, &asset);
+
+            let mut pools_vec = get_pools_vec(&e);
+            for i in 0..pools_vec.len() {
+                if let Some(existing) = pools_vec.get(i) {
+                    if existing == pool {
+                        pools_vec.remove_unchecked(i);
+                    }
+                }
+            }
+            set_pools_vec(&e, &pools_vec);
+
+            set_reward_tokens_detailed(&e, &asset, &(U256::from_u32(&e, 0), false));
         }
+
+        Events::new(&e).remove_pool(asset, pool);
     }
 
     //   _______    _______  ___________  ___________  _______   _______    ________

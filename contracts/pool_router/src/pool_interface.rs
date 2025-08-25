@@ -190,7 +190,9 @@ pub trait PoolsManagementTrait {
         quote_max_insurance: u128,
     ) -> Address;
 
-    fn remove_pool(e: Env, user: Address, asset: Symbol);
+    fn delist_pool(e: Env, admin: Address, asset: Symbol);
+
+    fn remove_pool(e: Env, admin: Address, asset: Symbol);
 
     //   _______    _______  ___________  ___________  _______   _______    ________
     //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )

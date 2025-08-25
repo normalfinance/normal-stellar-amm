@@ -212,8 +212,8 @@ impl PoolTrait for Pool {
                 last_revenue_withdraw_ts: 0,
             },
             liquidity_max_imbalance: 0,
-            expiry_ts: 0,
-            expiry_price: 0,
+            // expiry_ts: 0,
+            // expiry_price: 0,
         };
         set_pool(&e, &pool);
 
@@ -1230,6 +1230,19 @@ impl AdminInterfaceTrait for Pool {
         insurance_withdraw
     }
 
+    fn delist(e: Env, admin: Address) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+
+        let mut pool = get_pool(&e);
+
+        // TODO: finish any missing implementation
+
+        pool.status = PoolStatus::Settlement;
+
+        set_pool(&e, &pool);
+    }
+
     //   ________  _______  ___________  ___________  _______   _______    ________
     //  /"       )/"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
     // (:   \___/(: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
@@ -1360,32 +1373,6 @@ impl AdminInterfaceTrait for Pool {
         require_operations_admin_or_owner(&e, &admin);
 
         set_mint_cap_fraction(&e, &mint_cap_fraction);
-    }
-
-    fn set_expiry(e: Env, admin: Address, expiry_ts: u64) {
-        admin.require_auth();
-        require_operations_admin_or_owner(&e, &admin);
-
-        let now = e.ledger().timestamp();
-        validate!(&e, now < expiry_ts, PoolError::DefaultError);
-
-        let action = NormalAction::UpdateTwap;
-        let mut pool = get_pool(&e);
-
-        // set the price from last price of oracle registry
-        let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, action);
-        let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, action);
-        pool.expiry_price = peg_price(
-            &e,
-            base_oracle_price_data.last_oracle_price_twap,
-            quote_oracle_price_data.last_oracle_price_twap,
-        );
-
-        // automatically enter reduce only
-        pool.status = PoolStatus::ReduceOnly;
-        pool.expiry_ts = expiry_ts;
-
-        set_pool(&e, &pool);
     }
 
     //    _______     __       ____  ____   ________  _______  ________
