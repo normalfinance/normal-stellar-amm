@@ -190,12 +190,3 @@ pub enum SwapDirection {
     Buy,
     Sell,
 }
-
-#[contracttype]
-#[derive(Clone)]
-pub struct PoolInfoForCoverage {
-    pub asset: Symbol,
-    pub target_asset_price: u128,
-    pub total_synthetic_supply: u128,
-    pub token_b_reserve: u128,
-}
