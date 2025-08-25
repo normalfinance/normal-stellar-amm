@@ -24,15 +24,16 @@ pub struct Pool {
     // the pool does not have enough liquidity to fill all orders and will apply a price premium to new swaps.
     // precision = QUOTE_PRECISION
     pub liquidity_max_imbalance: u128,
-    pub expiry_ts: u64, // The time the pool is set to expire. Only set if pool is in reduce only mode
-    pub expiry_price: u128, // The frozen price used to settle positions when a pool is set to reduce only mode
+    //     pub expiry_ts: u64, // The time the pool is set to expire. Only set if pool is in reduce only mode
+    //     pub expiry_price: u128, // The frozen price used to settle positions when a pool is set to reduce only mode
 }
 
 impl Pool {
     pub fn is_in_settlement(&self, now: u64) -> bool {
         let in_settlement = matches!(self.status, PoolStatus::Settlement | PoolStatus::Delisted);
-        let expired = self.expiry_ts != 0 && now >= self.expiry_ts;
-        in_settlement || expired
+        // let expired = self.expiry_ts != 0 && now >= self.expiry_ts;
+        // in_settlement || expired
+        in_settlement
     }
 
     pub fn is_reduce_only(&self) -> bool {

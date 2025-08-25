@@ -49,6 +49,8 @@ pub(crate) trait PoolRouterEvents {
 
     fn delist_pool(&self, asset: Symbol, pool: Address);
 
+    fn remove_pool(&self, asset: Symbol, pool: Address);
+
     fn config_rewards(&self, asset: Symbol, pool: Address, pool_tps: u128, expired_at: u64);
 
     fn claim(
@@ -126,6 +128,12 @@ impl PoolRouterEvents for Events {
         self.env()
             .events()
             .publish((Symbol::new(self.env(), "delist_pool"), asset), (pool));
+    }
+
+    fn remove_pool(&self, asset: Symbol, pool: Address) {
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "remove_pool"), asset), (pool));
     }
 
     fn config_rewards(&self, asset: Symbol, pool: Address, pool_tps: u128, expired_at: u64) {

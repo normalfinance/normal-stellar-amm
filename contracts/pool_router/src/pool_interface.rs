@@ -192,6 +192,8 @@ pub trait PoolsManagementTrait {
 
     fn delist_pool(e: Env, admin: Address, asset: Symbol);
 
+    fn remove_pool(e: Env, admin: Address, asset: Symbol);
+
     //   _______    _______  ___________  ___________  _______   _______    ________
     //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
     // (: ( \___) (: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/

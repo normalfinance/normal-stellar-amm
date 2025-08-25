@@ -212,8 +212,8 @@ impl PoolTrait for Pool {
                 last_revenue_withdraw_ts: 0,
             },
             liquidity_max_imbalance: 0,
-            expiry_ts: 0,
-            expiry_price: 0,
+            // expiry_ts: 0,
+            // expiry_price: 0,
         };
         set_pool(&e, &pool);
 
@@ -1236,7 +1236,7 @@ impl AdminInterfaceTrait for Pool {
 
         let mut pool = get_pool(&e);
 
-        // ....
+        // TODO: finish any missing implementation
 
         pool.status = PoolStatus::Settlement;
 
