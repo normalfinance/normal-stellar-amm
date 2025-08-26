@@ -7,7 +7,6 @@ use utils::bump::{bump_instance, bump_persistent, bump_temporary};
 use utils::errors::storage_errors::StorageError;
 use utils::{
     generate_instance_storage_getter, generate_instance_storage_getter_and_setter,
-    generate_instance_storage_getter_and_setter_with_default,
     generate_instance_storage_getter_with_default, generate_instance_storage_setter,
 };
 
@@ -54,30 +53,14 @@ pub enum PoolError {
 }
 
 // Addresses
-generate_instance_storage_getter_and_setter_with_default!(
-    insurance_fund,
-    DataKey::InsuranceFund,
-    Address,
-    Address::from_str(&Env::default(), "")
-);
-generate_instance_storage_getter_and_setter_with_default!(
-    pool_plane,
-    DataKey::PoolPlane,
-    Address,
-    Address::from_str(&Env::default(), "")
-);
-generate_instance_storage_getter_and_setter_with_default!(
+generate_instance_storage_getter_and_setter!(insurance_fund, DataKey::InsuranceFund, Address);
+generate_instance_storage_getter_and_setter!(pool_plane, DataKey::PoolPlane, Address);
+generate_instance_storage_getter_and_setter!(
     liquidity_calculator,
     DataKey::LiquidityCalculator,
-    Address,
-    Address::from_str(&Env::default(), "")
+    Address
 );
-generate_instance_storage_getter_and_setter_with_default!(
-    oracle_registry,
-    DataKey::OracleRegistry,
-    Address,
-    Address::from_str(&Env::default(), "")
-);
+generate_instance_storage_getter_and_setter!(oracle_registry, DataKey::OracleRegistry, Address);
 
 // Hashes
 generate_instance_storage_getter_and_setter!(pool_hash, DataKey::PoolHash, BytesN<32>);

@@ -41,24 +41,9 @@ enum DataKey {
 }
 
 // Addresses
-generate_instance_storage_getter_and_setter_with_default!(
-    oracle_registry,
-    DataKey::OracleRegistry,
-    Address,
-    Address::from_str(&Env::default(), "")
-);
-generate_instance_storage_getter_and_setter_with_default!(
-    pool_router,
-    DataKey::PoolRouter,
-    Address,
-    Address::from_str(&Env::default(), "")
-);
-generate_instance_storage_getter_and_setter_with_default!(
-    premium_token,
-    DataKey::PremiumToken,
-    Address,
-    Address::from_str(&Env::default(), "")
-);
+generate_instance_storage_getter_and_setter!(oracle_registry, DataKey::OracleRegistry, Address);
+generate_instance_storage_getter_and_setter!(pool_router, DataKey::PoolRouter, Address);
+generate_instance_storage_getter_and_setter!(premium_token, DataKey::PremiumToken, Address);
 
 // Reserve
 pub(crate) fn get_reserve(e: &Env, token: &Address) -> InsuranceFundReserve {
