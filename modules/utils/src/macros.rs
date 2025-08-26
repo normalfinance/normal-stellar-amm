@@ -1,3 +1,4 @@
+use crate::errors::storage_errors::StorageError;
 use soroban_sdk::panic_with_error;
 
 #[macro_export]

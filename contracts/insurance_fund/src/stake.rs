@@ -440,10 +440,13 @@ pub fn if_shares_lost_test() {
 
     let mut total_shares = 1000 * QUOTE_PRECISION;
 
-    let token = Address::generate(&setup.env);
+    // let token = Address::generate(&setup.env);
 
-    let reserve = InsuranceFundReserve::new(token, setup.env.ledger().timestamp());
-    let mut if_stake = Stake::new(setup.admin, token);
+    let reserve = InsuranceFundReserve::new(
+        setup.token_a.address.clone(),
+        setup.env.ledger().timestamp(),
+    );
+    let mut if_stake = Stake::new(setup.admin, setup.token_a.address.clone());
     if_stake.update_shares(&setup.env, 100 * QUOTE_PRECISION);
     if_stake.last_withdraw_request_shares = 100 * QUOTE_PRECISION;
     if_stake.last_withdraw_request_value = 100 * QUOTE_PRECISION - 1;

@@ -5,7 +5,7 @@ use crate::errors::validation_errors::ValidationError;
 
 pub fn validate_token_contract(e: &Env, token: &Address) {
     // call token contract to check if token exists & it's alive
-    let result = SorobanTokenClient::new(e, &token).try_balance(&e.current_contract_address());
+    let result = SorobanTokenClient::new(e, token).try_balance(&e.current_contract_address());
 
     if result.is_err() {
         panic_with_error!(e, ValidationError::InvalidToken);
