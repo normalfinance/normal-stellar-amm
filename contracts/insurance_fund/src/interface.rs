@@ -130,7 +130,7 @@ pub trait AdminInterface {
 
     // Token whitelist
 
-    fn add_token_whitelist(e: Env, admin: Address, token: WhitelistToken);
+    fn add_token_whitelist(e: Env, admin: Address, token: Address, symbol: Symbol);
 
     fn set_token_whitelist_status(e: Env, admin: Address, token: Address, status: bool);
 

@@ -5,12 +5,11 @@ use crate::interest::calculate_rate;
 use crate::interest::calculate_total_reserve_value;
 use crate::interest::calculate_utilization;
 use crate::interface::{AdminInterface, InsuranceFundTrait};
-use crate::reserve;
 use crate::reserve::InsuranceFundReserve;
 use crate::stake::Stake;
 use crate::stake::{
     apply_rebase_to_insurance_fund, apply_rebase_to_stake, calculate_shares_lost, get_stake,
-    reserve_amount_to_shares, save_stake, shares_to_reserve_amount, StakeAction,
+    reserve_amount_to_shares, shares_to_reserve_amount, StakeAction,
 };
 use crate::storage::get_contract_token_balance;
 use crate::storage::get_oracle_registry;
@@ -49,13 +48,15 @@ use access_control::role::{Role, SymbolRepresentation};
 use access_control::transfer::TransferOwnershipTrait;
 use access_control::utils::require_admin;
 use soroban_sdk::contractmeta;
+use soroban_sdk::log;
 use soroban_sdk::{
     contract, contractimpl, panic_with_error, Address, BytesN, Env, IntoVal, Symbol, Vec,
 };
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
-use utils::math::safe_math::SafeMath;
+use utils::state::oracle_registry::HistoricalOracleData;
+use utils::state::oracle_registry::OracleValidity;
 use utils::state::pool::PoolInfo;
 use utils::token::transfer_token;
 use utils::token::validate_token_contract;
@@ -1078,35 +1079,40 @@ impl AdminInterface for InsuranceFund {
         set_optimal_insurance(&e, &optimal_insurance);
     }
 
-    fn add_token_whitelist(e: Env, admin: Address, token: WhitelistToken) {
+    fn add_token_whitelist(e: Env, admin: Address, token: Address, symbol: Symbol) {
         admin.require_auth();
         require_admin(&e, &admin);
 
         // Error if token already exists
-        if get_token_whitelist_status(&e, &token.address) {
+        if get_token_whitelist_status(&e, &token) {
             panic_with_error!(&e, InsuranceFundError::AdminNotSet);
         }
 
-        validate_token_contract(&e, &token.address);
+        validate_token_contract(&e, &token);
 
         // Validate oracle
-        let _: u128 = e.invoke_contract(
+        let (_, _): (HistoricalOracleData, OracleValidity) = e.invoke_contract(
             &get_oracle_registry(&e),
             &Symbol::new(&e, "get_price"),
-            Vec::from_array(&e, [token.symbol.to_val()]),
+            Vec::from_array(&e, [symbol.clone().to_val()]),
         );
 
-        set_token_whitelist(&e, &token);
+        let whitelist_token = WhitelistToken {
+            address: token.clone(),
+            symbol: symbol.clone(),
+            active: true,
+        };
+        set_token_whitelist(&e, &whitelist_token);
 
         let mut token_vec = get_token_whitelist_vec(&e);
-        token_vec.push_back(token.address.clone());
+        token_vec.push_back(token.clone());
         set_token_whitelist_vec(&e, &token_vec);
 
         // Setup reserve
-        let reserve = get_reserve(&e, &token.address);
-        put_reserve(&e, &token.address, &reserve);
+        let reserve = get_reserve(&e, &token);
+        put_reserve(&e, &token, &reserve);
 
-        FundEvents::new(&e).whitelist_token(admin, token.address, token.symbol);
+        FundEvents::new(&e).whitelist_token(admin, token, symbol);
     }
 
     fn set_token_whitelist_status(e: Env, admin: Address, token: Address, status: bool) {
