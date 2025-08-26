@@ -1071,6 +1071,13 @@ impl AdminInterface for InsuranceFund {
         set_rate_slope_b(&e, &rate_slope_b);
     }
 
+    fn set_optimal_insurance(e: Env, admin: Address, optimal_insurance: u128) {
+        admin.require_auth();
+        require_admin(&e, &admin);
+
+        set_optimal_insurance(&e, &optimal_insurance);
+    }
+
     fn add_token_whitelist(e: Env, admin: Address, token: WhitelistToken) {
         admin.require_auth();
         require_admin(&e, &admin);

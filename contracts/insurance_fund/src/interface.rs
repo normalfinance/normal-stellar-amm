@@ -126,6 +126,8 @@ pub trait AdminInterface {
         rate_slope_b: u32,
     );
 
+    fn set_optimal_insurance(e: Env, admin: Address, optimal_insurance: u128);
+
     // Token whitelist
 
     fn add_token_whitelist(e: Env, admin: Address, token: WhitelistToken);
