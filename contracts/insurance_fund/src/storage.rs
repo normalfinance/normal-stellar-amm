@@ -213,11 +213,3 @@ pub fn set_token_whitelist_vec(e: &Env, pools: &Vec<Address>) {
     e.storage().persistent().set(&key, pools);
     bump_persistent(e, &key);
 }
-
-#[contracttype]
-#[derive(Clone, PartialEq, Eq)]
-pub struct WhitelistToken {
-    pub address: Address, // Address of the token
-    pub symbol: Symbol,   // Symbol of the token
-    pub active: bool,
-}

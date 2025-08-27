@@ -8,27 +8,6 @@ use utils::helpers::log10_iter;
 use utils::math::safe_math::SafeMath;
 use utils::validate;
 
-#[contracttype]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum StakeAction {
-    Deposit,               // stake tokens
-    WithdrawRequest,       // initiate an unstake
-    WithdrawCancelRequest, // cancel an unstake
-    Withdraw,              // fulfill an unstake
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Stake {
-    pub user: Address,
-    pub token: Address,                     //
-    pub shares: u128,                       // the number of shares the user owns.
-    pub last_withdraw_request_shares: u128, //
-    pub base: u128,                         // the exponent for shares decimal places (for rebase).
-    pub last_withdraw_request_value: u128,  // the token amount of the last user withdrawal request.
-    pub last_withdraw_request_ts: u64, // the timestamp when the user last requested a withdrawal.
-    pub cost_basis: u128,              //
-}
 
 impl Stake {
     pub fn new(user: Address, token: Address) -> Self {

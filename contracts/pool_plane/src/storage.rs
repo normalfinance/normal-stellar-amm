@@ -13,13 +13,6 @@ enum DataKey {
     PoolData(Address),
 }
 
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PoolPlaneType {
-    pub init_args: Vec<u128>,
-    pub reserves: Vec<u128>,
-}
-
 fn bump_persistent(e: &Env, key: &DataKey) {
     e.storage()
         .persistent()

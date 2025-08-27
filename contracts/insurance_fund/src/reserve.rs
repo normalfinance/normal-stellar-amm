@@ -2,23 +2,6 @@ use soroban_sdk::{contracttype, Address, Env};
 
 use crate::storage::put_reserve;
 
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct InsuranceFundReserve {
-    pub token: Address,
-    pub balance: u128, // the current token balance of the reserve.
-    // shares
-    pub total_shares: u128, // the total amount of issued shares.
-    pub shares_base: u128,  // exponent for lp shares (for rebasing).
-    // metrics
-    pub total_deposits: u128, // the total amount of deposits made into this reserve.
-    pub total_withdrawals: u128, // the total amount of payouts made from this reserve.
-    pub total_claims: u128,
-    pub last_claim: u128,    // the token amount of the last claim.
-    pub last_claim_ts: u64,  // the timestamp of the last claim.
-    pub last_update_ts: u64, // the timestamp of the last reserve update.
-}
-
 impl InsuranceFundReserve {
     pub fn new(token: Address, now: u64) -> Self {
         InsuranceFundReserve {
