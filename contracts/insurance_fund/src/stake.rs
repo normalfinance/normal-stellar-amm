@@ -304,7 +304,7 @@ pub fn calculate_shares_lost(e: &Env, stake: &Stake, reserve: &InsuranceFundRese
 
     let amount = shares_to_reserve_amount(e, n_shares, reserve);
 
-    let if_shares_lost = if amount > stake.last_withdraw_request_value {
+    let shares_lost = if amount > stake.last_withdraw_request_value {
         let new_n_shares = reserve_amount_to_shares(
             e,
             stake.last_withdraw_request_value,
@@ -328,7 +328,7 @@ pub fn calculate_shares_lost(e: &Env, stake: &Stake, reserve: &InsuranceFundRese
         0
     };
 
-    if_shares_lost
+    shares_lost
 }
 
 #[test]

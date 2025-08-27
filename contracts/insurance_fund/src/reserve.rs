@@ -39,13 +39,15 @@ impl InsuranceFundReserve {
         put_reserve(e, &self.token, &self);
     }
 
-    pub fn deposit(&mut self, amount: u128, now: u64) {
+    pub fn deposit(&mut self, n_shares: u128, amount: u128, now: u64) {
+        self.total_shares = self.total_shares.saturating_add(n_shares);
         self.balance = self.balance.saturating_add(amount);
         self.total_deposits = self.total_deposits.saturating_add(amount);
         self.last_update_ts = now;
     }
 
-    pub fn withdraw(&mut self, amount: u128, now: u64) {
+    pub fn withdraw(&mut self, n_shares: u128, amount: u128, now: u64) {
+        self.total_shares = self.total_shares.saturating_sub(n_shares);
         self.balance = self.balance.saturating_sub(amount);
         self.total_withdrawals = self.total_withdrawals.saturating_add(amount);
         self.last_update_ts = now;
@@ -59,13 +61,13 @@ impl InsuranceFundReserve {
         self.last_update_ts = now;
     }
 
-    pub fn update_balance(&mut self, amount: u128, now: u64) {
-        self.balance = amount;
+    pub fn sync(&mut self, balance: u128, now: u64) {
+        self.balance = balance;
         self.last_update_ts = now;
     }
 
-    pub fn add_total_shares(&mut self, amount: u128, now: u64) {
-        self.total_shares = self.total_shares.saturating_add(amount);
+    pub fn skim(&mut self, skimmed: u128, now: u64) {
+        self.balance = self.balance.saturating_sub(skimmed);
         self.last_update_ts = now;
     }
 

@@ -204,9 +204,11 @@ impl InsuranceFundTrait for InsuranceFund {
             stake.cost_basis.saturating_add(amount)
         };
 
-        // Increase the Fund and Stake shares
+        // Increase the Fund and Stake
         stake.increase_shares(&e, n_shares);
-        reserve.add_total_shares(n_shares, now);
+        reserve.deposit(amount, n_shares, now);
+
+        let stake_shares_after = stake.checked_shares(&e);
 
         // Update the Reserve and Stake
         reserve.save(&e);
@@ -229,7 +231,7 @@ impl InsuranceFundTrait for InsuranceFund {
             reserve_balance_before,
             stake_shares_before,
             total_shares_before,
-            stake.shares,
+            stake_shares_after,
             reserve.total_shares,
         );
 
@@ -351,6 +353,8 @@ impl InsuranceFundTrait for InsuranceFund {
             InsuranceFundError::InvalidIFUnstakeSize
         );
 
+        let stake_shares_after = stake.checked_shares(&e);
+
         stake.last_withdraw_request_ts = now;
 
         // Update the Reserve and Stake
@@ -365,7 +369,7 @@ impl InsuranceFundTrait for InsuranceFund {
             reserve_balance_before,
             stake_shares_before,
             total_shares_before,
-            stake.shares,
+            stake_shares_after,
             reserve.total_shares,
         );
 
@@ -413,13 +417,6 @@ impl InsuranceFundTrait for InsuranceFund {
         let now = e.ledger().timestamp();
         let mut stake = get_stake(&e, &user, &token);
 
-        // No withdraw request in progress
-        validate!(
-            &e,
-            stake.last_withdraw_request_shares != 0,
-            InsuranceFundError::NoIFWithdrawRequestInProgress
-        );
-
         let mut reserve = get_reserve(&e, &token);
         let reserve_balance_before = reserve.balance;
 
@@ -430,26 +427,36 @@ impl InsuranceFundTrait for InsuranceFund {
         let stake_shares_before = stake.checked_shares(&e);
         let total_shares_before = reserve.total_shares;
 
-        // if stake base != base
+        // Stake base != base
         validate!(
             &e,
             stake.base == reserve.shares_base,
             InsuranceFundError::InvalidIFRebase
         );
 
-        // Decrease the Stake shares
-        let stake_shares_lost = calculate_shares_lost(&e, &stake, &reserve);
-
-        stake.decrease_shares(&e, stake_shares_lost);
-
+        // No withdraw request in progress
         validate!(
             &e,
-            reserve.total_shares >= stake_shares_lost,
-            InsuranceFundError::InsufficientIFShares
+            stake.last_withdraw_request_shares != 0,
+            InsuranceFundError::NoIFWithdrawRequestInProgress
         );
 
-        // Decrease the Fund shares
-        reserve.remove_total_shares(stake_shares_lost, now);
+        // Decrease the Stake shares (if value changed b/t request and cancellation)
+        let stake_shares_lost = calculate_shares_lost(&e, &stake, &reserve);
+
+        if stake_shares_lost > 0 {
+            stake.decrease_shares(&e, stake_shares_lost);
+
+            validate!(
+                &e,
+                reserve.total_shares >= stake_shares_lost,
+                InsuranceFundError::InsufficientIFShares
+            );
+
+            reserve.remove_total_shares(stake_shares_lost, now);
+        }
+
+        let stake_shares_after = stake.checked_shares(&e);
 
         stake.last_withdraw_request_shares = 0;
         stake.last_withdraw_request_value = 0;
@@ -467,7 +474,7 @@ impl InsuranceFundTrait for InsuranceFund {
             reserve_balance_before,
             stake_shares_before,
             total_shares_before,
-            stake.shares,
+            stake_shares_after,
             reserve.total_shares,
         );
 
@@ -564,7 +571,7 @@ impl InsuranceFundTrait for InsuranceFund {
 
         let amount = shares_to_reserve_amount(&e, n_shares, &reserve);
 
-        let _if_shares_lost = calculate_shares_lost(&e, &stake, &reserve);
+        let _shares_lost = calculate_shares_lost(&e, &stake, &reserve);
 
         let withdraw_amount = amount.min(stake.last_withdraw_request_value);
 
@@ -585,12 +592,14 @@ impl InsuranceFundTrait for InsuranceFund {
             InsuranceFundError::InsufficientIFShares
         );
 
-        reserve.remove_total_shares(n_shares, now);
+        reserve.withdraw(n_shares, withdraw_amount, now);
 
         // Reset stake withdraw request info
         stake.last_withdraw_request_shares = 0;
         stake.last_withdraw_request_value = 0;
         stake.last_withdraw_request_ts = now;
+
+        let stake_shares_after = stake.checked_shares(&e);
 
         // Update the Reserve and Stake
         reserve.save(&e);
@@ -613,7 +622,7 @@ impl InsuranceFundTrait for InsuranceFund {
             reserve_balance_before,
             stake_shares_before,
             total_shares_before,
-            stake.shares,
+            stake_shares_after,
             reserve.total_shares,
         );
 
@@ -699,7 +708,7 @@ impl InsuranceFundTrait for InsuranceFund {
         let balance = get_contract_token_balance(&e, &token);
 
         let mut reserve = get_reserve(&e, &token);
-        reserve.update_balance(balance, now);
+        reserve.sync(balance, now);
         reserve.save(&e);
 
         FundEvents::new(&e).sync(sender, token, 0);
@@ -720,12 +729,16 @@ impl InsuranceFundTrait for InsuranceFund {
 
         get_token_whitelist(&e, &token);
 
-        let reserve = get_reserve(&e, &token);
+        let mut reserve = get_reserve(&e, &token);
 
         let balance = get_contract_token_balance(&e, &token);
         let skimmed = balance.saturating_sub(reserve.balance) as i128;
 
         if skimmed > 0 {
+            let now = e.ledger().timestamp();
+            reserve.skim(skimmed as u128, now);
+            reserve.save(&e);
+
             transfer_token(&e, &token, &e.current_contract_address(), &sender, &skimmed);
             FundEvents::new(&e).skim(sender, token, skimmed);
         }
@@ -881,25 +894,28 @@ impl AdminInterface for InsuranceFund {
         let current_optimal_insurance = get_optimal_insurance(&e);
 
         // Fetch the total liquidity imbalance from the Pool Router
-        let total_liquidity_imbalance: i128 = e.invoke_contract(
+        match e.try_invoke_contract::<i128, soroban_sdk::Error>(
             &get_pool_router(&e),
             &Symbol::new(&e, "get_total_liquidity_imbalance"),
             Vec::from_array(&e, []),
-        );
+        ) {
+            Ok(Ok(total_liquidity_imbalance)) => {
+                let updated_optimal_insurance = if total_liquidity_imbalance <= 0 {
+                    0_u128
+                } else {
+                    total_liquidity_imbalance as u128
+                };
 
-        let updated_optimal_insurance = if total_liquidity_imbalance <= 0 {
-            0_u128
-        } else {
-            total_liquidity_imbalance as u128
-        };
+                set_optimal_insurance(&e, &updated_optimal_insurance);
 
-        set_optimal_insurance(&e, &updated_optimal_insurance);
-
-        FundEvents::new(&e).sync_optimal_insurance(
-            admin,
-            current_optimal_insurance,
-            updated_optimal_insurance,
-        );
+                FundEvents::new(&e).sync_optimal_insurance(
+                    admin,
+                    current_optimal_insurance,
+                    updated_optimal_insurance,
+                );
+            }
+            Ok(Err(_)) | Err(_) => panic_with_error!(&e, InsuranceFundError::AdminNotSet),
+        }
     }
 
     // Resolves a liquidity deficit in a pool by transferring insurance coverage from the Insurance Fund.
@@ -933,25 +949,18 @@ impl AdminInterface for InsuranceFund {
 
         enter(&e);
 
-        let pool_details_result = e.try_invoke_contract::<PoolInfo, soroban_sdk::Error>(
+        match e.try_invoke_contract::<PoolInfo, soroban_sdk::Error>(
             &get_pool_router(&e),
             &Symbol::new(&e, "query_pool_details"),
             Vec::from_array(&e, [asset.into_val(&e)]),
-        );
-
-        match pool_details_result {
-            Ok(Err(_pool_error)) => {
-                panic_with_error!(&e, InsuranceFundError::QueryPoolFailed);
-            }
-            Err(_contract_error) => {
-                panic_with_error!(&e, InsuranceFundError::QueryPoolFailed);
-            }
+        ) {
+            Ok(Err(_)) | Err(_) => panic_with_error!(&e, InsuranceFundError::QueryPoolFailed),
             Ok(Ok(pool_info)) => {
                 let reserve = get_reserve(&e, &token);
 
                 // Call `Pool.pay_insurance_claim()` to calculate how much insurance is needed
                 // and to update the `Pool.insurance_claim`
-                let pay_from_insurance_result = e.try_invoke_contract::<u128, soroban_sdk::Error>(
+                match e.try_invoke_contract::<u128, soroban_sdk::Error>(
                     &pool_info.pool_address,
                     &Symbol::new(&e, "pay_insurance_claim"),
                     Vec::from_array(
@@ -961,14 +970,9 @@ impl AdminInterface for InsuranceFund {
                             reserve.balance.into_val(&e),
                         ],
                     ),
-                );
-
-                match pay_from_insurance_result {
-                    Ok(Err(_pool_error)) => {
-                        panic_with_error!(&e, InsuranceFundError::PayInsuranceClaimFailed);
-                    }
-                    Err(_contract_error) => {
-                        panic_with_error!(&e, InsuranceFundError::PayInsuranceClaimFailed);
+                ) {
+                    Ok(Err(_)) | Err(_) => {
+                        panic_with_error!(&e, InsuranceFundError::PayInsuranceClaimFailed)
                     }
                     Ok(Ok(pay_from_insurance)) => {
                         if pay_from_insurance > 0 {
@@ -990,7 +994,7 @@ impl AdminInterface for InsuranceFund {
 
                         exit(&e);
                     }
-                }
+                };
             }
         }
     }
