@@ -805,7 +805,7 @@ dependencies = [
 
 [[package]]
 name = "normal-rust-types"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "soroban-fixed-point-math",
  "soroban-sdk",
