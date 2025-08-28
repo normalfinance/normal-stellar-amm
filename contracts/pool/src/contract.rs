@@ -258,7 +258,7 @@ impl PoolTrait for Pool {
     // - Transfers Token B to the pool.
     // - Mints LP tokens to the user.
     // - Updates reserves, oracle-based pricing, reward checkpoints, and emits an event.
-    fn deposit(e: Env, user: Address, token_b_amount: u128) -> (u128, u128) {
+    fn deposit(e: Env, user: Address, token_b_amount: u128) -> (u128, u128, i128) {
         user.require_auth();
 
         ensure_non_zero_u128(&e, token_b_amount);
@@ -396,7 +396,7 @@ impl PoolTrait for Pool {
 
         exit(&e);
 
-        (token_b_amount, shares_to_mint)
+        (token_b_amount, shares_to_mint, delta_a)
     }
 
     // Swaps tokens in the pool by transferring an input token from the user and returning an output token,
@@ -436,7 +436,7 @@ impl PoolTrait for Pool {
         direction: SwapDirection,
         in_amount: u128,
         out_min: u128,
-    ) -> u128 {
+    ) -> (u128, i128, i128) {
         user.require_auth();
 
         enter(&e);
@@ -580,7 +580,7 @@ impl PoolTrait for Pool {
 
         exit(&e);
 
-        out
+        (out, delta_a_prior, delta_a_post)
     }
 
     // Estimates the result of a swap operation.
@@ -644,7 +644,7 @@ impl PoolTrait for Pool {
         direction: SwapDirection,
         out_amount: u128,
         in_max: u128,
-    ) -> u128 {
+    ) -> (u128, i128, i128) {
         user.require_auth();
 
         ensure_non_zero_u128(&e, out_amount);
@@ -795,7 +795,7 @@ impl PoolTrait for Pool {
 
         exit(&e);
 
-        in_amount
+        (in_amount, delta_a_prior, delta_a_post)
     }
 
     // Estimates the result of a swap_strict_receive operation.
@@ -873,7 +873,7 @@ impl PoolTrait for Pool {
     // - Rebalances the pool using oracle data.
     // - Updates incentive tracking and on-chain accounting.
     // - Emits a liquidity withdrawal event.
-    fn withdraw(e: Env, user: Address, share_amount: u128) -> u128 {
+    fn withdraw(e: Env, user: Address, share_amount: u128) -> (u128, i128) {
         user.require_auth();
 
         ensure_non_zero_u128(&e, share_amount);
@@ -958,7 +958,7 @@ impl PoolTrait for Pool {
 
         exit(&e);
 
-        share_amount
+        (share_amount, delta_a)
     }
 
     //   _______    _______  ___________  ___________  _______   _______    ________
