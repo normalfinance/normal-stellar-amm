@@ -694,6 +694,7 @@ name = "insurance-fund"
 version = "1.0.0"
 dependencies = [
  "access_control",
+ "normal-rust-types",
  "paste",
  "reentrancy_guard",
  "soroban-fixed-point-math",
@@ -774,6 +775,7 @@ name = "liquidity-calculator"
 version = "1.0.0"
 dependencies = [
  "access_control",
+ "normal-rust-types",
  "soroban-fixed-point-math",
  "soroban-sdk",
  "upgrade",
@@ -795,6 +797,15 @@ dependencies = [
  "soroban-token-sdk",
  "upgrade",
  "utils",
+]
+
+[[package]]
+name = "normal-rust-types"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e2900072b81752814ae1018dcc153aea0992162c3165644d44e8312a7071092"
+dependencies = [
+ "soroban-sdk",
 ]
 
 [[package]]
@@ -849,6 +860,7 @@ name = "oracle-registry"
 version = "1.0.0"
 dependencies = [
  "access_control",
+ "normal-rust-types",
  "paste",
  "reentrancy_guard",
  "sep-40-oracle",
@@ -892,6 +904,7 @@ version = "1.0.0"
 dependencies = [
  "access_control",
  "incentives",
+ "normal-rust-types",
  "paste",
  "rand",
  "reentrancy_guard",
@@ -909,6 +922,7 @@ name = "pool-plane"
 version = "1.0.0"
 dependencies = [
  "access_control",
+ "normal-rust-types",
  "soroban-sdk",
  "upgrade",
  "utils",
@@ -920,6 +934,7 @@ version = "1.0.0"
 dependencies = [
  "access_control",
  "incentives",
+ "normal-rust-types",
  "paste",
  "reentrancy_guard",
  "sep-40-oracle",
@@ -935,6 +950,7 @@ version = "1.0.0"
 dependencies = [
  "access_control",
  "incentives",
+ "normal-rust-types",
  "paste",
  "reentrancy_guard",
  "sep-40-oracle",
@@ -1573,6 +1589,7 @@ dependencies = [
 name = "utils"
 version = "1.0.0"
 dependencies = [
+ "normal-rust-types",
  "sep-40-oracle",
  "soroban-fixed-point-math",
  "soroban-sdk",

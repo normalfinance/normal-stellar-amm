@@ -1,4 +1,6 @@
-use crate::errors::InsuranceFundError;
+
+use normal_rust_types::errors::InsuranceFundError;
+
 use crate::events::Events as FundEvents;
 use crate::events::InsuranceFundEvents;
 use crate::interest::calculate_rate;
