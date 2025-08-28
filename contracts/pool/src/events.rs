@@ -26,9 +26,23 @@ pub trait PoolEvents {
     // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
-    fn deposit_liquidity(&self, token: Address, user: Address, amount: u128, share_amount: u128);
+    fn deposit_liquidity(
+        &self,
+        token: Address,
+        user: Address,
+        amount: u128,
+        share_amount: u128,
+        delta_a: i128,
+    );
 
-    fn withdraw_liquidity(&self, token: Address, user: Address, share_amount: u128, amount: u128);
+    fn withdraw_liquidity(
+        &self,
+        token: Address,
+        user: Address,
+        share_amount: u128,
+        amount: u128,
+        delta_a: i128,
+    );
 
     fn swap(
         &self,
@@ -37,7 +51,8 @@ pub trait PoolEvents {
         token_out: Address,
         in_amount: u128,
         out_amount: u128,
-        fee_amount: u128,
+        delta_a_prior: i128,
+        delta_a_post: i128,
     );
 
     fn rebalance(
@@ -87,19 +102,33 @@ impl PoolEvents for Events {
     // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
-    fn deposit_liquidity(&self, token: Address, user: Address, amount: u128, share_amount: u128) {
+    fn deposit_liquidity(
+        &self,
+        token: Address,
+        user: Address,
+        amount: u128,
+        share_amount: u128,
+        delta_a: i128,
+    ) {
         let e = self.env();
         e.events().publish(
             (Symbol::new(e, "deposit_liquidity"), token, user),
-            (amount, share_amount),
+            (amount, share_amount, delta_a),
         );
     }
 
-    fn withdraw_liquidity(&self, token: Address, user: Address, share_amount: u128, amount: u128) {
+    fn withdraw_liquidity(
+        &self,
+        token: Address,
+        user: Address,
+        share_amount: u128,
+        amount: u128,
+        delta_a: i128,
+    ) {
         let e = self.env();
         e.events().publish(
             (Symbol::new(e, "withdraw_liquidity"), token, user),
-            (share_amount, amount),
+            (share_amount, amount, delta_a),
         );
     }
 
@@ -110,12 +139,13 @@ impl PoolEvents for Events {
         token_out: Address,
         in_amount: u128,
         out_amount: u128,
-        fee_amount: u128,
+        delta_a_prior: i128,
+        delta_a_post: i128,
     ) {
         let e = self.env();
         e.events().publish(
             (Symbol::new(e, "swap"), token_in, token_out, user),
-            (in_amount as i128, out_amount as i128, fee_amount as i128),
+            (in_amount, out_amount, delta_a_prior, delta_a_post),
         );
     }
 

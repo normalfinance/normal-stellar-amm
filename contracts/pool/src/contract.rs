@@ -383,11 +383,15 @@ impl PoolTrait for Pool {
         // update plane data for every pool update
         update_plane(&e);
 
+        // Finds how many synthetic tokens were minted/burned by finding the difference between reserve_a
+        let delta_a: i128 = (reserve_a_after_rebalance as i128).saturating_sub(reserve_a as i128);
+
         LiquidityPoolEvents::new(&e).deposit_liquidity(
             pool.token_b,
             user,
             token_b_amount,
             shares_to_mint,
+            delta_a,
         );
 
         exit(&e);
@@ -460,6 +464,8 @@ impl PoolTrait for Pool {
             action,
         );
 
+        let reserve_a_before_prior_rebalance = get_reserve_a(&e) as i128;
+
         rebalance(
             &e,
             base_oracle_price_data.last_oracle_price_twap,
@@ -470,6 +476,9 @@ impl PoolTrait for Pool {
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
         let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
+
+        let delta_a_prior = reserve_a_before_prior_rebalance.saturating_sub(reserve_a as i128);
+
         let tokens = Self::get_tokens(e.clone());
 
         let (in_idx, out_idx) = if direction == SwapDirection::Buy {
@@ -553,6 +562,9 @@ impl PoolTrait for Pool {
             pool.is_reduce_only(),
         );
 
+        let reserve_a_final = get_reserve_a(&e) as i128;
+        let delta_a_post = reserve_a_final.saturating_sub(reserve_a as i128);
+
         // update plane data for every pool update
         update_plane(&e);
 
@@ -562,7 +574,8 @@ impl PoolTrait for Pool {
             tokens.get(out_idx).unwrap(),
             in_amount,
             out,
-            fee,
+            delta_a_prior,
+            delta_a_post,
         );
 
         exit(&e);
@@ -657,6 +670,8 @@ impl PoolTrait for Pool {
             action,
         );
 
+        let reserve_a_before_prior_rebalance = get_reserve_a(&e) as i128;
+
         rebalance(
             &e,
             base_oracle_price_data.last_oracle_price_twap,
@@ -673,6 +688,9 @@ impl PoolTrait for Pool {
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
         let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
+
+        let delta_a_prior = reserve_a_before_prior_rebalance.saturating_sub(reserve_a as i128);
+
         let tokens = Self::get_tokens(e.clone());
 
         let reserve_sell = reserves.get(in_idx).unwrap();
@@ -751,15 +769,6 @@ impl PoolTrait for Pool {
             transfer_b(&e, &user, out_b);
         }
 
-        LiquidityPoolEvents::new(&e).swap(
-            user.clone(),
-            sell_token,
-            tokens.get(out_idx).unwrap(),
-            in_amount,
-            out_amount,
-            fee,
-        );
-
         // Rebalance the pool
         rebalance(
             &e,
@@ -768,8 +777,21 @@ impl PoolTrait for Pool {
             pool.is_reduce_only(),
         );
 
+        let reserve_a_final = get_reserve_a(&e) as i128;
+        let delta_a_post = reserve_a_final.saturating_sub(reserve_a as i128);
+
         // update plane data for every pool update
         update_plane(&e);
+
+        LiquidityPoolEvents::new(&e).swap(
+            user.clone(),
+            sell_token,
+            tokens.get(out_idx).unwrap(),
+            in_amount,
+            out_amount,
+            delta_a_prior,
+            delta_a_post,
+        );
 
         exit(&e);
 
@@ -874,7 +896,7 @@ impl PoolTrait for Pool {
 
         burn_lp_tokens(&e, &user, share_amount);
 
-        let (_, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
+        let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
 
         if total_shares - share_amount < MIN_LIQUIDITY {
             panic_with_error!(e, PoolError::WithdrawExceedsMinLiquidity);
@@ -911,6 +933,8 @@ impl PoolTrait for Pool {
             pool.is_reduce_only(),
         );
 
+        let reserve_a_after_rebalance = get_reserve_a(&e);
+
         // Checkpoint resulting working balance
         incentives.manager().update_working_balance(
             &user,
@@ -921,11 +945,15 @@ impl PoolTrait for Pool {
         // update plane data for every pool update
         update_plane(&e);
 
+        // Finds how many synthetic tokens were minted/burned by finding the difference between reserve_a
+        let delta_a: i128 = (reserve_a_after_rebalance as i128).saturating_sub(reserve_a as i128);
+
         LiquidityPoolEvents::new(&e).withdraw_liquidity(
             pool.token_b,
             user,
             share_amount,
             share_amount,
+            delta_a,
         );
 
         exit(&e);
