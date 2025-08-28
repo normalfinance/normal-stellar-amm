@@ -1,6 +1,6 @@
 use soroban_sdk::{Address, Env, Symbol};
 
-use crate::stake::StakeAction;
+use normal_rust_types::types::StakeAction;
 
 #[derive(Clone)]
 pub(crate) struct Events(Env);

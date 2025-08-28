@@ -13,7 +13,7 @@ use normal_rust_types::types::Stake;
 use normal_rust_types::types::StakeAction;
 use crate::stake::{
     apply_rebase_to_insurance_fund, apply_rebase_to_stake, calculate_shares_lost, get_stake,
-    reserve_amount_to_shares, save_stake, shares_to_reserve_amount,
+    reserve_amount_to_shares, shares_to_reserve_amount, StakeExt,
 };
 use crate::storage::get_contract_token_balance;
 use crate::storage::get_oracle_registry;
@@ -58,7 +58,6 @@ use soroban_sdk::{
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
-use utils::math::safe_math::SafeMath;
 use normal_rust_types::types::PoolInfo;
 use utils::token::transfer_token;
 use utils::token::validate_token_contract;
@@ -231,7 +230,7 @@ impl InsuranceFundTrait for InsuranceFund {
             reserve_balance_before,
             stake_shares_before,
             total_shares_before,
-            stake.shares,
+            stake.unchecked_shares(),
             reserve.total_shares,
         );
 
@@ -338,7 +337,7 @@ impl InsuranceFundTrait for InsuranceFund {
 
         validate!(
             &e,
-            stake.base == reserve.shares_base,
+            stake.if_base == reserve.shares_base,
             InsuranceFundError::InvalidIFRebase
         );
 
@@ -367,7 +366,7 @@ impl InsuranceFundTrait for InsuranceFund {
             reserve_balance_before,
             stake_shares_before,
             total_shares_before,
-            stake.shares,
+            stake.unchecked_shares(),
             reserve.total_shares,
         );
 
@@ -435,7 +434,7 @@ impl InsuranceFundTrait for InsuranceFund {
         // if stake base != base
         validate!(
             &e,
-            stake.base == reserve.shares_base,
+            stake.if_base == reserve.shares_base,
             InsuranceFundError::InvalidIFRebase
         );
 
@@ -469,7 +468,7 @@ impl InsuranceFundTrait for InsuranceFund {
             reserve_balance_before,
             stake_shares_before,
             total_shares_before,
-            stake.shares,
+            stake.unchecked_shares(),
             reserve.total_shares,
         );
 
@@ -615,7 +614,7 @@ impl InsuranceFundTrait for InsuranceFund {
             reserve_balance_before,
             stake_shares_before,
             total_shares_before,
-            stake.shares,
+            stake.unchecked_shares(),
             reserve.total_shares,
         );
 

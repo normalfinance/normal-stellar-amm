@@ -33,7 +33,7 @@ use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::constant::{FEE_DENOMINATOR, PRICE_PRECISION, THIRTY_DAY};
 use utils::math::safe_math::SafeMath;
 use utils::math::stats::calculate_rolling_sum;
-use utils::state::pool::{PoolInfo, SwapDirection};
+use normal_rust_types::{PoolInfo, SwapDirection};
 use utils::token::transfer_token;
 use utils::validate;
 use utils::validation::ensure_non_zero_u128;

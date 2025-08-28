@@ -1,5 +1,5 @@
 use soroban_sdk::{Address, Env, Symbol};
-use utils::state::oracle_registry::{
+use normal_rust_types::{
     HistoricalOracleData, MutableOracleInfo, OracleGuardRails, OracleInfo, OracleValidity,
 };
 

@@ -282,7 +282,7 @@ impl AdminInterface for OracleRegistry {
         update_twap(
             &e,
             &asset,
-            &HistoricalOracleData::default_with_current_oracle(oracle_price_data),
+            &HistoricalOracleData::default(),
             &oracle_price_data,
             sanitize_clamp_denominator,
             now,
@@ -292,7 +292,7 @@ impl AdminInterface for OracleRegistry {
             address: oracle_addr,
             decimals,
             frozen: false,
-            sanitize_clamp_denominator,
+            sanitize_clamp_denominator: sanitize_clamp_denominator as i64,
             last_updated: now,
         };
         put_oracle(&e, &asset, &oracle);
@@ -364,7 +364,7 @@ impl AdminInterface for OracleRegistry {
             if let Some(sanitize_clamp_denominator) = params.sanitize_clamp_denominator {
                 validate_positive_denominator(
                     &e,
-                    sanitize_clamp_denominator,
+                    sanitize_clamp_denominator as u64,
                     OracleRegistryError::InvalidClampDenominator,
                 );
             }
@@ -460,11 +460,11 @@ impl AdminInterface for OracleRegistry {
             historical_oracle_data.last_oracle_price_twap,
             &(OraclePriceData {
                 price,
-                delay: Delay::from_timestamp_diff_expect(
-                    now,
-                    historical_oracle_data.last_oracle_price_twap_ts,
+                delay: u64::from(Delay::from_timestamp_diff_expect(
+                    now as u64,
+                    historical_oracle_data.last_oracle_price_twap_ts as u64,
                     "Historical TWAP timestamp cannot be in the future",
-                ),
+                )),
             }),
         ) == OracleValidity::Valid;
 
@@ -483,7 +483,7 @@ impl AdminInterface for OracleRegistry {
             &historical_oracle_data,
             &(OraclePriceData {
                 price: price,
-                delay: Delay::ZERO,
+                delay: 0x64,
             }),
             oracle.sanitize_clamp_denominator as u64,
             now,

@@ -2,11 +2,11 @@ use sep_40_oracle::{Asset, PriceFeedClient};
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{Address, Env, Symbol};
 use utils::{
-    constant::{FIVE_MINUTE, PERCENTAGE_PRECISION, PERCENTAGE_PRECISION_U64, PRICE_PRECISION},
+    constant::{FIVE_MINUTE, PERCENTAGE_PRECISION, PRICE_PRECISION, PERCENTAGE_PRECISION_I64},
     math::{pool::sanitize_new_price, safe_math::SafeMath, stats::calculate_new_twap},
-    state::oracle_registry::{HistoricalOracleData, OraclePriceData, OracleValidity},
     temporal::Delay,
 };
+use normal_rust_types::types::{HistoricalOracleData, OraclePriceData, OracleValidity};
 
 use crate::storage::{get_oracle_guard_rails, put_historical_oracle_data};
 
@@ -45,7 +45,7 @@ pub fn get_oracle_price(e: &Env, oracle: &Address, asset: &Symbol, now: u64) -> 
 
     OraclePriceData {
         price: oracle_price,
-        delay: oracle_delay,
+        delay: oracle_delay.as_seconds(),
     }
 }
 
@@ -92,6 +92,7 @@ pub fn update_twap(
             last_oracle_price_twap: oracle_price_twap,
             last_oracle_price: oracle_price_data.price,
             last_oracle_price_twap_ts: now,
+            last_oracle_delay: 0,
         }),
     );
 }
@@ -128,22 +129,21 @@ pub fn oracle_validity(
     // Volatility
     // if Δprice <= 0.80 or 1.20 <= Δprice → too volatile
     let lower_bound =
-        PERCENTAGE_PRECISION_U64.safe_sub(e, oracle_guard_rails.validity.too_volatile_ratio);
+        PERCENTAGE_PRECISION_I64.safe_sub(e, oracle_guard_rails.validity.too_volatile_ratio as i64);
 
     let upper_bound = oracle_guard_rails
         .validity
         .too_volatile_ratio
-        .safe_add(e, PERCENTAGE_PRECISION_U64);
+        .safe_add(e, PERCENTAGE_PRECISION_I64);
 
     // let price_delta = oracle_price.safe_div(e, last_oracle_twap.max(1)) as u64;
     let price_delta =
-        oracle_price.fixed_div_floor(e, &last_oracle_twap, &PERCENTAGE_PRECISION) as u64;
+        oracle_price.fixed_div_floor(e, &last_oracle_twap, &PERCENTAGE_PRECISION) as i64;
 
     let is_oracle_price_too_volatile = price_delta <= lower_bound || upper_bound <= price_delta;
 
     // StaleForPool
     let is_stale_for_pool = oracle_delay
-        .as_seconds()
         .gt(&oracle_guard_rails.validity.seconds_before_stale_for_pool);
 
     let oracle_validity = if is_oracle_price_nonpositive {

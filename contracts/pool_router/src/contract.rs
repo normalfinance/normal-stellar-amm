@@ -12,7 +12,7 @@ use crate::storage::{
     get_pools_vec, get_reward_tokens, get_reward_tokens_detailed, get_rewards_config, remove_pool,
     set_insurance_fund, set_liquidity_calculator, set_lp_token_hash, set_oracle_registry,
     set_pool_hash, set_pool_plane, set_pools_vec, set_reward_tokens, set_reward_tokens_detailed,
-    set_rewards_config, GlobalRewardsConfig, PoolRewardInfo,
+    set_rewards_config,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
@@ -37,7 +37,7 @@ use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::constant::MAX_POOL_FEE;
-use utils::state::pool::{PoolInfo, PoolTier, SwapDirection};
+use normal_rust_types::{GlobalRewardsConfig, PoolInfo, PoolRewardInfo, PoolTier, SwapDirection};
 use utils::token::{transfer_token, transfer_token_from};
 use utils::validation::ensure_non_zero_u128;
 

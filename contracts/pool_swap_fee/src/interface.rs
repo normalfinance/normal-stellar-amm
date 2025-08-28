@@ -1,5 +1,5 @@
 use soroban_sdk::{Address, Env, Symbol};
-use utils::state::pool::SwapDirection;
+use normal_rust_types::SwapDirection;
 
 pub trait PoolSwapFeeInterface {
     //   _______    _______  ___________  ___________  _______   _______    ________

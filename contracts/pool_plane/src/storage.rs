@@ -1,4 +1,5 @@
 use soroban_sdk::{contracttype, Address, Env, Vec};
+use normal_rust_types::PoolPlaneType;
 
 const DAY_IN_LEDGERS: u32 = 17280;
 pub const MONTH_IN_LEDGERS: u32 = DAY_IN_LEDGERS * 30;
