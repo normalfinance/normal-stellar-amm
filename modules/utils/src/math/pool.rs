@@ -53,3 +53,47 @@ pub fn sanitize_new_price(
 
     capped_update_price
 }
+
+/// Computes a fee using ceiling rounding in fixed-point arithmetic.
+///
+/// The fee is calculated as:
+///
+/// ```text
+/// fee = ceil(amount * fee_fraction / FEE_MULTIPLIER)
+/// ```
+///
+/// where `fee_fraction` and `FEE_MULTIPLIER` share the same scale
+/// (e.g., `fee_fraction = 30` and `FEE_MULTIPLIER = 10_000` for 30 bps).
+/// Ceiling rounding ensures the protocol never under-collects due to truncation.
+///
+/// # Arguments
+///
+/// * `amount` — The gross amount to which the fee applies.
+/// * `fee_fraction` — The fee numerator in the same scale as `FEE_MULTIPLIER` (e.g., bps).
+///
+/// # Returns
+///
+/// * `u128` — The fee, rounded up (ceiling).
+///   Returns `0` if an overflow occurs inside `fixed_mul_ceil` (current behavior).
+///
+/// # Notes
+///
+/// * This uses `fixed_mul_ceil` and propagates its overflow handling by returning `0`
+///   on `None` via `unwrap_or(0)`. Consider replacing with explicit error handling
+///   if you need to distinguish overflow from a legitimate zero fee.
+///
+/// # Examples
+///
+/// ```rust
+/// // 30 bps on 1_000_000 with ceiling rounding
+/// // fee = ceil(1_000_000 * 30 / 10_000) = ceil(3_000 / 10) = 300
+/// let fee = calculate_fee(1_000_000, 30);
+/// assert_eq!(fee, 300);
+/// ```
+pub fn calculate_fee(amount: u128, fee_fraction: u32) -> u128 {
+    let result = amount
+        .fixed_mul_ceil(fee_fraction as u128, FEE_MULTIPLIER)
+        .unwrap_or(0);
+
+    result
+}

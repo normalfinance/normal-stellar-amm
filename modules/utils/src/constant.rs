@@ -59,9 +59,6 @@ pub const MIN_LIQUIDITY: u128 = 1_000;
 // Pool Router
 pub const MAX_POOL_FEE: u32 = 100; // 1%
 
-// Swap Fee
-pub const FEE_DENOMINATOR: u32 = 10000;
-
 // Incentives
 pub const REWARD_PRECISION: u128 = 1_000_000_000_000_000_0000000;
 

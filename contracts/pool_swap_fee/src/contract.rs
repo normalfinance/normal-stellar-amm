@@ -30,7 +30,8 @@ use token_lp::{get_total_lp_tokens, get_user_balance_lp};
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
-use utils::constant::{FEE_DENOMINATOR, PRICE_PRECISION, THIRTY_DAY};
+use utils::constant::{PRICE_PRECISION, THIRTY_DAY};
+use utils::math::pool::calculate_fee;
 use utils::math::safe_math::SafeMath;
 use utils::math::stats::calculate_rolling_sum;
 use utils::state::pool::{PoolInfo, SwapDirection};
@@ -142,9 +143,8 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         // Update fee if on token_in
         if direction == SwapDirection::Buy {
             quote_asset_amount = in_amount;
-            fee_amount = (in_amount * (pool_info.pool_response.pool.fee_fraction as u128))
-                / (FEE_DENOMINATOR as u128);
-            in_amount_mut = in_amount - fee_amount;
+            fee_amount = calculate_fee(in_amount, pool_info.pool_response.pool.fee_fraction);
+            in_amount_mut = in_amount.saturating_sub(fee_amount);
         }
 
         e.authorize_as_current_contract(vec![
@@ -181,11 +181,11 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         // Update fee if on token_out
         if direction == SwapDirection::Sell {
             quote_asset_amount = amount_out;
-            fee_amount = (amount_out * (pool_info.pool_response.pool.fee_fraction as u128))
-                / (FEE_DENOMINATOR as u128);
+            fee_amount = calculate_fee(amount_out, pool_info.pool_response.pool.fee_fraction);
         }
 
-        amount_out_w_fee = amount_out - fee_amount;
+        amount_out_w_fee = amount_out.saturating_sub(fee_amount);
+
         if amount_out_w_fee < out_min {
             panic_with_error!(&e, PoolSwapFeeError::OutMinNotSatisfied);
         }
@@ -208,8 +208,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
 
         // LP FEES
         let lp_revenue_fraction = get_lp_revenue_fraction(&e);
-        let lp_fee_amount =
-            (fee_amount * (lp_revenue_fraction as u128)) / (FEE_DENOMINATOR as u128);
+        let lp_fee_amount = calculate_fee(fee_amount, lp_revenue_fraction);
 
         // Add bounds checking to prevent fee calculation underflow when LP fees exceed total fees
         validate!(
@@ -238,7 +237,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
             ),
         );
 
-        let mut if_premium_paid: u128 = 0;
+        let mut insurance_premium_paid: u128 = 0;
 
         if insurance_premium_rate > 0 {
             let estimated_annual_volume = updated_volume_30d.fixed_mul_floor(365, 30).unwrap();
@@ -258,7 +257,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
             if insurance_premium_to_pay > 0 {
                 // TODO: must we also call the Pool to update last_revenue_withdraw_ts and rev_withdraw_since_last_settle?
 
-                if_premium_paid = e.invoke_contract(
+                insurance_premium_paid = e.invoke_contract(
                     &insurance_fund,
                     &Symbol::new(&e, "pay_premium"),
                     Vec::from_array(
@@ -283,7 +282,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
             amount_out,
             fee_amount,
             lp_fee_amount,
-            if_premium_paid,
+            insurance_premium_paid,
             protocol_fee_amount,
         );
 

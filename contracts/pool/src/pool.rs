@@ -1,7 +1,6 @@
 use core::cmp::max;
 
 use crate::errors::PoolError;
-use crate::errors::PoolValidationError;
 use crate::events::Events as LiquidityPoolEvents;
 use crate::events::PoolEvents;
 use crate::storage::get_last_trade_ts;
