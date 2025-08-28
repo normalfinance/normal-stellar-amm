@@ -20,7 +20,7 @@ use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
-use utils::state::oracle_registry::{
+use normal_rust_types::types::{
     HistoricalOracleData, MutableOracleInfo, OracleGuardRails, OracleInfo, OraclePriceData,
     OracleValidity,
 };
@@ -93,7 +93,7 @@ impl OracleRegistryTrait for OracleRegistry {
                 &asset,
                 &historical_oracle_data,
                 &oracle_price_data,
-                oracle.sanitize_clamp_denominator,
+                oracle.sanitize_clamp_denominator as u64,
                 now,
             );
         }
@@ -485,7 +485,7 @@ impl AdminInterface for OracleRegistry {
                 price: price,
                 delay: Delay::ZERO,
             }),
-            oracle.sanitize_clamp_denominator,
+            oracle.sanitize_clamp_denominator as u64,
             now,
         );
 

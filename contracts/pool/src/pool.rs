@@ -24,10 +24,10 @@ use utils::constant::TWENTY_FOUR_HOUR;
 use utils::constant::{FEE_MULTIPLIER, PRICE_PRECISION};
 use utils::math::safe_math::SafeMath;
 use utils::math::stats::calculate_rolling_sum;
-use utils::state::oracle_registry::HistoricalOracleData;
-use utils::state::oracle_registry::NormalAction;
-use utils::state::oracle_registry::OracleGuardRails;
-use utils::state::oracle_registry::OracleValidity;
+use normal_rust_types::HistoricalOracleData;
+use normal_rust_types::NormalAction;
+use normal_rust_types::OracleGuardRails;
+use normal_rust_types::OracleValidity;
 
 // Calculates the net liquidity imbalance between base and quote assets in the pool.
 //

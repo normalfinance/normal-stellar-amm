@@ -13,7 +13,7 @@ use crate::storage::{
 };
 use access_control::emergency::get_emergency_mode;
 use soroban_sdk::{panic_with_error, BytesN, Env};
-use utils::errors::storage_errors::StorageError;
+use normal_rust_types::StorageError;
 
 pub fn commit_upgrade(e: &Env, new_wasm_hash: &BytesN<32>) {
     if get_upgrade_deadline(e) != 0 {

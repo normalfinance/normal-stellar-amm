@@ -1,8 +1,10 @@
 use soroban_sdk::{contracttype, panic_with_error, Address, Env, Map, Vec};
 use utils::{
     bump::{bump_instance, bump_persistent},
-    errors::storage_errors::StorageError,
 };
+
+use normal_rust_types::{errors::storage_error::StorageError, types::{PoolIncentiveConfig, PoolIncentiveData, UserIncentiveData}};
+
 
 #[derive(Clone)]
 #[contracttype]

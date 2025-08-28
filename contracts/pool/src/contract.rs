@@ -55,14 +55,11 @@ use utils::constant::{
     MAX_POOL_FEE, MIN_LIQUIDITY,
 };
 use utils::math::safe_math::SafeMath;
-use utils::state::oracle_registry::NormalAction;
-use utils::state::pool::{InsuranceClaim, SwapDirection};
-use utils::state::{
-    pool::{
-        InitializeAllParams, InitializeParams, Pool as PoolType, PoolInfo, PoolResponse,
-        PoolStatus, PoolTier,
-    },
-    token::AddressAndAmount,
+use normal_rust_types::NormalAction;
+use normal_rust_types::{InsuranceClaim, SwapDirection};
+use normal_rust_types::{
+    InitializeAllParams, InitializeParams, Pool as PoolType, PoolInfo, PoolResponse,
+    PoolStatus, PoolTier, AddressAndAmount,
 };
 use utils::token::transfer_token;
 use utils::validate;
@@ -212,8 +209,8 @@ impl PoolTrait for Pool {
                 last_revenue_withdraw_ts: 0,
             },
             liquidity_max_imbalance: 0,
-            // expiry_ts: 0,
-            // expiry_price: 0,
+            expiry_ts: 0,
+            expiry_price: 0,
         };
         set_pool(&e, &pool);
 

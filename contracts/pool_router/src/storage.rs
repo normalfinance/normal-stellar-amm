@@ -4,7 +4,7 @@ use soroban_sdk::{
     contracterror, contracttype, panic_with_error, Address, BytesN, Env, Map, Symbol, Vec, U256,
 };
 use utils::bump::{bump_instance, bump_persistent, bump_temporary};
-use utils::errors::storage_errors::StorageError;
+use normal_rust_types::StorageError;
 use utils::{
     generate_instance_storage_getter, generate_instance_storage_getter_and_setter,
     generate_instance_storage_getter_and_setter_with_default,
