@@ -9,8 +9,8 @@ use crate::interface::{
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
 use crate::pool::{
-    get_amount_out_strict_receive, get_delta_a, get_net_liquidity_imbalance, get_oracle_price,
-    peg_price, rebalance, update_volume_30d, validate_oracle_price_with_pool,
+    get_amount_out, get_amount_out_strict_receive, get_delta_a, get_net_liquidity_imbalance,
+    get_oracle_price, rebalance, update_volume_30d, validate_oracle_price_with_pool,
 };
 use crate::storage::{
     get_insurance_fund_from_router, get_is_killed_claim, get_is_killed_deposit, get_is_killed_swap,
@@ -484,7 +484,7 @@ impl PoolTrait for Pool {
             panic_with_error!(&e, PoolValidationError::EmptyPool);
         }
 
-        let (out, fee) = pool.get_amount_out(&e, in_amount, reserve_sell, reserve_buy);
+        let out = get_amount_out(in_amount, reserve_sell, reserve_buy);
 
         if out < out_min {
             panic_with_error!(&e, PoolValidationError::OutMinNotSatisfied);
@@ -597,9 +597,7 @@ impl PoolTrait for Pool {
         let reserve_buy = reserves.get(out_idx).unwrap();
 
         let pool = get_pool(&e);
-        let out = pool
-            .get_amount_out(&e, in_amount, reserve_sell, reserve_buy)
-            .0;
+        let out = get_amount_out(in_amount, reserve_sell, reserve_buy);
 
         let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, NormalAction::Swap);
         let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, NormalAction::Swap);
@@ -683,13 +681,7 @@ impl PoolTrait for Pool {
             panic_with_error!(&e, PoolValidationError::EmptyPool);
         }
 
-        let (in_amount, fee) = get_amount_out_strict_receive(
-            &e,
-            out_amount,
-            reserve_sell,
-            reserve_buy,
-            pool.fee_fraction,
-        );
+        let in_amount = get_amount_out_strict_receive(out_amount, reserve_sell, reserve_buy);
 
         if in_amount > in_max {
             panic_with_error!(&e, PoolValidationError::InMaxNotSatisfied);
@@ -814,14 +806,7 @@ impl PoolTrait for Pool {
         let reserve_buy = reserves.get(out_idx).unwrap();
 
         let pool = get_pool(&e);
-        let out = get_amount_out_strict_receive(
-            &e,
-            out_amount,
-            reserve_sell,
-            reserve_buy,
-            pool.fee_fraction,
-        )
-        .0;
+        let out = get_amount_out_strict_receive(out_amount, reserve_sell, reserve_buy);
 
         let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, NormalAction::Swap);
         let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, NormalAction::Swap);

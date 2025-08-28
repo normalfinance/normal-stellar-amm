@@ -18,10 +18,10 @@ use soroban_sdk::Symbol;
 use soroban_sdk::Vec;
 use soroban_sdk::{panic_with_error, Env};
 
+use utils::constant::PRICE_PRECISION;
 use utils::constant::PRICE_PRECISION_I64;
 use utils::constant::PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO_I128;
 use utils::constant::TWENTY_FOUR_HOUR;
-use utils::constant::{FEE_MULTIPLIER, PRICE_PRECISION};
 use utils::math::safe_math::SafeMath;
 use utils::math::stats::calculate_rolling_sum;
 use utils::state::oracle_registry::HistoricalOracleData;
@@ -377,49 +377,116 @@ pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128, red
     }
 }
 
-// Calculates the input amount required to receive a fixed output amount in a swap,
-// factoring in the trading fee.
-//
-// This is used in strict-receive swaps where the output is guaranteed and the input
-// is determined. If the total value with fee exceeds the reserve, the function panics.
-//
-// # Arguments
-// * `e` - Soroban environment reference.
-// * `out_amount` - Desired amount of output token to receive.
-// * `reserve_sell` - Reserve of the token being sold.
-// * `reserve_buy` - Reserve of the token being bought.
-// * `fee_fraction` - Trading fee as a fraction (e.g., 30 = 0.3%).
-//
-// # Returns
-// * `(u128, u128)` — Tuple:
-//   - Input amount required to receive `out_amount`
-//   - Fee charged as the difference between input and output value.
-//
-// # Panics
-// - If the fee-adjusted input exceeds available reserves.
+/// Calculates the output amount of tokens for a swap given input and pool reserves.
+///
+/// This function implements a constant product AMM–style formula with fees applied externally (using PoolSwapFee).
+/// The calculation follows:
+///
+/// ```text
+/// out = in * reserve_buy / (reserve_sell + in) - fee
+/// ```
+///
+/// The `fee` portion is not handled inside this function—it must be deducted by the caller
+/// after receiving the raw output value.
+///
+/// # Arguments
+///
+/// * `in_amount` – The amount of input tokens being sold into the pool.
+/// * `reserve_sell` – The current reserve of the token being sold (the pool’s supply of the input token).
+/// * `reserve_buy` – The current reserve of the token being bought (the pool’s supply of the output token).
+///
+/// # Returns
+///
+/// A u128 `amount_out`:
+/// * `amount_out` – The number of output tokens the user would receive before fee deduction.
+///
+/// Returns `0` if `in_amount == 0`.
+///
+/// # Examples
+///
+/// ```rust
+/// // Example reserves
+/// let reserve_sell: u128 = 1_000_000;
+/// let reserve_buy: u128 = 500_000;
+/// let in_amount: u128 = 10_000;
+///
+/// // Calculate output before fee
+/// let out = contract.get_amount_out(in_amount, reserve_sell, reserve_buy);
+///
+/// assert!(out > 0);
+/// ```
+pub fn get_amount_out(in_amount: u128, reserve_sell: u128, reserve_buy: u128) -> u128 {
+    if in_amount == 0 {
+        return 0;
+    }
+
+    // +1 just in case there were some rounding errors & convert to real units in place
+    let result = in_amount
+        .fixed_mul_floor(reserve_buy, reserve_sell.saturating_add(in_amount))
+        .unwrap()
+        + 1;
+
+    result
+}
+
+/// Calculates the required input amount for a **strict receive** swap given
+/// a desired output amount and current pool reserves.
+///
+/// This function computes how much of the *sell token* must be provided in
+/// order to guarantee receiving exactly `out_amount` of the *buy token*,
+/// assuming a constant product AMM invariant.  
+///
+/// The calculation uses a floor division (`fixed_mul_floor`) and then adds
+/// `+1` to the result to guard against rounding errors, ensuring the pool
+/// always receives enough input tokens to cover the desired output.
+///
+/// # Arguments
+///
+/// * `out_amount` – The amount of output tokens the trader wishes to receive.  
+/// * `reserve_sell` – The current reserve of the token being sold
+///   (the pool’s input-side liquidity).  
+/// * `reserve_buy` – The current reserve of the token being bought
+///   (the pool’s output-side liquidity).  
+///
+/// # Returns
+///
+/// * `u128` – The minimum required input amount of the sell token
+///   needed to guarantee the `out_amount` is fulfilled.  
+///   Returns `0` if `out_amount == 0`.  
+///
+/// # Notes
+///
+/// * The extra `+1` ensures rounding errors never result in underpayment.  
+/// * The function does **not** apply protocol or trading fees — callers
+///   must account for those separately if required.  
+///
+/// # Examples
+///
+/// ```rust
+/// let reserve_sell: u128 = 1_000_000;
+/// let reserve_buy: u128 = 500_000;
+/// let desired_out: u128 = 10_000;
+///
+/// // Compute required input for a strict receive
+/// let required_in = contract::get_amount_out_strict_receive(desired_out, reserve_sell, reserve_buy);
+///
+/// assert!(required_in > 0);
+/// ```
 pub fn get_amount_out_strict_receive(
-    e: &Env,
     out_amount: u128,
     reserve_sell: u128,
     reserve_buy: u128,
-    fee_fraction: u32,
-) -> (u128, u128) {
+) -> u128 {
     if out_amount == 0 {
-        return (0, 0);
+        return 0;
     }
 
-    let dy_w_fee = out_amount
-        .fixed_mul_ceil(FEE_MULTIPLIER, (FEE_MULTIPLIER - (fee_fraction as u128)))
-        .unwrap();
-    // if total value including fee is more than the reserve, math can't be done properly
-    if dy_w_fee >= reserve_buy {
-        panic_with_error!(e, PoolValidationError::InsufficientBalance);
-    }
     // +1 just in case there were some rounding errors & convert to real units in place
     let result = reserve_buy
-        .fixed_mul_floor(reserve_sell, (reserve_buy - dy_w_fee))
+        .fixed_mul_floor(reserve_sell, reserve_buy)
         .unwrap()
         - reserve_sell
         + 1;
-    (result, dy_w_fee - out_amount)
+
+    result
 }

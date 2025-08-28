@@ -61,23 +61,6 @@ impl Pool {
             PoolTier::Isolated => 10_u64,
         }
     }
-
-    pub fn get_amount_out(
-        &self,
-        e: &Env,
-        in_amount: u128,
-        reserve_sell: u128,
-        reserve_buy: u128,
-    ) -> (u128, u128) {
-        if in_amount == 0 {
-            return (0, 0);
-        }
-
-        // in * reserve_buy / (reserve_sell + in) - fee
-        let result = in_amount.fixed_mul_floor(&e, &reserve_buy, &(reserve_sell + in_amount));
-        let fee = result.fixed_mul_ceil(&e, &(self.fee_fraction as u128), &FEE_MULTIPLIER);
-        (result - fee, fee)
-    }
 }
 
 #[contracttype]
