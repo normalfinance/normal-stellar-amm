@@ -1,13 +1,8 @@
 use soroban_fixed_point_math::SorobanFixedPoint;
-use soroban_sdk::contracttype;
-use soroban_sdk::Address;
-use soroban_sdk::Env;
-use soroban_sdk::Symbol;
+use soroban_sdk::{contracttype, Address, Env, Symbol};
+use normal_rust_types::{Pool, PoolStatus, PoolTier};
 
 use crate::constant::FEE_MULTIPLIER;
-use crate::state::access::PrivilegedAddresses;
-use crate::state::token::AddressAndAmount;
-use crate::state::token::TokenInitInfo;
 
 impl Pool {
     pub fn is_in_settlement(&self, now: u64) -> bool {

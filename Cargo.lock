@@ -806,6 +806,8 @@ dependencies = [
 [[package]]
 name = "normal-rust-types"
 version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f702751daaff172d2deba31985df61026ef8e470fca6b5e4a64232b6cef71ac0"
 dependencies = [
  "soroban-fixed-point-math",
  "soroban-sdk",
