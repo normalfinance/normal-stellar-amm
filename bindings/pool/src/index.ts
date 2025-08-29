@@ -370,7 +370,7 @@ export interface Client {
      * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
      */
     simulate?: boolean;
-  }) => Promise<AssembledTransaction<readonly [u128, u128]>>
+  }) => Promise<AssembledTransaction<readonly [u128, u128, i128]>>
 
   /**
    * Construct and simulate a swap transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -390,7 +390,7 @@ export interface Client {
      * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
      */
     simulate?: boolean;
-  }) => Promise<AssembledTransaction<u128>>
+  }) => Promise<AssembledTransaction<readonly [u128, i128, i128]>>
 
   /**
    * Construct and simulate a estimate_swap transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -430,7 +430,7 @@ export interface Client {
      * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
      */
     simulate?: boolean;
-  }) => Promise<AssembledTransaction<u128>>
+  }) => Promise<AssembledTransaction<readonly [u128, i128, i128]>>
 
   /**
    * Construct and simulate a estimate_swap_strict_receive transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -470,7 +470,7 @@ export interface Client {
      * Whether to automatically simulate the transaction when constructing the AssembledTransaction. Default: true
      */
     simulate?: boolean;
-  }) => Promise<AssembledTransaction<u128>>
+  }) => Promise<AssembledTransaction<readonly [u128, i128]>>
 
   /**
    * Construct and simulate a share_id transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -1672,12 +1672,12 @@ export class Client extends ContractClient {
     super(
       new ContractSpec([ "AAAAAAAAAAAAAAAOaW5pdGlhbGl6ZV9hbGwAAAAAAAEAAAAAAAAABnBhcmFtcwAAAAAH0AAAABNJbml0aWFsaXplQWxsUGFyYW1zAAAAAAA=",
         "AAAAAAAAAAAAAAAKaW5pdGlhbGl6ZQAAAAAAAQAAAAAAAAAGcGFyYW1zAAAAAAfQAAAAEEluaXRpYWxpemVQYXJhbXMAAAAA",
-        "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",
+        "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",
-        "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",
+        "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",
-        "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",
+        "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",
@@ -1778,12 +1778,12 @@ export class Client extends ContractClient {
   public readonly fromJSON = {
     initialize_all: this.txFromJSON<null>,
         initialize: this.txFromJSON<null>,
-        deposit: this.txFromJSON<readonly [u128, u128]>,
-        swap: this.txFromJSON<u128>,
+        deposit: this.txFromJSON<readonly [u128, u128, i128]>,
+        swap: this.txFromJSON<readonly [u128, i128, i128]>,
         estimate_swap: this.txFromJSON<readonly [u128, i128]>,
-        swap_strict_receive: this.txFromJSON<u128>,
+        swap_strict_receive: this.txFromJSON<readonly [u128, i128, i128]>,
         estimate_swap_strict_receive: this.txFromJSON<readonly [u128, i128]>,
-        withdraw: this.txFromJSON<u128>,
+        withdraw: this.txFromJSON<readonly [u128, i128]>,
         share_id: this.txFromJSON<string>,
         get_total_shares: this.txFromJSON<u128>,
         get_tokens: this.txFromJSON<Array<string>>,

@@ -1,5 +1,3 @@
-pub(crate) const FEE_MULTIPLIER: u128 = 10_000;
-
 // `PRECISION` is a constant that is used to maintain the precision of calculations.
 // It's a factor by which values are multiplied or divided to maintain precision during arithmetic operations.
 // This is particularly useful when dealing with fractional values in integer calculations,
