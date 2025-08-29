@@ -906,7 +906,7 @@ export interface Client {
   /**
    * Construct and simulate a add_token_whitelist transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    */
-  add_token_whitelist: ({admin, token}: {admin: string, token: WhitelistToken}, options?: {
+  add_token_whitelist: ({admin, token, symbol}: {admin: string, token: string, symbol: string}, options?: {
     /**
      * The fee to pay for the transaction. Default: BASE_FEE
      */
@@ -1391,7 +1391,7 @@ export class Client extends ContractClient {
         "AAAAAAAAAAAAAAAUc2V0X3Vuc3Rha2luZ19wZXJpb2QAAAACAAAAAAAAAAVhZG1pbgAAAAAAABMAAAAAAAAAEHVuc3Rha2luZ19wZXJpb2QAAAAGAAAAAA==",
         "AAAAAAAAAAAAAAAPc2V0X3JhdGVfY29uZmlnAAAAAAUAAAAAAAAABWFkbWluAAAAAAAAEwAAAAAAAAATb3B0aW1hbF91dGlsaXphdGlvbgAAAAAEAAAAAAAAAAliYXNlX3JhdGUAAAAAAAAFAAAAAAAAAAxyYXRlX3Nsb3BlX2EAAAAEAAAAAAAAAAxyYXRlX3Nsb3BlX2IAAAAEAAAAAA==",
         "AAAAAAAAAAAAAAAVc2V0X29wdGltYWxfaW5zdXJhbmNlAAAAAAAAAgAAAAAAAAAFYWRtaW4AAAAAAAATAAAAAAAAABFvcHRpbWFsX2luc3VyYW5jZQAAAAAAAAoAAAAA",
-        "AAAAAAAAAAAAAAATYWRkX3Rva2VuX3doaXRlbGlzdAAAAAACAAAAAAAAAAVhZG1pbgAAAAAAABMAAAAAAAAABXRva2VuAAAAAAAH0AAAAA5XaGl0ZWxpc3RUb2tlbgAAAAAAAA==",
+        "AAAAAAAAAAAAAAATYWRkX3Rva2VuX3doaXRlbGlzdAAAAAADAAAAAAAAAAVhZG1pbgAAAAAAABMAAAAAAAAABXRva2VuAAAAAAAAEwAAAAAAAAAGc3ltYm9sAAAAAAARAAAAAA==",
         "AAAAAAAAAAAAAAAac2V0X3Rva2VuX3doaXRlbGlzdF9zdGF0dXMAAAAAAAMAAAAAAAAABWFkbWluAAAAAAAAEwAAAAAAAAAFdG9rZW4AAAAAAAATAAAAAAAAAAZzdGF0dXMAAAAAAAEAAAAA",
         "AAAAAAAAAAAAAAAWcmVtb3ZlX3doaXRlbGlzdF90b2tlbgAAAAAAAgAAAAAAAAAFYWRtaW4AAAAAAAATAAAAAAAAAAV0b2tlbgAAAAAAABMAAAAA",
         "AAAAAAAAAAAAAAAMa2lsbF9kZXBvc2l0AAAAAQAAAAAAAAAFYWRtaW4AAAAAAAATAAAAAA==",
