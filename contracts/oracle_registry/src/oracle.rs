@@ -66,7 +66,7 @@ pub fn update_twap(
     asset: &Symbol,
     historical_oracle_data: &HistoricalOracleData,
     oracle_price_data: &OraclePriceData,
-    sanitize_clamp_denominator: u64,
+    sanitize_clamp_denominator: i64,
     now: u64,
 ) {
     let capped_oracle_update_price = sanitize_new_price(

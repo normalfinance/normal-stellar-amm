@@ -93,7 +93,7 @@ impl OracleRegistryTrait for OracleRegistry {
                 &asset,
                 &historical_oracle_data,
                 &oracle_price_data,
-                oracle.sanitize_clamp_denominator as u64,
+                oracle.sanitize_clamp_denominator,
                 now,
             );
         }
@@ -251,7 +251,7 @@ impl AdminInterface for OracleRegistry {
         asset: Symbol,
         oracle_addr: Address,
         decimals: u32,
-        sanitize_clamp_denominator: u64,
+        sanitize_clamp_denominator: i64,
     ) -> OracleInfo {
         admin.require_auth();
         require_admin(&e, &admin);
@@ -260,7 +260,7 @@ impl AdminInterface for OracleRegistry {
 
         validate_positive_denominator(
             &e,
-            sanitize_clamp_denominator,
+            sanitize_clamp_denominator.abs() as u64,
             OracleRegistryError::InvalidClampDenominator,
         );
 
@@ -292,7 +292,7 @@ impl AdminInterface for OracleRegistry {
             address: oracle_addr,
             decimals,
             frozen: false,
-            sanitize_clamp_denominator: sanitize_clamp_denominator as i64,
+            sanitize_clamp_denominator: sanitize_clamp_denominator,
             last_updated: now,
         };
         put_oracle(&e, &asset, &oracle);
@@ -364,7 +364,7 @@ impl AdminInterface for OracleRegistry {
             if let Some(sanitize_clamp_denominator) = params.sanitize_clamp_denominator {
                 validate_positive_denominator(
                     &e,
-                    sanitize_clamp_denominator as u64,
+                    sanitize_clamp_denominator.abs() as u64,
                     OracleRegistryError::InvalidClampDenominator,
                 );
             }
@@ -485,7 +485,7 @@ impl AdminInterface for OracleRegistry {
                 price: price,
                 delay: 0x64,
             }),
-            oracle.sanitize_clamp_denominator as u64,
+            oracle.sanitize_clamp_denominator,
             now,
         );
 

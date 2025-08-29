@@ -50,7 +50,7 @@ pub trait AdminInterface {
         asset: Symbol,
         oracle_addr: Address,
         decimals: u32,
-        sanitize_clamp_denominator: u64,
+        sanitize_clamp_denominator: i64,
     ) -> OracleInfo;
 
     // Update oracle info
