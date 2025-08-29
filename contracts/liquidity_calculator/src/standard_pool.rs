@@ -1,6 +1,6 @@
-use crate::constants::FEE_MULTIPLIER;
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{Env, Vec};
+use utils::constant::FEE_MULTIPLIER;
 
 // Derivation of the closed-form result for the integral:
 //

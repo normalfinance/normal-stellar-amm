@@ -9,8 +9,8 @@ use crate::interface::{
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
 use crate::pool::{
-    get_amount_out_strict_receive, get_delta_a, get_net_liquidity_imbalance, get_oracle_price,
-    peg_price, rebalance, update_volume_30d, validate_oracle_price_with_pool,
+    get_amount_out, get_amount_out_strict_receive, get_delta_a, get_net_liquidity_imbalance,
+    get_oracle_price, rebalance, update_volume_30d, validate_oracle_price_with_pool,
 };
 use crate::storage::{
     get_insurance_fund_from_router, get_is_killed_claim, get_is_killed_deposit, get_is_killed_swap,
@@ -300,7 +300,7 @@ impl PoolTrait for Pool {
     // - Transfers Token B to the pool.
     // - Mints LP tokens to the user.
     // - Updates reserves, oracle-based pricing, reward checkpoints, and emits an event.
-    fn deposit(e: Env, user: Address, token_b_amount: u128) -> (u128, u128) {
+    fn deposit(e: Env, user: Address, token_b_amount: u128) -> (u128, u128, i128) {
         user.require_auth();
 
         ensure_non_zero_u128(&e, token_b_amount);
@@ -425,16 +425,20 @@ impl PoolTrait for Pool {
         // update plane data for every pool update
         update_plane(&e);
 
+        // Finds how many synthetic tokens were minted/burned by finding the difference between reserve_a
+        let delta_a: i128 = (reserve_a_after_rebalance as i128).saturating_sub(reserve_a as i128);
+
         LiquidityPoolEvents::new(&e).deposit_liquidity(
             pool.token_b,
             user,
             token_b_amount,
             shares_to_mint,
+            delta_a,
         );
 
         exit(&e);
 
-        (token_b_amount, shares_to_mint)
+        (token_b_amount, shares_to_mint, delta_a)
     }
 
     // Swaps tokens in the pool by transferring an input token from the user and returning an output token,
@@ -474,7 +478,7 @@ impl PoolTrait for Pool {
         direction: SwapDirection,
         in_amount: u128,
         out_min: u128,
-    ) -> u128 {
+    ) -> (u128, i128, i128) {
         user.require_auth();
 
         enter(&e);
@@ -502,6 +506,8 @@ impl PoolTrait for Pool {
             action,
         );
 
+        let reserve_a_before_prior_rebalance = get_reserve_a(&e) as i128;
+
         rebalance(
             &e,
             base_oracle_price_data.last_oracle_price_twap,
@@ -512,6 +518,9 @@ impl PoolTrait for Pool {
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
         let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
+
+        let delta_a_prior = reserve_a_before_prior_rebalance.saturating_sub(reserve_a as i128);
+
         let tokens = Self::get_tokens(e.clone());
 
         let (in_idx, out_idx) = if direction == SwapDirection::Buy {
@@ -526,7 +535,7 @@ impl PoolTrait for Pool {
             panic_with_error!(&e, PoolValidationError::EmptyPool);
         }
 
-        let (out, fee) = pool.get_amount_out(&e, in_amount, reserve_sell, reserve_buy);
+        let out = get_amount_out(in_amount, reserve_sell, reserve_buy);
 
         if out < out_min {
             panic_with_error!(&e, PoolValidationError::OutMinNotSatisfied);
@@ -595,6 +604,9 @@ impl PoolTrait for Pool {
             pool.is_reduce_only(),
         );
 
+        let reserve_a_final = get_reserve_a(&e) as i128;
+        let delta_a_post = reserve_a_final.saturating_sub(reserve_a as i128);
+
         // update plane data for every pool update
         update_plane(&e);
 
@@ -604,12 +616,13 @@ impl PoolTrait for Pool {
             tokens.get(out_idx).unwrap(),
             in_amount,
             out,
-            fee,
+            delta_a_prior,
+            delta_a_post,
         );
 
         exit(&e);
 
-        out
+        (out, delta_a_prior, delta_a_post)
     }
 
     // Estimates the result of a swap operation.
@@ -639,9 +652,7 @@ impl PoolTrait for Pool {
         let reserve_buy = reserves.get(out_idx).unwrap();
 
         let pool = get_pool(&e);
-        let out = pool
-            .get_amount_out(&e, in_amount, reserve_sell, reserve_buy)
-            .0;
+        let out = get_amount_out(in_amount, reserve_sell, reserve_buy);
 
         let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, NormalAction::Swap);
         let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, NormalAction::Swap);
@@ -675,7 +686,7 @@ impl PoolTrait for Pool {
         direction: SwapDirection,
         out_amount: u128,
         in_max: u128,
-    ) -> u128 {
+    ) -> (u128, i128, i128) {
         user.require_auth();
 
         ensure_non_zero_u128(&e, out_amount);
@@ -701,6 +712,8 @@ impl PoolTrait for Pool {
             action,
         );
 
+        let reserve_a_before_prior_rebalance = get_reserve_a(&e) as i128;
+
         rebalance(
             &e,
             base_oracle_price_data.last_oracle_price_twap,
@@ -717,6 +730,9 @@ impl PoolTrait for Pool {
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
         let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
+
+        let delta_a_prior = reserve_a_before_prior_rebalance.saturating_sub(reserve_a as i128);
+
         let tokens = Self::get_tokens(e.clone());
 
         let reserve_sell = reserves.get(in_idx).unwrap();
@@ -725,13 +741,7 @@ impl PoolTrait for Pool {
             panic_with_error!(&e, PoolValidationError::EmptyPool);
         }
 
-        let (in_amount, fee) = get_amount_out_strict_receive(
-            &e,
-            out_amount,
-            reserve_sell,
-            reserve_buy,
-            pool.fee_fraction,
-        );
+        let in_amount = get_amount_out_strict_receive(out_amount, reserve_sell, reserve_buy);
 
         if in_amount > in_max {
             panic_with_error!(&e, PoolValidationError::InMaxNotSatisfied);
@@ -801,15 +811,6 @@ impl PoolTrait for Pool {
             transfer_b(&e, &user, out_b);
         }
 
-        LiquidityPoolEvents::new(&e).swap(
-            user.clone(),
-            sell_token,
-            tokens.get(out_idx).unwrap(),
-            in_amount,
-            out_amount,
-            fee,
-        );
-
         // Rebalance the pool
         rebalance(
             &e,
@@ -818,12 +819,25 @@ impl PoolTrait for Pool {
             pool.is_reduce_only(),
         );
 
+        let reserve_a_final = get_reserve_a(&e) as i128;
+        let delta_a_post = reserve_a_final.saturating_sub(reserve_a as i128);
+
         // update plane data for every pool update
         update_plane(&e);
 
+        LiquidityPoolEvents::new(&e).swap(
+            user.clone(),
+            sell_token,
+            tokens.get(out_idx).unwrap(),
+            in_amount,
+            out_amount,
+            delta_a_prior,
+            delta_a_post,
+        );
+
         exit(&e);
 
-        in_amount
+        (in_amount, delta_a_prior, delta_a_post)
     }
 
     // Estimates the result of a swap_strict_receive operation.
@@ -856,14 +870,7 @@ impl PoolTrait for Pool {
         let reserve_buy = reserves.get(out_idx).unwrap();
 
         let pool = get_pool(&e);
-        let out = get_amount_out_strict_receive(
-            &e,
-            out_amount,
-            reserve_sell,
-            reserve_buy,
-            pool.fee_fraction,
-        )
-        .0;
+        let out = get_amount_out_strict_receive(out_amount, reserve_sell, reserve_buy);
 
         let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, NormalAction::Swap);
         let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, NormalAction::Swap);
@@ -908,7 +915,7 @@ impl PoolTrait for Pool {
     // - Rebalances the pool using oracle data.
     // - Updates incentive tracking and on-chain accounting.
     // - Emits a liquidity withdrawal event.
-    fn withdraw(e: Env, user: Address, share_amount: u128) -> u128 {
+    fn withdraw(e: Env, user: Address, share_amount: u128) -> (u128, i128) {
         user.require_auth();
 
         ensure_non_zero_u128(&e, share_amount);
@@ -931,7 +938,7 @@ impl PoolTrait for Pool {
 
         burn_lp_tokens(&e, &user, share_amount);
 
-        let (_, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
+        let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
 
         if total_shares - share_amount < MIN_LIQUIDITY {
             panic_with_error!(e, PoolError::WithdrawExceedsMinLiquidity);
@@ -968,6 +975,8 @@ impl PoolTrait for Pool {
             pool.is_reduce_only(),
         );
 
+        let reserve_a_after_rebalance = get_reserve_a(&e);
+
         // Checkpoint resulting working balance
         incentives.manager().update_working_balance(
             &user,
@@ -978,16 +987,20 @@ impl PoolTrait for Pool {
         // update plane data for every pool update
         update_plane(&e);
 
+        // Finds how many synthetic tokens were minted/burned by finding the difference between reserve_a
+        let delta_a: i128 = (reserve_a_after_rebalance as i128).saturating_sub(reserve_a as i128);
+
         LiquidityPoolEvents::new(&e).withdraw_liquidity(
             pool.token_b,
             user,
             share_amount,
             share_amount,
+            delta_a,
         );
 
         exit(&e);
 
-        share_amount
+        (share_amount, delta_a)
     }
 
     //   _______    _______  ___________  ___________  _______   _______    ________

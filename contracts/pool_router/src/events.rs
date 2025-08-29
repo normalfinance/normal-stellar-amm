@@ -24,6 +24,7 @@ pub(crate) trait PoolRouterEvents {
         user: Address,
         amount: u128,
         share_amount: u128,
+        delta_a: i128,
     );
 
     fn swap(
@@ -34,6 +35,8 @@ pub(crate) trait PoolRouterEvents {
         direction: SwapDirection,
         in_amount: u128,
         out_amount: u128,
+        delta_a_pre: i128,
+        delta_a_post: i128,
     );
 
     fn withdraw_liquidity(
@@ -43,6 +46,7 @@ pub(crate) trait PoolRouterEvents {
         user: Address,
         share_amount: u128,
         amount: u128,
+        delta_a: i128,
     );
 
     fn add_pool(&self, asset: Symbol, token_b: Address, pool: Address, init_args: Vec<Val>);
@@ -71,6 +75,7 @@ impl PoolRouterEvents for Events {
         user: Address,
         amount: u128,
         share_amount: u128,
+        delta_a: i128,
     ) {
         self.env().events().publish(
             (
@@ -79,7 +84,7 @@ impl PoolRouterEvents for Events {
                 pool,
                 user,
             ),
-            (amount, share_amount),
+            (amount, share_amount, delta_a),
         );
     }
 
@@ -91,10 +96,12 @@ impl PoolRouterEvents for Events {
         direction: SwapDirection,
         in_amount: u128,
         out_amount: u128,
+        delta_a_pre: i128,
+        delta_a_post: i128,
     ) {
         self.env().events().publish(
             (Symbol::new(self.env(), "swap"), asset, pool, user),
-            (direction, in_amount, out_amount),
+            (direction, in_amount, out_amount, delta_a_pre, delta_a_post),
         );
     }
 
@@ -105,6 +112,7 @@ impl PoolRouterEvents for Events {
         user: Address,
         share_amount: u128,
         amount: u128,
+        delta_a: i128,
     ) {
         self.env().events().publish(
             (
@@ -113,7 +121,7 @@ impl PoolRouterEvents for Events {
                 pool,
                 user,
             ),
-            (share_amount, amount),
+            (share_amount, amount, delta_a),
         );
     }
 
@@ -127,13 +135,13 @@ impl PoolRouterEvents for Events {
     fn delist_pool(&self, asset: Symbol, pool: Address) {
         self.env()
             .events()
-            .publish((Symbol::new(self.env(), "delist_pool"), asset), (pool));
+            .publish((Symbol::new(self.env(), "delist_pool"), asset), pool);
     }
 
     fn remove_pool(&self, asset: Symbol, pool: Address) {
         self.env()
             .events()
-            .publish((Symbol::new(self.env(), "remove_pool"), asset), (pool));
+            .publish((Symbol::new(self.env(), "remove_pool"), asset), pool);
     }
 
     fn config_rewards(&self, asset: Symbol, pool: Address, pool_tps: u128, expired_at: u64) {

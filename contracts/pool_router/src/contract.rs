@@ -90,12 +90,12 @@ impl PoolInterfaceTrait for PoolRouter {
 
         let pool = get_pool(&e, &asset);
 
-        let (amount, share_amount): (u128, u128) = e.invoke_contract(
+        let (amount, share_amount, delta_a): (u128, u128, i128) = e.invoke_contract(
             &pool,
             &symbol_short!("deposit"),
             Vec::from_array(&e, [user.clone().into_val(&e), token_b_amount.into_val(&e)]),
         );
-        Events::new(&e).deposit_liquidity(asset, pool, user, amount, share_amount);
+        Events::new(&e).deposit_liquidity(asset, pool, user, amount, share_amount, delta_a);
 
         exit(&e);
 
@@ -145,10 +145,10 @@ impl PoolInterfaceTrait for PoolRouter {
 
         enter(&e);
 
-        let pool = get_pool(&e, &asset);
+        let pool_address = get_pool(&e, &asset);
 
-        let out_amount = e.invoke_contract(
-            &pool,
+        let (out_amount, delta_a_pre, delta_a_post): (u128, i128, i128) = e.invoke_contract(
+            &pool_address,
             &symbol_short!("swap"),
             Vec::from_array(
                 &e,
@@ -161,7 +161,16 @@ impl PoolInterfaceTrait for PoolRouter {
             ),
         );
 
-        Events::new(&e).swap(asset, pool, user, direction, in_amount, out_amount);
+        Events::new(&e).swap(
+            asset,
+            pool_address,
+            user,
+            direction,
+            in_amount,
+            out_amount,
+            delta_a_pre,
+            delta_a_post,
+        );
 
         exit(&e);
 
@@ -199,10 +208,10 @@ impl PoolInterfaceTrait for PoolRouter {
     ) -> (u128, i128) {
         ensure_non_zero_u128(&e, in_amount);
 
-        let pool_id = get_pool(&e, &asset);
+        let pool_address = get_pool(&e, &asset);
 
         e.invoke_contract(
-            &pool_id,
+            &pool_address,
             &Symbol::new(&e, "estimate_swap"),
             Vec::from_array(&e, [direction.into_val(&e), in_amount.into_val(&e)]),
         )
@@ -235,15 +244,22 @@ impl PoolInterfaceTrait for PoolRouter {
 
         enter(&e);
 
-        let pool = get_pool(&e, &asset);
+        let pool_address = get_pool(&e, &asset);
 
-        let amount: u128 = e.invoke_contract(
-            &pool,
+        let (amount, delta_a): (u128, i128) = e.invoke_contract(
+            &pool_address,
             &symbol_short!("withdraw"),
             Vec::from_array(&e, [user.clone().into_val(&e), share_amount.into_val(&e)]),
         );
 
-        Events::new(&e).withdraw_liquidity(asset, pool, user, share_amount, amount);
+        Events::new(&e).withdraw_liquidity(
+            asset,
+            pool_address,
+            user,
+            share_amount,
+            amount,
+            delta_a,
+        );
 
         exit(&e);
 
