@@ -43,6 +43,9 @@ use soroban_sdk::{
     contract, contractimpl, contractmeta, panic_with_error, symbol_short, Address, BytesN, Env,
     IntoVal, Map, String, Symbol, Vec, U256,
 };
+
+
+
 // LP Token interface for the calls we need
 pub trait LpTokenInterface {
     fn initialize(&self, admin: Address, decimal: u32, name: String, symbol: String);
@@ -106,6 +109,7 @@ use normal_rust_types::{
     InitializeAllParams, InitializeParams, Pool as PoolType, PoolInfo, PoolResponse,
     PoolStatus, PoolTier, AddressAndAmount,
 };
+use utils::state::PoolExt;
 use utils::token::transfer_token;
 use utils::validate;
 use utils::validation::ensure_non_zero_u128;

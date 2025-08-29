@@ -2,7 +2,8 @@ pub mod pool_plane {
     soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/pool_plane.wasm");
 }
 
-pub use crate::plane::pool_plane::Client as PoolPlaneClient;
+pub use pool_plane::Client as PoolPlaneClient;
+// pub use soroban_sdk::token::Client as PoolPlaneClient;
 
 use crate::storage::{get_plane, get_pool, get_reserve_a, get_reserve_b};
 use soroban_sdk::{Env, Vec};
