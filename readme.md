@@ -58,12 +58,12 @@ Normal is a synthetic asset protocol enabling investors to trade any crypto asse
 
 ## Deployment
 
-- Register a XLM oracle: `yarn oracle:register testnet XLM 14 1`
-- Register a BTC oracle: `yarn oracle:register testnet BTC 14 1`
-- Deploy a nBTC/XLM pool: `yarn pool:deploy testnet BTC nBTC 30 A 1_000_000_0000000`
-- Deposit liquidity to the pool: `yarn pool:deposit testnet BTC 10_0000000`
-- Withdraw liquidity to the pool: `yarn pool:withdraw testnet BTC 5_0000000`
-- Swap: `yarn pool:swap testnet BTC Buy 1_0000000 <out_min>`
+- Register a XLM oracle: `yarn oracle:register <identity> testnet XLM 14 1`
+- Register a BTC oracle: `yarn oracle:register <identity> testnet BTC 14 1`
+- Deploy a nBTC/XLM pool: `yarn pool:deploy <identity> testnet BTC nBTC 30 A 1_000_000_0000000`
+- Deposit liquidity to the pool: `yarn pool:deposit <identity> testnet BTC 10_0000000`
+- Withdraw liquidity to the pool: `yarn pool:withdraw <identity> testnet BTC 5_0000000`
+- Swap: `yarn pool:swap <identity> testnet BTC Buy 1_0000000 <out_min>`
 
 ## Getting Started
 
