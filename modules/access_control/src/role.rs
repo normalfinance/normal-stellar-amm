@@ -1,18 +1,14 @@
 use crate::errors::AccessControlError;
 use soroban_sdk::{panic_with_error, Env, Symbol};
+pub use normal_rust_types::Role;
 
-#[derive(Clone)]
-pub enum Role {
-    Admin,
-    EmergencyAdmin,
-    RewardsAdmin,
-    OperationsAdmin,
-    PauseAdmin,
-    EmergencyPauseAdmin,
+pub trait RoleExtensions {
+    fn has_many_users(&self) -> bool;
+    fn is_transfer_delayed(&self) -> bool;
 }
 
-impl Role {
-    pub(crate) fn has_many_users(&self) -> bool {
+impl RoleExtensions for Role {
+    fn has_many_users(&self) -> bool {
         match self {
             Role::Admin => false,
             Role::EmergencyAdmin => false,
@@ -23,7 +19,7 @@ impl Role {
         }
     }
 
-    pub(crate) fn is_transfer_delayed(&self) -> bool {
+    fn is_transfer_delayed(&self) -> bool {
         match self {
             Role::Admin => true,
             Role::EmergencyAdmin => true,
