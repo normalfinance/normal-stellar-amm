@@ -13,7 +13,6 @@ doctest = false
 soroban-sdk = { workspace = true }
 incentives = { workspace = true }
 token_lp = { workspace = true }
-token_synthetic = { workspace = true }
 access_control = { workspace = true }
 utils = { workspace = true }
 soroban-fixed-point-math = { workspace = true }

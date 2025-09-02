@@ -899,7 +899,6 @@ dependencies = [
  "soroban-fixed-point-math",
  "soroban-sdk",
  "token_lp",
- "token_synthetic",
  "upgrade",
  "utils",
 ]
@@ -1518,14 +1517,6 @@ dependencies = [
 
 [[package]]
 name = "token_lp"
-version = "1.0.0"
-dependencies = [
- "soroban-sdk",
- "utils",
-]
-
-[[package]]
-name = "token_synthetic"
 version = "1.0.0"
 dependencies = [
  "soroban-sdk",
