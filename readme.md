@@ -32,7 +32,6 @@ Normal is a synthetic asset protocol enabling investors to trade any crypto asse
 - **pool_router** - entry point and catalogue of liquidity pools which is capable to deploy new pools if necessary
 - **insurance_fund** - Additional backstop for liquidity deficits. Funded via liquidity provider staking deposits
 - **oracle_registry** - Oracle aggegation and price validation making it easier for pools to source reliable oracle prices
-- **pool_swap_fee** - A proxy for the `PoolRouter` that handles swap fee collection and distribution.
 - **pool_plane** - contract designed to store minimum information about any pool: type, parameters, reserves. being updated on every action with the pool (deposit, swap, withdraw, parameters update, etc)
 - **liquidity_calculator** - smart contract containing pools liquidity calculation logic which is capable to compare many pools at once
 - **lp_token** - [SEP-0041](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0041.md) compatible token smart contract designed for liquidity pool share management

@@ -930,22 +930,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pool-swap-fee"
-version = "1.0.0"
-dependencies = [
- "access_control",
- "incentives",
- "paste",
- "reentrancy_guard",
- "sep-40-oracle",
- "soroban-fixed-point-math",
- "soroban-sdk",
- "token_lp",
- "upgrade",
- "utils",
-]
-
-[[package]]
 name = "powerfmt"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
