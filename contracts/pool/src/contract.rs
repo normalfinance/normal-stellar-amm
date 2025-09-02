@@ -493,7 +493,12 @@ impl PoolTrait for Pool {
             panic_with_error!(&e, PoolValidationError::EmptyPool);
         }
 
-        let out = get_amount_out(in_amount, reserve_sell, reserve_buy);
+        let (out, _) = get_amount_out(
+            in_amount,
+            reserve_sell,
+            reserve_buy,
+            pool.fee_fraction as u128,
+        );
 
         if out < out_min {
             panic_with_error!(&e, PoolValidationError::OutMinNotSatisfied);
@@ -610,7 +615,12 @@ impl PoolTrait for Pool {
         let reserve_buy = reserves.get(out_idx).unwrap();
 
         let pool = get_pool(&e);
-        let out = get_amount_out(in_amount, reserve_sell, reserve_buy);
+        let (out, _) = get_amount_out(
+            in_amount,
+            reserve_sell,
+            reserve_buy,
+            pool.fee_fraction as u128,
+        );
 
         let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, NormalAction::Swap);
         let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, NormalAction::Swap);
@@ -699,7 +709,13 @@ impl PoolTrait for Pool {
             panic_with_error!(&e, PoolValidationError::EmptyPool);
         }
 
-        let in_amount = get_amount_out_strict_receive(out_amount, reserve_sell, reserve_buy);
+        let (in_amount, _) = get_amount_out_strict_receive(
+            &e,
+            out_amount,
+            reserve_sell,
+            reserve_buy,
+            pool.fee_fraction as u128,
+        );
 
         if in_amount > in_max {
             panic_with_error!(&e, PoolValidationError::InMaxNotSatisfied);
@@ -828,7 +844,13 @@ impl PoolTrait for Pool {
         let reserve_buy = reserves.get(out_idx).unwrap();
 
         let pool = get_pool(&e);
-        let out = get_amount_out_strict_receive(out_amount, reserve_sell, reserve_buy);
+        let (out, _) = get_amount_out_strict_receive(
+            &e,
+            out_amount,
+            reserve_sell,
+            reserve_buy,
+            pool.fee_fraction as u128,
+        );
 
         let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, NormalAction::Swap);
         let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, NormalAction::Swap);

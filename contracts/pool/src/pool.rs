@@ -1,6 +1,7 @@
 use core::cmp::max;
 
 use crate::errors::PoolError;
+use crate::errors::PoolValidationError;
 use crate::events::Events as LiquidityPoolEvents;
 use crate::events::PoolEvents;
 use crate::storage::get_last_trade_ts;
@@ -17,6 +18,7 @@ use soroban_sdk::Symbol;
 use soroban_sdk::Vec;
 use soroban_sdk::{panic_with_error, Env};
 
+use utils::constant::FEE_MULTIPLIER;
 use utils::constant::PRICE_PRECISION;
 use utils::constant::PRICE_PRECISION_I64;
 use utils::constant::PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO_I128;
@@ -414,19 +416,35 @@ pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128, red
 ///
 /// assert!(out > 0);
 /// ```
-pub fn get_amount_out(in_amount: u128, reserve_sell: u128, reserve_buy: u128) -> u128 {
+pub fn get_amount_out(
+    in_amount: u128,    // dx  – exact tokens the trader wants to sell
+    reserve_sell: u128, // x
+    reserve_buy: u128,  // y
+    fee_fraction: u128,
+) -> (u128, u128) {
     if in_amount == 0 {
-        return 0;
+        return (0, 0);
     }
 
-    // +1 just in case there were some rounding errors & convert to real units in place
-    let result = in_amount
-        .fixed_mul_floor(reserve_buy, reserve_sell.saturating_add(in_amount))
-        .unwrap()
-        + 1;
-
-    result
+    let in_after_fee = in_amount * (FEE_MULTIPLIER - fee_fraction) / FEE_MULTIPLIER;
+    let raw_out = in_after_fee
+        .fixed_mul_floor(reserve_buy, (reserve_sell + in_after_fee))
+        .unwrap();
+    (raw_out, in_amount - in_after_fee) // fee is taken on input
 }
+// pub fn get_amount_out(in_amount: u128, reserve_sell: u128, reserve_buy: u128) -> u128 {
+//     if in_amount == 0 {
+//         return 0;
+//     }
+
+//     // +1 just in case there were some rounding errors & convert to real units in place
+//     let result = in_amount
+//         .fixed_mul_floor(reserve_buy, reserve_sell.saturating_add(in_amount))
+//         .unwrap()
+//         + 1;
+
+//     result
+// }
 
 /// Calculates the required input amount for a **strict receive** swap given
 /// a desired output amount and current pool reserves.
@@ -472,20 +490,50 @@ pub fn get_amount_out(in_amount: u128, reserve_sell: u128, reserve_buy: u128) ->
 /// assert!(required_in > 0);
 /// ```
 pub fn get_amount_out_strict_receive(
-    out_amount: u128,
-    reserve_sell: u128,
-    reserve_buy: u128,
-) -> u128 {
+    e: &Env,
+    out_amount: u128,   // dy  – exact tokens the trader wants to receive
+    reserve_sell: u128, // x
+    reserve_buy: u128,  // y
+    fee_fraction: u128,
+) -> (u128, u128) {
     if out_amount == 0 {
-        return 0;
+        return (0, 0);
+    }
+    if out_amount >= reserve_buy {
+        panic_with_error!(e, PoolValidationError::InsufficientBalance);
     }
 
-    // +1 just in case there were some rounding errors & convert to real units in place
-    let result = reserve_buy
-        .fixed_mul_floor(reserve_sell, reserve_buy)
-        .unwrap()
-        - reserve_sell
-        + 1;
+    // ----------  Step 1: dx_after_fee = ceil(x·dy / (y-dy))  ----------
+    let dx_after_fee = reserve_sell
+        .fixed_mul_ceil(out_amount, (reserve_buy - out_amount))
+        .unwrap();
 
-    result
+    // ----------  Step 2: gross-up for fee on *input* side  -------------
+    // dx_before_fee = ceil( dx_after_fee / (1-f) )
+    let dx_before_fee = dx_after_fee
+        .fixed_mul_ceil(FEE_MULTIPLIER, (FEE_MULTIPLIER - fee_fraction))
+        .unwrap();
+
+    // ----------  Step 3: fee = dx_before_fee - dx_after_fee -----------
+    let fee = dx_before_fee - dx_after_fee;
+
+    (dx_before_fee, fee)
 }
+// pub fn get_amount_out_strict_receive(
+//     out_amount: u128,
+//     reserve_sell: u128,
+//     reserve_buy: u128,
+// ) -> u128 {
+//     if out_amount == 0 {
+//         return 0;
+//     }
+
+//     // +1 just in case there were some rounding errors & convert to real units in place
+//     let result = reserve_buy
+//         .fixed_mul_floor(reserve_sell, reserve_buy)
+//         .unwrap()
+//         - reserve_sell
+//         + 1;
+
+//     result
+// }

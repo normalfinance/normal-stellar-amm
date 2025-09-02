@@ -63,13 +63,13 @@ fn test() {
     // setup.registry.get_price(&setup.btc_asset_id);
     // setup.registry.get_price(&setup.xlm_asset_id);
 
-    let (x, y) = liq_pool.deposit(&admin, &1000_0000000);
+    let (x, y, z) = liq_pool.deposit(&admin, &1000_0000000);
 
     liq_pool.deposit(&admin, &2000_0000000);
 
     let swapped = liq_pool.swap(&admin, &SwapDirection::Buy, &10_0000000, &0);
 
-    assert_eq!(swapped, 0);
+    assert_eq!(swapped.0, 0);
 
     // let pools = Vec::from_array(&e, [liq_pool.address]);
     // let total = setup.liquidity_calculator.get_liquidity(&pools);
