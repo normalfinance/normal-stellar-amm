@@ -1,13 +1,14 @@
 use crate::{
-    errors::InsuranceFundError,
     storage::{get_oracle_registry, get_reserve, get_token_whitelist, get_token_whitelist_vec},
 };
 use soroban_fixed_point_math::FixedPoint;
 use soroban_sdk::{panic_with_error, Env, Symbol, Vec};
 use utils::{
     constant::{PERCENTAGE_PRECISION, PERCENTAGE_PRECISION_I64},
-    state::oracle_registry::{HistoricalOracleData, OracleValidity},
 };
+use normal_rust_types::types::{HistoricalOracleData, OracleValidity};
+use normal_rust_types::errors::InsuranceFundError;
+
 
 pub fn calculate_total_reserve_value(e: &Env) -> u128 {
     let tokens = get_token_whitelist_vec(&e);

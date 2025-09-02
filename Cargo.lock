@@ -6,6 +6,7 @@ version = 4
 name = "access_control"
 version = "1.0.0"
 dependencies = [
+ "normal-rust-types",
  "soroban-sdk",
  "utils",
 ]
@@ -656,6 +657,7 @@ checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 name = "incentives"
 version = "1.0.0"
 dependencies = [
+ "normal-rust-types",
  "soroban-fixed-point-math",
  "soroban-sdk",
  "utils",
@@ -694,6 +696,7 @@ name = "insurance-fund"
 version = "1.0.0"
 dependencies = [
  "access_control",
+ "normal-rust-types",
  "paste",
  "reentrancy_guard",
  "soroban-fixed-point-math",
@@ -706,6 +709,7 @@ dependencies = [
 name = "integration-tests"
 version = "1.0.0"
 dependencies = [
+ "normal-rust-types",
  "sep-40-oracle",
  "soroban-sdk",
  "token_lp",
@@ -774,6 +778,7 @@ name = "liquidity-calculator"
 version = "1.0.0"
 dependencies = [
  "access_control",
+ "normal-rust-types",
  "soroban-fixed-point-math",
  "soroban-sdk",
  "upgrade",
@@ -791,10 +796,19 @@ name = "lp-token"
 version = "1.0.0"
 dependencies = [
  "access_control",
+ "normal-rust-types",
  "soroban-sdk",
  "soroban-token-sdk",
  "upgrade",
  "utils",
+]
+
+[[package]]
+name = "normal-rust-types"
+version = "0.1.6"
+dependencies = [
+ "soroban-fixed-point-math",
+ "soroban-sdk",
 ]
 
 [[package]]
@@ -849,6 +863,7 @@ name = "oracle-registry"
 version = "1.0.0"
 dependencies = [
  "access_control",
+ "normal-rust-types",
  "paste",
  "reentrancy_guard",
  "sep-40-oracle",
@@ -892,6 +907,7 @@ version = "1.0.0"
 dependencies = [
  "access_control",
  "incentives",
+ "normal-rust-types",
  "paste",
  "rand",
  "reentrancy_guard",
@@ -909,6 +925,7 @@ name = "pool-plane"
 version = "1.0.0"
 dependencies = [
  "access_control",
+ "normal-rust-types",
  "soroban-sdk",
  "upgrade",
  "utils",
@@ -920,6 +937,7 @@ version = "1.0.0"
 dependencies = [
  "access_control",
  "incentives",
+ "normal-rust-types",
  "paste",
  "reentrancy_guard",
  "sep-40-oracle",
@@ -935,6 +953,7 @@ version = "1.0.0"
 dependencies = [
  "access_control",
  "incentives",
+ "normal-rust-types",
  "paste",
  "reentrancy_guard",
  "sep-40-oracle",
@@ -1028,6 +1047,7 @@ dependencies = [
 name = "reentrancy_guard"
 version = "1.0.0"
 dependencies = [
+ "normal-rust-types",
  "soroban-sdk",
  "utils",
 ]
@@ -1372,6 +1392,7 @@ name = "soroban-token-contract"
 version = "1.0.0"
 dependencies = [
  "access_control",
+ "normal-rust-types",
  "soroban-sdk",
  "soroban-token-sdk",
  "upgrade",
@@ -1536,6 +1557,7 @@ dependencies = [
 name = "token_lp"
 version = "1.0.0"
 dependencies = [
+ "normal-rust-types",
  "soroban-sdk",
  "utils",
 ]
@@ -1544,6 +1566,7 @@ dependencies = [
 name = "token_synthetic"
 version = "1.0.0"
 dependencies = [
+ "normal-rust-types",
  "soroban-sdk",
  "utils",
 ]
@@ -1565,6 +1588,7 @@ name = "upgrade"
 version = "1.0.0"
 dependencies = [
  "access_control",
+ "normal-rust-types",
  "soroban-sdk",
  "utils",
 ]
@@ -1573,6 +1597,7 @@ dependencies = [
 name = "utils"
 version = "1.0.0"
 dependencies = [
+ "normal-rust-types",
  "sep-40-oracle",
  "soroban-fixed-point-math",
  "soroban-sdk",

@@ -11,7 +11,7 @@ enum DataKey {
     TotalSyntheticTokens, // Total token supply
 }
 
-use utils::errors::storage_errors::StorageError;
+use normal_rust_types::StorageError;
 
 pub fn get_sac_address(e: &Env) -> Address {
     bump_instance(e);

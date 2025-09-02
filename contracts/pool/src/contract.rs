@@ -41,11 +41,59 @@ use soroban_fixed_point_math::FixedPoint;
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{
     contract, contractimpl, contractmeta, panic_with_error, symbol_short, Address, BytesN, Env,
-    IntoVal, Map, Symbol, Vec, U256,
+    IntoVal, Map, String, Symbol, Vec, U256,
 };
+
+
+
+// LP Token interface for the calls we need
+pub trait LpTokenInterface {
+    fn initialize(&self, admin: Address, decimal: u32, name: String, symbol: String);
+    fn upgrade(&self, admin: Address, new_wasm_hash: BytesN<32>);
+}
+
+// Helper struct to make LP token calls
+pub struct LpTokenClient<'a> {
+    env: &'a Env,
+    address: &'a Address,
+}
+
+impl<'a> LpTokenClient<'a> {
+    pub fn new(env: &'a Env, address: &'a Address) -> Self {
+        Self { env, address }
+    }
+}
+
+impl<'a> LpTokenInterface for LpTokenClient<'a> {
+    fn initialize(&self, admin: Address, decimal: u32, name: String, symbol: String) {
+        let _ = self.env.invoke_contract::<()>(
+            self.address,
+            &Symbol::new(self.env, "initialize"),
+            soroban_sdk::vec![
+                self.env,
+                admin.into_val(self.env),
+                decimal.into_val(self.env),
+                name.into_val(self.env),
+                symbol.into_val(self.env)
+            ],
+        );
+    }
+    
+    fn upgrade(&self, admin: Address, new_wasm_hash: BytesN<32>) {
+        let _ = self.env.invoke_contract::<()>(
+            self.address,
+            &Symbol::new(self.env, "upgrade"),
+            soroban_sdk::vec![
+                self.env,
+                admin.into_val(self.env),
+                new_wasm_hash.into_val(self.env)
+            ],
+        );
+    }
+}
 use token_lp::{
     burn_lp_tokens, get_token_lp, get_total_lp_tokens, get_user_balance_lp, mint_lp_tokens,
-    put_token_lp, Client as LpTokenClient,
+    put_token_lp,
 };
 use token_synthetic::{get_sac_address, put_sac_address};
 use upgrade::events::Events as UpgradeEvents;
@@ -55,15 +103,13 @@ use utils::constant::{
     MAX_POOL_FEE, MIN_LIQUIDITY,
 };
 use utils::math::safe_math::SafeMath;
-use utils::state::oracle_registry::NormalAction;
-use utils::state::pool::{InsuranceClaim, SwapDirection};
-use utils::state::{
-    pool::{
-        InitializeAllParams, InitializeParams, Pool as PoolType, PoolInfo, PoolResponse,
-        PoolStatus, PoolTier,
-    },
-    token::AddressAndAmount,
+use normal_rust_types::NormalAction;
+use normal_rust_types::{InsuranceClaim, SwapDirection};
+use normal_rust_types::{
+    InitializeAllParams, InitializeParams, Pool as PoolType, PoolInfo, PoolResponse,
+    PoolStatus, PoolTier, AddressAndAmount,
 };
+use utils::state::PoolExt;
 use utils::token::transfer_token;
 use utils::validate;
 use utils::validation::ensure_non_zero_u128;
@@ -185,10 +231,10 @@ impl PoolTrait for Pool {
             &params.token_b,
         );
         LpTokenClient::new(&e, &share_contract).initialize(
-            &e.current_contract_address(),
-            &7u32,
-            &params.lp_token_info.name.into_val(&e),
-            &params.lp_token_info.symbol.into_val(&e),
+            e.current_contract_address(),
+            7u32,
+            params.lp_token_info.name,
+            params.lp_token_info.symbol,
         );
 
         if params.fee_fraction > MAX_POOL_FEE {
@@ -212,8 +258,8 @@ impl PoolTrait for Pool {
                 last_revenue_withdraw_ts: 0,
             },
             liquidity_max_imbalance: 0,
-            // expiry_ts: 0,
-            // expiry_price: 0,
+            expiry_ts: 0,
+            expiry_price: 0,
         };
         set_pool(&e, &pool);
 
@@ -1530,8 +1576,8 @@ impl UpgradeableContract for Pool {
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
         let new_wasm_hash = apply_upgrade(&e);
         let token_new_wasm_hash = get_token_future_wasm(&e);
-        token_lp::Client::new(&e, &get_token_lp(&e))
-            .upgrade(&e.current_contract_address(), &token_new_wasm_hash);
+        LpTokenClient::new(&e, &get_token_lp(&e))
+            .upgrade(e.current_contract_address(), token_new_wasm_hash.clone());
 
         UpgradeEvents::new(&e).apply_upgrade(Vec::from_array(
             &e,

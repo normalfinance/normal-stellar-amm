@@ -1,10 +1,11 @@
-use crate::reserve::InsuranceFundReserve;
+use normal_rust_types::types::{InsuranceFundReserve, WhitelistToken};
+use crate::reserve::InsuranceFundReserveExt;
 use paste::paste;
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{contracttype, panic_with_error, Address, Env, Symbol, Vec};
 use utils::bump::{bump_instance, bump_persistent};
 use utils::constant::THIRTEEN_DAY;
-use utils::errors::storage_errors::StorageError;
+use normal_rust_types::StorageError;
 use utils::{
     generate_instance_storage_getter, generate_instance_storage_getter_and_setter,
     generate_instance_storage_getter_and_setter_with_default,
@@ -212,12 +213,4 @@ pub fn set_token_whitelist_vec(e: &Env, pools: &Vec<Address>) {
     let key = DataKey::TokenWhitelistVec;
     e.storage().persistent().set(&key, pools);
     bump_persistent(e, &key);
-}
-
-#[contracttype]
-#[derive(Clone, PartialEq, Eq)]
-pub struct WhitelistToken {
-    pub address: Address, // Address of the token
-    pub symbol: Symbol,   // Symbol of the token
-    pub active: bool,
 }

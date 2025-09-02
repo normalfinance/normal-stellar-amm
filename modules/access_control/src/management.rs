@@ -1,6 +1,6 @@
 use crate::access::AccessControl;
 use crate::errors::AccessControlError;
-use crate::role::Role;
+use crate::role::{Role, RoleExtensions};
 use crate::storage::StorageTrait;
 use soroban_sdk::{panic_with_error, Address, Vec};
 use utils::bump::bump_instance;

@@ -1,7 +1,7 @@
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{panic_with_error, Address, Env, Vec};
 
-use crate::errors::validation_errors::ValidationError;
+use normal_rust_types::ValidationError;
 
 pub fn validate_token_contract(e: &Env, token: &Address) {
     // call token contract to check if token exists & it's alive

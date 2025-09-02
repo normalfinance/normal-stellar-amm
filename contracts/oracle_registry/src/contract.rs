@@ -20,7 +20,7 @@ use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
-use utils::state::oracle_registry::{
+use normal_rust_types::types::{
     HistoricalOracleData, MutableOracleInfo, OracleGuardRails, OracleInfo, OraclePriceData,
     OracleValidity,
 };
@@ -251,7 +251,7 @@ impl AdminInterface for OracleRegistry {
         asset: Symbol,
         oracle_addr: Address,
         decimals: u32,
-        sanitize_clamp_denominator: u64,
+        sanitize_clamp_denominator: i64,
     ) -> OracleInfo {
         admin.require_auth();
         require_admin(&e, &admin);
@@ -260,7 +260,7 @@ impl AdminInterface for OracleRegistry {
 
         validate_positive_denominator(
             &e,
-            sanitize_clamp_denominator,
+            sanitize_clamp_denominator.abs() as u64,
             OracleRegistryError::InvalidClampDenominator,
         );
 
@@ -282,7 +282,7 @@ impl AdminInterface for OracleRegistry {
         update_twap(
             &e,
             &asset,
-            &HistoricalOracleData::default_with_current_oracle(oracle_price_data),
+            &HistoricalOracleData::default(),
             &oracle_price_data,
             sanitize_clamp_denominator,
             now,
@@ -292,7 +292,7 @@ impl AdminInterface for OracleRegistry {
             address: oracle_addr,
             decimals,
             frozen: false,
-            sanitize_clamp_denominator,
+            sanitize_clamp_denominator: sanitize_clamp_denominator,
             last_updated: now,
         };
         put_oracle(&e, &asset, &oracle);
@@ -364,7 +364,7 @@ impl AdminInterface for OracleRegistry {
             if let Some(sanitize_clamp_denominator) = params.sanitize_clamp_denominator {
                 validate_positive_denominator(
                     &e,
-                    sanitize_clamp_denominator,
+                    sanitize_clamp_denominator.abs() as u64,
                     OracleRegistryError::InvalidClampDenominator,
                 );
             }
@@ -460,11 +460,11 @@ impl AdminInterface for OracleRegistry {
             historical_oracle_data.last_oracle_price_twap,
             &(OraclePriceData {
                 price,
-                delay: Delay::from_timestamp_diff_expect(
-                    now,
-                    historical_oracle_data.last_oracle_price_twap_ts,
+                delay: u64::from(Delay::from_timestamp_diff_expect(
+                    now as u64,
+                    historical_oracle_data.last_oracle_price_twap_ts as u64,
                     "Historical TWAP timestamp cannot be in the future",
-                ),
+                )),
             }),
         ) == OracleValidity::Valid;
 
@@ -483,7 +483,7 @@ impl AdminInterface for OracleRegistry {
             &historical_oracle_data,
             &(OraclePriceData {
                 price: price,
-                delay: Delay::ZERO,
+                delay: 0x64,
             }),
             oracle.sanitize_clamp_denominator,
             now,

@@ -1,5 +1,5 @@
 use soroban_sdk::{Address, Env, Symbol, Val, Vec};
-use utils::state::pool::SwapDirection;
+use normal_rust_types::SwapDirection;
 
 #[derive(Clone)]
 pub(crate) struct Events(Env);

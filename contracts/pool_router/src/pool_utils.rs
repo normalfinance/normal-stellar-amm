@@ -13,10 +13,9 @@ use soroban_sdk::{
     symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Symbol, Val, Vec,
 };
 use soroban_sdk::{String, U256};
-use utils::state::{
-    access::PrivilegedAddresses,
-    pool::{InitializeAllParams, InitializeParams, PoolTier, RewardConfig},
-    token::TokenInitInfo,
+use normal_rust_types::{
+    InitializeAllParams, InitializeParams, PoolTier, PrivilegedAddresses, RewardConfig,
+    TokenInitInfo,
 };
 
 /* Salt Methodology
@@ -169,13 +168,18 @@ fn init_pool(
             router: e.current_contract_address(),
             oracle_registry: get_oracle_registry(e),
             assets: assets.clone(),
-            token_b: token_b.clone(),
-            synthetic_sac_address: synthetic_sac_address.clone(),
+            synthetic_token_info: TokenInitInfo {
+                token_wasm_hash: lp_token_wasm_hash.into_val(e),
+                name: String::from_str(e, "Normal Synthetic Token"),
+                symbol: String::from_str(e, "nTKN"),
+            },
             lp_token_info: TokenInitInfo {
                 token_wasm_hash: lp_token_wasm_hash.into_val(e),
                 name: lp_token_info.0.clone(),
                 symbol: lp_token_info.1.clone(),
             },
+            token_b: token_b.clone(),
+            synthetic_sac_address: synthetic_sac_address.clone(),
             fee_fraction,
             tier: tier.clone(),
             quote_max_insurance,

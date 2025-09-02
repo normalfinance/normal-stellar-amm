@@ -1,9 +1,9 @@
 use crate::errors::RewardsError;
 use crate::storage::{
-    LPTokenStorageTrait, PoolIncentiveConfig, PoolIncentiveData, PoolIncentivesStorageTrait,
-    RewardInvDataStorageTrait, RewardTokenStorageTrait, Storage, UserIncentiveData,
-    UserIncentivesStorageTrait, WorkingBalancesStorageTrait,
+    PoolIncentivesStorageTrait, RewardInvDataStorageTrait,
+    RewardTokenStorageTrait, Storage, UserIncentivesStorageTrait, WorkingBalancesStorageTrait,
 };
+use normal_rust_types::types::{PoolIncentiveConfig, PoolIncentiveData, UserIncentiveData};
 use crate::IncentivesConfig;
 use soroban_sdk::{panic_with_error, token::TokenClient as Client, Address, Env, Vec};
 use utils::bump::bump_instance;

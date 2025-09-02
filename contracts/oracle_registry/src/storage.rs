@@ -1,8 +1,8 @@
 use paste::paste;
 use soroban_sdk::{contracttype, panic_with_error, Env, Symbol};
 use utils::bump::{bump_instance, bump_persistent};
-use utils::errors::storage_errors::StorageError;
-use utils::state::oracle_registry::{HistoricalOracleData, OracleGuardRails, OracleInfo};
+use normal_rust_types::StorageError;
+use normal_rust_types::{HistoricalOracleData, OracleGuardRails, OracleInfo};
 use utils::{
     generate_instance_storage_getter, generate_instance_storage_getter_and_setter,
     generate_instance_storage_setter,
@@ -51,7 +51,7 @@ pub fn get_historical_oracle_data(e: &Env, asset: &Symbol) -> HistoricalOracleDa
     let key = DataKey::HistoricalOracleData(asset.clone());
     match e.storage().persistent().get(&key) {
         Some(data) => data,
-        None => HistoricalOracleData::default_quote_oracle(),
+        None => HistoricalOracleData::default(),
     }
 }
 

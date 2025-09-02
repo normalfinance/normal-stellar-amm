@@ -1,5 +1,5 @@
 use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Vec};
-use utils::state::pool::{
+use normal_rust_types::{
     InitializeAllParams, InitializeParams, PoolInfo, PoolStatus, PoolTier, SwapDirection,
 };
 

@@ -2,7 +2,7 @@
 
 pub mod bump;
 pub mod constant;
-pub mod errors;
+// pub mod errors;
 pub mod helpers;
 pub mod macros;
 pub mod math;

@@ -1,8 +1,8 @@
 use paste::paste;
 use soroban_sdk::{contracttype, panic_with_error, Address, BytesN, Env, Symbol, Vec};
 pub use utils::bump::bump_instance;
-use utils::errors::storage_errors::StorageError;
-use utils::state::pool::Pool as PoolType;
+use normal_rust_types::StorageError;
+use normal_rust_types::Pool as PoolType;
 use utils::{
     generate_instance_storage_getter, generate_instance_storage_getter_and_setter,
     generate_instance_storage_getter_and_setter_with_default,

@@ -1,16 +1,19 @@
-use crate::errors::InsuranceFundError;
+
+use normal_rust_types::errors::InsuranceFundError;
+
 use crate::events::Events as FundEvents;
 use crate::events::InsuranceFundEvents;
 use crate::interest::calculate_rate;
 use crate::interest::calculate_total_reserve_value;
 use crate::interest::calculate_utilization;
 use crate::interface::{AdminInterface, InsuranceFundTrait};
-use crate::reserve;
-use crate::reserve::InsuranceFundReserve;
-use crate::stake::Stake;
+use crate::reserve::InsuranceFundReserveExt;
+use normal_rust_types::types::InsuranceFundReserve;
+use normal_rust_types::types::Stake;
+use normal_rust_types::types::StakeAction;
 use crate::stake::{
     apply_rebase_to_insurance_fund, apply_rebase_to_stake, calculate_shares_lost, get_stake,
-    reserve_amount_to_shares, save_stake, shares_to_reserve_amount, StakeAction,
+    reserve_amount_to_shares, shares_to_reserve_amount, StakeExt,
 };
 use crate::storage::get_contract_token_balance;
 use crate::storage::get_oracle_registry;
@@ -29,7 +32,7 @@ use crate::storage::set_premium_payer_status;
 use crate::storage::set_premium_token;
 use crate::storage::set_token_whitelist;
 use crate::storage::set_token_whitelist_vec;
-use crate::storage::WhitelistToken;
+use normal_rust_types::types::WhitelistToken;
 use crate::storage::{
     get_base_rate, get_is_killed_deposit, get_is_killed_request_withdraw, get_is_killed_withdraw,
     get_optimal_insurance, get_optimal_utilization, get_rate_slope_a, get_rate_slope_b,
@@ -55,8 +58,7 @@ use soroban_sdk::{
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
-use utils::math::safe_math::SafeMath;
-use utils::state::pool::PoolInfo;
+use normal_rust_types::types::PoolInfo;
 use utils::token::transfer_token;
 use utils::token::validate_token_contract;
 use utils::validate;
@@ -228,7 +230,7 @@ impl InsuranceFundTrait for InsuranceFund {
             reserve_balance_before,
             stake_shares_before,
             total_shares_before,
-            stake.shares,
+            stake.unchecked_shares(),
             reserve.total_shares,
         );
 
@@ -335,7 +337,7 @@ impl InsuranceFundTrait for InsuranceFund {
 
         validate!(
             &e,
-            stake.base == reserve.shares_base,
+            stake.if_base == reserve.shares_base,
             InsuranceFundError::InvalidIFRebase
         );
 
@@ -364,7 +366,7 @@ impl InsuranceFundTrait for InsuranceFund {
             reserve_balance_before,
             stake_shares_before,
             total_shares_before,
-            stake.shares,
+            stake.unchecked_shares(),
             reserve.total_shares,
         );
 
@@ -432,7 +434,7 @@ impl InsuranceFundTrait for InsuranceFund {
         // if stake base != base
         validate!(
             &e,
-            stake.base == reserve.shares_base,
+            stake.if_base == reserve.shares_base,
             InsuranceFundError::InvalidIFRebase
         );
 
@@ -466,7 +468,7 @@ impl InsuranceFundTrait for InsuranceFund {
             reserve_balance_before,
             stake_shares_before,
             total_shares_before,
-            stake.shares,
+            stake.unchecked_shares(),
             reserve.total_shares,
         );
 
@@ -540,7 +542,7 @@ impl InsuranceFundTrait for InsuranceFund {
             InsuranceFundError::TryingToRemoveLiquidityTooFast
         );
 
-        let mut reserve = get_reserve(&e, &token);
+        let mut reserve: InsuranceFundReserve = get_reserve(&e, &token);
         let reserve_balance_before = reserve.balance;
 
         // Rebase the Insurance Fund and Stake
@@ -612,7 +614,7 @@ impl InsuranceFundTrait for InsuranceFund {
             reserve_balance_before,
             stake_shares_before,
             total_shares_before,
-            stake.shares,
+            stake.unchecked_shares(),
             reserve.total_shares,
         );
 

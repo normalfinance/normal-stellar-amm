@@ -1,7 +1,7 @@
 #![no_std]
 
 mod contract;
-pub mod errors;
+// pub mod errors;
 mod events;
 mod interest;
 mod interface;

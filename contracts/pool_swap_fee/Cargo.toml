@@ -18,6 +18,7 @@ token_lp = { workspace = true }
 reentrancy_guard = { workspace = true }
 upgrade = { workspace = true }
 soroban-fixed-point-math = { workspace = true }
+normal-rust-types = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

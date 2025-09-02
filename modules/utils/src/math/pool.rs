@@ -66,7 +66,7 @@ pub fn sanitize_new_price(
     e: &Env,
     new_price: u128,
     last_price_twap: u128,
-    sanitize_clamp_denominator: u64,
+    sanitize_clamp_denominator: i64,
 ) -> u128 {
     assert!(new_price > 0, "new_price must be positive");
     assert!(last_price_twap >= 0, "last_price_twap must be non-negative");
@@ -86,7 +86,7 @@ pub fn sanitize_new_price(
     let sanitize_clamp_denominator = if sanitize_clamp_denominator != 0 {
         sanitize_clamp_denominator
     } else {
-        DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR
+        DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR as i64
     };
 
     if sanitize_clamp_denominator == 0 {
@@ -94,7 +94,7 @@ pub fn sanitize_new_price(
         return new_price;
     }
 
-    let price_twap_price_band = last_price_twap.safe_div(e, sanitize_clamp_denominator as u128);
+    let price_twap_price_band = last_price_twap.safe_div(e, sanitize_clamp_denominator.abs() as u128);
 
     let capped_update_price = if new_price_spread > price_twap_price_band {
         if price_is_increasing {

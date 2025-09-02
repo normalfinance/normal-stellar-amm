@@ -1,5 +1,6 @@
 use crate::interface::PlaneInterface;
-use crate::storage::{get, update, PoolPlaneType};
+use crate::storage::{get, update};
+use normal_rust_types::PoolPlaneType;
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
 use access_control::errors::AccessControlError;

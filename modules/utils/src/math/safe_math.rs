@@ -1,6 +1,6 @@
 use soroban_sdk::{log, panic_with_error, Env};
 
-use crate::errors::math_errors::MathError;
+use normal_rust_types::MathError;
 
 pub trait SafeMath: Sized {
     fn safe_add(self, e: &Env, rhs: Self) -> Self; // instead of Result<Self, ()> since it either returns Self or panics (no return)

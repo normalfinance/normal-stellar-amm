@@ -1,4 +1,5 @@
 use soroban_sdk::{contracttype, Address, Env, Vec};
+use normal_rust_types::PoolPlaneType;
 
 const DAY_IN_LEDGERS: u32 = 17280;
 pub const MONTH_IN_LEDGERS: u32 = DAY_IN_LEDGERS * 30;
@@ -11,13 +12,6 @@ pub const PERSISTENT_TTL_THRESHOLD: u32 = MAX_PERSISTENT_TTL - MONTH_IN_LEDGERS;
 #[contracttype]
 enum DataKey {
     PoolData(Address),
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PoolPlaneType {
-    pub init_args: Vec<u128>,
-    pub reserves: Vec<u128>,
 }
 
 fn bump_persistent(e: &Env, key: &DataKey) {

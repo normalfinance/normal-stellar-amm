@@ -13,11 +13,11 @@ enum DataKey {
     TotalLPTokens, // Total token supply
 }
 
-pub mod lp_token {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/lp_token.wasm");
-}
-pub use lp_token::{self as token_contract, Client};
-use utils::errors::storage_errors::StorageError;
+// pub mod lp_token {
+//     soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/lp_token.wasm");
+// }
+// pub use lp_token::{self as token_contract, Client};
+use normal_rust_types::StorageError;
 
 pub fn get_token_lp(e: &Env) -> Address {
     bump_instance(e);

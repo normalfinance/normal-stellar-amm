@@ -1,7 +1,6 @@
-use soroban_sdk::{Address, Env, Symbol, Vec};
+use soroban_sdk::{Address, Env, Symbol};
 
-use crate::storage::WhitelistToken;
-use crate::{reserve::InsuranceFundReserve, stake::Stake};
+use normal_rust_types::types::{InsuranceFundReserve, Stake, WhitelistToken};
 
 pub trait InsuranceFundTrait {
     fn initialize(

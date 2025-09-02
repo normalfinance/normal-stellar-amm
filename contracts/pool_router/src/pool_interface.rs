@@ -1,5 +1,5 @@
 use soroban_sdk::{Address, Env, Map, String, Symbol, Val, Vec, U256};
-use utils::state::pool::{PoolInfo, PoolTier, SwapDirection};
+use normal_rust_types::{PoolInfo, PoolTier, SwapDirection};
 
 pub trait PoolInterfaceTrait {
     //  ___      ___       __        __    _____  ___

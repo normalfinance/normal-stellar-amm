@@ -1,5 +1,5 @@
 use soroban_sdk::{Address, Env, Symbol};
-use utils::state::oracle_registry::{
+use normal_rust_types::{
     HistoricalOracleData, MutableOracleInfo, OracleGuardRails, OracleInfo, OracleValidity,
 };
 
@@ -50,7 +50,7 @@ pub trait AdminInterface {
         asset: Symbol,
         oracle_addr: Address,
         decimals: u32,
-        sanitize_clamp_denominator: u64,
+        sanitize_clamp_denominator: i64,
     ) -> OracleInfo;
 
     // Update oracle info

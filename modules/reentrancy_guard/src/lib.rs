@@ -1,7 +1,7 @@
 #![no_std]
 
 use soroban_sdk::{contracttype, panic_with_error, Env};
-use utils::errors::validation_errors::ValidationError;
+use normal_rust_types::ValidationError;
 
 #[derive(Clone)]
 #[contracttype]
