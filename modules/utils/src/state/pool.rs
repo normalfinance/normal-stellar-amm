@@ -90,12 +90,10 @@ pub struct PoolConfig {
     pub privileged_addrs: PrivilegedAddresses,
     pub router: Address,
     pub oracle_registry: Address,
-
     pub token_a_sac_address: Address,
     pub token_b: Address,
-
+    pub lp_token_info: TokenInitInfo,
     pub assets: (Symbol, Symbol),
-
     pub status: PoolStatus,
     pub tier: PoolTier,
     pub fee_fraction: u32,
