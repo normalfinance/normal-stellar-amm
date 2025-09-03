@@ -1,36 +1,34 @@
 use paste::paste;
-use soroban_sdk::{ contracttype, panic_with_error, Address, BytesN, Env, Symbol, Vec };
+use soroban_sdk::{contracttype, panic_with_error, Address, BytesN, Env, Symbol, Vec};
 pub use utils::bump::bump_instance;
 use utils::errors::storage_errors::StorageError;
-use utils::state::pool::{ InsuranceClaim, PoolStatus, PoolTier };
+use utils::state::pool::{InsuranceClaim, PoolStatus, PoolTier};
 use utils::{
-    generate_instance_storage_getter,
-    generate_instance_storage_getter_and_setter,
+    generate_instance_storage_getter, generate_instance_storage_getter_and_setter,
     generate_instance_storage_getter_and_setter_with_default,
-    generate_instance_storage_getter_with_default,
-    generate_instance_storage_setter,
+    generate_instance_storage_getter_with_default, generate_instance_storage_setter,
 };
 
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
     TokenA,
-    TokenB, // the quote token address (always XLM).
-    ReserveA, // total token_a amount in the pool (x in the constant product formula)
-    ReserveB, // total token_b amount in the pool (y in the constant product formula)
-    BaseAsset, // the Symbol of the base (synthetic) asset (i.e. nBTC).
+    TokenB,     // the quote token address (always XLM).
+    ReserveA,   // total token_a amount in the pool (x in the constant product formula)
+    ReserveB,   // total token_b amount in the pool (y in the constant product formula)
+    BaseAsset,  // the Symbol of the base (synthetic) asset (i.e. nBTC).
     QuoteAsset, // the Symbol of the quote asset (TokenB).
     Tier,
     Status,
 
-    Plane, // the address of the pool plane.
-    Router, // the Pool Router contract address
+    Plane,          // the address of the pool plane.
+    Router,         // the Pool Router contract address
     OracleRegistry, // the Oracle Registry contract address
 
     MintCapFraction, // a bps cap on how much token_a can be minted when the pool is in reduce only mode
 
     // fees
-    FeeFraction, // 1 = 0.01%
+    FeeFraction,         // 1 = 0.01%
     ProtocolFeeFraction, // part of the fee that goes to the protocol, 5000 = 50% of the fee goes to the protocol
     ProtocolFeeA,
     ProtocolFeeB,
@@ -44,8 +42,10 @@ enum DataKey {
 
     // metrics
     TotalSyntheticTokens, // Total token supply
-    LastTradeTs, // the blockchain unix timestamp at the time of the last trade
-    Volume30d, // estimated total of volume in market
+    LastTradeTs,          // the blockchain unix timestamp at the time of the last trade
+    Volume30d,            // estimated total of volume in market
+
+    LiquidityMintedSynthetic, // This is incremented only when liquidity is added and token_a is minted by the pool to balance the XLM deposit
 
     // paused ops
     IsKilledSwap,
@@ -55,6 +55,12 @@ enum DataKey {
 
     TokenFutureWASM,
 }
+generate_instance_storage_getter_and_setter_with_default!(
+    liquidity_minted_synthetic,
+    DataKey::LiquidityMintedSynthetic,
+    u128,
+    0
+);
 
 // Numbers
 generate_instance_storage_getter_and_setter_with_default!(reserve_a, DataKey::ReserveA, u128, 0);
@@ -211,6 +217,6 @@ pub fn get_insurance_fund_from_router(e: &Env) -> Address {
     e.invoke_contract::<Address>(
         &get_router(e),
         &Symbol::new(e, "get_insurance_fund"),
-        Vec::from_array(e, [])
+        Vec::from_array(e, []),
     )
 }

@@ -13,7 +13,7 @@ use crate::storage::get_total_synthetic_tokens;
 use crate::storage::get_volume_30d;
 use crate::storage::set_last_trade_ts;
 use crate::storage::set_volume_30d;
-use crate::storage::{ get_reserve_a, get_reserve_b, set_reserve_a };
+use crate::storage::{get_reserve_a, get_reserve_b, set_reserve_a};
 use crate::token::burn_synthetic_tokens;
 use crate::token::mint_synthetic_tokens;
 // use soroban_fixed_point_math::FixedPoint;
@@ -21,12 +21,13 @@ use soroban_fixed_point_math::SorobanFixedPoint;
 
 use soroban_sdk::Symbol;
 use soroban_sdk::Vec;
-use soroban_sdk::{ panic_with_error, Env };
+use soroban_sdk::{panic_with_error, Env};
 
 use utils::constant::FEE_MULTIPLIER;
 use utils::constant::PRICE_PRECISION;
 use utils::constant::PRICE_PRECISION_I64;
 use utils::constant::PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO_I128;
+use utils::constant::THIRTY_DAY;
 use utils::constant::TWENTY_FOUR_HOUR;
 use utils::math::safe_math::SafeMath;
 use utils::math::stats::calculate_rolling_sum;
@@ -52,7 +53,7 @@ use utils::state::pool::PoolStatus;
 pub fn get_net_liquidity_imbalance(
     e: &Env,
     base_oracle_price: u128,
-    quote_oracle_price: u128
+    quote_oracle_price: u128,
 ) -> i128 {
     let base_token_supply = get_total_synthetic_tokens(&e);
     let reserve_b = get_reserve_b(e);
@@ -81,14 +82,12 @@ pub fn get_net_liquidity_imbalance(
 // # Returns
 // * `HistoricalOracleData` — The current oracle price and delay since publication.
 pub fn get_oracle_price(e: &Env, asset: &Symbol, action: NormalAction) -> HistoricalOracleData {
-    let (historical_oracle_data, oracle_validity): (
-        HistoricalOracleData,
-        OracleValidity,
-    ) = e.invoke_contract(
-        &get_oracle_registry(e),
-        &Symbol::new(e, "get_price"),
-        Vec::from_array(e, [asset.to_val()])
-    );
+    let (historical_oracle_data, oracle_validity): (HistoricalOracleData, OracleValidity) = e
+        .invoke_contract(
+            &get_oracle_registry(e),
+            &Symbol::new(e, "get_price"),
+            Vec::from_array(e, [asset.to_val()]),
+        );
 
     let oracle_valid_for_action = is_oracle_valid_for_action(oracle_validity, Some(action));
 
@@ -103,7 +102,7 @@ pub fn validate_oracle_price_with_pool(
     e: &Env,
     base_oracle_price_twap: u128,
     quote_oracle_price_twap: u128,
-    action: NormalAction
+    action: NormalAction,
 ) {
     if action == NormalAction::PoolInit {
         return;
@@ -120,23 +119,18 @@ pub fn validate_oracle_price_with_pool(
     };
 
     // Find % difference b/t pool price and oracle price
-    let oracle_pool_price_spread_pct = calculate_oracle_twap_price_spread_pct(
-        e,
-        pool_price,
-        peg_price
-    );
+    let oracle_pool_price_spread_pct =
+        calculate_oracle_twap_price_spread_pct(e, pool_price, peg_price);
 
     // Check if the oracle price is too divergent
     let oracle_guard_rails: OracleGuardRails = e.invoke_contract(
         &get_oracle_registry(e),
         &Symbol::new(e, "get_oracle_guard_rails"),
-        Vec::from_array(e, [])
+        Vec::from_array(e, []),
     );
 
-    let is_oracle_price_too_divergent = is_oracle_price_too_divergent(
-        oracle_pool_price_spread_pct,
-        oracle_guard_rails
-    );
+    let is_oracle_price_too_divergent =
+        is_oracle_price_too_divergent(oracle_pool_price_spread_pct, oracle_guard_rails);
 
     if is_oracle_price_too_divergent {
         panic_with_error!(e, PoolError::InvalidOracle);
@@ -158,11 +152,10 @@ pub fn validate_oracle_price_with_pool(
 pub fn calculate_oracle_twap_price_spread_pct(
     e: &Env,
     pool_price: u128,
-    last_oracle_price_twap: u128
+    last_oracle_price_twap: u128,
 ) -> i64 {
-    let price_spread: i64 = (pool_price as i128).saturating_sub(
-        last_oracle_price_twap as i128
-    ) as i64;
+    let price_spread: i64 =
+        (pool_price as i128).saturating_sub(last_oracle_price_twap as i128) as i64;
 
     price_spread.fixed_div_floor(e, pool_price as i64, PRICE_PRECISION_I64) as i64
 }
@@ -181,9 +174,11 @@ pub fn calculate_oracle_twap_price_spread_pct(
 // - `true` if the spread exceeds the maximum allowed divergence.
 pub fn is_oracle_price_too_divergent(
     price_spread_pct: i64,
-    oracle_guard_rails: OracleGuardRails
+    oracle_guard_rails: OracleGuardRails,
 ) -> bool {
-    let max_divergence = oracle_guard_rails.price_divergence.oracle_twap_percent_divergence;
+    let max_divergence = oracle_guard_rails
+        .price_divergence
+        .oracle_twap_percent_divergence;
 
     price_spread_pct.unsigned_abs() > max_divergence
 }
@@ -209,26 +204,32 @@ pub fn is_oracle_price_too_divergent(
 /// - `false` if the action should be blocked due to stale, volatile, or invalid data.
 pub fn is_oracle_valid_for_action(
     oracle_validity: OracleValidity,
-    action: Option<NormalAction>
+    action: Option<NormalAction>,
 ) -> bool {
     let is_ok = match action {
-        Some(action) =>
-            match action {
-                NormalAction::PoolInit => matches!(oracle_validity, OracleValidity::Valid),
-                NormalAction::AddLiquidity =>
-                    matches!(oracle_validity, OracleValidity::Valid | OracleValidity::StaleForPool),
-                NormalAction::RemoveLiquidity =>
-                    matches!(oracle_validity, OracleValidity::Valid | OracleValidity::StaleForPool),
-                NormalAction::Swap => matches!(oracle_validity, OracleValidity::Valid),
-                NormalAction::UpdateTwap => !matches!(oracle_validity, OracleValidity::NonPositive),
-                NormalAction::Rebalance => { matches!(oracle_validity, OracleValidity::Valid) }
-                NormalAction::ClaimInsurance =>
-                    !matches!(
-                        oracle_validity,
-                        OracleValidity::NonPositive | OracleValidity::TooVolatile
-                    ),
+        Some(action) => match action {
+            NormalAction::PoolInit => matches!(oracle_validity, OracleValidity::Valid),
+            NormalAction::AddLiquidity => matches!(
+                oracle_validity,
+                OracleValidity::Valid | OracleValidity::StaleForPool
+            ),
+            NormalAction::RemoveLiquidity => matches!(
+                oracle_validity,
+                OracleValidity::Valid | OracleValidity::StaleForPool
+            ),
+            NormalAction::Swap => matches!(oracle_validity, OracleValidity::Valid),
+            NormalAction::UpdateTwap => !matches!(oracle_validity, OracleValidity::NonPositive),
+            NormalAction::Rebalance => {
+                matches!(oracle_validity, OracleValidity::Valid)
             }
-        None => { matches!(oracle_validity, OracleValidity::Valid) }
+            NormalAction::ClaimInsurance => !matches!(
+                oracle_validity,
+                OracleValidity::NonPositive | OracleValidity::TooVolatile
+            ),
+        },
+        None => {
+            matches!(oracle_validity, OracleValidity::Valid)
+        }
     };
 
     is_ok
@@ -275,7 +276,7 @@ pub fn update_volume_30d(e: &Env, quote_asset_amount: u128, now: u64) {
             volume_30d,
             quote_asset_amount,
             since_last,
-            TWENTY_FOUR_HOUR
+            TWENTY_FOUR_HOUR,
         );
 
         set_volume_30d(e, &sum);
@@ -302,11 +303,13 @@ pub fn get_delta_a(
     reserve_a: u128,
     reserve_b: u128,
     base_oracle_price: u128,
-    quote_oracle_price: u128
+    quote_oracle_price: u128,
 ) -> i128 {
     let peg_price = peg_price(e, base_oracle_price, quote_oracle_price);
     let target_reserve_a = reserve_b.fixed_div_floor(e, &peg_price, &PRICE_PRECISION);
-    let delta_a = (target_reserve_a as i128).checked_sub(reserve_a as i128).unwrap();
+    let delta_a = (target_reserve_a as i128)
+        .checked_sub(reserve_a as i128)
+        .unwrap();
 
     delta_a
 }
@@ -328,19 +331,25 @@ pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) {
     let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
 
     // Find the ideal reserve_a amount such that the pool's price is equal to the oracle price
-    let delta_a = get_delta_a(&e, reserve_a, reserve_b, base_oracle_price, quote_oracle_price);
+    let delta_a = get_delta_a(
+        &e,
+        reserve_a,
+        reserve_b,
+        base_oracle_price,
+        quote_oracle_price,
+    );
     if delta_a != 0 {
         if delta_a > 0 {
             if reduce_only {
                 LiquidityPoolEvents::new(&e).capped_mint(
                     base_oracle_price,
                     quote_oracle_price,
-                    delta_a
+                    delta_a,
                 );
 
                 // allow minting up to 0.1 % of current supply per ledger
-                let mint_cap = (get_total_synthetic_tokens(&e) /
-                    (get_mint_cap_fraction(&e) as u128)) as i128;
+                let mint_cap =
+                    (get_total_synthetic_tokens(&e) / (get_mint_cap_fraction(&e) as u128)) as i128;
 
                 if delta_a > mint_cap {
                     panic_with_error!(&e, PoolError::SwapReduceOnly);
@@ -362,9 +371,11 @@ pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) {
             reserve_b,
             new_reserve_a,
             new_reserve_b,
-            delta_a
+            delta_a,
         );
     }
+
+    delta_a
 }
 
 /// Calculates the output amount of tokens for a swap given input and pool reserves.
@@ -407,9 +418,9 @@ pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) {
 /// ```
 pub fn get_amount_out(
     e: &Env,
-    in_amount: u128, // dx  – exact tokens the trader wants to sell
+    in_amount: u128,    // dx  – exact tokens the trader wants to sell
     reserve_sell: u128, // x
-    reserve_buy: u128 // y
+    reserve_buy: u128,  // y
 ) -> (u128, u128) {
     if in_amount == 0 {
         return (0, 0);
@@ -466,9 +477,9 @@ pub fn get_amount_out(
 /// ```
 pub fn get_amount_out_strict_receive(
     e: &Env,
-    out_amount: u128, // dy  – exact tokens the trader wants to receive
+    out_amount: u128,   // dy  – exact tokens the trader wants to receive
     reserve_sell: u128, // x
-    reserve_buy: u128 // y
+    reserve_buy: u128,  // y
 ) -> (u128, u128) {
     if out_amount == 0 {
         return (0, 0);
@@ -484,11 +495,8 @@ pub fn get_amount_out_strict_receive(
 
     // ----------  Step 2: gross-up for fee on *input* side  -------------
     // dx_before_fee = ceil( dx_after_fee / (1-f) )
-    let dx_before_fee = dx_after_fee.fixed_mul_ceil(
-        e,
-        &FEE_MULTIPLIER,
-        &(FEE_MULTIPLIER - fee_fraction)
-    );
+    let dx_before_fee =
+        dx_after_fee.fixed_mul_ceil(e, &FEE_MULTIPLIER, &(FEE_MULTIPLIER - fee_fraction));
 
     // ----------  Step 3: fee = dx_before_fee - dx_after_fee -----------
     let fee = dx_before_fee - dx_after_fee;
@@ -518,18 +526,18 @@ pub fn validate_fair_share_calculation(
     reserve_a: u128,
     reserve_b_before_deposit: u128,
     base_oracle_price: u128,
-    quote_oracle_price: u128
+    quote_oracle_price: u128,
 ) {
     if total_shares > 0 && reserve_a > 0 {
         // Calculate the minimum fair shares based on pool's total value
-        let token_a_value_in_token_b = reserve_a
-            .fixed_mul_floor(e, &base_oracle_price, &quote_oracle_price);
+        let token_a_value_in_token_b =
+            reserve_a.fixed_mul_floor(e, &base_oracle_price, &quote_oracle_price);
 
         let total_pool_value = reserve_b_before_deposit + token_a_value_in_token_b;
 
         // Minimum shares should be proportional to contribution vs total pool value
-        let expected_min_shares = token_b_amount
-            .fixed_mul_floor(e, &total_shares, &total_pool_value);
+        let expected_min_shares =
+            token_b_amount.fixed_mul_floor(e, &total_shares, &total_pool_value);
 
         // Allow for small rounding differences
         let tolerance = expected_min_shares / 10000;
@@ -539,4 +547,14 @@ pub fn validate_fair_share_calculation(
             panic_with_error!(e, PoolError::UnfairShareCalculation);
         }
     }
+}
+
+pub fn update_volume(e: &Env, amount: u128, current_time: u64) {
+    let volume_30d = get_volume_30d(e);
+    let since_last = max(1_u64, current_time.saturating_sub(get_last_trade_ts(&e)));
+
+    let updated_volume_30d = calculate_rolling_sum(&e, volume_30d, amount, since_last, THIRTY_DAY);
+
+    set_volume_30d(&e, &updated_volume_30d);
+    set_last_trade_ts(&e, &current_time);
 }

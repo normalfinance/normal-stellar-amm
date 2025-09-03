@@ -10,7 +10,13 @@ pub trait PoolInterfaceTrait {
     // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
-    fn deposit(e: Env, user: Address, asset: Symbol, token_b_amount: u128) -> (u128, u128);
+    fn deposit(
+        e: Env,
+        user: Address,
+        asset: Symbol,
+        desired_amount: u128,
+        min_shares: u128,
+    ) -> (u128, u128);
 
     fn swap(
         e: Env,
@@ -28,7 +34,13 @@ pub trait PoolInterfaceTrait {
         in_amount: u128,
     ) -> (u128, i128);
 
-    fn withdraw(e: Env, user: Address, asset: Symbol, share_amount: u128) -> u128;
+    fn withdraw(
+        e: Env,
+        user: Address,
+        asset: Symbol,
+        share_amount: u128,
+        min_amounts: Vec<u128>,
+    ) -> u128;
 
     //   _______    _______  ___________  ___________  _______   _______    ________
     //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )

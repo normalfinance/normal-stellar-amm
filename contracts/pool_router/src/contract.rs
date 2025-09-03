@@ -81,10 +81,16 @@ impl PoolInterfaceTrait for PoolRouter {
     // * If the user does not authorize the operation.
     // * If the asset has no associated pool registered.
 
-    fn deposit(e: Env, user: Address, asset: Symbol, token_b_amount: u128) -> (u128, u128) {
+    fn deposit(
+        e: Env,
+        user: Address,
+        asset: Symbol,
+        desired_amount: u128,
+        min_shares: u128,
+    ) -> (u128, u128) {
         user.require_auth();
 
-        ensure_non_zero_u128(&e, token_b_amount);
+        ensure_non_zero_u128(&e, desired_amount);
 
         enter(&e);
 
@@ -93,7 +99,14 @@ impl PoolInterfaceTrait for PoolRouter {
         let (amount, share_amount, delta_a): (u128, u128, i128) = e.invoke_contract(
             &pool,
             &symbol_short!("deposit"),
-            Vec::from_array(&e, [user.clone().into_val(&e), token_b_amount.into_val(&e)]),
+            Vec::from_array(
+                &e,
+                [
+                    user.clone().into_val(&e),
+                    desired_amount.into_val(&e),
+                    min_shares.into_val(&e),
+                ],
+            ),
         );
         Events::new(&e).deposit_liquidity(asset, pool, user, amount, share_amount, delta_a);
 
@@ -237,7 +250,13 @@ impl PoolInterfaceTrait for PoolRouter {
     //
     // # Emits
     // * A `withdraw` event recording the asset, user, pool, withdrawn amount, and share amount.
-    fn withdraw(e: Env, user: Address, asset: Symbol, share_amount: u128) -> u128 {
+    fn withdraw(
+        e: Env,
+        user: Address,
+        asset: Symbol,
+        share_amount: u128,
+        min_amounts: Vec<u128>,
+    ) -> u128 {
         user.require_auth();
 
         ensure_non_zero_u128(&e, share_amount);
@@ -249,7 +268,14 @@ impl PoolInterfaceTrait for PoolRouter {
         let (amount, delta_a): (u128, i128) = e.invoke_contract(
             &pool_address,
             &symbol_short!("withdraw"),
-            Vec::from_array(&e, [user.clone().into_val(&e), share_amount.into_val(&e)]),
+            Vec::from_array(
+                &e,
+                [
+                    user.clone().into_val(&e),
+                    share_amount.into_val(&e),
+                    min_amounts.into_val(&e),
+                ],
+            ),
         );
 
         Events::new(&e).withdraw_liquidity(

@@ -20,20 +20,20 @@ impl Pool {
 
     pub fn get_sanitize_clamp_denominator(&self) -> Option<i64> {
         match self.tier {
-            PoolTier::A => Some(10_i64), // 10%
-            PoolTier::B => Some(5_i64), // 20%
-            PoolTier::C => Some(2_i64), // 50%
-            PoolTier::Speculative => None, // DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR
+            PoolTier::A => Some(10_i64),         // 10%
+            PoolTier::B => Some(5_i64),          // 20%
+            PoolTier::C => Some(2_i64),          // 50%
+            PoolTier::Speculative => None,       // DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR
             PoolTier::HighlySpeculative => None, // DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR
-            PoolTier::Isolated => None, // DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR
+            PoolTier::Isolated => None,          // DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR
         }
     }
 
     pub fn get_insurance_coverage_multiplier(&self) -> u64 {
         match self.tier {
             PoolTier::A => 10_u64, // 10%
-            PoolTier::B => 5_u64, // 20%
-            PoolTier::C => 2_u64, // 50%
+            PoolTier::B => 5_u64,  // 20%
+            PoolTier::C => 2_u64,  // 50%
             PoolTier::Speculative => 10_u64,
             PoolTier::HighlySpeculative => 10_u64,
             PoolTier::Isolated => 10_u64,
@@ -124,7 +124,7 @@ pub struct PoolConfig {
     pub status: PoolStatus,
     pub tier: PoolTier,
     pub fee_fraction: u32,
-    pub protocol_fee_fraction: u32
+    pub protocol_fee_fraction: u32,
 }
 
 // This struct is used to return a query result with the total amount of LP tokens and assets in a specific pool.

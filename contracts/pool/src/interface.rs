@@ -1,6 +1,10 @@
 use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Vec};
-use utils::state::pool::{
-    InitializeAllParams, InitializeParams, InsuranceClaim, PoolInfo, PoolStatus, PoolTier, SwapDirection
+use utils::state::{
+    oracle_registry::NormalAction,
+    pool::{
+        InitializeAllParams, InitializeParams, InsuranceClaim, PoolInfo, PoolStatus, PoolTier,
+        SwapDirection,
+    },
 };
 
 pub trait PoolCrunch {
@@ -20,14 +24,9 @@ pub trait PoolTrait {
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
     // Add liquidity
-    fn deposit(e: Env, user: Address, token_b_amount: u128) -> (u128, u128, i128);
+    fn deposit(e: Env, user: Address, amount: u128, min_shares: u128) -> (u128, u128, i128);
 
     // Perform an exchange between two coins.
-    // in_idx: Index value for the coin to send
-    // out_idx: Index value of the coin to receive
-    // in_amount: Amount of in_idx being exchanged
-    // out_min: Minimum amount of out_idx to receive
-    // Returns the actual amount of coin out_idx received. Index values can be found via the get_tokens public getter method.
     fn swap(
         e: Env,
         user: Address,
@@ -40,10 +39,6 @@ pub trait PoolTrait {
     fn estimate_swap(e: Env, direction: SwapDirection, in_amount: u128) -> (u128, i128);
 
     // Perform an exchange between two coins with strict amount to receive.
-    // in_idx: Index value for the coin to send
-    // out_idx: Index value of the coin to receive
-    // out_amount: Amount of out_idx being exchanged
-    // in_max: Maximum amount of in_idx to send
     fn swap_strict_receive(
         e: Env,
         user: Address,
@@ -60,7 +55,7 @@ pub trait PoolTrait {
     ) -> (u128, i128);
 
     // Remove liquidity
-    fn withdraw(e: Env, user: Address, share_amount: u128) -> (u128, i128);
+    fn withdraw(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>) -> (u128, i128);
 
     //   _______    _______  ___________  ___________  _______   _______    ________
     //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
@@ -77,6 +72,7 @@ pub trait PoolTrait {
     fn get_total_shares(e: Env) -> u128;
 
     fn get_tokens(e: Env) -> Vec<Address>;
+
     fn get_reserves(e: Env) -> Vec<u128>;
 
     fn get_fee_fraction(e: Env) -> u32;
@@ -91,7 +87,7 @@ pub trait PoolTrait {
 
     fn get_liquidity_imbalance(e: Env) -> i128;
 
-     // Returns the protocol fees accumulated in the pool.
+    // Returns the protocol fees accumulated in the pool.
     fn get_protocol_fees(e: Env) -> Vec<u128>;
 }
 
@@ -104,7 +100,7 @@ pub trait AdminInterfaceTrait {
     // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
-    fn rebalance(e: Env, admin: Address);
+    fn rebalance(e: Env, admin: Address, action: NormalAction);
 
     fn claim_protocol_fees(e: Env, admin: Address, destination: Address) -> Vec<u128>;
 
