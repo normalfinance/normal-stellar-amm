@@ -1117,7 +1117,7 @@ impl AdminInterfaceTrait for Pool {
         let mut updated_insurance_claim = insurance_claim.clone();
         updated_insurance_claim.rev_withdraw_since_last_settle = updated_insurance_claim
             .rev_withdraw_since_last_settle
-            .safe_add(&e, insurance_withdraw as i128);
+            .safe_add(&e, insurance_withdraw);
 
         updated_insurance_claim.settled_insurance = updated_insurance_claim
             .settled_insurance

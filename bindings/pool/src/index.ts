@@ -250,7 +250,7 @@ export interface InsuranceClaim {
   last_revenue_withdraw_ts: u64;
   max_insurance: u128;
   settled_insurance: u128;
-  rev_withdraw_since_last_settle: i128;
+  rev_withdraw_since_last_settle: u128;
 }
 
 

@@ -104,12 +104,7 @@ generate_instance_storage_getter_and_setter_with_default!(
     insurance_claim,
     DataKey::InsuranceClaim,
     InsuranceClaim,
-    InsuranceClaim {
-        rev_withdraw_since_last_settle: 0,
-        max_insurance: 0,
-        settled_insurance: 0,
-        last_revenue_withdraw_ts: 0,
-    }
+    InsuranceClaim::default()
 );
 
 // Addresses

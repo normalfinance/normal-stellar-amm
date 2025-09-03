@@ -52,13 +52,10 @@ impl PoolTier {
 #[contracttype]
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct InsuranceClaim {
-    // The amount of revenue last settled
-    // Positive if funds left the pool,
-    // negative if funds were pulled into the pool
-    pub rev_withdraw_since_last_settle: i128,
+    pub rev_withdraw_since_last_settle: u128, // The amount of revenue last settled
     pub max_insurance: u128, // The max amount of insurance that the pool can use to resolve liquidity deficits
     pub settled_insurance: u128, // The amount of insurance that has been used to resolve liquidity deficits
-    pub last_revenue_withdraw_ts: u64, // The last time revenue was settled in/out of the pool
+    pub last_revenue_withdraw_ts: u64, // The last time revenue was settled out of the pool
 }
 
 impl Default for InsuranceClaim {
