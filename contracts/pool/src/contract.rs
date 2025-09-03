@@ -10,11 +10,21 @@ use crate::plane::update_plane;
 use crate::plane_interface::Plane;
 use crate::pool::{
     get_amount_out, get_amount_out_strict_receive, get_delta_a, get_net_liquidity_imbalance,
-    get_oracle_price, rebalance,
-    validate_oracle_price_with_pool,
+    get_oracle_price, rebalance, validate_oracle_price_with_pool,
 };
 use crate::storage::{
-    get_base_asset, get_fee_fraction, get_insurance_claim, get_insurance_fund_from_router, get_is_killed_claim, get_is_killed_deposit, get_is_killed_swap, get_is_killed_withdraw, get_last_trade_ts, get_liquidity_minted_synthetic, get_max_liquidity_imbalance, get_mint_cap_fraction, get_plane, get_protocol_fee_a, get_protocol_fee_b, get_protocol_fee_fraction, get_quote_asset, get_reserve_a, get_reserve_b, get_router, get_status, get_tier, get_token_a, get_token_b, get_token_future_wasm, get_volume_30d, has_plane, set_base_asset, set_fee_fraction, set_insurance_claim, set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap, set_is_killed_withdraw, set_last_trade_ts, set_liquidity_minted_synthetic, set_max_liquidity_imbalance, set_mint_cap_fraction, set_oracle_registry, set_plane, set_protocol_fee_a, set_protocol_fee_b, set_protocol_fee_fraction, set_quote_asset, set_reserve_a, set_reserve_b, set_router, set_status, set_tier, set_token_a, set_token_b, set_token_future_wasm, set_volume_30d
+    get_base_asset, get_fee_fraction, get_insurance_claim, get_insurance_fund_from_router,
+    get_is_killed_claim, get_is_killed_deposit, get_is_killed_swap, get_is_killed_withdraw,
+    get_last_trade_ts, get_liquidity_minted_synthetic, get_max_liquidity_imbalance,
+    get_mint_cap_fraction, get_plane, get_protocol_fee_a, get_protocol_fee_b,
+    get_protocol_fee_fraction, get_quote_asset, get_reserve_a, get_reserve_b, get_router,
+    get_status, get_tier, get_token_a, get_token_b, get_token_future_wasm, get_volume_30d,
+    has_plane, set_base_asset, set_fee_fraction, set_insurance_claim, set_is_killed_claim,
+    set_is_killed_deposit, set_is_killed_swap, set_is_killed_withdraw, set_last_trade_ts,
+    set_liquidity_minted_synthetic, set_max_liquidity_imbalance, set_mint_cap_fraction,
+    set_oracle_registry, set_plane, set_protocol_fee_a, set_protocol_fee_b,
+    set_protocol_fee_fraction, set_quote_asset, set_reserve_a, set_reserve_b, set_router,
+    set_status, set_tier, set_token_a, set_token_b, set_token_future_wasm, set_volume_30d,
 };
 use crate::token::{burn_synthetic_tokens, create_lp_token_contract, transfer_a, transfer_b};
 use access_control::access::{AccessControl, AccessControlTrait};
@@ -937,7 +947,7 @@ impl PoolTrait for Pool {
                 tier: get_tier(&e),
                 fee_fraction: get_fee_fraction(&e),
                 protocol_fee_fraction: get_protocol_fee_fraction(&e),
-                insurance: get_insurance_claim(&e)
+                insurance: get_insurance_claim(&e),
             },
             token_a: AddressAndAmount {
                 address: get_token_a(&e),
@@ -1115,8 +1125,7 @@ impl AdminInterfaceTrait for Pool {
 
         validate!(
             &e,
-            updated_insurance_claim.settled_insurance
-                <= updated_insurance_claim.max_insurance,
+            updated_insurance_claim.settled_insurance <= updated_insurance_claim.max_insurance,
             PoolError::MaxIFWithdrawReached
         );
 

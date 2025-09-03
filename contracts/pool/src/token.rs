@@ -5,7 +5,9 @@ use soroban_sdk::{
 };
 use utils::token::transfer_token;
 
-use crate::storage::{get_token_a, get_token_b, get_total_synthetic_tokens, set_total_synthetic_tokens};
+use crate::storage::{
+    get_token_a, get_token_b, get_total_synthetic_tokens, set_total_synthetic_tokens,
+};
 
 pub fn create_lp_token_contract(
     e: &Env,
