@@ -1,6 +1,6 @@
 #![no_std]
 
-use soroban_sdk::{Address, Env, Symbol};
+use soroban_sdk::{ Address, Env, IntoVal, Symbol, Val, Vec };
 
 #[derive(Clone)]
 pub struct Events(Env);
@@ -32,7 +32,7 @@ pub trait PoolEvents {
         user: Address,
         amount: u128,
         share_amount: u128,
-        delta_a: i128,
+        delta_a: i128
     );
 
     fn withdraw_liquidity(
@@ -41,7 +41,7 @@ pub trait PoolEvents {
         user: Address,
         share_amount: u128,
         amount: u128,
-        delta_a: i128,
+        delta_a: i128
     );
 
     fn swap(
@@ -52,7 +52,7 @@ pub trait PoolEvents {
         in_amount: u128,
         out_amount: u128,
         delta_a_prior: i128,
-        delta_a_post: i128,
+        delta_a_post: i128
     );
 
     fn rebalance(
@@ -61,10 +61,15 @@ pub trait PoolEvents {
         reserve_b: u128,
         new_reserve_a: u128,
         new_reserve_b: u128,
-        delta_a: i128,
+        delta_a: i128
     );
 
     fn capped_mint(&self, base_oracle_price: u128, quote_oracle_price: u128, delta_a: i128);
+
+    fn update_reserves(&self, reserves: Vec<u128>);
+
+    fn set_protocol_fee_fraction(&self, fraction: u32);
+    fn claim_protocol_fee(&self, token: Address, destination: Address, amount: u128);
 
     //    _______     __       ____  ____   ________  _______  ________
     //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\
@@ -108,12 +113,12 @@ impl PoolEvents for Events {
         user: Address,
         amount: u128,
         share_amount: u128,
-        delta_a: i128,
+        delta_a: i128
     ) {
         let e = self.env();
         e.events().publish(
             (Symbol::new(e, "deposit_liquidity"), token, user),
-            (amount, share_amount, delta_a),
+            (amount, share_amount, delta_a)
         );
     }
 
@@ -123,12 +128,12 @@ impl PoolEvents for Events {
         user: Address,
         share_amount: u128,
         amount: u128,
-        delta_a: i128,
+        delta_a: i128
     ) {
         let e = self.env();
         e.events().publish(
             (Symbol::new(e, "withdraw_liquidity"), token, user),
-            (share_amount, amount, delta_a),
+            (share_amount, amount, delta_a)
         );
     }
 
@@ -140,12 +145,12 @@ impl PoolEvents for Events {
         in_amount: u128,
         out_amount: u128,
         delta_a_prior: i128,
-        delta_a_post: i128,
+        delta_a_post: i128
     ) {
         let e = self.env();
         e.events().publish(
             (Symbol::new(e, "swap"), token_in, token_out, user),
-            (in_amount, out_amount, delta_a_prior, delta_a_post),
+            (in_amount, out_amount, delta_a_prior, delta_a_post)
         );
     }
 
@@ -155,12 +160,12 @@ impl PoolEvents for Events {
         reserve_b: u128,
         new_reserve_a: u128,
         new_reserve_b: u128,
-        delta_a: i128,
+        delta_a: i128
     ) {
         let e = self.env();
         e.events().publish(
             (Symbol::new(e, "rebalance"),),
-            (reserve_a, reserve_b, new_reserve_a, new_reserve_b, delta_a),
+            (reserve_a, reserve_b, new_reserve_a, new_reserve_b, delta_a)
         );
     }
 
@@ -168,7 +173,29 @@ impl PoolEvents for Events {
         let e = self.env();
         e.events().publish(
             (Symbol::new(e, "capped_mint"),),
-            (base_oracle_price, quote_oracle_price, delta_a),
+            (base_oracle_price, quote_oracle_price, delta_a)
+        );
+    }
+
+    fn update_reserves(&self, reserves: Vec<u128>) {
+        let e = self.env();
+        let mut body: Vec<Val> = Vec::new(e);
+        for reserve in reserves.iter() {
+            body.push_back((reserve as i128).into_val(e));
+        }
+        e.events().publish((Symbol::new(e, "update_reserves"),), body);
+    }
+
+    fn set_protocol_fee_fraction(&self, fraction: u32) {
+        let e = self.env();
+        e.events().publish((Symbol::new(e, "set_protocol_fee"),), (fraction,));
+    }
+
+    fn claim_protocol_fee(&self, token: Address, destination: Address, amount: u128) {
+        let e = self.env();
+        e.events().publish(
+            (Symbol::new(e, "claim_protocol_fee"), token),
+            (destination, amount as i128)
         );
     }
 
@@ -230,7 +257,6 @@ impl PoolEvents for Events {
 
     fn permanently_locked_liquidity(&self, amount: u128) {
         let e = self.env();
-        e.events()
-            .publish((Symbol::new(e, "permanently_locked_liquidity"),), amount);
+        e.events().publish((Symbol::new(e, "permanently_locked_liquidity"),), amount);
     }
 }

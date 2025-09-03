@@ -1,6 +1,6 @@
 use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Vec};
 use utils::state::pool::{
-    InitializeAllParams, InitializeParams, PoolInfo, PoolStatus, PoolTier, SwapDirection,
+    InitializeAllParams, InitializeParams, InsuranceClaim, PoolInfo, PoolStatus, PoolTier, SwapDirection
 };
 
 pub trait PoolCrunch {
@@ -83,14 +83,16 @@ pub trait PoolTrait {
 
     fn get_mint_cap_fraction(e: Env) -> u32;
 
-    fn get_insurance_coverage(e: Env) -> u128;
+    fn get_insurance_claim(e: Env) -> InsuranceClaim;
 
-    // Get dictionary of basic pool information: type, fee, special parameters if any.
     fn get_info(e: Env) -> PoolInfo;
 
     fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>>;
 
     fn get_liquidity_imbalance(e: Env) -> i128;
+
+     // Returns the protocol fees accumulated in the pool.
+    fn get_protocol_fees(e: Env) -> Vec<u128>;
 }
 
 pub trait AdminInterfaceTrait {
@@ -103,6 +105,8 @@ pub trait AdminInterfaceTrait {
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
     fn rebalance(e: Env, admin: Address);
+
+    fn claim_protocol_fees(e: Env, admin: Address, destination: Address) -> Vec<u128>;
 
     fn pay_insurance_claim(e: Env, sender: Address, insurance_vault_amount: u128) -> u128;
 
@@ -141,6 +145,8 @@ pub trait AdminInterfaceTrait {
     fn set_mint_cap_fraction(e: Env, admin: Address, mint_cap_fraction: u32);
 
     // fn set_expiry(e: Env, admin: Address, expiry_ts: u64);
+
+    fn set_protocol_fee_fraction(e: Env, admin: Address, new_fraction: u32);
 
     //    _______     __       ____  ____   ________  _______  ________
     //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\

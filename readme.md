@@ -43,7 +43,6 @@ Normal is a synthetic asset protocol enabling investors to trade any crypto asse
 - **incentives** - Handles how liquidity provider fees and pool rewards are calculated and claimed
 - **reentrancy_guard** - Handles utilities helping prevent re-entrant calls (even though they're technically impossible on Soroban)
 - **token_lp** - Handles LP token utilities
-- **token_synthetic** - Handles synthetic token (`Pool.token_a`) utilities
 - **upgrade** - Handles contract upgrades
 - **utils** - Handles shared types, utils, constants, errors, macros, and more
 
