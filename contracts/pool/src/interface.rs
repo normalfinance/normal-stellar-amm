@@ -135,7 +135,7 @@ pub trait AdminInterfaceTrait {
         e: Env,
         admin: Address,
         liquidity_max_imbalance: u128,
-        quote_max_insurance: u128,
+        max_insurance: u128,
     );
 
     fn set_mint_cap_fraction(e: Env, admin: Address, mint_cap_fraction: u32);

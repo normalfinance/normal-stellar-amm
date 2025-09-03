@@ -599,7 +599,7 @@
 //     let setup = Setup::default();
 //     let pool = setup.liq_pool;
 //     let liquidity_max_imbalance = 1_000_000 * PRICE_PRECISION;
-//     let quote_max_insurance = 1_000_000 * PRICE_PRECISION;
+//     let max_insurance = 1_000_000 * PRICE_PRECISION;
 //     let user = Address::generate(&setup.env);
 
 //     for (addr, is_ok) in [
@@ -611,7 +611,7 @@
 //         (setup.emergency_pause_admin, false),
 //     ] {
 //         assert_eq!(
-//             pool.try_set_max_imbalances(&addr, &liquidity_max_imbalance, &quote_max_insurance)
+//             pool.try_set_max_imbalances(&addr, &liquidity_max_imbalance, &max_insurance)
 //                 .is_ok(),
 //             is_ok
 //         );

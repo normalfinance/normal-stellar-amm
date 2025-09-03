@@ -175,8 +175,8 @@ export type PoolTier = {tag: "A", values: void} | {tag: "B", values: void} | {ta
 
 export interface InsuranceClaim {
   last_revenue_withdraw_ts: u64;
-  quote_max_insurance: u128;
-  quote_settled_insurance: u128;
+  max_insurance: u128;
+  settled_insurance: u128;
   rev_withdraw_since_last_settle: i128;
 }
 
@@ -207,7 +207,7 @@ export interface InitializeParams {
   lp_token_info: TokenInitInfo;
   oracle_registry: string;
   privileged_addrs: PrivilegedAddresses;
-  quote_max_insurance: u128;
+  max_insurance: u128;
   router: string;
   synthetic_sac_address: string;
   tier: PoolTier;

@@ -520,7 +520,7 @@ pub fn create_pool_contract<'a>(
     reward_token: &Address,
     fee_fraction: u32,
     tier: &PoolTier,
-    quote_max_insurance: u128,
+    max_insurance: u128,
 ) -> PoolClient<'a> {
     let pool = PoolClient::new(e, &e.register(crate::Pool {}, ()));
     let params = InitializeAllParams {
@@ -545,7 +545,7 @@ pub fn create_pool_contract<'a>(
             },
             fee_fraction,
             tier: tier.clone(),
-            quote_max_insurance,
+            max_insurance,
         },
         reward_config: RewardConfig {
             reward_token: reward_token.clone(),

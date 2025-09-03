@@ -57,4 +57,4 @@ stellar contract invoke \
     --lp_token_info "[\"$LP_TOKEN_NAME\", \"$LP_TOKEN_SYMBOL\"]" \
     --fee_fraction "$FEE_FRACTION" \
     --tier "$POOL_TIER" \
-    --quote_max_insurance "$MAX_INSURANCE"
+    --max_insurance "$MAX_INSURANCE"

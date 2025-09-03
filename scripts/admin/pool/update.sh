@@ -122,7 +122,7 @@ case "$FLAG" in
 
 -m)
     if [ "$#" -ne 2 ]; then
-        echo "Error: -m requires <liquidity_max_imbalance> <quote_max_insurance>"
+        echo "Error: -m requires <liquidity_max_imbalance> <max_insurance>"
         exit 1
     fi
     stellar contract invoke \
@@ -136,7 +136,7 @@ case "$FLAG" in
         set_max_imbalances \
         --admin "$ADMIN_ADDRESS" \
         --liquidity_max_imbalance "$1" \
-        --quote_max_insurance "$2"
+        --max_insurance "$2"
     ;;
 
 -e)

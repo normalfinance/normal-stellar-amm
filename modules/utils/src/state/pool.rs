@@ -56,8 +56,8 @@ pub struct InsuranceClaim {
     // Positive if funds left the pool,
     // negative if funds were pulled into the pool
     pub rev_withdraw_since_last_settle: i128,
-    pub quote_max_insurance: u128, // The max amount of insurance that the pool can use to resolve liquidity deficits
-    pub quote_settled_insurance: u128, // The amount of insurance that has been used to resolve liquidity deficits
+    pub max_insurance: u128, // The max amount of insurance that the pool can use to resolve liquidity deficits
+    pub settled_insurance: u128, // The amount of insurance that has been used to resolve liquidity deficits
     pub last_revenue_withdraw_ts: u64, // The last time revenue was settled in/out of the pool
 }
 
@@ -65,8 +65,8 @@ impl Default for InsuranceClaim {
     fn default() -> Self {
         InsuranceClaim {
             rev_withdraw_since_last_settle: 0,
-            quote_max_insurance: 0,
-            quote_settled_insurance: 0,
+            max_insurance: 0,
+            settled_insurance: 0,
             last_revenue_withdraw_ts: 0,
         }
     }
@@ -76,8 +76,8 @@ impl InsuranceClaim {
     pub fn new(max_insurance: u128) -> Self {
         InsuranceClaim {
             rev_withdraw_since_last_settle: 0,
-            quote_max_insurance: max_insurance,
-            quote_settled_insurance: 0,
+            max_insurance: max_insurance,
+            settled_insurance: 0,
             last_revenue_withdraw_ts: 0,
         }
     }

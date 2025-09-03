@@ -563,7 +563,7 @@ fn test() {
 //         },
 //         fee_fraction: 10_u32,
 //         tier: PoolTier::A,
-//         quote_max_insurance: 1_000_000_u128,
+//         max_insurance: 1_000_000_u128,
 //     };
 
 //     setup.liq_pool.initialize(&params);
@@ -598,7 +598,7 @@ fn test() {
 //             },
 //             fee_fraction: 10_u32,
 //             tier: PoolTier::A,
-//             quote_max_insurance: 1_000_000_u128,
+//             max_insurance: 1_000_000_u128,
 //         },
 //         reward_config: RewardConfig {
 //             reward_token: setup.token_reward.address,

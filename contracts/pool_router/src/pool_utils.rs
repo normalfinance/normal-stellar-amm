@@ -75,7 +75,7 @@ pub fn deploy_pool(
     lp_token_info: &(String, String),
     fee_fraction: u32,
     tier: &PoolTier,
-    quote_max_insurance: u128,
+    max_insurance: u128,
 ) -> Address {
     let pool_wasm_hash = get_pool_hash(e);
     let (base_asset, _) = assets;
@@ -94,7 +94,7 @@ pub fn deploy_pool(
         lp_token_info,
         fee_fraction,
         tier,
-        quote_max_insurance,
+        max_insurance,
     );
 
     // Add pool contract address to Map<Symbol, Address>
@@ -114,7 +114,7 @@ pub fn deploy_pool(
             [
                 fee_fraction.into_val(e),
                 tier.into_val(e),
-                quote_max_insurance.into_val(e),
+                max_insurance.into_val(e),
             ],
         ),
     );
@@ -131,7 +131,7 @@ fn init_pool(
     lp_token_info: &(String, String),
     fee_fraction: u32,
     tier: &PoolTier,
-    quote_max_insurance: u128,
+    max_insurance: u128,
 ) {
     let lp_token_wasm_hash = get_lp_token_hash(e);
     let incentives = get_incentives_manager(e);
@@ -178,7 +178,7 @@ fn init_pool(
             },
             fee_fraction,
             tier: tier.clone(),
-            quote_max_insurance,
+            max_insurance,
         },
         reward_config: RewardConfig { reward_token },
         plane,

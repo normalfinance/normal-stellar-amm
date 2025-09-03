@@ -412,8 +412,8 @@ fn test_add_liquidity() {
 //             .insurance_claim,
 //         InsuranceClaim {
 //             last_revenue_withdraw_ts: now,
-//             quote_max_insurance: pool_info.insurance_claim.quote_max_insurance,
-//             quote_settled_insurance: pool_info.insurance_claim.quote_settled_insurance + paid,
+//             max_insurance: pool_info.insurance_claim.max_insurance,
+//             settled_insurance: pool_info.insurance_claim.settled_insurance + paid,
 //             rev_withdraw_since_last_settle: 0,
 //         }
 //     );

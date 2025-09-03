@@ -1,5 +1,3 @@
-use core::f32::consts::E;
-
 use crate::errors::{PoolError, PoolValidationError};
 use crate::events::Events as LiquidityPoolEvents;
 use crate::events::PoolEvents;
@@ -130,7 +128,7 @@ impl PoolTrait for Pool {
         let share_contract = create_lp_token_contract(
             &e,
             config.lp_token_info.token_wasm_hash,
-            &config.synthetic_sac_address,
+            &config.token_a_sac_address,
             &config.token_b,
         );
         LpTokenClient::new(&e, &share_contract).initialize(
@@ -145,7 +143,7 @@ impl PoolTrait for Pool {
         }
 
         put_token_lp(&e, share_contract);
-        set_token_a(&e, &config.synthetic_sac_address);
+        set_token_a(&e, &config.token_a_sac_address);
         set_token_b(&e, &config.token_b);
         set_tier(&e, &config.tier);
         set_status(&e, &PoolStatus::Initialized);
@@ -1084,8 +1082,8 @@ impl AdminInterfaceTrait for Pool {
         );
 
         let insurance_claim = get_insurance_claim(&e);
-        let max_insurance = insurance_claim.quote_max_insurance;
-        let settled_insurance = insurance_claim.quote_settled_insurance;
+        let max_insurance = insurance_claim.max_insurance;
+        let settled_insurance = insurance_claim.settled_insurance;
         validate!(
             &e,
             max_insurance >= settled_insurance,
@@ -1111,14 +1109,14 @@ impl AdminInterfaceTrait for Pool {
             .rev_withdraw_since_last_settle
             .safe_add(&e, insurance_withdraw as i128);
 
-        updated_insurance_claim.quote_settled_insurance = updated_insurance_claim
-            .quote_settled_insurance
+        updated_insurance_claim.settled_insurance = updated_insurance_claim
+            .settled_insurance
             .safe_add(&e, insurance_withdraw);
 
         validate!(
             &e,
-            updated_insurance_claim.quote_settled_insurance
-                <= updated_insurance_claim.quote_max_insurance,
+            updated_insurance_claim.settled_insurance
+                <= updated_insurance_claim.max_insurance,
             PoolError::MaxIFWithdrawReached
         );
 
@@ -1184,7 +1182,7 @@ impl AdminInterfaceTrait for Pool {
         //             let volume_30d = get_volume_30d(&e);
         //             let estimated_annual_volume = volume_30d.fixed_mul_floor(365, 30).unwrap();
 
-        //             let total_annual_premium = insurance_claim.quote_max_insurance
+        //             let total_annual_premium = insurance_claim.max_insurance
         //                 .fixed_mul_floor(insurance_premium_rate as u128, PRICE_PRECISION)
         //                 .unwrap();
 
@@ -1327,7 +1325,7 @@ impl AdminInterfaceTrait for Pool {
         e: Env,
         admin: Address,
         liquidity_max_imbalance: u128,
-        quote_max_insurance: u128,
+        max_insurance: u128,
     ) {
         admin.require_auth();
         require_operations_admin_or_owner(&e, &admin);
@@ -1345,14 +1343,14 @@ impl AdminInterfaceTrait for Pool {
         validate!(
             &e,
             liquidity_max_imbalance <= max_insurance_for_tier + 1
-                && quote_max_insurance <= max_insurance_for_tier,
+                && max_insurance <= max_insurance_for_tier,
             PoolError::DefaultError
         );
 
         let insurance_claim = get_insurance_claim(&e);
         validate!(
             &e,
-            insurance_claim.quote_settled_insurance <= quote_max_insurance,
+            insurance_claim.settled_insurance <= max_insurance,
             PoolError::DefaultError
         );
 
@@ -1360,7 +1358,7 @@ impl AdminInterfaceTrait for Pool {
         set_insurance_claim(
             &e,
             &(InsuranceClaim {
-                quote_max_insurance,
+                max_insurance,
                 ..insurance_claim
             }),
         );

@@ -1051,7 +1051,7 @@ impl PoolsManagementTrait for PoolRouter {
     // * `lp_token_info` - A tuple of the LP token name and symbol.
     // * `fee_fraction` - The fee fraction for the pool (in basis points).
     // * `tier` - The risk tier of the target asset.
-    // * `quote_max_insurance` - The max coverage the pool may claim from the Insurance Fund.
+    // * `max_insurance` - The max coverage the pool may claim from the Insurance Fund.
     //
     // # Returns
     //
@@ -1067,7 +1067,7 @@ impl PoolsManagementTrait for PoolRouter {
         lp_token_info: (String, String),
         fee_fraction: u32,
         tier: PoolTier,
-        quote_max_insurance: u128,
+        max_insurance: u128,
     ) -> Address {
         admin.require_auth();
         require_admin(&e, &admin);
@@ -1088,7 +1088,7 @@ impl PoolsManagementTrait for PoolRouter {
                 &lp_token_info,
                 fee_fraction,
                 &tier,
-                quote_max_insurance,
+                max_insurance,
             ),
         }
     }

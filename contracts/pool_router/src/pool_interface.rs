@@ -199,7 +199,7 @@ pub trait PoolsManagementTrait {
         lp_token_info: (String, String),
         fee_fraction: u32,
         tier: PoolTier,
-        quote_max_insurance: u128,
+        max_insurance: u128,
     ) -> Address;
 
     fn delist_pool(e: Env, admin: Address, asset: Symbol);
