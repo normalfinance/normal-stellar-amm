@@ -20,7 +20,7 @@ pub trait PoolTrait {
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
     // Add liquidity
-    fn deposit(e: Env, user: Address, token_b_amount: u128) -> (u128, u128);
+    fn deposit(e: Env, user: Address, token_b_amount: u128) -> (u128, u128, i128);
 
     // Perform an exchange between two coins.
     // in_idx: Index value for the coin to send
@@ -34,7 +34,7 @@ pub trait PoolTrait {
         direction: SwapDirection,
         in_amount: u128,
         out_min: u128,
-    ) -> u128;
+    ) -> (u128, i128, i128);
 
     // Estimate amount of coins to retrieve using swap function
     fn estimate_swap(e: Env, direction: SwapDirection, in_amount: u128) -> (u128, i128);
@@ -50,7 +50,7 @@ pub trait PoolTrait {
         direction: SwapDirection,
         out_amount: u128,
         in_max: u128,
-    ) -> u128;
+    ) -> (u128, i128, i128);
 
     // Estimate amount of coins to retrieve using swap_strict_receive function
     fn estimate_swap_strict_receive(
@@ -60,7 +60,7 @@ pub trait PoolTrait {
     ) -> (u128, i128);
 
     // Remove liquidity
-    fn withdraw(e: Env, user: Address, share_amount: u128) -> u128;
+    fn withdraw(e: Env, user: Address, share_amount: u128) -> (u128, i128);
 
     //   _______    _______  ___________  ___________  _______   _______    ________
     //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
@@ -89,6 +89,8 @@ pub trait PoolTrait {
     fn get_info(e: Env) -> PoolInfo;
 
     fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>>;
+
+    fn get_liquidity_imbalance(e: Env) -> i128;
 }
 
 pub trait AdminInterfaceTrait {
@@ -103,6 +105,8 @@ pub trait AdminInterfaceTrait {
     fn rebalance(e: Env, admin: Address);
 
     fn pay_insurance_claim(e: Env, sender: Address, insurance_vault_amount: u128) -> u128;
+
+    fn delist(e: Env, admin: Address);
 
     //   ________  _______  ___________  ___________  _______   _______    ________
     //  /"       )/"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
@@ -136,7 +140,7 @@ pub trait AdminInterfaceTrait {
 
     fn set_mint_cap_fraction(e: Env, admin: Address, mint_cap_fraction: u32);
 
-    fn set_expiry(e: Env, admin: Address, expiry_ts: u64);
+    // fn set_expiry(e: Env, admin: Address, expiry_ts: u64);
 
     //    _______     __       ____  ____   ________  _______  ________
     //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\

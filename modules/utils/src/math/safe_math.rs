@@ -80,7 +80,6 @@ mod test {
         let e = Env::default();
         assert_eq!((1_u128).safe_add(&e, 1), 2);
         // assert_eq!((1_u128).safe_add(u128::MAX, &env), Err(MathError::MathError));
-        // TODO:
         assert_eq!((1_u128).safe_add(&e, u128::MAX), 0);
     }
 

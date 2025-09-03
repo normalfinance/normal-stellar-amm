@@ -1,5 +1,5 @@
 use paste::paste;
-use soroban_sdk::{contracttype, panic_with_error, Address, BytesN, Env};
+use soroban_sdk::{contracttype, panic_with_error, Address, BytesN, Env, Symbol, Vec};
 pub use utils::bump::bump_instance;
 use utils::errors::storage_errors::StorageError;
 use utils::state::pool::Pool as PoolType;
@@ -18,9 +18,7 @@ enum DataKey {
     Plane,           // the address of the pool plane.
     Router,          // the Pool Router contract address
     OracleRegistry,  // the Oracle Registry contract address
-    LastOracleValid, // tracks whether the oracle was considered valid at the last pool update
     LastTradeTs,     // the blockchain unix timestamp at the time of the last trade
-    LastUpdateTs,    // the last blockchain slot the amm was updated
     MintCapFraction, // a bps cap on how much token_a can be minted when the pool is in reduce only mode
 
     // metrics
@@ -44,18 +42,6 @@ generate_instance_storage_getter_and_setter_with_default!(volume_30d, DataKey::V
 generate_instance_storage_getter_and_setter_with_default!(
     last_trade_ts,
     DataKey::LastTradeTs,
-    u64,
-    0
-);
-generate_instance_storage_getter_and_setter_with_default!(
-    last_oracle_valid,
-    DataKey::LastOracleValid,
-    bool,
-    false
-);
-generate_instance_storage_getter_and_setter_with_default!(
-    last_update_ts,
-    DataKey::LastUpdateTs,
     u64,
     0
 );
@@ -122,4 +108,14 @@ pub(crate) fn get_token_future_wasm(e: &Env) -> BytesN<32> {
         Some(v) => v,
         None => panic_with_error!(e, StorageError::ValueNotInitialized),
     }
+}
+
+/// Get Insurance Fund address from PoolRouter contract
+pub fn get_insurance_fund_from_router(e: &Env) -> Address {
+    // Call PoolRouter's get_insurance_fund() function
+    e.invoke_contract::<Address>(
+        &get_router(e),
+        &Symbol::new(e, "get_insurance_fund"),
+        Vec::from_array(e, []),
+    )
 }

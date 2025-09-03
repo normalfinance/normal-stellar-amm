@@ -19,6 +19,7 @@ pub fn enter(e: &Env) {
     }
     e.storage().instance().set(&DataKey::ReentrancyGuard, &true);
 }
+
 pub fn exit(e: &Env) {
     e.storage()
         .instance()

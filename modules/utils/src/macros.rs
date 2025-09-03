@@ -1,6 +1,5 @@
+use crate::errors::storage_errors::StorageError;
 use soroban_sdk::panic_with_error;
-
-use crate::errors::math_errors::MathError;
 
 #[macro_export]
 macro_rules! generate_instance_storage_setter {
@@ -71,26 +70,4 @@ macro_rules! validate {
             panic_with_error!($env, $error) // Panic with the specified error
         }
     };
-}
-
-#[macro_export]
-macro_rules! safe_increment {
-    ($env:expr, $struct:expr, $value:expr) => {{
-        $struct = $struct.checked_add($value).unwrap_or_else(|| {
-            #[cfg(debug_assertions)]
-            panic_with_error!($env, MathError::MathError);
-            $struct
-        });
-    }};
-}
-
-#[macro_export]
-macro_rules! safe_decrement {
-    ($env:expr, $struct:expr, $value:expr) => {{
-        $struct = $struct.checked_sub($value).unwrap_or_else(|| {
-            #[cfg(debug_assertions)]
-            panic_with_error!($env, MathError::MathError);
-            $struct
-        });
-    }};
 }

@@ -1,10 +1,7 @@
-use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::contracttype;
 use soroban_sdk::Address;
-use soroban_sdk::Env;
 use soroban_sdk::Symbol;
 
-use crate::constant::FEE_MULTIPLIER;
 use crate::state::access::PrivilegedAddresses;
 use crate::state::token::AddressAndAmount;
 use crate::state::token::TokenInitInfo;
@@ -19,20 +16,21 @@ pub struct Pool {
     pub status: PoolStatus,
     pub fee_fraction: u32,               // the swap fee (in basis points).
     pub insurance_claim: InsuranceClaim, // the pool's claim on the insurance fund.
-    // The max liquidity imbalance before price premiums are added and/or the buffer/if is used
+    // The max liquidity imbalance before price premiums are added and/or the Insurance Fund is used
     // liquidity imbalance is the difference between quote token and base token value. When it's less than 0,
     // the pool does not have enough liquidity to fill all orders and will apply a price premium to new swaps.
     // precision = QUOTE_PRECISION
     pub liquidity_max_imbalance: u128,
-    pub expiry_ts: u64, // The time the pool is set to expire. Only set if pool is in reduce only mode
-    pub expiry_price: u128, // The frozen price used to settle positions when a pool is set to reduce only mode
+    //     pub expiry_ts: u64, // The time the pool is set to expire. Only set if pool is in reduce only mode
+    //     pub expiry_price: u128, // The frozen price used to settle positions when a pool is set to reduce only mode
 }
 
 impl Pool {
     pub fn is_in_settlement(&self, now: u64) -> bool {
         let in_settlement = matches!(self.status, PoolStatus::Settlement | PoolStatus::Delisted);
-        let expired = self.expiry_ts != 0 && now >= self.expiry_ts;
-        in_settlement || expired
+        // let expired = self.expiry_ts != 0 && now >= self.expiry_ts;
+        // in_settlement || expired
+        in_settlement
     }
 
     pub fn is_reduce_only(&self) -> bool {
@@ -59,23 +57,6 @@ impl Pool {
             PoolTier::HighlySpeculative => 10_u64,
             PoolTier::Isolated => 10_u64,
         }
-    }
-
-    pub fn get_amount_out(
-        &self,
-        e: &Env,
-        in_amount: u128,
-        reserve_sell: u128,
-        reserve_buy: u128,
-    ) -> (u128, u128) {
-        if in_amount == 0 {
-            return (0, 0);
-        }
-
-        // in * reserve_buy / (reserve_sell + in) - fee
-        let result = in_amount.fixed_mul_floor(&e, &reserve_buy, &(reserve_sell + in_amount));
-        let fee = result.fixed_mul_ceil(&e, &(self.fee_fraction as u128), &FEE_MULTIPLIER);
-        (result - fee, fee)
     }
 }
 

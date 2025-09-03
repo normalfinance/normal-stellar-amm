@@ -7,7 +7,7 @@ use utils::bump::{bump_instance, bump_persistent, bump_temporary};
 use utils::errors::storage_errors::StorageError;
 use utils::{
     generate_instance_storage_getter, generate_instance_storage_getter_and_setter,
-    generate_instance_storage_setter,
+    generate_instance_storage_getter_with_default, generate_instance_storage_setter,
 };
 
 #[contracttype]
@@ -27,13 +27,15 @@ pub struct PoolRewardInfo {
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
+    InsuranceFund,       // the address of the Insurnace Fund contract.
+    PoolPlane,           // the address of the PoolPlane contract.
+    LiquidityCalculator, // the address of the Liquidity Calculator contract.
+    OracleRegistry,      // the address of the Oracle Registry contract.
+
     PoolsVec,
     Pools(Symbol), // Map of asset (i.e. "BTC") > Pool
     LpTokenHash,
     PoolHash,
-    PoolPlane,
-    LiquidityCalculator,
-    OracleRegistry, // the address of the Oracle Registry contract.
 
     // Temporary storage
     RewardsConfig,                      // Global reward config
@@ -50,8 +52,8 @@ pub enum PoolError {
     PoolNotFound = 404,
 }
 
-generate_instance_storage_getter_and_setter!(pool_hash, DataKey::PoolHash, BytesN<32>);
-generate_instance_storage_getter_and_setter!(lp_token_hash, DataKey::LpTokenHash, BytesN<32>);
+// Addresses
+generate_instance_storage_getter_and_setter!(insurance_fund, DataKey::InsuranceFund, Address);
 generate_instance_storage_getter_and_setter!(pool_plane, DataKey::PoolPlane, Address);
 generate_instance_storage_getter_and_setter!(
     liquidity_calculator,
@@ -59,6 +61,10 @@ generate_instance_storage_getter_and_setter!(
     Address
 );
 generate_instance_storage_getter_and_setter!(oracle_registry, DataKey::OracleRegistry, Address);
+
+// Hashes
+generate_instance_storage_getter_and_setter!(pool_hash, DataKey::PoolHash, BytesN<32>);
+generate_instance_storage_getter_and_setter!(lp_token_hash, DataKey::LpTokenHash, BytesN<32>);
 
 // Pool
 pub fn get_pool(e: &Env, asset: &Symbol) -> Address {
@@ -85,8 +91,8 @@ pub fn put_pool(e: &Env, asset: Symbol, pool_address: &Address) {
     bump_persistent(e, &key);
 }
 
-pub fn remove_pool(e: &Env, asset: Symbol) {
-    let key = DataKey::Pools(asset);
+pub fn remove_pool(e: &Env, asset: &Symbol) {
+    let key = DataKey::Pools(asset.clone());
     e.storage().persistent().remove(&key);
 }
 
@@ -155,8 +161,8 @@ pub fn get_reward_tokens_detailed(e: &Env, asset: Symbol) -> (U256, bool) {
     }
 }
 
-pub fn set_reward_tokens_detailed(e: &Env, asset: Symbol, value: &(U256, bool)) {
-    let key = DataKey::RewardTokensPoolsLiquidity(asset);
+pub fn set_reward_tokens_detailed(e: &Env, asset: &Symbol, value: &(U256, bool)) {
+    let key = DataKey::RewardTokensPoolsLiquidity(asset.clone());
     let result = e.storage().temporary().set(&key, value);
     bump_temporary(e, &key);
     result

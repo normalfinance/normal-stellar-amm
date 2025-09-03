@@ -14,7 +14,7 @@ impl Delay {
     }
 
     pub fn from_timestamp_diff(now: u64, past_timestamp: u64) -> Option<Self> {
-        now.checked_sub(past_timestamp).map(Self) // TODO: change to saturating_sub?
+        now.checked_sub(past_timestamp).map(Self)
     }
 
     pub fn from_timestamp_diff_expect(now: u64, past_timestamp: u64, msg: &str) -> Self {

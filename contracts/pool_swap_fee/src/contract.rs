@@ -5,9 +5,9 @@ use crate::events::{Events, ProviderFeeEvents};
 use crate::incentives::get_incentives_manager;
 use crate::interface::{AdminInterface, PoolSwapFeeInterface};
 use crate::storage::{
-    get_buffer, get_buffer_fraction, get_fee_destination, get_insurance_fund, get_last_trade_ts,
-    get_lp_revenue_fraction, get_router, get_volume_30d, set_buffer, set_buffer_fraction,
-    set_fee_destination, set_insurance_fund, set_lp_revenue_fraction, set_router, set_volume_30d,
+    get_fee_destination, get_insurance_fund, get_last_trade_ts, get_lp_revenue_fraction,
+    get_router, get_volume_30d, set_fee_destination, set_insurance_fund, set_lp_revenue_fraction,
+    set_router, set_volume_30d,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
@@ -30,12 +30,14 @@ use token_lp::{get_total_lp_tokens, get_user_balance_lp};
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
-use utils::constant::{FEE_DENOMINATOR, PRICE_PRECISION, THIRTY_DAY};
+use utils::constant::{PRICE_PRECISION, THIRTY_DAY};
+use utils::math::pool::calculate_fee;
 use utils::math::safe_math::SafeMath;
 use utils::math::stats::calculate_rolling_sum;
 use utils::state::pool::{PoolInfo, SwapDirection};
 use utils::token::transfer_token;
 use utils::validate;
+use utils::validation::ensure_non_zero_u128;
 
 #[contract]
 pub struct PoolSwapFeeCollector;
@@ -57,7 +59,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
     /// - Token transfer from user to router
     /// - Routing the swap to the pool via the router contract
     /// - Applying protocol-level fees
-    /// - Distributing LP revenue, buffer reserves, and insurance fund premiums
+    /// - Distributing LP revenue and insurance fund premiums
     /// - Tracking long-term metrics like volume and incentives
     ///
     /// # Arguments
@@ -79,8 +81,8 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
     /// * If cross-contract calls fail (e.g., due to misconfiguration or insufficient balances).
     ///
     /// # Side Effects
-    /// * Transfers tokens between user, pool, router, buffer, and insurance fund.
-    /// * Emits swap-related events: trade, buffer deposit, insurance premium, protocol fee charged.
+    /// * Transfers tokens between user, pool, router, and insurance fund.
+    /// * Emits swap-related events: trade, insurance premium, protocol fee charged.
     /// * Updates rolling volume and LP incentive checkpoints.
     fn swap(
         e: Env,
@@ -91,6 +93,8 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         out_min: u128,
     ) -> u128 {
         user.require_auth();
+
+        ensure_non_zero_u128(&e, in_amount);
 
         enter(&e);
 
@@ -139,9 +143,8 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         // Update fee if on token_in
         if direction == SwapDirection::Buy {
             quote_asset_amount = in_amount;
-            fee_amount = (in_amount * (pool_info.pool_response.pool.fee_fraction as u128))
-                / (FEE_DENOMINATOR as u128);
-            in_amount_mut = in_amount - fee_amount;
+            fee_amount = calculate_fee(in_amount, pool_info.pool_response.pool.fee_fraction);
+            in_amount_mut = in_amount.saturating_sub(fee_amount);
         }
 
         e.authorize_as_current_contract(vec![
@@ -178,11 +181,11 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         // Update fee if on token_out
         if direction == SwapDirection::Sell {
             quote_asset_amount = amount_out;
-            fee_amount = (amount_out * (pool_info.pool_response.pool.fee_fraction as u128))
-                / (FEE_DENOMINATOR as u128);
+            fee_amount = calculate_fee(amount_out, pool_info.pool_response.pool.fee_fraction);
         }
 
-        amount_out_w_fee = amount_out - fee_amount;
+        amount_out_w_fee = amount_out.saturating_sub(fee_amount);
+
         if amount_out_w_fee < out_min {
             panic_with_error!(&e, PoolSwapFeeError::OutMinNotSatisfied);
         }
@@ -205,8 +208,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
 
         // LP FEES
         let lp_revenue_fraction = get_lp_revenue_fraction(&e);
-        let lp_fee_amount =
-            (fee_amount * (lp_revenue_fraction as u128)) / (FEE_DENOMINATOR as u128);
+        let lp_fee_amount = calculate_fee(fee_amount, lp_revenue_fraction);
 
         // Add bounds checking to prevent fee calculation underflow when LP fees exceed total fees
         validate!(
@@ -215,42 +217,6 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
             PoolSwapFeeError::InvalidFeeCalculation
         );
         let mut protocol_fee_amount = fee_amount - lp_fee_amount;
-
-        // BUFFER
-        let buffer_fraction = get_buffer_fraction(&e);
-        let fee_amount_for_buffer = (protocol_fee_amount * (buffer_fraction as u128)) / 10_000_u128;
-        let buffer = get_buffer(&e);
-
-        e.authorize_as_current_contract(vec![
-            &e,
-            InvokerContractAuthEntry::Contract(SubContractInvocation {
-                context: ContractContext {
-                    contract: token_out.clone(),
-                    fn_name: Symbol::new(&e, "transfer"),
-                    args: (
-                        e.current_contract_address(),
-                        buffer.clone(),
-                        fee_amount_for_buffer as i128,
-                    )
-                        .into_val(&e),
-                },
-                sub_invocations: vec![&e],
-            }),
-        ]);
-        let _: u128 = e.invoke_contract(
-            &get_buffer(&e),
-            &Symbol::new(&e, "deposit"),
-            Vec::from_array(
-                &e,
-                [
-                    e.current_contract_address().to_val(),
-                    token_out.clone().to_val(),
-                    fee_amount_for_buffer.into_val(&e),
-                ],
-            ),
-        );
-
-        protocol_fee_amount = protocol_fee_amount - fee_amount_for_buffer;
 
         // INSURANCE FUND
         let insurance_fund = get_insurance_fund(&e);
@@ -271,15 +237,18 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
             ),
         );
 
-        let mut if_premium_paid: u128 = 0;
+        let mut insurance_premium_paid: u128 = 0;
+
         if insurance_premium_rate > 0 {
             let estimated_annual_volume = updated_volume_30d.fixed_mul_floor(365, 30).unwrap();
 
             let total_annual_premium = pool_insurance_coverage
                 .fixed_mul_floor(insurance_premium_rate as u128, PRICE_PRECISION)
                 .unwrap();
+
             let premium_per_dollar_swapped =
                 total_annual_premium.safe_div(&e, estimated_annual_volume);
+
             // Lesser of premium or what's left of protocol fee
             let insurance_premium_to_pay = quote_asset_amount
                 .safe_mul(&e, premium_per_dollar_swapped)
@@ -288,7 +257,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
             if insurance_premium_to_pay > 0 {
                 // TODO: must we also call the Pool to update last_revenue_withdraw_ts and rev_withdraw_since_last_settle?
 
-                if_premium_paid = e.invoke_contract(
+                insurance_premium_paid = e.invoke_contract(
                     &insurance_fund,
                     &Symbol::new(&e, "pay_premium"),
                     Vec::from_array(
@@ -313,8 +282,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
             amount_out,
             fee_amount,
             lp_fee_amount,
-            fee_amount_for_buffer,
-            if_premium_paid,
+            insurance_premium_paid,
             protocol_fee_amount,
         );
 
@@ -345,16 +313,8 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         get_router(&e)
     }
 
-    fn get_buffer(e: Env) -> Address {
-        get_buffer(&e)
-    }
-
     fn get_fee_destination(e: Env) -> Address {
         get_fee_destination(&e)
-    }
-
-    fn get_buffer_fraction(e: Env) -> u32 {
-        get_buffer_fraction(&e)
     }
 
     fn get_lp_revenue_fraction(e: Env) -> u32 {
@@ -446,13 +406,6 @@ impl AdminInterface for PoolSwapFeeCollector {
         set_router(&e, &router);
     }
 
-    fn set_buffer(e: Env, admin: Address, buffer: Address) {
-        admin.require_auth();
-        require_admin(&e, &admin);
-
-        set_buffer(&e, &buffer);
-    }
-
     fn set_insurance_fund(e: Env, admin: Address, insurance_fund: Address) {
         admin.require_auth();
         require_admin(&e, &admin);
@@ -465,13 +418,6 @@ impl AdminInterface for PoolSwapFeeCollector {
         require_admin(&e, &admin);
 
         set_fee_destination(&e, &fee_destination);
-    }
-
-    fn set_buffer_fraction(e: Env, admin: Address, fraction: u32) {
-        admin.require_auth();
-        require_admin(&e, &admin);
-
-        set_buffer_fraction(&e, &fraction);
     }
 
     fn set_lp_revenue_fraction(e: Env, admin: Address, fraction: u32) {

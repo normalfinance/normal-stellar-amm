@@ -59,3 +59,11 @@ pub fn put_historical_oracle_data(e: &Env, asset: &Symbol, data: &HistoricalOrac
     let key = DataKey::HistoricalOracleData(asset.clone());
     e.storage().persistent().set(&key, data)
 }
+
+pub fn remove_oracle(e: &Env, asset: &Symbol) {
+    let oracle_key = DataKey::OraclesSet(asset.clone());
+    let historical_key = DataKey::HistoricalOracleData(asset.clone());
+
+    e.storage().persistent().remove(&oracle_key);
+    e.storage().persistent().remove(&historical_key);
+}

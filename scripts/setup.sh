@@ -171,32 +171,6 @@ stellar contract invoke \
 
 echo "Tokens and pool router deployed."
 
-#  _______   ____  ____   _______   _______   _______   _______
-# |   _  "\ ("  _||_ " | /"     "| /"     "| /"     "| /"      \
-# (. |_)  :)|   (  ) : |(: ______)(: ______)(: ______)|:        |
-# |:     \/ (:  |  | . ) \/    |   \/    |   \/    |  |_____/   )
-# (|  _  \\  \\ \__/ //  // ___)   // ___)   // ___)_  //      /
-# |: |_)  :) /\\ __ //\ (:  (     (:  (     (:      "||:  __   \
-# (_______/ (__________) \__/      \__/      \_______)|__|  \___)
-
-echo "Setup buffer..."
-
-ONE_HOUR=$((3600))
-
-stellar contract invoke \
-    --id $BUFFER_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
-    --fee $STELLAR_BASE_FEE \
-    -- \
-    initialize \
-    --admin $ADMIN_ADDRESS \
-    --emergency_admin $ADMIN_ADDRESS \
-    --time_bt_payouts $ONE_HOUR \
-    --min_reserve_ratio 1000
-
 #   __    _____  ___    ________  ____  ____   _______        __      _____  ___    ______    _______
 #  |" \  (\"   \|"  \  /"       )("  _||_ " | /"      \      /""\    (\"   \|"  \  /" _  "\  /"     "|
 #  ||  | |.\\   \    |(:   \___/ |   (  ) : ||:        |    /    \   |.\\   \    |(: ( \___)(: ______)
@@ -220,11 +194,27 @@ stellar contract invoke \
     initialize \
     --admin $ADMIN_ADDRESS \
     --emergency_admin $ADMIN_ADDRESS \
-    --token $XLM_ADDRESS \
+    --oracle_registry $ORACLE_REGISTRY_ADDR \
+    --pool_router $POOL_ROUTER_ADDR \
+    --premium_token $XLM_ADDRESS \
     --unstaking_period $THIRTEEN_DAYS \
     --optimal_utilization 8000 \
     --base_rate 200 \
     --rate_slopes '[2000, 6000]'
+
+# REMEMBER: An oracle for each whitelisted token is required before adding them here
+stellar contract invoke \
+    --id $INSURANCE_FUND_ADDR \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    --rpc-url $STELLAR_RPC_URL \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
+    --fee $STELLAR_BASE_FEE \
+    -- \
+    add_token_whitelist \
+    --admin $ADMIN_ADDRESS \
+    --token $XLM_ADDRESS \
+    --symbol "XLM"
 
 #   _______   _______   _______       ______    ______    ___      ___       _______   ______  ___________  ______     _______
 #  /"     "| /"     "| /"     "|     /" _  "\  /    " \  |"  |    |"  |     /"     "| /" _  "\("     _   ")/    " \   /"      \
@@ -237,7 +227,7 @@ stellar contract invoke \
 echo "Setup fee collector..."
 
 stellar contract invoke \
-    --id $POOL_SWAP_FEE \
+    --id $POOL_SWAP_FEE_ADDR \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     --rpc-url $STELLAR_RPC_URL \
@@ -249,7 +239,7 @@ stellar contract invoke \
     --emergency_admin $ADMIN_ADDRESS
 
 stellar contract invoke \
-    --id $POOL_SWAP_FEE \
+    --id $POOL_SWAP_FEE_ADDR \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     --rpc-url $STELLAR_RPC_URL \
@@ -261,19 +251,7 @@ stellar contract invoke \
     --router $POOL_ROUTER_ADDR
 
 stellar contract invoke \
-    --id $POOL_SWAP_FEE \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
-    --fee $STELLAR_BASE_FEE \
-    -- \
-    set_buffer \
-    --admin $ADMIN_ADDRESS \
-    --buffer $BUFFER_ADDR
-
-stellar contract invoke \
-    --id $POOL_SWAP_FEE \
+    --id $POOL_SWAP_FEE_ADDR \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     --rpc-url $STELLAR_RPC_URL \
@@ -285,7 +263,7 @@ stellar contract invoke \
     --insurance_fund $INSURANCE_FUND_ADDR
 
 stellar contract invoke \
-    --id $POOL_SWAP_FEE \
+    --id $POOL_SWAP_FEE_ADDR \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     --rpc-url $STELLAR_RPC_URL \

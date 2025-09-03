@@ -21,6 +21,4 @@ soroban contract bindings typescript --overwrite --wasm target/wasm32v1-none/rel
 
 soroban contract bindings typescript --overwrite --wasm target/wasm32v1-none/release/pool_swap_fee.wasm --output-dir bindings/pool_swap_fee
 
-soroban contract bindings typescript --overwrite --wasm target/wasm32v1-none/release/buffer.wasm --output-dir bindings/buffer
-
 soroban contract bindings typescript --overwrite --wasm target/wasm32v1-none/release/insurance_fund.wasm --output-dir bindings/insurance_fund

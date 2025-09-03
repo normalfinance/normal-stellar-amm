@@ -4,9 +4,7 @@ use crate::errors::PoolError;
 use crate::errors::PoolValidationError;
 use crate::events::Events as LiquidityPoolEvents;
 use crate::events::PoolEvents;
-use crate::storage::get_last_oracle_valid;
 use crate::storage::get_last_trade_ts;
-use crate::storage::get_last_update_ts;
 use crate::storage::get_mint_cap_fraction;
 use crate::storage::get_oracle_registry;
 use crate::storage::get_volume_30d;
@@ -20,10 +18,11 @@ use soroban_sdk::Symbol;
 use soroban_sdk::Vec;
 use soroban_sdk::{panic_with_error, Env};
 
+use utils::constant::FEE_MULTIPLIER;
+use utils::constant::PRICE_PRECISION;
 use utils::constant::PRICE_PRECISION_I64;
 use utils::constant::PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO_I128;
 use utils::constant::TWENTY_FOUR_HOUR;
-use utils::constant::{FEE_MULTIPLIER, PRICE_PRECISION};
 use utils::math::safe_math::SafeMath;
 use utils::math::stats::calculate_rolling_sum;
 use utils::state::oracle_registry::HistoricalOracleData;
@@ -288,21 +287,6 @@ pub fn update_volume_30d(e: &Env, quote_asset_amount: u128, now: u64) {
     set_last_trade_ts(e, &now);
 }
 
-// Checks whether the most recent oracle update is still valid for use.
-//
-// Compares the current timestamp to the last update timestamp and returns `true`
-// only if they match and the last oracle update was marked valid.
-//
-// # Arguments
-// * `e` - Soroban environment reference.
-// * `current_ts` - The current ledger timestamp.
-//
-// # Returns
-// * `bool` — `true` if the oracle data is recent and marked valid.
-pub fn is_recent_oracle_valid(e: &Env, current_ts: u64) -> bool {
-    get_last_oracle_valid(e) && current_ts == get_last_update_ts(e)
-}
-
 // Computes the delta needed to re-peg reserve A (synthetic base token) to match the target peg price.
 //
 // Uses current reserves and oracle prices to calculate the ideal reserve A value,
@@ -394,49 +378,162 @@ pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128, red
     }
 }
 
-// Calculates the input amount required to receive a fixed output amount in a swap,
-// factoring in the trading fee.
-//
-// This is used in strict-receive swaps where the output is guaranteed and the input
-// is determined. If the total value with fee exceeds the reserve, the function panics.
-//
-// # Arguments
-// * `e` - Soroban environment reference.
-// * `out_amount` - Desired amount of output token to receive.
-// * `reserve_sell` - Reserve of the token being sold.
-// * `reserve_buy` - Reserve of the token being bought.
-// * `fee_fraction` - Trading fee as a fraction (e.g., 30 = 0.3%).
-//
-// # Returns
-// * `(u128, u128)` — Tuple:
-//   - Input amount required to receive `out_amount`
-//   - Fee charged as the difference between input and output value.
-//
-// # Panics
-// - If the fee-adjusted input exceeds available reserves.
+/// Calculates the output amount of tokens for a swap given input and pool reserves.
+///
+/// This function implements a constant product AMM–style formula with fees applied externally (using PoolSwapFee).
+/// The calculation follows:
+///
+/// ```text
+/// out = in * reserve_buy / (reserve_sell + in) - fee
+/// ```
+///
+/// The `fee` portion is not handled inside this function—it must be deducted by the caller
+/// after receiving the raw output value.
+///
+/// # Arguments
+///
+/// * `in_amount` – The amount of input tokens being sold into the pool.
+/// * `reserve_sell` – The current reserve of the token being sold (the pool’s supply of the input token).
+/// * `reserve_buy` – The current reserve of the token being bought (the pool’s supply of the output token).
+///
+/// # Returns
+///
+/// A u128 `amount_out`:
+/// * `amount_out` – The number of output tokens the user would receive before fee deduction.
+///
+/// Returns `0` if `in_amount == 0`.
+///
+/// # Examples
+///
+/// ```rust
+/// // Example reserves
+/// let reserve_sell: u128 = 1_000_000;
+/// let reserve_buy: u128 = 500_000;
+/// let in_amount: u128 = 10_000;
+///
+/// // Calculate output before fee
+/// let out = contract.get_amount_out(in_amount, reserve_sell, reserve_buy);
+///
+/// assert!(out > 0);
+/// ```
+pub fn get_amount_out(
+    in_amount: u128,    // dx  – exact tokens the trader wants to sell
+    reserve_sell: u128, // x
+    reserve_buy: u128,  // y
+    fee_fraction: u128,
+) -> (u128, u128) {
+    if in_amount == 0 {
+        return (0, 0);
+    }
+
+    let in_after_fee = in_amount * (FEE_MULTIPLIER - fee_fraction) / FEE_MULTIPLIER;
+    let raw_out = in_after_fee
+        .fixed_mul_floor(reserve_buy, (reserve_sell + in_after_fee))
+        .unwrap();
+    (raw_out, in_amount - in_after_fee) // fee is taken on input
+}
+// pub fn get_amount_out(in_amount: u128, reserve_sell: u128, reserve_buy: u128) -> u128 {
+//     if in_amount == 0 {
+//         return 0;
+//     }
+
+//     // +1 just in case there were some rounding errors & convert to real units in place
+//     let result = in_amount
+//         .fixed_mul_floor(reserve_buy, reserve_sell.saturating_add(in_amount))
+//         .unwrap()
+//         + 1;
+
+//     result
+// }
+
+/// Calculates the required input amount for a **strict receive** swap given
+/// a desired output amount and current pool reserves.
+///
+/// This function computes how much of the *sell token* must be provided in
+/// order to guarantee receiving exactly `out_amount` of the *buy token*,
+/// assuming a constant product AMM invariant.  
+///
+/// The calculation uses a floor division (`fixed_mul_floor`) and then adds
+/// `+1` to the result to guard against rounding errors, ensuring the pool
+/// always receives enough input tokens to cover the desired output.
+///
+/// # Arguments
+///
+/// * `out_amount` – The amount of output tokens the trader wishes to receive.  
+/// * `reserve_sell` – The current reserve of the token being sold
+///   (the pool’s input-side liquidity).  
+/// * `reserve_buy` – The current reserve of the token being bought
+///   (the pool’s output-side liquidity).  
+///
+/// # Returns
+///
+/// * `u128` – The minimum required input amount of the sell token
+///   needed to guarantee the `out_amount` is fulfilled.  
+///   Returns `0` if `out_amount == 0`.  
+///
+/// # Notes
+///
+/// * The extra `+1` ensures rounding errors never result in underpayment.  
+/// * The function does **not** apply protocol or trading fees — callers
+///   must account for those separately if required.  
+///
+/// # Examples
+///
+/// ```rust
+/// let reserve_sell: u128 = 1_000_000;
+/// let reserve_buy: u128 = 500_000;
+/// let desired_out: u128 = 10_000;
+///
+/// // Compute required input for a strict receive
+/// let required_in = contract::get_amount_out_strict_receive(desired_out, reserve_sell, reserve_buy);
+///
+/// assert!(required_in > 0);
+/// ```
 pub fn get_amount_out_strict_receive(
     e: &Env,
-    out_amount: u128,
-    reserve_sell: u128,
-    reserve_buy: u128,
-    fee_fraction: u32,
+    out_amount: u128,   // dy  – exact tokens the trader wants to receive
+    reserve_sell: u128, // x
+    reserve_buy: u128,  // y
+    fee_fraction: u128,
 ) -> (u128, u128) {
     if out_amount == 0 {
         return (0, 0);
     }
-
-    let dy_w_fee = out_amount
-        .fixed_mul_ceil(FEE_MULTIPLIER, (FEE_MULTIPLIER - (fee_fraction as u128)))
-        .unwrap();
-    // if total value including fee is more than the reserve, math can't be done properly
-    if dy_w_fee >= reserve_buy {
+    if out_amount >= reserve_buy {
         panic_with_error!(e, PoolValidationError::InsufficientBalance);
     }
-    // +1 just in case there were some rounding errors & convert to real units in place
-    let result = reserve_buy
-        .fixed_mul_floor(reserve_sell, (reserve_buy - dy_w_fee))
-        .unwrap()
-        - reserve_sell
-        + 1;
-    (result, dy_w_fee - out_amount)
+
+    // ----------  Step 1: dx_after_fee = ceil(x·dy / (y-dy))  ----------
+    let dx_after_fee = reserve_sell
+        .fixed_mul_ceil(out_amount, (reserve_buy - out_amount))
+        .unwrap();
+
+    // ----------  Step 2: gross-up for fee on *input* side  -------------
+    // dx_before_fee = ceil( dx_after_fee / (1-f) )
+    let dx_before_fee = dx_after_fee
+        .fixed_mul_ceil(FEE_MULTIPLIER, (FEE_MULTIPLIER - fee_fraction))
+        .unwrap();
+
+    // ----------  Step 3: fee = dx_before_fee - dx_after_fee -----------
+    let fee = dx_before_fee - dx_after_fee;
+
+    (dx_before_fee, fee)
 }
+// pub fn get_amount_out_strict_receive(
+//     out_amount: u128,
+//     reserve_sell: u128,
+//     reserve_buy: u128,
+// ) -> u128 {
+//     if out_amount == 0 {
+//         return 0;
+//     }
+
+//     // +1 just in case there were some rounding errors & convert to real units in place
+//     let result = reserve_buy
+//         .fixed_mul_floor(reserve_sell, reserve_buy)
+//         .unwrap()
+//         - reserve_sell
+//         + 1;
+
+//     result
+// }

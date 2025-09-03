@@ -8,11 +8,11 @@ use crate::pool_interface::{
 use crate::pool_utils::{deploy_pool, get_total_liquidity};
 use crate::router_interface::AdminInterface;
 use crate::storage::{
-    get_liquidity_calculator, get_pool, get_pool_base, get_pool_plane, get_pools_vec,
-    get_reward_tokens, get_reward_tokens_detailed, get_rewards_config, remove_pool,
-    set_liquidity_calculator, set_lp_token_hash, set_oracle_registry, set_pool_hash,
-    set_pool_plane, set_reward_tokens, set_reward_tokens_detailed, set_rewards_config,
-    GlobalRewardsConfig, PoolRewardInfo,
+    get_insurance_fund, get_liquidity_calculator, get_pool, get_pool_base, get_pool_plane,
+    get_pools_vec, get_reward_tokens, get_reward_tokens_detailed, get_rewards_config, remove_pool,
+    set_insurance_fund, set_liquidity_calculator, set_lp_token_hash, set_oracle_registry,
+    set_pool_hash, set_pool_plane, set_pools_vec, set_reward_tokens, set_reward_tokens_detailed,
+    set_rewards_config, GlobalRewardsConfig, PoolRewardInfo,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
@@ -39,6 +39,7 @@ use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::constant::MAX_POOL_FEE;
 use utils::state::pool::{PoolInfo, PoolTier, SwapDirection};
 use utils::token::{transfer_token, transfer_token_from};
+use utils::validation::ensure_non_zero_u128;
 
 #[contract]
 pub struct PoolRouter;
@@ -83,16 +84,18 @@ impl PoolInterfaceTrait for PoolRouter {
     fn deposit(e: Env, user: Address, asset: Symbol, token_b_amount: u128) -> (u128, u128) {
         user.require_auth();
 
+        ensure_non_zero_u128(&e, token_b_amount);
+
         enter(&e);
 
         let pool = get_pool(&e, &asset);
 
-        let (amount, share_amount): (u128, u128) = e.invoke_contract(
+        let (amount, share_amount, delta_a): (u128, u128, i128) = e.invoke_contract(
             &pool,
             &symbol_short!("deposit"),
             Vec::from_array(&e, [user.clone().into_val(&e), token_b_amount.into_val(&e)]),
         );
-        Events::new(&e).deposit_liquidity(asset, pool, user, amount, share_amount);
+        Events::new(&e).deposit_liquidity(asset, pool, user, amount, share_amount, delta_a);
 
         exit(&e);
 
@@ -138,12 +141,14 @@ impl PoolInterfaceTrait for PoolRouter {
     ) -> u128 {
         user.require_auth();
 
+        ensure_non_zero_u128(&e, in_amount);
+
         enter(&e);
 
-        let pool = get_pool(&e, &asset);
+        let pool_address = get_pool(&e, &asset);
 
-        let out_amount = e.invoke_contract(
-            &pool,
+        let (out_amount, delta_a_pre, delta_a_post): (u128, i128, i128) = e.invoke_contract(
+            &pool_address,
             &symbol_short!("swap"),
             Vec::from_array(
                 &e,
@@ -156,7 +161,16 @@ impl PoolInterfaceTrait for PoolRouter {
             ),
         );
 
-        Events::new(&e).swap(asset, pool, user, direction, in_amount, out_amount);
+        Events::new(&e).swap(
+            asset,
+            pool_address,
+            user,
+            direction,
+            in_amount,
+            out_amount,
+            delta_a_pre,
+            delta_a_post,
+        );
 
         exit(&e);
 
@@ -177,7 +191,7 @@ impl PoolInterfaceTrait for PoolRouter {
     // # Returns
     // * `(u128, i128)` - A tuple containing:
     //     - The estimated amount of output token received.
-    //     - The estimated fee (can be negative or positive depending on implementation).
+    //     - The estimated delta_a (can be negative or positive depending on implementation).
     //
     // # Panics
     // * If `token_in` or `token_out` are not found in the `tokens` vector.
@@ -192,10 +206,12 @@ impl PoolInterfaceTrait for PoolRouter {
         direction: SwapDirection,
         in_amount: u128,
     ) -> (u128, i128) {
-        let pool_id = get_pool(&e, &asset);
+        ensure_non_zero_u128(&e, in_amount);
+
+        let pool_address = get_pool(&e, &asset);
 
         e.invoke_contract(
-            &pool_id,
+            &pool_address,
             &Symbol::new(&e, "estimate_swap"),
             Vec::from_array(&e, [direction.into_val(&e), in_amount.into_val(&e)]),
         )
@@ -224,17 +240,26 @@ impl PoolInterfaceTrait for PoolRouter {
     fn withdraw(e: Env, user: Address, asset: Symbol, share_amount: u128) -> u128 {
         user.require_auth();
 
+        ensure_non_zero_u128(&e, share_amount);
+
         enter(&e);
 
-        let pool = get_pool(&e, &asset);
+        let pool_address = get_pool(&e, &asset);
 
-        let amount: u128 = e.invoke_contract(
-            &pool,
+        let (amount, delta_a): (u128, i128) = e.invoke_contract(
+            &pool_address,
             &symbol_short!("withdraw"),
             Vec::from_array(&e, [user.clone().into_val(&e), share_amount.into_val(&e)]),
         );
 
-        Events::new(&e).withdraw_liquidity(asset, pool, user, share_amount, amount);
+        Events::new(&e).withdraw_liquidity(
+            asset,
+            pool_address,
+            user,
+            share_amount,
+            amount,
+            delta_a,
+        );
 
         exit(&e);
 
@@ -460,11 +485,22 @@ impl AdminInterface for PoolRouter {
         );
     }
 
+    fn set_insurance_fund(e: Env, admin: Address, insurance_fund: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        set_insurance_fund(&e, &insurance_fund);
+    }
+
     fn set_liquidity_calculator(e: Env, admin: Address, calculator: Address) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-
         set_liquidity_calculator(&e, &calculator);
+    }
+
+    fn set_oracle_registry(e: Env, admin: Address, oracle_registry: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        set_oracle_registry(&e, &oracle_registry);
     }
 
     // Sets the liquidity pool share token wasm hash.
@@ -490,10 +526,16 @@ impl AdminInterface for PoolRouter {
             .put_reward_token(reward_token);
     }
 
-    fn set_oracle_registry(e: Env, admin: Address, oracle_registry: Address) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-        set_oracle_registry(&e, &oracle_registry);
+    //   _______    _______  ___________  ___________  _______   _______    ________
+    //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
+    // (: ( \___) (: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
+    //  \/ \       \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
+    //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
+    // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
+    //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
+
+    fn get_insurance_fund(e: Env) -> Address {
+        get_insurance_fund(&e)
     }
 }
 
@@ -640,7 +682,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
         token_data.total_liquidity = total_liquidity;
         tokens_with_liquidity.set(asset.clone(), token_data);
         set_reward_tokens(&e, &tokens_with_liquidity);
-        set_reward_tokens_detailed(&e, asset, &pool_with_processed_info);
+        set_reward_tokens_detailed(&e, &asset, &pool_with_processed_info);
     }
 
     // Configures the rewards for a specific pool.
@@ -725,7 +767,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
 
         if pool_tps > 0 {
             // mark pool as configured to avoid reentrancy
-            set_reward_tokens_detailed(&e, asset.clone(), &(pool_liquidity, true));
+            set_reward_tokens_detailed(&e, &asset, &(pool_liquidity, true));
         }
 
         Events::new(&e).config_rewards(asset, pool_id, pool_tps, rewards_config.expired_at);
@@ -1025,13 +1067,53 @@ impl PoolsManagementTrait for PoolRouter {
         }
     }
 
-    fn remove_pool(e: Env, user: Address, asset: Symbol) {
-        user.require_auth();
-        require_operations_admin_or_owner(&e, &user);
+    fn delist_pool(e: Env, admin: Address, asset: Symbol) {
+        admin.require_auth();
+        require_admin(&e, &admin);
 
-        if get_pool_base(&e, asset.clone()).is_some() {
-            remove_pool(&e, asset)
+        let pool = get_pool(&e, &asset);
+
+        let response: u128 = e.invoke_contract(
+            &pool,
+            &Symbol::new(&e, "delist"),
+            Vec::from_array(&e, [admin.clone().into_val(&e), asset.into_val(&e)]),
+        );
+
+        Events::new(&e).delist_pool(asset, pool);
+    }
+
+    fn remove_pool(e: Env, admin: Address, asset: Symbol) {
+        admin.require_auth();
+        require_admin(&e, &admin);
+
+        let now = e.ledger().timestamp();
+        let pool = get_pool(&e, &asset);
+
+        let pool_info: PoolInfo =
+            e.invoke_contract(&pool, &Symbol::new(&e, "get_info"), Vec::from_array(&e, []));
+
+        let pool_in_settlement = pool_info.pool_response.pool.is_in_settlement(now);
+        let pool_reserves_empty = pool_info.pool_response.token_a.amount == 0
+            && pool_info.pool_response.token_b.amount == 0;
+
+        // Only remove the Pool if it's in settlement and has emptied it's reserves
+        if pool_in_settlement && pool_reserves_empty {
+            remove_pool(&e, &asset);
+
+            let mut pools_vec = get_pools_vec(&e);
+            for i in 0..pools_vec.len() {
+                if let Some(existing) = pools_vec.get(i) {
+                    if existing == pool {
+                        pools_vec.remove_unchecked(i);
+                    }
+                }
+            }
+            set_pools_vec(&e, &pools_vec);
+
+            set_reward_tokens_detailed(&e, &asset, &(U256::from_u32(&e, 0), false));
         }
+
+        Events::new(&e).remove_pool(asset, pool);
     }
 
     //   _______    _______  ___________  ___________  _______   _______    ________
@@ -1066,6 +1148,25 @@ impl PoolsManagementTrait for PoolRouter {
 
     fn get_pools(e: Env) -> Vec<Address> {
         get_pools_vec(&e)
+    }
+
+    fn get_total_liquidity_imbalance(e: Env) -> i128 {
+        let pools = get_pools_vec(&e);
+
+        let mut total_liquidity_imbalance = 0_i128;
+
+        for idx in 0..pools.len() {
+            let pool_address = pools.get(idx).unwrap();
+            let pool_liquidity_imbalance: i128 = e.invoke_contract(
+                &pool_address,
+                &Symbol::new(&e, "get_liquidity_imbalance"),
+                Vec::new(&e),
+            );
+            total_liquidity_imbalance =
+                total_liquidity_imbalance.saturating_add(pool_liquidity_imbalance);
+        }
+
+        total_liquidity_imbalance
     }
 }
 

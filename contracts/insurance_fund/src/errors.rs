@@ -23,10 +23,14 @@ pub enum InsuranceFundError {
     InsufficientCollateral = 18,
     InvalidIFDetected = 19,
     TooMuchInsurance = 20,
-
     InvalidOptimalUtilization = 21,
     InvalidTimestamp = 22,
     CostBasisUnderflow = 23,
+    QueryPoolFailed = 24,
+    PayInsuranceClaimFailed = 25,
+    UnsupportedToken = 26,
+    TokenAlreadyDeleted = 27,
+    InvalidOracle = 28,
 
     // paused ops
     FundDepositKilled = 30,

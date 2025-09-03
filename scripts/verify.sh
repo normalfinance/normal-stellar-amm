@@ -1,6 +1,8 @@
 # Ensure the script exits on any errors
 set -e
 
+# TODO: this script is not complete!
+
 # Check if the arguments are provided
 # Required: identity_string, network, contract_name
 if [ "$#" -lt 3 ]; then

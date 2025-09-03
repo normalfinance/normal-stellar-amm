@@ -1,27 +1,68 @@
+use crate::{
+    errors::InsuranceFundError,
+    storage::{get_oracle_registry, get_reserve, get_token_whitelist, get_token_whitelist_vec},
+};
 use soroban_fixed_point_math::FixedPoint;
-use utils::constant::{PERCENTAGE_PRECISION, PERCENTAGE_PRECISION_I64};
+use soroban_sdk::{panic_with_error, Env, Symbol, Vec};
+use utils::{
+    constant::{PERCENTAGE_PRECISION, PERCENTAGE_PRECISION_I64},
+    state::oracle_registry::{HistoricalOracleData, OracleValidity},
+};
+
+pub fn calculate_total_reserve_value(e: &Env) -> u128 {
+    let tokens = get_token_whitelist_vec(&e);
+
+    let mut total_reserve_value: u128 = 0;
+
+    for i in 0..tokens.len() {
+        let token = tokens.get(i).unwrap();
+        let whitelist_token = get_token_whitelist(e, &token);
+
+        let reserve = get_reserve(&e, &whitelist_token.address);
+
+        // Fetch price
+        let (historical_oracle_data, oracle_validity): (HistoricalOracleData, OracleValidity) = e
+            .invoke_contract(
+                &get_oracle_registry(&e),
+                &Symbol::new(&e, "get_price"),
+                Vec::from_array(&e, [whitelist_token.symbol.to_val()]),
+            );
+
+        // Check oracle validity
+        if oracle_validity != OracleValidity::Valid {
+            panic_with_error!(e, InsuranceFundError::InvalidOracle);
+        }
+
+        let reserve_value = reserve
+            .balance
+            .saturating_mul(historical_oracle_data.last_oracle_price_twap);
+
+        total_reserve_value = total_reserve_value.saturating_add(reserve_value);
+    }
+
+    total_reserve_value
+}
 
 // Calculates the utilization percentage of the insurance fund.
 //
 // # Arguments
 //
-// * `insurance_vault_amount` - The current balance in the insurance vault, in fixed-point units.
+// * `total_reserve_value` - The current balance in the insurance vault, in fixed-point units.
 // * `optimal_insurance` - The target or optimal coverage amount, in fixed-point units.
 //
 // # Returns
 //
 // * The utilization percentage as a fixed-point `u32` (e.g. 10_000_000 = 100%).
 //   Returns 0 if either input is zero. The result is scaled by `PERCENTAGE_PRECISION`.
-pub fn calculate_utilization(insurance_vault_amount: u128, optimal_insurance: u128) -> u32 {
-    if insurance_vault_amount == 0 || optimal_insurance == 0 {
+pub fn calculate_utilization(total_reserve_value: u128, optimal_insurance: u128) -> u32 {
+    if total_reserve_value == 0 || optimal_insurance == 0 {
         return 0;
     }
 
     // is this safe to cast u128 down to i32?
-    insurance_vault_amount
+    total_reserve_value
         .fixed_div_floor(optimal_insurance, PERCENTAGE_PRECISION)
         .unwrap_or(0) as u32
-    //  result.min(u32::MAX as u128) as u32
 }
 
 // Calculates the interest rate based on utilization using a two-slope model.
