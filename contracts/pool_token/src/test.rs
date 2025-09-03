@@ -2,7 +2,7 @@
 extern crate std;
 
 use crate::testutils::{create_dummy_pool, create_token, Setup};
-use crate::{contract::LpToken, LpTokenClient};
+use crate::{contract::PoolToken, PoolTokenClient};
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::{
     Address as _, AuthorizedFunction, AuthorizedInvocation, Events, MockAuth, MockAuthInvoke,
@@ -270,7 +270,7 @@ fn initialize_already_initialized() {
 fn decimal_is_over_max() {
     let e = Env::default();
     let admin = create_dummy_pool(&e).address;
-    let token = LpTokenClient::new(&e, &e.register(LpToken {}, ()));
+    let token = PoolTokenClient::new(&e, &e.register(PoolToken {}, ()));
     token.initialize(
         &admin,
         &(u32::from(u8::MAX) + 1),

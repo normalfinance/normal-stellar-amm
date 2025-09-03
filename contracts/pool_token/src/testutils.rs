@@ -1,11 +1,11 @@
 #![cfg(test)]
 
-use crate::LpTokenClient;
+use crate::PoolTokenClient;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{contract, contractimpl, Address, Env, IntoVal};
 
-pub fn create_token<'a>(e: &Env, admin: &Address) -> LpTokenClient<'a> {
-    let token = LpTokenClient::new(e, &e.register(crate::contract::LpToken {}, ()));
+pub fn create_token<'a>(e: &Env, admin: &Address) -> PoolTokenClient<'a> {
+    let token = PoolTokenClient::new(e, &e.register(crate::contract::PoolToken {}, ()));
     token.initialize(admin, &7, &"name".into_val(e), &"symbol".into_val(e));
     token
 }
@@ -37,7 +37,7 @@ pub(crate) struct Setup<'a> {
     pub(crate) env: Env,
 
     pub(crate) admin: Address,
-    pub(crate) token: LpTokenClient<'a>,
+    pub(crate) token: PoolTokenClient<'a>,
 }
 
 impl Default for Setup<'_> {

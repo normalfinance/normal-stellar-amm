@@ -2,6 +2,7 @@
 
 use soroban_sdk::Env;
 
+mod constants;
 pub mod errors;
 pub mod events;
 pub mod manager;
@@ -12,22 +13,22 @@ pub use storage::Storage;
 pub use utils;
 
 #[derive(Clone)]
-pub struct IncentivesConfig {
+pub struct RewardsConfig {
     page_size: u64,
 }
 
 #[derive(Clone)]
-pub struct Incentives {
+pub struct Rewards {
     env: Env,
-    config: IncentivesConfig,
+    config: RewardsConfig,
 }
 
-impl Incentives {
+impl Rewards {
     #[inline(always)]
-    pub fn new(env: &Env, page_size: u64) -> Incentives {
-        Incentives {
+    pub fn new(env: &Env, page_size: u64) -> Rewards {
+        Rewards {
             env: env.clone(),
-            config: IncentivesConfig { page_size },
+            config: RewardsConfig { page_size },
         }
     }
 

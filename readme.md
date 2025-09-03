@@ -34,15 +34,15 @@ Normal is a synthetic asset protocol enabling investors to trade any crypto asse
 - **oracle_registry** - Oracle aggegation and price validation making it easier for pools to source reliable oracle prices
 - **pool_plane** - contract designed to store minimum information about any pool: type, parameters, reserves. being updated on every action with the pool (deposit, swap, withdraw, parameters update, etc)
 - **liquidity_calculator** - smart contract containing pools liquidity calculation logic which is capable to compare many pools at once
-- **lp_token** - [SEP-0041](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0041.md) compatible token smart contract designed for liquidity pool share management
+- **pool_token** - [SEP-0041](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0041.md) compatible token smart contract designed for liquidity pool share management
 - **token** - [SEP-0041](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0041.md) compatible token smart contract
 
 ## Modules
 
 - **access_control** - Handles permissioned access to contracts using role-based access control (RBAC)
-- **incentives** - Handles how liquidity provider fees and pool rewards are calculated and claimed
+- **rewards** - Handles how liquidity provider fees and pool rewards are calculated and claimed
 - **reentrancy_guard** - Handles utilities helping prevent re-entrant calls (even though they're technically impossible on Soroban)
-- **token_lp** - Handles LP token utilities
+- **token_share** - Handles Pool token utilities
 - **upgrade** - Handles contract upgrades
 - **utils** - Handles shared types, utils, constants, errors, macros, and more
 

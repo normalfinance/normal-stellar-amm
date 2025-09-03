@@ -13,6 +13,7 @@ use utils::{
 #[contracttype]
 enum DataKey {
     TokenA,
+    TotalSynthetics,
     TokenB,     // the quote token address (always XLM).
     ReserveA,   // total token_a amount in the pool (x in the constant product formula)
     ReserveB,   // total token_b amount in the pool (y in the constant product formula)
@@ -41,10 +42,8 @@ enum DataKey {
     MaxLiquidityImbalance,
 
     // metrics
-    TotalSyntheticTokens, // Total token supply
-    LastTradeTs,          // the blockchain unix timestamp at the time of the last trade
-    Volume30d,            // estimated total of volume in market
-
+    LastTradeTs, // the blockchain unix timestamp at the time of the last trade
+    Volume30d,   // estimated total of volume in market
     LiquidityMintedSynthetic, // This is incremented only when liquidity is added and token_a is minted by the pool to balance the XLM deposit
 
     // paused ops
@@ -55,12 +54,6 @@ enum DataKey {
 
     TokenFutureWASM,
 }
-generate_instance_storage_getter_and_setter_with_default!(
-    liquidity_minted_synthetic,
-    DataKey::LiquidityMintedSynthetic,
-    u128,
-    0
-);
 
 // Numbers
 generate_instance_storage_getter_and_setter_with_default!(reserve_a, DataKey::ReserveA, u128, 0);
@@ -72,8 +65,8 @@ generate_instance_storage_getter_and_setter_with_default!(
     0
 );
 generate_instance_storage_getter_and_setter_with_default!(
-    total_synthetic_tokens,
-    DataKey::TotalSyntheticTokens,
+    total_synthetics,
+    DataKey::TotalSynthetics,
     u128,
     0
 );
@@ -141,12 +134,6 @@ generate_instance_storage_getter_and_setter_with_default!(
 );
 
 // Metrics
-generate_instance_storage_getter_and_setter_with_default!(
-    total_synthetic_tokens,
-    DataKey::TotalSyntheticTokens,
-    u128,
-    0
-);
 generate_instance_storage_getter_and_setter_with_default!(volume_30d, DataKey::Volume30d, u128, 0);
 generate_instance_storage_getter_and_setter_with_default!(
     last_trade_ts,
@@ -154,7 +141,12 @@ generate_instance_storage_getter_and_setter_with_default!(
     u64,
     0
 );
-
+generate_instance_storage_getter_and_setter_with_default!(
+    liquidity_minted_synthetic,
+    DataKey::LiquidityMintedSynthetic,
+    u128,
+    0
+);
 generate_instance_storage_getter_and_setter_with_default!(
     mint_cap_fraction,
     DataKey::MintCapFraction,

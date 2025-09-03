@@ -139,7 +139,7 @@ impl Setup<'_> {
         // Contracts
         // Pool Router
         let pool_hash = install_liq_pool_hash(&e);
-        let lp_token_hash = install_lp_token_wasm(&e);
+        let token_share_hash = install_lp_token_wasm(&e);
         let synthetic_token_hash = install_synthetic_token_wasm(&e);
         let router = create_pool_router_contract(&e);
         router.init_admin(&admin);
@@ -151,7 +151,7 @@ impl Setup<'_> {
             &Vec::from_array(&e, [emergency_pause_admin.clone()]),
         );
         router.set_pool_hash(&admin, &pool_hash);
-        router.set_lp_token_hash(&admin, &lp_token_hash);
+        router.set_token_share_hash(&admin, &token_share_hash);
         router.set_synthetic_token_hash(&admin, &synthetic_token_hash);
         router.set_reward_token(&admin, &reward_token.address);
 

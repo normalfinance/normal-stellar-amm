@@ -30,8 +30,8 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 source "$REPO_ROOT/scripts/load-env.sh" "$NETWORK"
 
 # Derive LP token info
-LP_TOKEN_NAME="$NORMAL_TOKEN_SYMBOL-XLM LP Token"
-LP_TOKEN_SYMBOL="$NORMAL_TOKEN_SYMBOL-XLM-LP"
+POOL_TOKEN_NAME="$NORMAL_TOKEN_SYMBOL-XLM LP Token"
+POOL_TOKEN_SYMBOL="$NORMAL_TOKEN_SYMBOL-XLM-LP"
 
 cd target/wasm32v1-none/release
 
@@ -53,8 +53,8 @@ stellar contract invoke \
     --admin "$ADMIN_ADDRESS" \
     --assets "[\"$NORMAL_TOKEN_TARGET\", \"XLM\"]" \
     --token_b "$XLM_ADDRESS" \
-    --synthetic_sac_address "$ASSET_SAC_ADDRESS" \
-    --lp_token_info "[\"$LP_TOKEN_NAME\", \"$LP_TOKEN_SYMBOL\"]" \
+    --token_a_sac_address "$ASSET_SAC_ADDRESS" \
+    --share_token_info "[\"$POOL_TOKEN_NAME\", \"$POOL_TOKEN_SYMBOL\"]" \
     --fee_fraction "$FEE_FRACTION" \
     --tier "$POOL_TIER" \
     --max_insurance "$MAX_INSURANCE"

@@ -25,7 +25,7 @@ echo "Contracts compiled."
 echo "Optimize contracts..."
 
 soroban contract optimize --wasm soroban_token_contract.wasm
-soroban contract optimize --wasm lp_token.wasm
+soroban contract optimize --wasm pool_token.wasm
 soroban contract optimize --wasm pool.wasm
 soroban contract optimize --wasm pool_router.wasm
 soroban contract optimize --wasm insurance_fund.wasm
@@ -51,10 +51,10 @@ POOL_WASM_HASH=$(soroban contract upload \
 
 echo "Pool contract deployed."
 
-echo "Install the LP token contract..."
+echo "Install the Pool Token contract..."
 
-LP_TOKEN_WASM_HASH=$(soroban contract upload \
-    --wasm lp_token.optimized.wasm \
+POOL_TOKEN_WASM_HASH=$(soroban contract upload \
+    --wasm pool_token.optimized.wasm \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     --rpc-url $STELLAR_RPC_URL \
@@ -62,7 +62,7 @@ LP_TOKEN_WASM_HASH=$(soroban contract upload \
     --fee $STELLAR_BASE_FEE 
     )
 
-echo "LP token contract deployed."
+echo "Pool Token contract deployed."
 
 #     ______     _______        __       ______   ___       _______   ________
 #    /    " \   /"      \      /""\     /" _  "\ |"  |     /"     "| /"       )
@@ -147,7 +147,7 @@ echo "Initialization complete!"
 echo "XLM address: $XLM_ADDRESS"
 
 # Contract addresses
-echo 'POOL_ROUTER_ADDR="$POOL_ROUTER_ADDR"'
+echo "POOL_ROUTER_ADDR=$POOL_ROUTER_ADDR"
 echo "ORACLE_REGISTRY_ADDR=$ORACLE_REGISTRY_ADDR"
 echo "INSURANCE_FUND_ADDR=$INSURANCE_FUND_ADDR"
 echo "POOL_PLANE_ADDR=$POOL_PLANE_ADDR"
@@ -155,4 +155,4 @@ echo "LIQUIDITY_CALCULATOR_ADDR=$LIQUIDITY_CALCULATOR_ADDR"
 
 # Wasm hashes
 echo "POOL_WASM_HASH=$POOL_WASM_HASH"
-echo "LP_TOKEN_WASM_HASH=$LP_TOKEN_WASM_HASH"
+echo "POOL_TOKEN_WASM_HASH=$POOL_TOKEN_WASM_HASH"

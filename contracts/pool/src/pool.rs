@@ -9,14 +9,13 @@ use crate::storage::get_last_trade_ts;
 use crate::storage::get_mint_cap_fraction;
 use crate::storage::get_oracle_registry;
 use crate::storage::get_status;
-use crate::storage::get_total_synthetic_tokens;
+use crate::storage::get_total_synthetics;
 use crate::storage::get_volume_30d;
 use crate::storage::set_last_trade_ts;
 use crate::storage::set_volume_30d;
 use crate::storage::{get_reserve_a, get_reserve_b, set_reserve_a};
 use crate::token::burn_synthetic_tokens;
 use crate::token::mint_synthetic_tokens;
-// use soroban_fixed_point_math::FixedPoint;
 use soroban_fixed_point_math::SorobanFixedPoint;
 
 use soroban_sdk::Symbol;
@@ -25,7 +24,7 @@ use soroban_sdk::{panic_with_error, Env};
 
 use utils::constant::FEE_MULTIPLIER;
 use utils::constant::PRICE_PRECISION;
-use utils::constant::PRICE_PRECISION_I64;
+use utils::constant::PRICE_PRECISION_I128;
 use utils::constant::PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO_I128;
 use utils::constant::THIRTY_DAY;
 use utils::constant::TWENTY_FOUR_HOUR;
@@ -56,7 +55,7 @@ pub fn get_net_liquidity_imbalance(
     base_oracle_price: u128,
     quote_oracle_price: u128,
 ) -> i128 {
-    let base_token_supply = get_total_synthetic_tokens(&e);
+    let base_token_supply = get_total_synthetics(&e);
     let reserve_b = get_reserve_b(e);
 
     let net_base_asset_value = (base_token_supply as i128)
@@ -155,10 +154,9 @@ pub fn calculate_oracle_twap_price_spread_pct(
     pool_price: u128,
     last_oracle_price_twap: u128,
 ) -> i64 {
-    let price_spread: i64 =
-        (pool_price as i128).saturating_sub(last_oracle_price_twap as i128) as i64;
+    let price_spread = (pool_price as i128).saturating_sub(last_oracle_price_twap as i128);
 
-    price_spread.fixed_div_floor(e, pool_price as i64, PRICE_PRECISION_I64) as i64
+    price_spread.fixed_div_floor(e, &(pool_price as i128), &PRICE_PRECISION_I128) as i64
 }
 
 // Determines whether the oracle price diverges too far from the reserve price.
@@ -325,7 +323,7 @@ pub fn get_delta_a(
 // * `e` - Soroban environment reference.
 // * `base_oracle_price` - Oracle price of the synthetic base asset.
 // * `quote_oracle_price` - Oracle price of the quote asset.
-pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) {
+pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -> i128 {
     let status = get_status(e);
     let reduce_only = status == PoolStatus::ReduceOnly;
 
@@ -350,7 +348,7 @@ pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) {
 
                 // allow minting up to 0.1 % of current supply per ledger
                 let mint_cap =
-                    (get_total_synthetic_tokens(&e) / (get_mint_cap_fraction(&e) as u128)) as i128;
+                    (get_total_synthetics(&e) / (get_mint_cap_fraction(&e) as u128)) as i128;
 
                 if delta_a > mint_cap {
                     panic_with_error!(&e, PoolError::SwapReduceOnly);

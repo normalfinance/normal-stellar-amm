@@ -1,61 +1,54 @@
 use soroban_sdk::{contracttype, panic_with_error, Address, Env, Map, Vec};
-use utils::{
-    bump::{bump_instance, bump_persistent},
-    errors::storage_errors::StorageError,
-};
+use utils::bump::{bump_instance, bump_persistent};
+use utils::errors::storage_errors::StorageError;
 
 // ------------------------------------
 // Data Structures
 // ------------------------------------
 
-// Incentives configuration for a specific pool.
+// Rewards configuration for a specific pool.
 #[derive(Clone)]
 #[contracttype]
-pub struct PoolIncentiveConfig {
-    pub reward_tps: u128,
-    pub reward_expired_at: u64,
+pub struct PoolRewardConfig {
+    pub tps: u128,
+    pub expired_at: u64,
 }
 
-// Mutable pool incentive data that evolves over time.
+// Mutable pool reward data that evolves over time.
 #[derive(Clone)]
 #[contracttype]
-pub struct PoolIncentiveData {
-    // rewards
+pub struct PoolRewardData {
     pub block: u64,
-    pub accumulated_rewards: u128,
-    pub claimed_rewards: u128,
-    pub rewards_last_time: u64,
-    // lp fees - Tracks how much of token_b has been collected as fees per unit of LP token, cumulatively.
-    pub fee_growth_per_lp: u128,
+    pub accumulated: u128,
+    pub claimed: u128,
+    pub last_time: u64,
 }
 
-// Per-user incentive data.
+// Per-user reward data.
 #[derive(Clone)]
 #[contracttype]
-pub struct UserIncentiveData {
-    // rewards
-    pub pool_accumulated_rewards: u128,
-    pub rewards_to_claim: u128,
+pub struct UserRewardData {
+    pub pool_accumulated: u128,
+    pub to_claim: u128,
     pub last_block: u64,
-    // lp fees
-    pub fee_checkpoint: u128,
 }
 
 #[derive(Clone)]
 #[contracttype]
 enum DataKey {
     // Pool-level data
-    PoolIncentiveConfig,
-    PoolIncentiveData,
+    PoolRewardConfig,
+    PoolRewardData,
 
     // User-level data
-    UserIncentiveData(Address),
+    UserRewardData(Address),
 
-    // Reward invariants
-    RewardInvDataV2(u32, u64),
+    // Reward invariants (legacy + new)
+    RewardInvData(u32, u64),   // legacy
+    RewardInvDataV2(u32, u64), // new
 
-    // Tokens
-    LPToken,
+    // Reward tokens & lock tokens
+    RewardStorage,
     RewardToken,
 
     // Working balances
@@ -141,98 +134,92 @@ impl WorkingBalancesStorageTrait for Storage {
 }
 
 // ------------------------------------
-// Sub-trait: Pool Incentives
+// Sub-trait: Pool Rewards
 // ------------------------------------
 
-pub trait PoolIncentivesStorageTrait {
-    fn get_pool_incentive_config(&self) -> PoolIncentiveConfig;
-    fn set_pool_incentive_config(&self, config: &PoolIncentiveConfig);
+pub trait PoolRewardsStorageTrait {
+    fn get_pool_reward_config(&self) -> PoolRewardConfig;
+    fn set_pool_reward_config(&self, config: &PoolRewardConfig);
 
-    fn get_pool_incentive_data(&self) -> PoolIncentiveData;
-    fn set_pool_incentive_data(&self, data: &PoolIncentiveData);
+    fn get_pool_reward_data(&self) -> PoolRewardData;
+    fn set_pool_reward_data(&self, data: &PoolRewardData);
 }
 
-impl PoolIncentivesStorageTrait for Storage {
-    fn get_pool_incentive_config(&self) -> PoolIncentiveConfig {
+impl PoolRewardsStorageTrait for Storage {
+    fn get_pool_reward_config(&self) -> PoolRewardConfig {
         match self
             .env
             .storage()
             .instance()
-            .get(&DataKey::PoolIncentiveConfig)
+            .get(&DataKey::PoolRewardConfig)
         {
             Some(v) => v,
-            None => PoolIncentiveConfig {
-                reward_tps: 0,
-                reward_expired_at: 0,
+            None => PoolRewardConfig {
+                tps: 0,
+                expired_at: 0,
             },
         }
     }
 
-    fn set_pool_incentive_config(&self, config: &PoolIncentiveConfig) {
+    fn set_pool_reward_config(&self, config: &PoolRewardConfig) {
         self.env
             .storage()
             .instance()
-            .set(&DataKey::PoolIncentiveConfig, config);
+            .set(&DataKey::PoolRewardConfig, config);
     }
 
-    fn get_pool_incentive_data(&self) -> PoolIncentiveData {
-        match self
-            .env
-            .storage()
-            .instance()
-            .get(&DataKey::PoolIncentiveData)
-        {
+    fn get_pool_reward_data(&self) -> PoolRewardData {
+        match self.env.storage().instance().get(&DataKey::PoolRewardData) {
             Some(v) => v,
-            None => PoolIncentiveData {
+            None => PoolRewardData {
                 block: 0,
-                accumulated_rewards: 0,
-                claimed_rewards: 0,
-                rewards_last_time: 0,
-                fee_growth_per_lp: 0,
+                accumulated: 0,
+                claimed: 0,
+                last_time: 0,
             },
         }
     }
 
-    fn set_pool_incentive_data(&self, data: &PoolIncentiveData) {
+    fn set_pool_reward_data(&self, data: &PoolRewardData) {
         self.env
             .storage()
             .instance()
-            .set(&DataKey::PoolIncentiveData, data);
+            .set(&DataKey::PoolRewardData, data);
     }
 }
 
 // ------------------------------------
-// Sub-trait: User Incentives
+// Sub-trait: User Rewards
 // ------------------------------------
 
-pub trait UserIncentivesStorageTrait {
-    fn get_user_incentive_data(&self, user: &Address) -> Option<UserIncentiveData>;
-    fn set_user_incentive_data(&self, user: &Address, config: &UserIncentiveData);
-    fn bump_user_incentive_data(&self, user: &Address);
+pub trait UserRewardsStorageTrait {
+    fn get_user_reward_data(&self, user: &Address) -> Option<UserRewardData>;
+    fn set_user_reward_data(&self, user: &Address, config: &UserRewardData);
+    fn bump_user_reward_data(&self, user: &Address);
 }
 
-impl UserIncentivesStorageTrait for Storage {
-    fn get_user_incentive_data(&self, user: &Address) -> Option<UserIncentiveData> {
+impl UserRewardsStorageTrait for Storage {
+    fn get_user_reward_data(&self, user: &Address) -> Option<UserRewardData> {
         match self
             .env
             .storage()
             .persistent()
-            .get(&DataKey::UserIncentiveData(user.clone()))
+            .get(&DataKey::UserRewardData(user.clone()))
         {
             Some(data) => data,
             None => None,
         }
     }
 
-    fn set_user_incentive_data(&self, user: &Address, config: &UserIncentiveData) {
+    fn set_user_reward_data(&self, user: &Address, config: &UserRewardData) {
         self.env
             .storage()
             .persistent()
-            .set(&DataKey::UserIncentiveData(user.clone()), config);
+            .set(&DataKey::UserRewardData(user.clone()), config);
     }
 
-    fn bump_user_incentive_data(&self, user: &Address) {
-        bump_persistent(&self.env, &DataKey::UserIncentiveData(user.clone()))
+    fn bump_user_reward_data(&self, user: &Address) {
+        bump_persistent(&self.env, &DataKey::UserRewardData(user.clone()))
     }
 }
 
@@ -255,7 +242,21 @@ impl RewardInvDataStorageTrait for Storage {
         let value = match self.env.storage().persistent().get::<_, Vec<u128>>(&key) {
             Some(v) => v,
             None => {
-                return Vec::new(&self.env);
+                // fallback to legacy key
+                let key_old = DataKey::RewardInvData(pow, page_number);
+                let old_result: Option<Map<u64, u128>> =
+                    self.env.storage().persistent().get(&key_old);
+                match old_result {
+                    Some(legacy_map) => {
+                        let mut new_vec = Vec::new(&self.env);
+                        for (_, local_value) in legacy_map {
+                            new_vec.push_back(local_value);
+                        }
+                        self.set_reward_inv_data(pow, page_number, new_vec.clone());
+                        new_vec
+                    }
+                    None => return Vec::new(&self.env),
+                }
             }
         };
 
@@ -268,36 +269,6 @@ impl RewardInvDataStorageTrait for Storage {
         self.inv_cache.set(key.clone(), value.clone());
         self.env.storage().persistent().set(&key, &value);
         bump_persistent(&self.env, &key);
-    }
-}
-
-// ------------------------------------
-// Sub-trait: LP Token
-// ------------------------------------
-
-pub trait LPTokenStorageTrait {
-    fn get_lp_token(&self) -> Address;
-    fn put_lp_token(&self, contract: Address);
-    fn has_lp_token(&self) -> bool;
-}
-
-impl LPTokenStorageTrait for Storage {
-    fn get_lp_token(&self) -> Address {
-        match self.env.storage().instance().get(&DataKey::LPToken) {
-            Some(v) => v,
-            None => panic_with_error!(self.env, StorageError::ValueNotInitialized),
-        }
-    }
-
-    fn put_lp_token(&self, contract: Address) {
-        self.env
-            .storage()
-            .instance()
-            .set(&DataKey::LPToken, &contract);
-    }
-
-    fn has_lp_token(&self) -> bool {
-        self.env.storage().instance().has(&DataKey::LPToken)
     }
 }
 

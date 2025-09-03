@@ -7,7 +7,7 @@ task build
 # Generate bindings for each contract
 soroban contract bindings typescript --overwrite --wasm target/wasm32v1-none/release/soroban_token_contract.wasm --output-dir bindings/soroban_token_contract
 
-soroban contract bindings typescript --overwrite --wasm target/wasm32v1-none/release/lp_token.wasm --output-dir bindings/lp_token
+soroban contract bindings typescript --overwrite --wasm target/wasm32v1-none/release/pool_token.wasm --output-dir bindings/pool_token
 
 soroban contract bindings typescript --overwrite --wasm target/wasm32v1-none/release/oracle_registry.wasm --output-dir bindings/oracle_registry
 

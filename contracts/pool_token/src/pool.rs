@@ -4,7 +4,7 @@ use access_control::management::SingleAddressManagementTrait;
 use access_control::role::Role;
 use soroban_sdk::{Address, Env, IntoVal, Symbol, Vec};
 
-pub fn checkpoint_user_incentives(e: &Env, user: Address) {
+pub fn checkpoint_user_rewards(e: &Env, user: Address) {
     let access_control = AccessControl::new(&e);
     let pool_address = access_control.get_role(&Role::Admin);
 
@@ -15,7 +15,7 @@ pub fn checkpoint_user_incentives(e: &Env, user: Address) {
 
     e.invoke_contract::<()>(
         &pool_address,
-        &Symbol::new(&e, "checkpoint_incentive"),
+        &Symbol::new(&e, "checkpoint_reward"),
         Vec::from_array(
             &e,
             [

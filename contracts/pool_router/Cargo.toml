@@ -13,7 +13,7 @@ soroban-sdk = { workspace = true }
 paste = { workspace = true }
 access_control = { workspace = true }
 utils = { workspace = true }
-incentives = { workspace = true }
+rewards = { workspace = true }
 reentrancy_guard = { workspace = true }
 upgrade = { workspace = true }
 sep-40-oracle = { workspace = true }
@@ -22,4 +22,4 @@ sep-40-oracle = { workspace = true }
 soroban-sdk = { workspace = true, features = ["testutils"] }
 utils = { workspace = true, features = ["testutils"] }
 sep-40-oracle = { workspace = true, features = ["testutils"] }
-token_lp = { workspace = true }
+token_share = { workspace = true }

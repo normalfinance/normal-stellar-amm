@@ -89,7 +89,7 @@ pub struct PoolConfig {
     pub oracle_registry: Address,
     pub token_a_sac_address: Address,
     pub token_b: Address,
-    pub lp_token_info: TokenInitInfo,
+    pub share_token_info: TokenInitInfo,
     pub assets: (Symbol, Symbol),
     pub status: PoolStatus,
     pub tier: PoolTier,

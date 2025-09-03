@@ -1,6 +1,6 @@
 [package]
-name = "lp-token"
-description = "Augmented soroban token contract tracking incentives on transfer"
+name = "pool-token"
+description = "Augmented soroban token contract tracking rewards on transfer"
 version.workspace = true
 edition = "2021"
 publish = false

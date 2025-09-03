@@ -102,9 +102,9 @@ stellar contract invoke \
     --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     -- \
-    set_lp_token_hash \
+    set_token_share_hash \
     --admin $ADMIN_ADDRESS \
-    --new_hash $LP_TOKEN_WASM_HASH
+    --new_hash $POOL_TOKEN_WASM_HASH
 
 stellar contract invoke \
     --id $POOL_ROUTER_ADDR \

@@ -1,9 +1,8 @@
 use crate::errors::{PoolError, PoolValidationError};
 use crate::events::Events as LiquidityPoolEvents;
 use crate::events::PoolEvents;
-use crate::incentives::get_incentives_manager;
 use crate::interface::{
-    AdminInterfaceTrait, IncentivesTrait, PoolCrunch, PoolTrait, UpgradeableContract,
+    AdminInterfaceTrait, PoolCrunch, PoolTrait, RewardsTrait, UpgradeableContract,
     UpgradeableLPTokenTrait,
 };
 use crate::plane::update_plane;
@@ -12,21 +11,21 @@ use crate::pool::{
     get_amount_out, get_amount_out_strict_receive, get_delta_a, get_net_liquidity_imbalance,
     get_oracle_price, rebalance, validate_oracle_price_with_pool,
 };
+use crate::rewards::get_rewards_manager;
 use crate::storage::{
     get_base_asset, get_fee_fraction, get_insurance_claim, get_insurance_fund_from_router,
     get_is_killed_claim, get_is_killed_deposit, get_is_killed_swap, get_is_killed_withdraw,
-    get_last_trade_ts, get_liquidity_minted_synthetic, get_max_liquidity_imbalance,
-    get_mint_cap_fraction, get_plane, get_protocol_fee_a, get_protocol_fee_b,
-    get_protocol_fee_fraction, get_quote_asset, get_reserve_a, get_reserve_b, get_router,
-    get_status, get_tier, get_token_a, get_token_b, get_token_future_wasm, get_volume_30d,
-    has_plane, set_base_asset, set_fee_fraction, set_insurance_claim, set_is_killed_claim,
-    set_is_killed_deposit, set_is_killed_swap, set_is_killed_withdraw, set_last_trade_ts,
+    get_liquidity_minted_synthetic, get_max_liquidity_imbalance, get_mint_cap_fraction, get_plane,
+    get_protocol_fee_a, get_protocol_fee_b, get_protocol_fee_fraction, get_quote_asset,
+    get_reserve_a, get_reserve_b, get_router, get_status, get_tier, get_token_a, get_token_b,
+    get_token_future_wasm, has_plane, set_base_asset, set_fee_fraction, set_insurance_claim,
+    set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap, set_is_killed_withdraw,
     set_liquidity_minted_synthetic, set_max_liquidity_imbalance, set_mint_cap_fraction,
     set_oracle_registry, set_plane, set_protocol_fee_a, set_protocol_fee_b,
     set_protocol_fee_fraction, set_quote_asset, set_reserve_a, set_reserve_b, set_router,
-    set_status, set_tier, set_token_a, set_token_b, set_token_future_wasm, set_volume_30d,
+    set_status, set_tier, set_token_a, set_token_b, set_token_future_wasm,
 };
-use crate::token::{burn_synthetic_tokens, create_lp_token_contract, transfer_a, transfer_b};
+use crate::token::{burn_synthetic_tokens, create_token_share_contract, transfer_a, transfer_b};
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
 use access_control::errors::AccessControlError;
@@ -40,19 +39,18 @@ use access_control::utils::{
     require_operations_admin_or_owner, require_pause_admin_or_owner,
     require_pause_or_emergency_pause_admin_or_owner, require_rewards_admin_or_owner,
 };
-use incentives::events::Events as RewardEvents;
-use incentives::storage::{PoolIncentivesStorageTrait, RewardTokenStorageTrait};
 use reentrancy_guard::{enter, exit};
-// use soroban_fixed_point_math::FixedPoint;
+use rewards::events::Events as RewardEvents;
+use rewards::storage::{PoolRewardsStorageTrait, RewardTokenStorageTrait};
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::token::TokenClient as SorobanTokenClient;
 use soroban_sdk::{
     contract, contractimpl, contractmeta, panic_with_error, symbol_short, Address, BytesN, Env,
     IntoVal, Map, Symbol, Vec, U256,
 };
-use token_lp::{
-    burn_lp_tokens, get_token_lp, get_total_lp_tokens, get_user_balance_lp, mint_lp_tokens,
-    put_token_lp, Client as LpTokenClient,
+use token_share::{
+    burn_shares, get_token_share, get_total_shares, get_user_balance_shares, mint_shares,
+    put_token_share, Client as ShareTokenClient,
 };
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
@@ -92,7 +90,7 @@ impl PoolCrunch for Pool {
         // https://github.com/stellar/rs-soroban-env/issues/827
         Self::init_pools_plane(e.clone(), params.plane);
         Self::initialize(e.clone(), params.config);
-        Self::initialize_incentives_config(e.clone(), params.reward_config.reward_token);
+        Self::initialize_rewards_config(e.clone(), params.reward_config.reward_token);
     }
 }
 
@@ -135,24 +133,24 @@ impl PoolTrait for Pool {
         get_oracle_price(&e, &quote_asset, NormalAction::PoolInit);
 
         // deploy and initialize LP token contract
-        let share_contract = create_lp_token_contract(
+        let share_contract = create_token_share_contract(
             &e,
-            config.lp_token_info.token_wasm_hash,
+            config.share_token_info.token_wasm_hash,
             &config.token_a_sac_address,
             &config.token_b,
         );
-        LpTokenClient::new(&e, &share_contract).initialize(
+        ShareTokenClient::new(&e, &share_contract).initialize(
             &e.current_contract_address(),
             &7u32,
-            &config.lp_token_info.name.into_val(&e),
-            &config.lp_token_info.symbol.into_val(&e),
+            &config.share_token_info.name.into_val(&e),
+            &config.share_token_info.symbol.into_val(&e),
         );
 
         if config.fee_fraction > MAX_POOL_FEE {
             panic_with_error!(&e, PoolValidationError::FeeOutOfBounds);
         }
 
-        put_token_lp(&e, share_contract);
+        put_token_share(&e, share_contract);
         set_token_a(&e, &config.token_a_sac_address);
         set_token_b(&e, &config.token_b);
         set_tier(&e, &config.tier);
@@ -182,7 +180,7 @@ impl PoolTrait for Pool {
     // - Transfers Token B from the user to the pool contract.
     // - Updates the pool's reserves and rebalances the pool using oracle prices.
     // - Mints new LP tokens proportional to the deposit amount.
-    // - Updates the user's reward tracking through the incentives manager.
+    // - Updates the user's reward tracking through the rewards manager.
     // - Emits a `deposit_liquidity` event with the deposit details.
     //
     // # Arguments
@@ -221,52 +219,37 @@ impl PoolTrait for Pool {
             panic_with_error!(e, PoolError::PoolDepositKilled);
         }
 
-        let token_b = get_token_b(&e);
         let action = NormalAction::AddLiquidity;
-
         let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
 
         // Before actual changes were made to the pool, update total rewards data and refresh/initialize user reward
-        let incentives = get_incentives_manager(&e);
-        let total_shares = get_total_lp_tokens(&e);
-        let user_shares = get_user_balance_lp(&e, &user);
-        incentives
+        let rewards = get_rewards_manager(&e);
+        let total_shares = get_total_shares(&e);
+        let user_shares = get_user_balance_shares(&e, &user);
+        rewards
             .manager()
-            .checkpoint_user(&user, total_shares, user_shares, 0);
+            .checkpoint_user(&user, total_shares, user_shares);
 
-        if reserve_a == 0 && reserve_b == 0 && desired_amount == 0 {
+        if reserve_a == 0 && reserve_b == 0 {
             panic_with_error!(&e, PoolValidationError::AllCoinsRequired);
         }
 
-        // Rebalance the pool
-        Self::rebalance(e.clone(), user.clone(), action.clone());
-
-        // Increase reserves
-        set_reserve_b(&e, &(reserve_b + desired_amount));
-
-        // Deposit Token B
-        transfer_token(
-            &e,
-            &token_b,
+        let token_b_client = SorobanTokenClient::new(&e, &get_token_b(&e));
+        token_b_client.transfer(
             &user,
             &e.current_contract_address(),
             &(desired_amount as i128),
         );
 
-        let delta_a = new_reserve_a - reserve_a;
-        let prev_value = get_liquidity_minted_synthetic(&e);
-        set_liquidity_minted_synthetic(&e, &(prev_value + delta_a));
+        // Increase reserves
+        set_reserve_b(&e, &(reserve_b + desired_amount));
+
+        // Rebalance the pool
+        Self::rebalance(e.clone(), user.clone(), action.clone());
 
         // Now calculate how many new pool shares to mint
         let (new_reserve_a, new_reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
-
-        // First deposit: mint MIN_LIQUIDITY to contract itself to prevent dust attacks
-        if total_shares == 0 {
-            mint_lp_tokens(&e, &e.current_contract_address(), MIN_LIQUIDITY as i128);
-            let events = LiquidityPoolEvents::new(&e);
-            events.permanently_locked_liquidity(MIN_LIQUIDITY);
-            shares_to_mint = shares_to_mint.saturating_sub(MIN_LIQUIDITY);
-        }
+        let total_shares = get_total_shares(&e);
 
         let zero = 0;
         let new_total_shares = if reserve_a > zero && reserve_b > zero {
@@ -282,18 +265,27 @@ impl PoolTrait for Pool {
                 .unwrap()
         };
 
-        let shares_to_mint = new_total_shares - total_shares;
+        let mut shares_to_mint = new_total_shares - total_shares;
         if shares_to_mint < min_shares {
             panic_with_error!(&e, PoolValidationError::OutMinNotSatisfied);
         }
-        mint_lp_tokens(&e, &user, shares_to_mint as i128);
+
+        // First deposit: mint MIN_LIQUIDITY to contract itself to prevent dust attacks
+        if total_shares == 0 {
+            mint_shares(&e, &e.current_contract_address(), MIN_LIQUIDITY as i128);
+            let events = LiquidityPoolEvents::new(&e);
+            events.permanently_locked_liquidity(MIN_LIQUIDITY);
+            shares_to_mint = shares_to_mint.saturating_sub(MIN_LIQUIDITY);
+        }
+
+        mint_shares(&e, &user, shares_to_mint as i128);
         set_reserve_a(&e, &new_reserve_a);
         set_reserve_b(&e, &new_reserve_b);
 
         // Checkpoint resulting working balance
-        incentives.manager().update_working_balance(
+        rewards.manager().update_working_balance(
             &user,
-            total_shares + shares_to_mint,
+            new_total_shares,
             user_shares + shares_to_mint,
         );
 
@@ -303,13 +295,19 @@ impl PoolTrait for Pool {
         // Finds how many synthetic tokens were minted/burned by finding the difference between reserve_a
         let delta_a: i128 = (new_reserve_a as i128).saturating_sub(reserve_a as i128);
 
+        // Update the liquidity minted synthetic
+        let new_value = (get_liquidity_minted_synthetic(&e) as i128).safe_sub(&e, delta_a);
+        set_liquidity_minted_synthetic(&e, &(new_value as u128));
+
         LiquidityPoolEvents::new(&e).deposit_liquidity(
-            token_b.clone(),
+            get_token_b(&e),
             user,
             desired_amount,
             shares_to_mint,
             delta_a,
         );
+        LiquidityPoolEvents::new(&e)
+            .update_reserves(Vec::from_array(&e, [new_reserve_a, new_reserve_b]));
 
         exit(&e);
 
@@ -804,17 +802,14 @@ impl PoolTrait for Pool {
         Self::rebalance(e.clone(), user.clone(), action.clone());
 
         // Before actual changes were made to the pool, update total rewards data and refresh user reward
-        let incentives = get_incentives_manager(&e);
-        let total_shares = get_total_lp_tokens(&e);
-        if total_shares - share_amount < MIN_LIQUIDITY {
-            panic_with_error!(e, PoolError::WithdrawExceedsMinLiquidity);
-        }
-        let user_shares = get_user_balance_lp(&e, &user);
-        incentives
+        let rewards = get_rewards_manager(&e);
+        let total_shares = get_total_shares(&e);
+        let user_shares = get_user_balance_shares(&e, &user);
+        rewards
             .manager()
-            .checkpoint_user(&user, total_shares, user_shares, 0);
+            .checkpoint_user(&user, total_shares, user_shares);
 
-        burn_lp_tokens(&e, &user, share_amount);
+        burn_shares(&e, &user, share_amount);
 
         let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
 
@@ -851,7 +846,7 @@ impl PoolTrait for Pool {
         let reserve_a_after_rebalance = get_reserve_a(&e);
 
         // Checkpoint resulting working balance
-        incentives.manager().update_working_balance(
+        rewards.manager().update_working_balance(
             &user,
             total_shares - share_amount,
             user_shares - share_amount,
@@ -886,11 +881,11 @@ impl PoolTrait for Pool {
 
     // Returns the pool's share token address.
     fn share_id(e: Env) -> Address {
-        get_token_lp(&e)
+        get_token_share(&e)
     }
 
     fn get_total_shares(e: Env) -> u128 {
-        get_total_lp_tokens(&e)
+        get_total_shares(&e)
     }
 
     fn get_tokens(e: Env) -> Vec<Address> {
@@ -958,8 +953,8 @@ impl PoolTrait for Pool {
                 amount: get_reserve_b(&e),
             },
             token_share: AddressAndAmount {
-                address: get_token_lp(&e),
-                amount: get_total_lp_tokens(&e),
+                address: get_token_share(&e),
+                amount: get_total_shares(&e),
             },
         };
 
@@ -998,13 +993,11 @@ impl AdminInterfaceTrait for Pool {
     // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
     // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
 
-    fn rebalance(e: Env, admin: Address, action: NormalAction) {
+    fn rebalance(e: Env, admin: Address, action: NormalAction) -> i128 {
         admin.require_auth();
         require_operations_admin_or_owner(&e, &admin);
 
         enter(&e);
-
-        let action = NormalAction::Rebalance;
 
         let base_oracle_price_data = get_oracle_price(&e, &get_base_asset(&e), action);
         let quote_oracle_price_data = get_oracle_price(&e, &get_quote_asset(&e), action);
@@ -1016,13 +1009,15 @@ impl AdminInterfaceTrait for Pool {
             action,
         );
 
-        rebalance(
+        let delta_a = rebalance(
             &e,
             base_oracle_price_data.last_oracle_price_twap,
             quote_oracle_price_data.last_oracle_price_twap,
         );
 
         exit(&e);
+
+        delta_a
     }
 
     // Pays an insurance claim.
@@ -1313,12 +1308,12 @@ impl AdminInterfaceTrait for Pool {
         // Automatically recover minimum liquidity when pool is delisted
         if status == PoolStatus::Delisted {
             let contract_address = e.current_contract_address();
-            let locked_balance = get_user_balance_lp(&e, &contract_address);
+            let locked_balance = get_user_balance_shares(&e, &contract_address);
 
             if locked_balance > 0 {
-                burn_lp_tokens(&e, &contract_address, locked_balance);
+                burn_shares(&e, &contract_address, locked_balance);
 
-                let total_shares = get_total_lp_tokens(&e);
+                let total_shares = get_total_shares(&e);
                 let reserve_b = get_reserve_b(&e);
                 let token_b_amount = if total_shares > 0 {
                     (locked_balance * reserve_b) / total_shares
@@ -1535,7 +1530,7 @@ impl UpgradeableContract for Pool {
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
         let new_wasm_hash = apply_upgrade(&e);
         let token_new_wasm_hash = get_token_future_wasm(&e);
-        token_lp::Client::new(&e, &get_token_lp(&e))
+        token_share::Client::new(&e, &get_token_share(&e))
             .upgrade(&e.current_contract_address(), &token_new_wasm_hash);
 
         UpgradeEvents::new(&e).apply_upgrade(Vec::from_array(
@@ -1592,7 +1587,7 @@ impl UpgradeableLPTokenTrait for Pool {
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
 
         e.invoke_contract::<()>(
-            &get_token_lp(&e),
+            &get_token_share(&e),
             &symbol_short!("upgrade"),
             Vec::from_array(&e, [new_token_wasm.to_val()]),
         );
@@ -1600,20 +1595,20 @@ impl UpgradeableLPTokenTrait for Pool {
 }
 
 #[contractimpl]
-impl IncentivesTrait for Pool {
+impl RewardsTrait for Pool {
     // Initializes the rewards configuration.
     //
     // # Arguments
     //
     // * `e` - The environment.
     // * `reward_token` - The address of the reward token.
-    fn initialize_incentives_config(e: Env, reward_token: Address) {
-        let incentives = get_incentives_manager(&e);
-        if incentives.storage().has_reward_token() {
+    fn initialize_rewards_config(e: Env, reward_token: Address) {
+        let rewards = get_rewards_manager(&e);
+        if rewards.storage().has_reward_token() {
             panic_with_error!(&e, PoolError::RewardsAlreadyInitialized);
         }
 
-        incentives.storage().put_reward_token(reward_token);
+        rewards.storage().put_reward_token(reward_token);
     }
 
     // Sets the rewards configuration.
@@ -1624,7 +1619,7 @@ impl IncentivesTrait for Pool {
     // * `admin` - The address of the admin user.
     // * `expired_at` - The timestamp when the rewards expire.
     // * `tps` - The value with 7 decimal places. Example: 600_0000000
-    fn set_incentives_config(
+    fn set_rewards_config(
         e: Env,
         admin: Address,
         expired_at: u64, // timestamp
@@ -1637,24 +1632,23 @@ impl IncentivesTrait for Pool {
             require_rewards_admin_or_owner(&e, &admin);
         }
 
-        let incentives = get_incentives_manager(&e);
-        let total_shares = get_total_lp_tokens(&e);
-        incentives
+        let rewards = get_rewards_manager(&e);
+        let total_shares = get_total_shares(&e);
+        rewards
             .manager()
-            .set_incentive_config(total_shares, expired_at, tps);
-        RewardEvents::new(&e).set_incentives_config(expired_at, tps);
+            .set_reward_config(total_shares, expired_at, tps);
+        RewardEvents::new(&e).set_rewards_config(expired_at, tps);
     }
 
     // Get difference between the actual balance and the total unclaimed reward minus the reserves
     fn get_unused_reward(e: Env) -> u128 {
-        let incentives = get_incentives_manager(&e);
-        let mut incentives_manager = incentives.manager();
-        let total_shares = get_total_lp_tokens(&e);
-        let mut reward_balance_to_keep = incentives_manager
-            .get_total_configured_reward(total_shares)
-            - incentives_manager.get_total_claimed_reward(total_shares);
+        let rewards = get_rewards_manager(&e);
+        let mut rewards_manager = rewards.manager();
+        let total_shares = get_total_shares(&e);
+        let mut reward_balance_to_keep = rewards_manager.get_total_configured_reward(total_shares)
+            - rewards_manager.get_total_claimed_reward(total_shares);
 
-        let reward_token = incentives.storage().get_reward_token();
+        let reward_token = rewards.storage().get_reward_token();
         let reward_balance = SorobanTokenClient::new(&e, &reward_token)
             .balance(&e.current_contract_address()) as u128;
 
@@ -1664,7 +1658,7 @@ impl IncentivesTrait for Pool {
                 reward_balance_to_keep += Self::get_reserves(e.clone()).get(idx).unwrap();
             }
             None => {}
-        }
+        };
 
         if reward_balance > reward_balance_to_keep {
             reward_balance - reward_balance_to_keep
@@ -1685,10 +1679,8 @@ impl IncentivesTrait for Pool {
             return 0;
         }
 
-        let reward_token = get_incentives_manager(&e).storage().get_reward_token();
-        transfer_token(
-            &e,
-            &reward_token,
+        let reward_token = get_rewards_manager(&e).storage().get_reward_token();
+        SorobanTokenClient::new(&e, &reward_token).transfer(
             &e.current_contract_address(),
             &get_router(&e),
             &(unused_reward as i128),
@@ -1696,7 +1688,7 @@ impl IncentivesTrait for Pool {
         unused_reward
     }
 
-    // Returns the incentives information:
+    // Returns the rewards information:
     //     tps, total accumulated amount for user, expiration, amount available to claim, debug info.
     //
     // # Arguments
@@ -1706,22 +1698,22 @@ impl IncentivesTrait for Pool {
     //
     // # Returns
     //
-    // A map of Symbols to i128 representing the incentives information.
-    fn get_incentives_info(e: Env, user: Address) -> Map<Symbol, i128> {
-        let incentives = get_incentives_manager(&e);
-        let mut manager = incentives.manager();
-        let storage = incentives.storage();
-        let config = storage.get_pool_incentive_config();
-        let total_shares = get_total_lp_tokens(&e);
-        let user_shares = get_user_balance_lp(&e, &user);
+    // A map of Symbols to i128 representing the rewards information.
+    fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128> {
+        let rewards = get_rewards_manager(&e);
+        let mut manager = rewards.manager();
+        let storage = rewards.storage();
+        let config = storage.get_pool_reward_config();
+        let total_shares = get_total_shares(&e);
+        let user_shares = get_user_balance_shares(&e, &user);
 
         // pre-fill result dict with stored values
         // or values won't be affected by checkpoint in any way
         let mut result = Map::from_array(
             &e,
             [
-                (symbol_short!("tps"), config.reward_tps as i128),
-                (symbol_short!("exp_at"), config.reward_expired_at as i128),
+                (symbol_short!("tps"), config.tps as i128),
+                (symbol_short!("exp_at"), config.expired_at as i128),
                 (symbol_short!("supply"), total_shares as i128),
                 (
                     Symbol::new(&e, "working_balance"),
@@ -1735,30 +1727,18 @@ impl IncentivesTrait for Pool {
         );
 
         // display actual values
-        let user_data = manager.checkpoint_user(&user, total_shares, user_shares, 0);
-        let pool_data = storage.get_pool_incentive_data();
+        let user_data = manager.checkpoint_user(&user, total_shares, user_shares);
+        let pool_data = storage.get_pool_reward_data();
 
-        result.set(symbol_short!("acc"), pool_data.accumulated_rewards as i128);
-        result.set(
-            symbol_short!("last_time"),
-            pool_data.rewards_last_time as i128,
-        );
+        result.set(symbol_short!("acc"), pool_data.accumulated as i128);
+        result.set(symbol_short!("last_time"), pool_data.last_time as i128);
         result.set(
             symbol_short!("pool_acc"),
-            user_data.pool_accumulated_rewards as i128,
+            user_data.pool_accumulated as i128,
         );
         result.set(symbol_short!("block"), pool_data.block as i128);
-        result.set(
-            symbol_short!("fees_owed"),
-            pool_data.fee_growth_per_lp as i128,
-        );
-
         result.set(symbol_short!("usr_block"), user_data.last_block as i128);
-        result.set(
-            symbol_short!("to_claim"),
-            user_data.rewards_to_claim as i128,
-        );
-        result.set(symbol_short!("fee_check"), user_data.fee_checkpoint as i128);
+        result.set(symbol_short!("to_claim"), user_data.to_claim as i128);
 
         // provide updated working balance information. if working_balance_new is bigger
         // than working_balance, it means that user has locked some tokens
@@ -1785,35 +1765,25 @@ impl IncentivesTrait for Pool {
     //
     // The amount of reward tokens available for the user to claim as a u128.
     fn get_user_reward(e: Env, user: Address) -> u128 {
-        let incentives = get_incentives_manager(&e);
-        let total_shares = get_total_lp_tokens(&e);
-        let user_shares = get_user_balance_lp(&e, &user);
-        incentives
+        let rewards = get_rewards_manager(&e);
+        let total_shares = get_total_shares(&e);
+        let user_shares = get_user_balance_shares(&e, &user);
+        rewards
             .manager()
-            .get_reward_amount_to_claim(&user, total_shares, user_shares)
+            .get_amount_to_claim(&user, total_shares, user_shares)
     }
 
-    // Get amount of LP fees available for the user to claim.
-    fn get_user_fees(e: Env, user: Address) -> u128 {
-        let incentives = get_incentives_manager(&e);
-        let total_shares = get_total_lp_tokens(&e);
-        let user_shares = get_user_balance_lp(&e, &user);
-        incentives
-            .manager()
-            .get_fee_amounts_to_claim(&user, total_shares, user_shares)
-    }
-
-    fn checkpoint_incentive(e: Env, token_contract: Address, user: Address, user_shares: u128) {
+    fn checkpoint_reward(e: Env, token_contract: Address, user: Address, user_shares: u128) {
         // checkpoint reward with provided values to avoid re-entrancy issue
         token_contract.require_auth();
-        if token_contract != get_token_lp(&e) {
+        if token_contract != get_token_share(&e) {
             panic_with_error!(&e, AccessControlError::Unauthorized);
         }
-        let incentives = get_incentives_manager(&e);
-        let total_lp_tokens = get_total_lp_tokens(&e);
-        incentives
+        let rewards = get_rewards_manager(&e);
+        let total_shares = get_total_shares(&e);
+        rewards
             .manager()
-            .checkpoint_user(&user, total_lp_tokens, user_shares, 0);
+            .checkpoint_user(&user, total_shares, user_shares);
     }
 
     fn checkpoint_working_balance(
@@ -1824,14 +1794,14 @@ impl IncentivesTrait for Pool {
     ) {
         // checkpoint working balance with provided values to avoid re-entrancy issue
         token_contract.require_auth();
-        if token_contract != get_token_lp(&e) {
+        if token_contract != get_token_share(&e) {
             panic_with_error!(&e, AccessControlError::Unauthorized);
         }
-        let incentives = get_incentives_manager(&e);
-        let total_lp_tokens = get_total_lp_tokens(&e);
-        incentives
+        let rewards = get_rewards_manager(&e);
+        let total_shares = get_total_shares(&e);
+        rewards
             .manager()
-            .update_working_balance(&user, total_lp_tokens, user_shares);
+            .update_working_balance(&user, total_shares, user_shares);
     }
 
     // Returns the total amount of accumulated reward for the pool.
@@ -1844,11 +1814,9 @@ impl IncentivesTrait for Pool {
     //
     // The total amount of accumulated reward for the pool as a u128.
     fn get_total_accumulated_reward(e: Env) -> u128 {
-        let incentives = get_incentives_manager(&e);
-        let total_shares = get_total_lp_tokens(&e);
-        incentives
-            .manager()
-            .get_total_accumulated_reward(total_shares)
+        let rewards = get_rewards_manager(&e);
+        let total_shares = get_total_shares(&e);
+        rewards.manager().get_total_accumulated_reward(total_shares)
     }
 
     // Returns the total amount of configured reward for the pool.
@@ -1861,11 +1829,9 @@ impl IncentivesTrait for Pool {
     //
     // The total amount of configured reward for the pool as a u128.
     fn get_total_configured_reward(e: Env) -> u128 {
-        let incentives = get_incentives_manager(&e);
-        let total_shares = get_total_lp_tokens(&e);
-        incentives
-            .manager()
-            .get_total_configured_reward(total_shares)
+        let rewards = get_rewards_manager(&e);
+        let total_shares = get_total_shares(&e);
+        rewards.manager().get_total_configured_reward(total_shares)
     }
 
     // Returns the total amount of claimed reward for the pool.
@@ -1878,12 +1844,12 @@ impl IncentivesTrait for Pool {
     //
     // The total amount of claimed reward for the pool as a u128.
     fn get_total_claimed_reward(e: Env) -> u128 {
-        let incentives = get_incentives_manager(&e);
-        let total_shares = get_total_lp_tokens(&e);
-        incentives.manager().get_total_claimed_reward(total_shares)
+        let rewards = get_rewards_manager(&e);
+        let total_shares = get_total_shares(&e);
+        rewards.manager().get_total_claimed_reward(total_shares)
     }
 
-    // Claims the LP fees and reward as a user.
+    // Claims the reward as a user.
     //
     // # Arguments
     //
@@ -1893,27 +1859,21 @@ impl IncentivesTrait for Pool {
     // # Returns
     //
     // The amount of tokens rewarded to the user as a u128.
-    fn claim(e: Env, user: Address) -> (u128, u128) {
+    fn claim(e: Env, user: Address) -> u128 {
         if get_is_killed_claim(&e) {
             panic_with_error!(e, PoolError::PoolClaimKilled);
         }
 
-        let tokens = Self::get_tokens(e.clone());
-
-        let incentives = get_incentives_manager(&e);
-        let total_shares = get_total_lp_tokens(&e);
-        let user_shares = get_user_balance_lp(&e, &user);
-        let mut incentives_manager = incentives.manager();
-        let incentives_storage = incentives.storage();
-        let (reward, fees_owed) = incentives_manager.claim_incentives(
-            &user,
-            total_shares,
-            user_shares,
-            &tokens.get(1).unwrap(),
-        );
+        let rewards = get_rewards_manager(&e);
+        let total_shares = get_total_shares(&e);
+        let user_shares = get_user_balance_shares(&e, &user);
+        let mut rewards_manager = rewards.manager();
+        let rewards_storage = rewards.storage();
+        let reward = rewards_manager.claim_reward(&user, total_shares, user_shares);
 
         // validate reserves after claim - they should be less than or equal to the balance
-        let reward_token = incentives_storage.get_reward_token();
+        let tokens = Self::get_tokens(e.clone());
+        let reward_token = rewards_storage.get_reward_token();
         let reserves = Self::get_reserves(e.clone());
 
         for i in 0..reserves.len() {
@@ -1929,15 +1889,9 @@ impl IncentivesTrait for Pool {
             }
         }
 
-        RewardEvents::new(&e).claim(
-            user,
-            reward_token,
-            reward,
-            tokens.get(1).unwrap(),
-            fees_owed,
-        );
+        RewardEvents::new(&e).claim(user, reward_token, reward);
 
-        (reward, fees_owed)
+        reward
     }
 }
 

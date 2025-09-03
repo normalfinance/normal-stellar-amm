@@ -14,24 +14,17 @@ impl Events {
         Events(env.clone())
     }
 
-    pub fn set_incentives_config(&self, expired_at: u64, tps: u128) {
+    pub fn set_rewards_config(&self, expired_at: u64, tps: u128) {
         self.env().events().publish(
-            (Symbol::new(self.env(), "set_incentives_config"),),
+            (Symbol::new(self.env(), "set_rewards_config"),),
             (expired_at, tps),
         )
     }
 
-    pub fn claim(
-        &self,
-        user: Address,
-        reward_token: Address,
-        amount: u128,
-        token_b: Address,
-        fees_owed: u128,
-    ) {
+    pub fn claim(&self, user: Address, reward_token: Address, amount: u128) {
         // topics
         // [
-        //   "claim_rewclaim_incentivesard": Symbol,    // event identifier
+        //   "claim_reward": Symbol,    // event identifier
         //   reward_token: Address,     // Address of token claimed
         //   claimant: Address          // address of account/contract that initiated the claim
         // ]
@@ -42,13 +35,8 @@ impl Events {
 
         let e = self.env();
         e.events().publish(
-            (
-                Symbol::new(e, "claim_incentives"),
-                reward_token,
-                token_b,
-                user,
-            ),
-            (amount as i128, fees_owed as i128),
+            (Symbol::new(e, "claim_reward"), reward_token, user),
+            (amount as i128,),
         );
     }
 }

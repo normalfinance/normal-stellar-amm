@@ -20,6 +20,6 @@ pub(crate) mod liquidity_calculator {
 pub(crate) mod insurance_fund {
     soroban_sdk::contractimport!(file = "../../wasm/insurance_fund.wasm");
 }
-pub(crate) mod lp_token {
-    soroban_sdk::contractimport!(file = "../../wasm/lp_token.wasm");
+pub(crate) mod pool_token {
+    soroban_sdk::contractimport!(file = "../../wasm/pool_token.wasm");
 }

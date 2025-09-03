@@ -4,7 +4,7 @@ use crate::balance::{read_balance, receive_balance, spend_balance};
 use crate::errors::TokenError;
 use crate::interface::UpgradeableContract;
 use crate::metadata::{read_decimal, read_name, read_symbol, write_metadata};
-use crate::pool::{checkpoint_user_incentives, checkpoint_user_working_balance};
+use crate::pool::{checkpoint_user_rewards, checkpoint_user_working_balance};
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::errors::AccessControlError;
 use access_control::events::Events as AccessControlEvents;
@@ -25,10 +25,10 @@ fn check_nonnegative_amount(e: &Env, amount: i128) {
 }
 
 #[contract]
-pub struct LpToken;
+pub struct PoolToken;
 
 #[contractimpl]
-impl LpToken {
+impl PoolToken {
     pub fn initialize(e: Env, admin: Address, decimal: u32, name: String, symbol: String) {
         admin.require_auth();
 
@@ -64,7 +64,7 @@ impl LpToken {
 }
 
 #[contractimpl]
-impl token::Interface for LpToken {
+impl token::Interface for PoolToken {
     fn allowance(e: Env, from: Address, spender: Address) -> i128 {
         bump_instance(&e);
         read_allowance(&e, from, spender).amount
@@ -96,8 +96,8 @@ impl token::Interface for LpToken {
         bump_instance(&e);
 
         // To avoid fee abuse through token transfers, checkpoint the fee indices when LP tokens are minted/burned/transferred
-        checkpoint_user_incentives(&e, from.clone());
-        checkpoint_user_incentives(&e, to.clone());
+        checkpoint_user_rewards(&e, from.clone());
+        checkpoint_user_rewards(&e, to.clone());
 
         spend_balance(&e, from.clone(), amount);
         receive_balance(&e, to.clone(), amount);
@@ -116,8 +116,8 @@ impl token::Interface for LpToken {
         bump_instance(&e);
 
         // To avoid fee abuse through token transfers, checkpoint the fee indices when LP tokens are minted/burned/transferred
-        checkpoint_user_incentives(&e, from.clone());
-        checkpoint_user_incentives(&e, to.clone());
+        checkpoint_user_rewards(&e, from.clone());
+        checkpoint_user_rewards(&e, to.clone());
 
         spend_allowance(&e, from.clone(), spender, amount);
         spend_balance(&e, from.clone(), amount);
@@ -168,7 +168,7 @@ impl token::Interface for LpToken {
 // The `UpgradeableContract` trait provides the interface for upgrading the contract.
 // This contract has no delayed upgrade. Liquidity Pool contract handles the upgrade delay.
 #[contractimpl]
-impl UpgradeableContract for LpToken {
+impl UpgradeableContract for PoolToken {
     // Returns the version of the contract.
     //
     // # Returns
@@ -188,7 +188,7 @@ impl UpgradeableContract for LpToken {
 
 // The `TransferableContract` trait provides the interface for transferring ownership of the contract.
 #[contractimpl]
-impl TransferableContract for LpToken {
+impl TransferableContract for PoolToken {
     // Commits an ownership transfer.
     //
     // # Arguments

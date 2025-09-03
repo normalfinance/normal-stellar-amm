@@ -1,21 +1,21 @@
 use crate::events::{Events, PoolRouterEvents};
-use crate::incentives::get_incentives_manager;
 use crate::liquidity_calculator::LiquidityCalculatorClient;
+use crate::rewards::get_rewards_manager;
 use crate::storage::{
-    get_lp_token_hash, get_oracle_registry, get_pool, get_pool_hash, get_pool_plane, get_pools_vec,
-    put_pool, set_pools_vec,
+    get_oracle_registry, get_pool, get_pool_hash, get_pool_plane, get_pools_vec,
+    get_token_share_hash, put_pool, set_pools_vec,
 };
 use access_control::access::AccessControl;
 use access_control::management::{MultipleAddressesManagementTrait, SingleAddressManagementTrait};
 use access_control::role::Role;
-use incentives::storage::RewardTokenStorageTrait;
+use rewards::storage::RewardTokenStorageTrait;
 use soroban_sdk::{
     symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Symbol, Val, Vec,
 };
 use soroban_sdk::{String, U256};
 use utils::state::{
     access::PrivilegedAddresses,
-    pool::{InitializeAllParams, InitializeParams, PoolTier, RewardConfig},
+    pool::{InitializeAllParams, PoolConfig, PoolStatus, PoolTier, RewardConfig},
     token::TokenInitInfo,
 };
 
@@ -71,8 +71,8 @@ pub fn deploy_pool(
     e: &Env,
     token_b: &Address,
     assets: &(Symbol, Symbol),
-    synthetic_sac_address: &Address,
-    lp_token_info: &(String, String),
+    token_a_sac_address: &Address,
+    share_token_info: &(String, String),
     fee_fraction: u32,
     tier: &PoolTier,
     max_insurance: u128,
@@ -90,8 +90,8 @@ pub fn deploy_pool(
         token_b,
         assets,
         &pool_contract_id,
-        synthetic_sac_address,
-        lp_token_info,
+        token_a_sac_address,
+        share_token_info,
         fee_fraction,
         tier,
         max_insurance,
@@ -127,15 +127,15 @@ fn init_pool(
     token_b: &Address,
     assets: &(Symbol, Symbol),
     pool_contract_id: &Address,
-    synthetic_sac_address: &Address,
-    lp_token_info: &(String, String),
+    token_a_sac_address: &Address,
+    share_token_info: &(String, String),
     fee_fraction: u32,
     tier: &PoolTier,
     max_insurance: u128,
 ) {
-    let lp_token_wasm_hash = get_lp_token_hash(e);
-    let incentives = get_incentives_manager(e);
-    let reward_token = incentives.storage().get_reward_token();
+    let share_token_wasm_hash = get_token_share_hash(e);
+    let rewards = get_rewards_manager(e);
+    let reward_token = rewards.storage().get_reward_token();
     let access_control = AccessControl::new(e);
 
     // privileged users
@@ -157,7 +157,7 @@ fn init_pool(
     let plane = get_pool_plane(e);
 
     let params = InitializeAllParams {
-        base: InitializeParams {
+        config: PoolConfig {
             admin,
             privileged_addrs: PrivilegedAddresses {
                 emergency_admin,
@@ -170,13 +170,15 @@ fn init_pool(
             oracle_registry: get_oracle_registry(e),
             assets: assets.clone(),
             token_b: token_b.clone(),
-            synthetic_sac_address: synthetic_sac_address.clone(),
-            lp_token_info: TokenInitInfo {
-                token_wasm_hash: lp_token_wasm_hash.into_val(e),
-                name: lp_token_info.0.clone(),
-                symbol: lp_token_info.1.clone(),
+            token_a_sac_address: token_a_sac_address.clone(),
+            share_token_info: TokenInitInfo {
+                token_wasm_hash: share_token_wasm_hash.into_val(e),
+                name: share_token_info.0.clone(),
+                symbol: share_token_info.1.clone(),
             },
             fee_fraction,
+            protocol_fee_fraction: 0,
+            status: PoolStatus::Initialized,
             tier: tier.clone(),
             max_insurance,
         },

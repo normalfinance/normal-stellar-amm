@@ -34,7 +34,7 @@ enum DataKey {
 
     PoolsVec,
     Pools(Symbol), // Map of asset (i.e. "BTC") > Pool
-    LpTokenHash,
+    TokenShareHash,
     PoolHash,
 
     // Temporary storage
@@ -64,7 +64,7 @@ generate_instance_storage_getter_and_setter!(oracle_registry, DataKey::OracleReg
 
 // Hashes
 generate_instance_storage_getter_and_setter!(pool_hash, DataKey::PoolHash, BytesN<32>);
-generate_instance_storage_getter_and_setter!(lp_token_hash, DataKey::LpTokenHash, BytesN<32>);
+generate_instance_storage_getter_and_setter!(token_share_hash, DataKey::TokenShareHash, BytesN<32>);
 
 // Pool
 pub fn get_pool(e: &Env, asset: &Symbol) -> Address {
