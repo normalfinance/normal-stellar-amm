@@ -5,7 +5,7 @@ use soroban_sdk::{
 };
 use utils::token::transfer_token;
 
-use crate::storage::{get_token_a, get_token_b};
+use crate::storage::{get_token_a, get_token_b, get_total_synthetic_tokens, set_total_synthetic_tokens};
 
 pub fn create_lp_token_contract(
     e: &Env,
@@ -48,7 +48,7 @@ pub fn get_user_balance_synthetic(e: &Env, user: &Address) -> u128 {
 
 pub fn burn_synthetic_tokens(e: &Env, from: &Address, amount: u128) {
     let total_share = get_total_synthetic_tokens(e);
-    put_total_synthetic_tokens(e, total_share - amount);
+    set_total_synthetic_tokens(e, &(total_share - amount));
 
     let token_client = StellarAssetClient::new(e, &get_token_a(e));
     token_client.clawback(from, &(amount as i128));
@@ -56,7 +56,7 @@ pub fn burn_synthetic_tokens(e: &Env, from: &Address, amount: u128) {
 
 pub fn mint_synthetic_tokens(e: &Env, to: &Address, amount: i128) {
     let total_share = get_total_synthetic_tokens(e);
-    put_total_synthetic_tokens(e, total_share + (amount as u128));
+    set_total_synthetic_tokens(e, &(total_share + (amount as u128)));
 
     let token_client = StellarAssetClient::new(e, &get_token_a(e));
     token_client.mint(to, &amount);

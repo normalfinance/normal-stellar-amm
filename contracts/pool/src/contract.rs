@@ -1,4 +1,4 @@
-use core::cmp::max;
+use core::f32::consts::E;
 
 use crate::errors::{PoolError, PoolValidationError};
 use crate::events::Events as LiquidityPoolEvents;
@@ -12,11 +12,11 @@ use crate::plane::update_plane;
 use crate::plane_interface::Plane;
 use crate::pool::{
     get_amount_out, get_amount_out_strict_receive, get_delta_a, get_net_liquidity_imbalance,
-    get_oracle_price, rebalance, update_volume_30d, validate_fair_share_calculation,
+    get_oracle_price, rebalance,
     validate_oracle_price_with_pool,
 };
 use crate::storage::{
-    get_base_asset, get_fee_fraction, get_insurance_claim, get_insurance_fund_from_router, get_is_killed_claim, get_is_killed_deposit, get_is_killed_swap, get_is_killed_withdraw, get_last_trade_ts, get_liquidity_minted_synthetic, get_max_liquidity_imbalance, get_mint_cap_fraction, get_plane, get_protocol_fee_a, get_protocol_fee_b, get_protocol_fee_fraction, get_quote_asset, get_reserve_a, get_reserve_b, get_router, get_status, get_tier, get_token_a, get_token_b, get_token_future_wasm, get_volume_30d, has_plane, set_base_asset, set_fee_fraction, set_insurance_claim, set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap, set_is_killed_withdraw, set_last_trade_ts, set_max_liquidity_imbalance, set_mint_cap_fraction, set_oracle_registry, set_plane, set_protocol_fee_a, set_protocol_fee_b, set_protocol_fee_fraction, set_quote_asset, set_reserve_a, set_reserve_b, set_router, set_status, set_tier, set_token_a, set_token_b, set_token_future_wasm, set_volume_30d
+    get_base_asset, get_fee_fraction, get_insurance_claim, get_insurance_fund_from_router, get_is_killed_claim, get_is_killed_deposit, get_is_killed_swap, get_is_killed_withdraw, get_last_trade_ts, get_liquidity_minted_synthetic, get_max_liquidity_imbalance, get_mint_cap_fraction, get_plane, get_protocol_fee_a, get_protocol_fee_b, get_protocol_fee_fraction, get_quote_asset, get_reserve_a, get_reserve_b, get_router, get_status, get_tier, get_token_a, get_token_b, get_token_future_wasm, get_volume_30d, has_plane, set_base_asset, set_fee_fraction, set_insurance_claim, set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap, set_is_killed_withdraw, set_last_trade_ts, set_liquidity_minted_synthetic, set_max_liquidity_imbalance, set_mint_cap_fraction, set_oracle_registry, set_plane, set_protocol_fee_a, set_protocol_fee_b, set_protocol_fee_fraction, set_quote_asset, set_reserve_a, set_reserve_b, set_router, set_status, set_tier, set_token_a, set_token_b, set_token_future_wasm, set_volume_30d
 };
 use crate::token::{burn_synthetic_tokens, create_lp_token_contract, transfer_a, transfer_b};
 use access_control::access::{AccessControl, AccessControlTrait};
@@ -50,17 +50,17 @@ use upgrade::events::Events as UpgradeEvents;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::constant::{
     FEE_MULTIPLIER, INSURANCE_A_MAX, INSURANCE_B_MAX, INSURANCE_C_MAX, INSURANCE_SPECULATIVE_MAX,
-    MAX_POOL_FEE, MIN_LIQUIDITY, THIRTY_DAY,
+    MAX_POOL_FEE, MIN_LIQUIDITY,
 };
 use utils::math::safe_math::SafeMath;
-use utils::math::stats::calculate_rolling_sum;
 use utils::state::oracle_registry::NormalAction;
-use utils::state::pool::{InsuranceClaim, PoolConfig, SwapDirection};
+use utils::state::pool::{InsuranceClaim, PoolConfig, PoolDetails, SwapDirection};
 use utils::state::{
-    pool::{InitializeAllParams, InitializeParams, PoolInfo, PoolResponse, PoolStatus, PoolTier},
+    pool::{InitializeAllParams, PoolInfo, PoolResponse, PoolStatus, PoolTier},
     token::AddressAndAmount,
 };
 use utils::token::transfer_token;
+use utils::u256_math::ExtraMath;
 use utils::validate;
 use utils::validation::ensure_non_zero_u128;
 
@@ -83,7 +83,7 @@ impl PoolCrunch for Pool {
         // merge whole initialize process into one because lack of caching of VM components
         // https://github.com/stellar/rs-soroban-env/issues/827
         Self::init_pools_plane(e.clone(), params.plane);
-        Self::initialize(e.clone(), params.base);
+        Self::initialize(e.clone(), params.config);
         Self::initialize_incentives_config(e.clone(), params.reward_config.reward_token);
     }
 }
@@ -94,34 +94,34 @@ impl PoolTrait for Pool {
     //
     // # Arguments
     //
-    // * `params` - The params to initialize the pool with.
-    fn initialize(e: Env, params: InitializeParams) {
+    // * `config` - The config to initialize the pool with.
+    fn initialize(e: Env, config: PoolConfig) {
         let access_control = AccessControl::new(&e);
         if access_control.get_role_safe(&Role::Admin).is_some() {
             panic_with_error!(&e, PoolError::AlreadyInitialized);
         }
-        access_control.set_role_address(&Role::Admin, &params.admin);
+        access_control.set_role_address(&Role::Admin, &config.admin);
         access_control.set_role_address(
             &Role::EmergencyAdmin,
-            &params.privileged_addrs.emergency_admin,
+            &config.privileged_addrs.emergency_admin,
         );
         access_control
-            .set_role_address(&Role::RewardsAdmin, &params.privileged_addrs.rewards_admin);
+            .set_role_address(&Role::RewardsAdmin, &config.privileged_addrs.rewards_admin);
         access_control.set_role_address(
             &Role::OperationsAdmin,
-            &params.privileged_addrs.operations_admin,
+            &config.privileged_addrs.operations_admin,
         );
-        access_control.set_role_address(&Role::PauseAdmin, &params.privileged_addrs.pause_admin);
+        access_control.set_role_address(&Role::PauseAdmin, &config.privileged_addrs.pause_admin);
         access_control.set_role_addresses(
             &Role::EmergencyPauseAdmin,
-            &params.privileged_addrs.emergency_pause_admins,
+            &config.privileged_addrs.emergency_pause_admins,
         );
 
-        set_router(&e, &params.router);
-        set_oracle_registry(&e, &params.oracle_registry);
+        set_router(&e, &config.router);
+        set_oracle_registry(&e, &config.oracle_registry);
 
         // validate oracle assets
-        let (base_asset, quote_asset) = params.assets;
+        let (base_asset, quote_asset) = config.assets;
 
         get_oracle_price(&e, &base_asset, NormalAction::PoolInit);
         get_oracle_price(&e, &quote_asset, NormalAction::PoolInit);
@@ -129,31 +129,30 @@ impl PoolTrait for Pool {
         // deploy and initialize LP token contract
         let share_contract = create_lp_token_contract(
             &e,
-            params.lp_token_info.token_wasm_hash,
-            &params.synthetic_sac_address,
-            &params.token_b,
+            config.lp_token_info.token_wasm_hash,
+            &config.synthetic_sac_address,
+            &config.token_b,
         );
         LpTokenClient::new(&e, &share_contract).initialize(
             &e.current_contract_address(),
             &7u32,
-            &params.lp_token_info.name.into_val(&e),
-            &params.lp_token_info.symbol.into_val(&e),
+            &config.lp_token_info.name.into_val(&e),
+            &config.lp_token_info.symbol.into_val(&e),
         );
 
-        if params.fee_fraction > MAX_POOL_FEE {
+        if config.fee_fraction > MAX_POOL_FEE {
             panic_with_error!(&e, PoolValidationError::FeeOutOfBounds);
         }
 
         put_token_lp(&e, share_contract);
-        set_token_a(&e, &params.synthetic_sac_address);
-        set_token_b(&e, &params.token_b);
-
-        set_tier(&e, &params.tier);
+        set_token_a(&e, &config.synthetic_sac_address);
+        set_token_b(&e, &config.token_b);
+        set_tier(&e, &config.tier);
         set_status(&e, &PoolStatus::Initialized);
         set_base_asset(&e, &base_asset);
         set_quote_asset(&e, &quote_asset);
-        set_fee_fraction(&e, &params.fee_fraction);
-        set_insurance_claim(&e, &InsuranceClaim::new(params.quote_max_insurance));
+        set_fee_fraction(&e, &config.fee_fraction);
+        set_insurance_claim(&e, &InsuranceClaim::new(config.max_insurance));
         set_max_liquidity_imbalance(&e, &0_u128);
 
         // update plane data for every pool update
@@ -233,16 +232,6 @@ impl PoolTrait for Pool {
 
         // Rebalance the pool
         Self::rebalance(e.clone(), user.clone(), action.clone());
-        // Fetch asset oracle prices
-        let base_oracle_price_data = get_oracle_price(&e, &get_base_asset(&e), action);
-        let quote_oracle_price_data = get_oracle_price(&e, &get_quote_asset(&e), action);
-
-        validate_oracle_price_with_pool(
-            &e,
-            base_oracle_price_data.last_oracle_price_twap,
-            quote_oracle_price_data.last_oracle_price_twap,
-            action,
-        );
 
         // Increase reserves
         set_reserve_b(&e, &(reserve_b + desired_amount));
@@ -256,19 +245,11 @@ impl PoolTrait for Pool {
             &(desired_amount as i128),
         );
 
-        // Rebalance the pool
-        let delta_a = rebalance(
-            &e,
-            base_oracle_price_data.last_oracle_price_twap,
-            quote_oracle_price_data.last_oracle_price_twap,
-        );
+        let delta_a = new_reserve_a - reserve_a;
         let prev_value = get_liquidity_minted_synthetic(&e);
-        set_liquidity_minted_synthetic(&e, prev_value + delta_a);
+        set_liquidity_minted_synthetic(&e, &(prev_value + delta_a));
 
         // Now calculate how many new pool shares to mint
-        let total_shares = get_total_lp_tokens(&e);
-        // let reserve_a_after_rebalance = get_reserve_a(&e);
-        // let reserve_b_after_deposit = get_reserve_b(&e);
         let (new_reserve_a, new_reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
 
         // First deposit: mint MIN_LIQUIDITY to contract itself to prevent dust attacks
@@ -312,7 +293,7 @@ impl PoolTrait for Pool {
         update_plane(&e);
 
         // Finds how many synthetic tokens were minted/burned by finding the difference between reserve_a
-        let delta_a: i128 = (reserve_a_after_rebalance as i128).saturating_sub(reserve_a as i128);
+        let delta_a: i128 = (new_reserve_a as i128).saturating_sub(reserve_a as i128);
 
         LiquidityPoolEvents::new(&e).deposit_liquidity(
             token_b.clone(),
@@ -476,7 +457,7 @@ impl PoolTrait for Pool {
 
         // Update volume metrics
         let quote_asset_amount = if in_idx == 1 { in_amount } else { out };
-        crate::pool::update_volume(&e, quote_asset_amount, current_time);
+        crate::pool::update_volume(&e, quote_asset_amount, now);
 
         // Rebalance the pool
         Self::rebalance(e.clone(), user.clone(), action.clone());
@@ -576,6 +557,7 @@ impl PoolTrait for Pool {
             panic_with_error!(e, PoolError::PoolSwapKilled);
         }
 
+        let now = e.ledger().timestamp();
         let action = NormalAction::Swap;
 
         let reserve_a_before_prior_rebalance = get_reserve_a(&e) as i128;
@@ -690,7 +672,7 @@ impl PoolTrait for Pool {
 
         // Update volume metrics
         let quote_asset_amount = if in_idx == 1 { in_amount } else { out_amount };
-        crate::pool::update_volume(&e, quote_asset_amount, &now);
+        crate::pool::update_volume(&e, quote_asset_amount, now);
 
         // Rebalance the pool
         Self::rebalance(e.clone(), user.clone(), action.clone());
@@ -844,11 +826,7 @@ impl PoolTrait for Pool {
         let token_a_to_burn =
             liquidity_minted_synthetic.fixed_mul_floor(&e, &share_amount, &total_shares);
 
-        burn_synthetic_tokens(
-            &e,
-            &e.current_contract_address(),
-            token_a_to_burn,
-        );
+        burn_synthetic_tokens(&e, &e.current_contract_address(), token_a_to_burn);
         out_a = out_a - token_a_to_burn;
 
         // Transfer and update
@@ -955,9 +933,13 @@ impl PoolTrait for Pool {
 
     fn get_info(e: Env) -> PoolInfo {
         let pool_response = PoolResponse {
-            pool: PoolConfig {
+            pool: PoolDetails {
+                assets: (get_base_asset(&e), get_quote_asset(&e)),
                 status: get_status(&e),
                 tier: get_tier(&e),
+                fee_fraction: get_fee_fraction(&e),
+                protocol_fee_fraction: get_protocol_fee_fraction(&e),
+                insurance: get_insurance_claim(&e)
             },
             token_a: AddressAndAmount {
                 address: get_token_a(&e),
@@ -1374,7 +1356,7 @@ impl AdminInterfaceTrait for Pool {
             PoolError::DefaultError
         );
 
-        set_max_liquidity_imbalance(&e, liquidity_max_imbalance);
+        set_max_liquidity_imbalance(&e, &liquidity_max_imbalance);
         set_insurance_claim(
             &e,
             &(InsuranceClaim {
@@ -1401,7 +1383,7 @@ impl AdminInterfaceTrait for Pool {
         }
 
         set_protocol_fee_fraction(&e, &new_fraction);
-        PoolEvents::new(&e).set_protocol_fee_fraction(new_fraction);
+        LiquidityPoolEvents::new(&e).set_protocol_fee_fraction(new_fraction);
     }
 
     //    _______     __       ____  ____   ________  _______  ________
