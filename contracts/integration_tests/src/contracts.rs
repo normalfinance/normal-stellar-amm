@@ -1,9 +1,7 @@
 pub(crate) mod pool {
     soroban_sdk::contractimport!(file = "../../wasm/pool.wasm");
 }
-pub(crate) mod pool_swap_fee {
-    soroban_sdk::contractimport!(file = "../../wasm/pool_swap_fee.wasm");
-}
+
 pub(crate) mod pool_router {
     soroban_sdk::contractimport!(file = "../../wasm/pool_router.wasm");
 }

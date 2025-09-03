@@ -20,7 +20,6 @@ tasks:
     cmds:
       - task -d contracts/token build || exit 1
       - task -d contracts/pool_router build || exit 1
-      - task -d contracts/pool_swap_fee build || exit 1
       - task -d contracts/oracle_registry build || exit 1
       - task -d contracts/insurance_fund build || exit 1
       - cp ./target/wasm32v1-none/release/*.wasm ./wasm
@@ -48,7 +47,7 @@ tasks:
   _check_bindings_tranfer_ownership:
     vars:
       WASMS:
-        sh: find ./target/wasm32v1-none/release/ -maxdepth 1 -type f \( -name '*.wasm' -and -not -name 'pool_swap_fee.wasm' \)
+        sh: find ./target/wasm32v1-none/release/ -maxdepth 1 -type f 
     cmds:
       - for: { var: WASMS }
         cmd: echo "Checking bindings for {{ .ITEM }}" &&
@@ -59,7 +58,7 @@ tasks:
   _check_bindings_delayed_upgrade:
     vars:
       WASMS:
-        sh: find ./target/wasm32v1-none/release/ -maxdepth 1 -type f \( -name '*.wasm' -and -not -name 'soroban_token_contract.wasm' -and -not -name 'pool_swap_fee.wasm' \)
+        sh: find ./target/wasm32v1-none/release/ -maxdepth 1 -type f \( -name '*.wasm' -and -not -name 'soroban_token_contract.wasm' \)
     cmds:
       - for: { var: WASMS }
         cmd: echo "Checking bindings for {{ .ITEM }}" &&

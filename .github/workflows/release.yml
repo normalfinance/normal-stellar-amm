@@ -72,14 +72,3 @@ jobs:
       required_package: "liquidity_calculator"
     secrets:
       release_token: ${{ secrets.GITHUB_TOKEN }}
-
-  # Pool Swap Fee contract
-  release-contract-pool-swap-fee:
-    uses: normalfinance/soroban-build-workflow/.github/workflows/release.yml@feat/contract-dependency
-    with:
-      release_name: ${{ github.ref_name }}
-      release_description: "Contract release"
-      relative_path: "contracts/pool_swap_fee"
-      required_package: "lp_token"
-    secrets:
-      release_token: ${{ secrets.GITHUB_TOKEN }}

@@ -30,7 +30,6 @@ soroban contract optimize --wasm pool.wasm
 soroban contract optimize --wasm pool_router.wasm
 soroban contract optimize --wasm insurance_fund.wasm
 soroban contract optimize --wasm oracle_registry.wasm
-soroban contract optimize --wasm pool_swap_fee.wasm
 soroban contract optimize --wasm pool_plane.wasm
 soroban contract optimize --wasm liquidity_calculator.wasm
 
@@ -142,25 +141,6 @@ INSURANCE_FUND_ADDR=$(soroban contract deploy \
     --fee $STELLAR_BASE_FEE
     )
 
-#   _______   _______   _______       ______    ______    ___      ___       _______   ______  ___________  ______     _______
-#  /"     "| /"     "| /"     "|     /" _  "\  /    " \  |"  |    |"  |     /"     "| /" _  "\("     _   ")/    " \   /"      \
-# (: ______)(: ______)(: ______)    (: ( \___)// ____  \ ||  |    ||  |    (: ______)(: ( \___))__/  \\__// ____  \ |:        |
-#  \/    |   \/    |   \/    |       \/ \    /  /    ) :)|:  |    |:  |     \/    |   \/ \        \\_ /  /  /    ) :)|_____/   )
-#  // ___)   // ___)_  // ___)_      //  \ _(: (____/ //  \  |___  \  |___  // ___)_  //  \ _     |.  | (: (____/ //  //      /
-# (:  (     (:      "|(:      "|    (:   _) \\        /  ( \_|:  \( \_|:  \(:      "|(:   _) \    \:  |  \        /  |:  __   \
-#  \__/      \_______) \_______)     \_______)\"_____/    \_______)\_______)\_______) \_______)    \__|   \"_____/   |__|  \___)
-
-echo "Initialize fee collector..."
-
-FEE_COLLECTOR_ADDR=$(soroban contract deploy \
-    --wasm pool_swap_fee.optimized.wasm \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
-    --fee $STELLAR_BASE_FEE
-    )
-
 echo "#############################"
 
 echo "Initialization complete!"
@@ -170,7 +150,6 @@ echo "XLM address: $XLM_ADDRESS"
 echo 'POOL_ROUTER_ADDR="$POOL_ROUTER_ADDR"'
 echo "ORACLE_REGISTRY_ADDR=$ORACLE_REGISTRY_ADDR"
 echo "INSURANCE_FUND_ADDR=$INSURANCE_FUND_ADDR"
-echo "POOL_SWAP_FEE_ADDR=$FEE_COLLECTOR_ADDR"
 echo "POOL_PLANE_ADDR=$POOL_PLANE_ADDR"
 echo "LIQUIDITY_CALCULATOR_ADDR=$LIQUIDITY_CALCULATOR_ADDR"
 

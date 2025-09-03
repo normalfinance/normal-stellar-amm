@@ -28,8 +28,7 @@
     "oracle:update": "./scripts/admin/oracle/update.sh",
     "oracle:delete": "./scripts/admin/oracle/delete.sh",
     "insurnace:resolve": "./scripts/admin/insurnace/resolve.sh",
-    "insurnace:update": "./scripts/admin/insurnace/update.sh",
-    "fees:collect": "./scripts/admin/fees/collect.sh"
+    "insurnace:update": "./scripts/admin/insurnace/update.sh"
   },
   "repository": {
     "type": "git",

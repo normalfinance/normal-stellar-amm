@@ -67,7 +67,6 @@ pub(crate) struct Setup<'a> {
     // contracts
     pub(crate) oracle_registry: contracts::oracle_registry::Client<'a>,
     pub(crate) router: contracts::pool_router::Client<'a>,
-    // pub(crate) fee_collector: contracts::pool_swap_fee::Client<'a>,
     pub(crate) insurance_fund: contracts::insurance_fund::Client<'a>,
     pub(crate) plane: contracts::pool_plane::Client<'a>,
     pub(crate) liquidity_calculator: contracts::liquidity_calculator::Client<'a>,
@@ -433,10 +432,6 @@ fn create_liquidity_calculator_contract<'a>(
 
 fn create_plane_contract<'a>(e: &Env) -> contracts::pool_plane::Client<'a> {
     contracts::pool_plane::Client::new(e, &e.register(contracts::pool_plane::WASM, ()))
-}
-
-fn create_pool_swap_fee_contract<'a>(e: &Env) -> contracts::pool_swap_fee::Client<'a> {
-    contracts::pool_swap_fee::Client::new(e, &e.register(contracts::pool_swap_fee::WASM, ()))
 }
 
 fn create_insurance_fund_contract<'a>(e: &Env) -> contracts::insurance_fund::Client<'a> {
