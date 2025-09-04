@@ -5,6 +5,9 @@ use crate::constant::{
 use soroban_sdk::{Env, IntoVal, Val};
 
 pub fn bump_instance(e: &Env) {
+    // NOTE: TTL extension operations are performed automatically during read operations
+    // Authorization is handled at the contract function level (e.g., admin-only operations)
+    // rather than at the TTL extension level to maintain operational efficiency
     e.storage()
         .instance()
         .extend_ttl(INSTANCE_TTL_THRESHOLD, MAX_INSTANCE_TTL);

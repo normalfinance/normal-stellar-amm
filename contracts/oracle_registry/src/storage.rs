@@ -50,14 +50,18 @@ pub(crate) fn put_oracle(e: &Env, asset: &Symbol, info: &OracleInfo) {
 pub fn get_historical_oracle_data(e: &Env, asset: &Symbol) -> HistoricalOracleData {
     let key = DataKey::HistoricalOracleData(asset.clone());
     match e.storage().persistent().get(&key) {
-        Some(data) => data,
+        Some(data) => {
+            bump_persistent(e, &key);
+            data
+        }
         None => HistoricalOracleData::default_quote_oracle(),
     }
 }
 
 pub fn put_historical_oracle_data(e: &Env, asset: &Symbol, data: &HistoricalOracleData) {
     let key = DataKey::HistoricalOracleData(asset.clone());
-    e.storage().persistent().set(&key, data)
+    e.storage().persistent().set(&key, data);
+    bump_persistent(e, &key);
 }
 
 pub fn remove_oracle(e: &Env, asset: &Symbol) {
