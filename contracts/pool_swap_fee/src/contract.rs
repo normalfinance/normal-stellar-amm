@@ -144,7 +144,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         if direction == SwapDirection::Buy {
             quote_asset_amount = in_amount;
             fee_amount = calculate_fee(in_amount, pool_info.pool_response.pool.fee_fraction);
-            in_amount_mut = in_amount.saturating_sub(fee_amount);
+            in_amount_mut = in_amount.safe_sub(&e, fee_amount);
         }
 
         e.authorize_as_current_contract(vec![
@@ -184,7 +184,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
             fee_amount = calculate_fee(amount_out, pool_info.pool_response.pool.fee_fraction);
         }
 
-        amount_out_w_fee = amount_out.saturating_sub(fee_amount);
+        amount_out_w_fee = amount_out.safe_sub(&e, fee_amount);
 
         if amount_out_w_fee < out_min {
             panic_with_error!(&e, PoolSwapFeeError::OutMinNotSatisfied);
@@ -201,7 +201,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
 
         // UPDATE METRICS
         let volume_30d = get_volume_30d(&e);
-        let since_last = max(1_u64, now.saturating_sub(get_last_trade_ts(&e)));
+        let since_last = max(1_u64, now.safe_sub(&e, get_last_trade_ts(&e)));
         let updated_volume_30d =
             calculate_rolling_sum(&e, volume_30d, quote_asset_amount, since_last, THIRTY_DAY);
         set_volume_30d(&e, &updated_volume_30d);

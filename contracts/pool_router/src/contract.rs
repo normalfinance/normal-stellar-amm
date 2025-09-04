@@ -1,5 +1,6 @@
 use crate::errors::PoolRouterError;
 use crate::events::{Events, PoolRouterEvents};
+use utils::math::safe_math::SafeMath;
 use crate::incentives::get_incentives_manager;
 use crate::liquidity_calculator::LiquidityCalculatorClient;
 use crate::pool_interface::{
@@ -924,7 +925,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
         let reward_token_client = SorobanTokenClient::new(&e, &reward_token);
         let pool_reward_balance = reward_token_client.balance(&pool_id) as u128;
 
-        configured_reward.saturating_sub(claimed_reward + pool_reward_balance)
+        configured_reward.safe_sub(&e, claimed_reward + pool_reward_balance)
     }
 
     // Transfer outstanding reward to the pool
@@ -1163,7 +1164,7 @@ impl PoolsManagementTrait for PoolRouter {
                 Vec::new(&e),
             );
             total_liquidity_imbalance =
-                total_liquidity_imbalance.saturating_add(pool_liquidity_imbalance);
+                total_liquidity_imbalance.safe_add(&e, pool_liquidity_imbalance);
         }
 
         total_liquidity_imbalance

@@ -148,7 +148,7 @@ pub fn calculate_oracle_twap_price_spread_pct(
     last_oracle_price_twap: u128,
 ) -> i64 {
     let price_spread: i64 =
-        (pool_price as i128).saturating_sub(last_oracle_price_twap as i128) as i64;
+        (pool_price as i128).safe_sub(&e, last_oracle_price_twap as i128) as i64;
 
     // price_spread_pct
     price_spread
@@ -265,7 +265,7 @@ pub fn peg_price(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -> 
 // * `quote_asset_amount` - Amount of quote asset involved in the trade.
 // * `now` - Current ledger timestamp.
 pub fn update_volume_30d(e: &Env, quote_asset_amount: u128, now: u64) {
-    let since_last = max(1_u64, now.saturating_sub(get_last_trade_ts(e)));
+    let since_last = max(1_u64, now.safe_sub(&e, get_last_trade_ts(e)));
     let volume_30d = get_volume_30d(e);
 
     if volume_30d == 0 {
@@ -421,7 +421,7 @@ pub fn get_amount_out(in_amount: u128, reserve_sell: u128, reserve_buy: u128) ->
 
     // +1 just in case there were some rounding errors & convert to real units in place
     let result = in_amount
-        .fixed_mul_floor(reserve_buy, reserve_sell.saturating_add(in_amount))
+        .fixed_mul_floor(reserve_buy, reserve_sell.safe_add(&e, in_amount))
         .unwrap()
         + 1;
 

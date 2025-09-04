@@ -131,7 +131,7 @@ fn validate_fair_share_calculation(
 
         // Allow for small rounding differences
         let tolerance = expected_min_shares / 10000;
-        let min_acceptable_shares = expected_min_shares.saturating_sub(tolerance);
+        let min_acceptable_shares = expected_min_shares.safe_sub(&e, tolerance);
 
         if shares_to_mint < min_acceptable_shares {
             panic_with_error!(e, PoolError::UnfairShareCalculation);
@@ -368,7 +368,7 @@ impl PoolTrait for Pool {
             mint_lp_tokens(&e, &e.current_contract_address(), MIN_LIQUIDITY as i128);
             let events = LiquidityPoolEvents::new(&e);
             events.permanently_locked_liquidity(MIN_LIQUIDITY);
-            shares_to_mint = shares_to_mint.saturating_sub(MIN_LIQUIDITY);
+            shares_to_mint = shares_to_mint.safe_sub(&e, MIN_LIQUIDITY);
         }
 
         mint_lp_tokens(&e, &user, shares_to_mint as i128);
@@ -384,7 +384,7 @@ impl PoolTrait for Pool {
         update_plane(&e);
 
         // Finds how many synthetic tokens were minted/burned by finding the difference between reserve_a
-        let delta_a: i128 = (reserve_a_after_rebalance as i128).saturating_sub(reserve_a as i128);
+        let delta_a: i128 = (reserve_a_after_rebalance as i128).safe_sub(&e, reserve_a as i128);
 
         LiquidityPoolEvents::new(&e).deposit_liquidity(
             pool.token_b,
@@ -477,7 +477,7 @@ impl PoolTrait for Pool {
         let reserve_b = get_reserve_b(&e);
         let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
 
-        let delta_a_prior = reserve_a_before_prior_rebalance.saturating_sub(reserve_a as i128);
+        let delta_a_prior = reserve_a_before_prior_rebalance.safe_sub(&e, reserve_a as i128);
 
         let tokens = Self::get_tokens(e.clone());
 
@@ -563,7 +563,7 @@ impl PoolTrait for Pool {
         );
 
         let reserve_a_final = get_reserve_a(&e) as i128;
-        let delta_a_post = reserve_a_final.saturating_sub(reserve_a as i128);
+        let delta_a_post = reserve_a_final.safe_sub(&e, reserve_a as i128);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -689,7 +689,7 @@ impl PoolTrait for Pool {
         let reserve_b = get_reserve_b(&e);
         let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
 
-        let delta_a_prior = reserve_a_before_prior_rebalance.saturating_sub(reserve_a as i128);
+        let delta_a_prior = reserve_a_before_prior_rebalance.safe_sub(&e, reserve_a as i128);
 
         let tokens = Self::get_tokens(e.clone());
 
@@ -778,7 +778,7 @@ impl PoolTrait for Pool {
         );
 
         let reserve_a_final = get_reserve_a(&e) as i128;
-        let delta_a_post = reserve_a_final.saturating_sub(reserve_a as i128);
+        let delta_a_post = reserve_a_final.safe_sub(&e, reserve_a as i128);
 
         // update plane data for every pool update
         update_plane(&e);
@@ -946,7 +946,7 @@ impl PoolTrait for Pool {
         update_plane(&e);
 
         // Finds how many synthetic tokens were minted/burned by finding the difference between reserve_a
-        let delta_a: i128 = (reserve_a_after_rebalance as i128).saturating_sub(reserve_a as i128);
+        let delta_a: i128 = (reserve_a_after_rebalance as i128).safe_sub(&e, reserve_a as i128);
 
         LiquidityPoolEvents::new(&e).withdraw_liquidity(
             pool.token_b,
@@ -1161,7 +1161,7 @@ impl AdminInterfaceTrait for Pool {
                 quote_oracle_price_data.last_oracle_price_twap,
             );
 
-            net_liquidity_imbalance.saturating_sub(pool.liquidity_max_imbalance as i128)
+            net_liquidity_imbalance.safe_sub(&e, pool.liquidity_max_imbalance as i128)
         } else {
             0
         };
@@ -1192,7 +1192,7 @@ impl AdminInterfaceTrait for Pool {
 
         let insurance_withdraw = (excess_liquidity_imbalance as u128)
             .min(max_insurance_withdraw)
-            .min(insurance_vault_amount.saturating_sub(1));
+            .min(insurance_vault_amount.safe_sub(&e, 1));
 
         // "No available funds for insurance_withdraw({}) for liquidity_imbalance={}",
         validate!(&e, insurance_withdraw > 0, PoolError::NoIFWithdrawAvailable);

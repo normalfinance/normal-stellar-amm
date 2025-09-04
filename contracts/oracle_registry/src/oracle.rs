@@ -34,7 +34,7 @@ pub fn get_oracle_price(e: &Env, oracle: &Address, asset: &Symbol, now: u64) -> 
 
     let oracle_price_data = oracle_client.lastprice(&oracle_asset).unwrap();
 
-    oracle_price = (oracle_price_data.price as u128).saturating_div(PRICE_PRECISION);
+    oracle_price = (oracle_price_data.price as u128).safe_div(&e, PRICE_PRECISION);
     published_ts = oracle_price_data.timestamp;
 
     let oracle_delay = Delay::from_timestamp_diff_expect(
