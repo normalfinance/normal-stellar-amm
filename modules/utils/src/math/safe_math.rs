@@ -18,8 +18,8 @@ macro_rules! checked_impl {
                 match self.checked_add(v) {
                     Some(result) => result,
                     None => {
-                        log!(e, "Math error thrown at {}:{}", file!(), line!());
-                        panic_with_error!(e, MathError::MathError);
+                        log!(e, "Addition overflow at {}:{}", file!(), line!());
+                        panic_with_error!(e, MathError::AdditionOverflow);
                     }
                 }
             }
@@ -30,8 +30,8 @@ macro_rules! checked_impl {
                 match self.checked_sub(v) {
                     Some(result) => result,
                     None => {
-                        log!(e, "Math error thrown at {}:{}", file!(), line!());
-                        panic_with_error!(e, MathError::MathError);
+                        log!(e, "Subtraction underflow at {}:{}", file!(), line!());
+                        panic_with_error!(e, MathError::SubtractionUnderflow);
                     }
                 }
             }
@@ -42,8 +42,8 @@ macro_rules! checked_impl {
                 match self.checked_mul(v) {
                     Some(result) => result,
                     None => {
-                        log!(e, "Math error thrown at {}:{}", file!(), line!());
-                        panic_with_error!(e, MathError::MathError);
+                        log!(e, "Multiplication overflow at {}:{}", file!(), line!());
+                        panic_with_error!(e, MathError::MultiplicationOverflow);
                     }
                 }
             }
@@ -54,8 +54,8 @@ macro_rules! checked_impl {
                 match self.checked_div(v) {
                     Some(result) => result,
                     None => {
-                        log!(e, "Math error thrown at {}:{}", file!(), line!());
-                        panic_with_error!(e, MathError::MathError);
+                        log!(e, "Division by zero at {}:{}", file!(), line!());
+                        panic_with_error!(e, MathError::DivisionByZero);
                     }
                 }
             }
