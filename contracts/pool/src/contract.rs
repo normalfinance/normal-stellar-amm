@@ -295,9 +295,10 @@ impl PoolTrait for Pool {
         // Finds how many synthetic tokens were minted/burned by finding the difference between reserve_a
         let delta_a: i128 = (new_reserve_a as i128).saturating_sub(reserve_a as i128);
 
-        // Update the liquidity minted synthetic
-        let new_value = (get_liquidity_minted_synthetic(&e) as i128).safe_sub(&e, delta_a);
-        set_liquidity_minted_synthetic(&e, &(new_value as u128));
+        // Update LiquidityMintedSynthetic to track the total # of synthetic tokens minted by the pool
+        let new_liquidity_minted_synthetic =
+            (get_liquidity_minted_synthetic(&e) as i128).safe_add(&e, delta_a);
+        set_liquidity_minted_synthetic(&e, &(new_liquidity_minted_synthetic as u128));
 
         LiquidityPoolEvents::new(&e).deposit_liquidity(
             get_token_b(&e),
@@ -824,13 +825,18 @@ impl PoolTrait for Pool {
             panic_with_error!(&e, PoolValidationError::OutMinNotSatisfied);
         }
 
-        // sfdsf
+        // Burn the users proportional share of the pool's total minted token_a amount
         let liquidity_minted_synthetic = get_liquidity_minted_synthetic(&e);
         let token_a_to_burn =
             liquidity_minted_synthetic.fixed_mul_floor(&e, &share_amount, &total_shares);
-
         burn_synthetic_tokens(&e, &e.current_contract_address(), token_a_to_burn);
-        out_a = out_a - token_a_to_burn;
+        out_a = out_a.safe_sub(&e, token_a_to_burn);
+
+        // Update LiquidityMintedSynthetic to track the total # of synthetic tokens minted by the pool
+        set_liquidity_minted_synthetic(
+            &e,
+            &(liquidity_minted_synthetic.safe_sub(&e, token_a_to_burn)),
+        );
 
         // Transfer and update
         transfer_a(&e, &user, out_a);
