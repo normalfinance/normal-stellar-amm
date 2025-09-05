@@ -13,10 +13,7 @@ pub fn calculate_rolling_sum(
 ) -> u128 {
     // assumes that missing times are zeros (e.g. handle NaN as 0)
     let prev_twap_99 = data1
-        .safe_mul(
-            e,
-            max(0, weight1_denom.safe_sub(&e, weight1_numer)) as u128,
-        )
+        .safe_mul(e, max(0, weight1_denom.safe_sub(&e, weight1_numer)) as u128)
         .safe_div(e, weight1_denom as u128);
 
     prev_twap_99.safe_add(e, data2)

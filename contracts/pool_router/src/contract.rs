@@ -1,6 +1,5 @@
 use crate::errors::PoolRouterError;
 use crate::events::{Events, PoolRouterEvents};
-use utils::math::safe_math::SafeMath;
 use crate::incentives::get_incentives_manager;
 use crate::liquidity_calculator::LiquidityCalculatorClient;
 use crate::pool_interface::{
@@ -38,6 +37,7 @@ use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::constant::MAX_POOL_FEE;
+use utils::math::safe_math::SafeMath;
 use utils::state::pool::{PoolInfo, PoolTier, SwapDirection};
 use utils::token::{transfer_token, transfer_token_from};
 use utils::validation::ensure_non_zero_u128;
