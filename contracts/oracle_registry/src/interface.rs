@@ -3,6 +3,9 @@ use utils::state::oracle_registry::{
     HistoricalOracleData, MutableOracleInfo, OracleGuardRails, OracleInfo, OracleValidity,
 };
 
+use crate::storage_types::OracleGuardRails;
+use crate::storage::OracleFetchConfig;
+
 pub trait OracleRegistryTrait {
     fn initialize(e: Env, admin: Address, emergency_admin: Address);
 
@@ -76,4 +79,15 @@ pub trait AdminInterface {
     // (_______/  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
 
     fn set_oracle_guard_rails(e: Env, admin: Address, oracle_guard_rails: OracleGuardRails);
+
+ 
+    fn configure_oracle_fetch_policy(
+        e: Env, 
+        admin: Address,
+        hot_ttl_hours: u32,
+        checkpoint_interval_hours: u32,
+        max_entries: u32,
+    );
+    
+    fn get_oracle_fetch_config(e: Env) -> OracleFetchConfig;
 }
