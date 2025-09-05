@@ -200,12 +200,12 @@ impl InsuranceFundTrait for InsuranceFund {
         stake.cost_basis = if stake_shares_before == 0 {
             amount
         } else {
-            stake.cost_basis.saturating_add(amount)
+            stake.cost_basis.safe_add(&e, amount)
         };
 
         // Increase the Fund and Stake shares
         stake.increase_shares(&e, n_shares);
-        reserve.add_total_shares(n_shares, now);
+        reserve.add_total_shares(&e, n_shares, now);
 
         // Update the Reserve and Stake
         reserve.save(&e);
@@ -341,7 +341,7 @@ impl InsuranceFundTrait for InsuranceFund {
 
         stake.last_withdraw_request_value =
             shares_to_reserve_amount(&e, stake.last_withdraw_request_shares, &reserve)
-                .min(reserve.balance.saturating_sub(1));
+                .min(reserve.balance.safe_sub(&e, 1));
 
         validate!(
             &e,
@@ -448,7 +448,7 @@ impl InsuranceFundTrait for InsuranceFund {
         );
 
         // Decrease the Fund shares
-        reserve.remove_total_shares(stake_shares_lost, now);
+        reserve.remove_total_shares(&e, stake_shares_lost, now);
 
         stake.last_withdraw_request_shares = 0;
         stake.last_withdraw_request_value = 0;
@@ -575,7 +575,7 @@ impl InsuranceFundTrait for InsuranceFund {
             stake.cost_basis >= withdraw_amount,
             InsuranceFundError::CostBasisUnderflow
         );
-        stake.cost_basis = stake.cost_basis.saturating_sub(withdraw_amount);
+        stake.cost_basis = stake.cost_basis.safe_sub(&e, withdraw_amount);
 
         // Add bounds checking to prevent critical share tracking underflow
         validate!(
@@ -584,7 +584,7 @@ impl InsuranceFundTrait for InsuranceFund {
             InsuranceFundError::InsufficientIFShares
         );
 
-        reserve.remove_total_shares(n_shares, now);
+        reserve.remove_total_shares(&e, n_shares, now);
 
         // Reset stake withdraw request info
         stake.last_withdraw_request_shares = 0;
@@ -721,8 +721,8 @@ impl InsuranceFundTrait for InsuranceFund {
 
         let reserve = get_reserve(&e, &token);
 
-        let balance = get_contract_token_balance(&e, &token);
-        let skimmed = balance.saturating_sub(reserve.balance) as i128;
+        let balance = get_contract_token_balance(&e, &token) as i128;
+        let skimmed = balance.safe_sub(&e, reserve.balance as i128);
 
         if skimmed > 0 {
             transfer_token(&e, &token, &e.current_contract_address(), &sender, &skimmed);

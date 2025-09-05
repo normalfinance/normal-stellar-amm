@@ -37,6 +37,7 @@ use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::constant::MAX_POOL_FEE;
+use utils::math::safe_math::SafeMath;
 use utils::state::pool::{PoolInfo, PoolTier, SwapDirection};
 use utils::token::{transfer_token, transfer_token_from};
 use utils::validation::ensure_non_zero_u128;
@@ -924,7 +925,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
         let reward_token_client = SorobanTokenClient::new(&e, &reward_token);
         let pool_reward_balance = reward_token_client.balance(&pool_id) as u128;
 
-        configured_reward.saturating_sub(claimed_reward + pool_reward_balance)
+        configured_reward.safe_sub(&e, claimed_reward + pool_reward_balance)
     }
 
     // Transfer outstanding reward to the pool
@@ -1163,7 +1164,7 @@ impl PoolsManagementTrait for PoolRouter {
                 Vec::new(&e),
             );
             total_liquidity_imbalance =
-                total_liquidity_imbalance.saturating_add(pool_liquidity_imbalance);
+                total_liquidity_imbalance.safe_add(&e, pool_liquidity_imbalance);
         }
 
         total_liquidity_imbalance

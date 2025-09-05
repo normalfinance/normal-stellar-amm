@@ -68,12 +68,12 @@ impl Stake {
 
     pub fn increase_shares(&mut self, e: &Env, delta: u128) {
         self.validate_base(e);
-        self.shares = self.shares.saturating_add(delta);
+        self.shares = self.shares.safe_add(&e, delta);
     }
 
     pub fn decrease_shares(&mut self, e: &Env, delta: u128) {
         self.validate_base(e);
-        self.shares = self.shares.saturating_sub(delta);
+        self.shares = self.shares.safe_sub(&e, delta);
     }
 
     pub fn update_shares(&mut self, e: &Env, new_shares: u128) {
@@ -309,10 +309,10 @@ pub fn calculate_shares_lost(e: &Env, stake: &Stake, reserve: &InsuranceFundRese
             e,
             stake.last_withdraw_request_value,
             &(InsuranceFundReserve {
-                total_shares: reserve.total_shares.saturating_sub(n_shares),
+                total_shares: reserve.total_shares.safe_sub(&e, n_shares),
                 balance: reserve
                     .balance
-                    .saturating_sub(stake.last_withdraw_request_value),
+                    .safe_sub(&e, stake.last_withdraw_request_value),
                 ..reserve.clone()
             }),
         );
@@ -323,7 +323,7 @@ pub fn calculate_shares_lost(e: &Env, stake: &Stake, reserve: &InsuranceFundRese
             InsuranceFundError::InvalidIFSharesDetected
         );
 
-        n_shares.saturating_sub(new_n_shares)
+        n_shares.safe_sub(&e, new_n_shares)
     } else {
         0
     };

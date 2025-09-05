@@ -1,4 +1,5 @@
 use soroban_sdk::{contracttype, Address, Env};
+use utils::math::safe_math::SafeMath;
 
 use crate::storage::put_reserve;
 
@@ -39,21 +40,21 @@ impl InsuranceFundReserve {
         put_reserve(e, &self.token, &self);
     }
 
-    pub fn deposit(&mut self, amount: u128, now: u64) {
-        self.balance = self.balance.saturating_add(amount);
-        self.total_deposits = self.total_deposits.saturating_add(amount);
+    pub fn deposit(&mut self, e: &Env, amount: u128, now: u64) {
+        self.balance = self.balance.safe_add(e, amount);
+        self.total_deposits = self.total_deposits.safe_add(e, amount);
         self.last_update_ts = now;
     }
 
-    pub fn withdraw(&mut self, amount: u128, now: u64) {
-        self.balance = self.balance.saturating_sub(amount);
-        self.total_withdrawals = self.total_withdrawals.saturating_add(amount);
+    pub fn withdraw(&mut self, e: &Env, amount: u128, now: u64) {
+        self.balance = self.balance.safe_sub(e, amount);
+        self.total_withdrawals = self.total_withdrawals.safe_add(e, amount);
         self.last_update_ts = now;
     }
 
-    pub fn claim(&mut self, amount: u128, now: u64) {
-        self.balance = self.balance.saturating_sub(amount);
-        self.total_claims = self.total_claims.saturating_add(amount);
+    pub fn claim(&mut self, e: &Env, amount: u128, now: u64) {
+        self.balance = self.balance.safe_sub(e, amount);
+        self.total_claims = self.total_claims.safe_add(e, amount);
         self.last_claim = amount;
         self.last_claim_ts = now;
         self.last_update_ts = now;
@@ -64,13 +65,13 @@ impl InsuranceFundReserve {
         self.last_update_ts = now;
     }
 
-    pub fn add_total_shares(&mut self, amount: u128, now: u64) {
-        self.total_shares = self.total_shares.saturating_add(amount);
+    pub fn add_total_shares(&mut self, e: &Env, amount: u128, now: u64) {
+        self.total_shares = self.total_shares.safe_add(e, amount);
         self.last_update_ts = now;
     }
 
-    pub fn remove_total_shares(&mut self, amount: u128, now: u64) {
-        self.total_shares = self.total_shares.saturating_sub(amount);
+    pub fn remove_total_shares(&mut self, e: &Env, amount: u128, now: u64) {
+        self.total_shares = self.total_shares.safe_sub(e, amount);
         self.last_update_ts = now;
     }
 }

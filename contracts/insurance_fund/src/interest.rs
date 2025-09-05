@@ -6,6 +6,7 @@ use soroban_fixed_point_math::FixedPoint;
 use soroban_sdk::{panic_with_error, Env, Symbol, Vec};
 use utils::{
     constant::{PERCENTAGE_PRECISION, PERCENTAGE_PRECISION_I64},
+    math::safe_math::SafeMath,
     state::oracle_registry::{HistoricalOracleData, OracleValidity},
 };
 
@@ -35,9 +36,9 @@ pub fn calculate_total_reserve_value(e: &Env) -> u128 {
 
         let reserve_value = reserve
             .balance
-            .saturating_mul(historical_oracle_data.last_oracle_price_twap);
+            .safe_mul(&e, historical_oracle_data.last_oracle_price_twap);
 
-        total_reserve_value = total_reserve_value.saturating_add(reserve_value);
+        total_reserve_value = total_reserve_value.safe_add(&e, reserve_value);
     }
 
     total_reserve_value
