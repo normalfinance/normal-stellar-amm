@@ -86,7 +86,6 @@ pub trait AdminInterface {
         admin: Address,
         hot_ttl_hours: u32,
         checkpoint_interval_hours: u32,
-        max_entries: u32,
     );
     
     fn get_oracle_fetch_config(e: Env) -> OracleFetchConfig;

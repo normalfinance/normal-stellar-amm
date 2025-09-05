@@ -44,7 +44,6 @@ pub struct ColdOracleData {
 pub struct OracleFetchConfig {
     pub hot_data_ttl_seconds: u64,        
     pub cold_checkpoint_interval: u64,    
-    pub max_hot_entries_per_asset: u32, 
 }
 
 impl Default for OracleFetchConfig {
@@ -52,7 +51,6 @@ impl Default for OracleFetchConfig {
         OracleFetchConfig {
             hot_data_ttl_seconds: 48 * ONE_HOUR,           
             cold_checkpoint_interval: 24 * ONE_HOUR,       
-            max_hot_entries_per_asset: 25,                
         }
     }
 }

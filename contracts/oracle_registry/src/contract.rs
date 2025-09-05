@@ -521,7 +521,6 @@ impl AdminInterface for OracleRegistry {
         admin: Address,
         hot_ttl_hours: u32,
         checkpoint_interval_hours: u32,
-        max_entries: u32,
     ) {
         admin.require_auth();
         require_admin(&e, &admin);
@@ -529,7 +528,6 @@ impl AdminInterface for OracleRegistry {
         let config = OracleFetchConfig {
             hot_data_ttl_seconds: (hot_ttl_hours as u64) * ONE_HOUR,
             cold_checkpoint_interval: (checkpoint_interval_hours as u64) * ONE_HOUR,
-            max_hot_entries_per_asset: max_entries,
         };
         
         set_oracle_fetch_config(&e, &config);
