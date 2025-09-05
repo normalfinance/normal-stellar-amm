@@ -721,8 +721,8 @@ impl InsuranceFundTrait for InsuranceFund {
 
         let reserve = get_reserve(&e, &token);
 
-        let balance = get_contract_token_balance(&e, &token);
-        let skimmed = balance.safe_sub(&e, reserve.balance) as i128;
+        let balance = get_contract_token_balance(&e, &token) as i128;
+        let skimmed = balance.safe_sub(&e, reserve.balance as i128);
 
         if skimmed > 0 {
             transfer_token(&e, &token, &e.current_contract_address(), &sender, &skimmed);
