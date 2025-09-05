@@ -2,8 +2,9 @@ use crate::errors::OracleRegistryError;
 use crate::interface::{AdminInterface, OracleRegistryTrait};
 use crate::oracle::{get_oracle_price, oracle_validity, update_twap};
 use crate::storage::{
-    get_historical_oracle_data, get_oracle, get_oracle_base, get_oracle_guard_rails, put_oracle,
-    set_oracle_guard_rails, OracleFetchConfig, set_oracle_fetch_config, get_oracle_fetch_config_or_default,
+    get_historical_oracle_data, get_oracle, get_oracle_base, get_oracle_fetch_config_or_default,
+    get_oracle_guard_rails, put_oracle, remove_oracle, set_oracle_fetch_config,
+    set_oracle_guard_rails, OracleFetchConfig,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
@@ -515,9 +516,8 @@ impl AdminInterface for OracleRegistry {
         set_oracle_guard_rails(&e, &oracle_guard_rails);
     }
 
-
-    fn configure_oracle_fetch_policy( 
-        e: Env, 
+    fn configure_oracle_fetch_policy(
+        e: Env,
         admin: Address,
         hot_ttl_hours: u32,
         checkpoint_interval_hours: u32,
@@ -529,10 +529,10 @@ impl AdminInterface for OracleRegistry {
             hot_data_ttl_seconds: (hot_ttl_hours as u64) * ONE_HOUR,
             cold_checkpoint_interval: (checkpoint_interval_hours as u64) * ONE_HOUR,
         };
-        
+
         set_oracle_fetch_config(&e, &config);
     }
-    
+
     fn get_oracle_fetch_config(e: Env) -> OracleFetchConfig {
         get_oracle_fetch_config_or_default(&e)
     }

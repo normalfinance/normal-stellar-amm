@@ -15,20 +15,18 @@ enum DataKey {
     OracleGuardRails,   // a set of oracle price data validations and protections.
     OraclesSet(Symbol), // map of asset (i.e. "BTC") > OracleInfo.
     HistoricalOracleData(Symbol), // map of asset (i.e. "BTC") > HistoricalOracleData (historically witnessed oracle data - LEGACY).
-    
 
-    HotOracleData(Symbol),   
-    ColdOracleData(Symbol),   
-    OracleFetchConfig,               // Configuration for oracle fetch optimization policies               
+    HotOracleData(Symbol),
+    ColdOracleData(Symbol),
+    OracleFetchConfig, // Configuration for oracle fetch optimization policies
 }
-
 
 #[contracttype]
 #[derive(Default, Clone, Copy, Debug)]
 pub struct HotOracleData {
     pub data: HistoricalOracleData,
-    pub created_at: u64,           
-    pub last_accessed: u64,        
+    pub created_at: u64,
+    pub last_accessed: u64,
 }
 
 #[contracttype]
@@ -42,15 +40,15 @@ pub struct ColdOracleData {
 #[contracttype]
 #[derive(Clone, Copy, Debug)]
 pub struct OracleFetchConfig {
-    pub hot_data_ttl_seconds: u64,        
-    pub cold_checkpoint_interval: u64,    
+    pub hot_data_ttl_seconds: u64,
+    pub cold_checkpoint_interval: u64,
 }
 
 impl Default for OracleFetchConfig {
     fn default() -> Self {
         OracleFetchConfig {
-            hot_data_ttl_seconds: 48 * ONE_HOUR,           
-            cold_checkpoint_interval: 24 * ONE_HOUR,       
+            hot_data_ttl_seconds: 48 * ONE_HOUR,
+            cold_checkpoint_interval: 24 * ONE_HOUR,
         }
     }
 }
@@ -86,22 +84,21 @@ pub(crate) fn put_oracle(e: &Env, asset: &Symbol, info: &OracleInfo) {
     bump_persistent(e, &key);
 }
 
-
 pub fn get_historical_oracle_data(e: &Env, asset: &Symbol) -> HistoricalOracleData {
     let now = e.ledger().timestamp();
-    
+
     // 1. Try hot data first
     if let Some(hot_data) = get_hot_oracle_data(e, asset) {
         put_hot_oracle_data_with_access_time(e, asset, &hot_data, now);
         return hot_data.data;
     }
-    
+
     // 2. Fall back to cold data
     if let Some(hot_data) = get_hot_oracle_data(e, asset) {
         put_hot_oracle_data_with_access_time(e, asset, &hot_data, now);
         return hot_data.data;
     }
-    
+
     // 2. Fall back to cold data (checkpoint-based historical data)
     if let Some(cold_data) = get_cold_oracle_data(e, asset) {
         let config = get_oracle_fetch_config_or_default(e);
@@ -116,7 +113,7 @@ pub fn get_historical_oracle_data(e: &Env, asset: &Symbol) -> HistoricalOracleDa
         }
         return cold_data.data;
     }
-    
+
     // 3. Fall back to legacy persistent storage
     if let Some(legacy_data) = get_legacy_oracle_data(e, asset) {
         let hot_data = HotOracleData {
@@ -125,16 +122,16 @@ pub fn get_historical_oracle_data(e: &Env, asset: &Symbol) -> HistoricalOracleDa
             last_accessed: now,
         };
         put_hot_oracle_data(e, asset, &hot_data);
-        
+
         let cold_data = ColdOracleData {
             data: legacy_data,
             checkpoint_timestamp: now,
         };
         put_cold_oracle_data(e, asset, &cold_data);
-        
+
         return legacy_data;
     }
-    
+
     // 4. Return default if nothing found
     HistoricalOracleData::default_quote_oracle()
 }
@@ -142,7 +139,7 @@ pub fn get_historical_oracle_data(e: &Env, asset: &Symbol) -> HistoricalOracleDa
 pub fn put_historical_oracle_data(e: &Env, asset: &Symbol, data: &HistoricalOracleData) {
     let now = e.ledger().timestamp();
     let config = get_oracle_fetch_config_or_default(e);
-    
+
     // Always write to hot storage first
     let hot_data = HotOracleData {
         data: *data,
@@ -150,15 +147,12 @@ pub fn put_historical_oracle_data(e: &Env, asset: &Symbol, data: &HistoricalOrac
         last_accessed: now,
     };
     put_hot_oracle_data(e, asset, &hot_data);
-    
+
     // Check if we need to create a cold checkpoint
     if should_create_cold_checkpoint(e, asset, now, &config) {
         create_cold_checkpoint(e, asset, data, now);
     }
 }
-
-
-
 
 pub fn get_oracle_fetch_config(e: &Env) -> OracleFetchConfig {
     match e.storage().instance().get(&DataKey::OracleFetchConfig) {
@@ -172,7 +166,9 @@ pub fn get_oracle_fetch_config(e: &Env) -> OracleFetchConfig {
 
 // Internal setter
 pub fn set_oracle_fetch_config(e: &Env, config: &OracleFetchConfig) {
-    e.storage().instance().set(&DataKey::OracleFetchConfig, config);
+    e.storage()
+        .instance()
+        .set(&DataKey::OracleFetchConfig, config);
     bump_instance(e);
 }
 
@@ -194,7 +190,12 @@ fn put_hot_oracle_data(e: &Env, asset: &Symbol, data: &HotOracleData) {
     bump_temporary(e, &key);
 }
 
-fn put_hot_oracle_data_with_access_time(e: &Env, asset: &Symbol, data: &HotOracleData, access_time: u64) {
+fn put_hot_oracle_data_with_access_time(
+    e: &Env,
+    asset: &Symbol,
+    data: &HotOracleData,
+    access_time: u64,
+) {
     let updated_data = HotOracleData {
         data: data.data,
         created_at: data.created_at,
@@ -236,7 +237,7 @@ fn get_legacy_oracle_data(e: &Env, asset: &Symbol) -> Option<HistoricalOracleDat
 // Helper function for oracle fetch optimization
 pub fn get_oracle_fetch_config_or_default(e: &Env) -> OracleFetchConfig {
     let config = get_oracle_fetch_config(e);
-    
+
     // Check if config has default values
     if config.hot_data_ttl_seconds == 0 {
         // Initialize with default config if not set
@@ -249,7 +250,12 @@ pub fn get_oracle_fetch_config_or_default(e: &Env) -> OracleFetchConfig {
 }
 
 // Smart checkpointing logic
-fn should_create_cold_checkpoint(e: &Env, asset: &Symbol, now: u64, config: &OracleFetchConfig) -> bool {
+fn should_create_cold_checkpoint(
+    e: &Env,
+    asset: &Symbol,
+    now: u64,
+    config: &OracleFetchConfig,
+) -> bool {
     if let Some(existing_cold) = get_cold_oracle_data(e, asset) {
         let time_since_checkpoint = now - existing_cold.checkpoint_timestamp;
         time_since_checkpoint >= config.cold_checkpoint_interval
@@ -264,7 +270,7 @@ fn create_cold_checkpoint(e: &Env, asset: &Symbol, data: &HistoricalOracleData, 
         data: *data,
         checkpoint_timestamp: now,
     };
-    
+
     put_cold_oracle_data(e, asset, &cold_data);
 }
 
