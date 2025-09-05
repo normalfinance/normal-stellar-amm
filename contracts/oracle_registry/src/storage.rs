@@ -93,11 +93,6 @@ pub fn get_historical_oracle_data(e: &Env, asset: &Symbol) -> HistoricalOracleDa
         return hot_data.data;
     }
 
-    // 2. Fall back to cold data
-    if let Some(hot_data) = get_hot_oracle_data(e, asset) {
-        put_hot_oracle_data_with_access_time(e, asset, &hot_data, now);
-        return hot_data.data;
-    }
 
     // 2. Fall back to cold data (checkpoint-based historical data)
     if let Some(cold_data) = get_cold_oracle_data(e, asset) {

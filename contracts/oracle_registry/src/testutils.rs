@@ -108,6 +108,7 @@ impl Setup<'_> {
         );
 
         // Add prices to the mocked oracle (using 14 decimal precision according to Reflector oracle)
+
         let initial_btc_price = 109237_22794294087742_i128;
         let initial_eth_price = 3237_22794294087742_i128;
         let prices: Vec<i128> = Vec::from_array(&e, [initial_btc_price, initial_eth_price]);
