@@ -10,8 +10,7 @@ use utils::state::oracle_registry::{
 
 use soroban_sdk::{Address, Env, Symbol, Vec};
 use std::vec;
-use utils::constant::PERCENTAGE_PRECISION_U64;
-// use utils::test_utils::jump;
+use utils::test_utils::jump;
 
 pub(crate) struct TestConfig {
     pub(crate) users_count: u32,
@@ -24,11 +23,11 @@ impl Default for TestConfig {
             users_count: 3,
             oracle_guard_rails: OracleGuardRails {
                 price_divergence: PriceDivergenceGuardRails {
-                    oracle_twap_percent_divergence: 1000000,
+                    oracle_twap_percent_divergence: 1200000000, // allow ±20%
                 },
                 validity: ValidityGuardRails {
-                    seconds_before_stale_for_pool: 500,
-                    too_volatile_ratio: 2000000, // allow ±20%
+                    seconds_before_stale_for_pool: 300, // 5mins
+                    too_volatile_ratio: 1200000000,     // allow ±20%
                 },
             },
         }
@@ -42,20 +41,24 @@ pub(crate) struct Setup<'a> {
     pub(crate) admin: Address,
     pub(crate) emergency_admin: Address,
     pub(crate) users: vec::Vec<Address>,
-    pub(crate) oracle: Address,
 
     // contracts
     pub(crate) registry: OracleRegistryClient<'a>,
 
     // oracles
-    pub(crate) btc_asset_id: Symbol,
-    pub(crate) eth_asset_id: Symbol,
+    pub(crate) btc_symbol: Symbol,
+    pub(crate) eth_symbol: Symbol,
+    pub(crate) btc_asset: MockAsset,
+    pub(crate) eth_asset: MockAsset,
     pub(crate) oracle_client: MockPriceOracleClient<'a>,
 
     // state
     pub(crate) oracle_guard_rails: OracleGuardRails,
-    // pub(crate) init_btc_price: i128,
-    // pub(crate) init_eth_price: i128,
+
+    // oracle
+    pub(crate) oracle: Address,
+    pub(crate) initial_btc_price: u128,
+    pub(crate) initial_eth_price: u128,
 }
 
 impl Default for Setup<'_> {
@@ -77,166 +80,76 @@ impl Setup<'_> {
         e.mock_all_auths();
         e.cost_estimate().budget().reset_unlimited();
 
-        let start_time = 1755271154;
+        // Set the current time to avoid oracle timing issues
+        let start_time = 1751513914;
         jump(&e, start_time);
 
-        // addresses
+        // Addresses
         let users = Self::generate_random_users(&e, config.users_count);
         let admin = users[0].clone();
         let emergency_admin = Address::generate(&e);
 
-        // assets
-        let btc_asset_id = Symbol::new(&e, "SOL");
-        let eth_asset_id = Symbol::new(&e, "XLM");
+        // Assets
+        let btc_symbol = Symbol::new(&e, "BTC");
+        let eth_symbol = Symbol::new(&e, "ETH");
+        let usd_symbol = Symbol::new(&e, "USD");
 
-        let asset_1 = MockAsset::Other(btc_asset_id.clone());
-        let asset_2 = MockAsset::Other(eth_asset_id.clone());
+        let btc_asset = MockAsset::Other(btc_symbol.clone());
+        let eth_asset = MockAsset::Other(eth_symbol.clone());
+        let usd_asset = MockAsset::Other(usd_symbol);
 
-        let base = MockAsset::Other(Symbol::new(&e, "USD"));
-
-        let (oracle_id, oracle_client) = setup_price_feed_oracle(
+        let (oracle_address, oracle_client) = setup_price_feed_oracle(
             &e,
             &admin,
-            &base,
-            &Vec::from_array(&e, [asset_1.clone(), asset_2.clone()]),
+            &usd_asset,
+            &Vec::from_array(&e, [btc_asset.clone(), eth_asset.clone()]),
             14,
             300,
         );
 
-        // ===
-
-        // let prices_1: Vec<i128> = vec![&e, 94_234_1234567, 1_1021304];
-        let prices_1: Vec<i128> = Vec::from_array(&e, [190_00000000000000, 0_42190000000000]);
-        oracle_client.set_price(&prices_1, &start_time);
+        // Add prices to the mocked oracle (using 14 decimal precision according to Reflector oracle)
+        let initial_btc_price = 109237_22794294087742_i128;
+        let initial_eth_price = 3237_22794294087742_i128;
+        let prices: Vec<i128> = Vec::from_array(&e, [initial_btc_price, initial_eth_price]);
+        oracle_client.set_price(&prices, &start_time);
 
         // verify price data can be fetched
-        let result_1 = oracle_client.lastprice(&asset_1).unwrap();
-        assert_eq!(result_1.price, prices_1.get_unchecked(0));
-        // assert_eq!(result_1.timestamp, start_time);
+        let result_1 = oracle_client.lastprice(&btc_asset).unwrap();
+        assert_eq!(result_1.price, prices.get_unchecked(0));
 
-        let result_2 = oracle_client.lastprice(&asset_2).unwrap();
-        assert_eq!(result_2.price, prices_1.get_unchecked(1));
-        // assert_eq!(result_2.timestamp, start_time);
+        let result_2 = oracle_client.lastprice(&eth_asset).unwrap();
+        assert_eq!(result_2.price, prices.get_unchecked(1));
 
-        // let last_timestamp = oracle_client.last_timestamp();
-        // assert_eq!(last_timestamp, start_time);
-
-        // pass time
-        // jump(&e, 325);
-        // env.ledger().set(LedgerInfo {
-        //     timestamp: start_time + 325,
-        //     protocol_version: 22,
-        //     sequence_number: start_block + 325 / 5,
-        //     network_id: Default::default(),
-        //     base_reserve: 10,
-        //     min_temp_entry_ttl: 16,
-        //     min_persistent_entry_ttl: 4096,
-        //     max_entry_ttl: 6312000,
-        // });
-
-        // verify price data can still be fetched and timestamp does not change
-        // let result_1 = oracle_client.lastprice(&asset_1).unwrap();
-        // assert_eq!(result_1.price, prices_1.get_unchecked(0));
-        // assert_eq!(result_1.timestamp, start_time);
-
-        // let result_2 = oracle_client.lastprice(&asset_2).unwrap();
-        // assert_eq!(result_2.price, prices_1.get_unchecked(1));
-        // assert_eq!(result_2.timestamp, start_time);
-
-        // let last_timestamp = oracle_client.last_timestamp();
-        // assert_eq!(last_timestamp, start_time);
-
-        // set another round of prices
-        // let prices_2: Vec<i128> = Vec::from_array(&e, [10923722794294087742, 10923722794294087742]);
-        // oracle_client.set_price(&prices_2, &(start_time + 300));
-
-        // // verify most recent prices are fetched
-        // let result_1 = oracle_client.lastprice(&asset_1).unwrap();
-        // assert_eq!(result_1.price, prices_2.get_unchecked(0));
-        // assert_eq!(result_1.timestamp, start_time + 300);
-
-        // let result_2 = oracle_client.lastprice(&asset_2).unwrap();
-        // assert_eq!(result_2.price, prices_2.get_unchecked(1));
-        // assert_eq!(result_2.timestamp, start_time + 300);
-
-        // let last_timestamp = oracle_client.last_timestamp();
-        // assert_eq!(last_timestamp, start_time + 300);
-
-        // // verify old prices can be fetched
-        // let result_1 = oracle_client.price(&asset_1, &start_time).unwrap();
-        // assert_eq!(result_1.price, prices_1.get_unchecked(0));
-        // assert_eq!(result_1.timestamp, start_time);
-
-        // let result_2 = oracle_client.price(&asset_2, &start_time).unwrap();
-        // assert_eq!(result_2.price, prices_1.get_unchecked(1));
-        // assert_eq!(result_2.timestamp, start_time);
-
-        // // verify timestamp is normalized to the most recent price
-        // // older than the requested timestamp
-        // let result_1 = oracle_client.price(&asset_1, &(100 + start_time)).unwrap();
-        // assert_eq!(result_1.price, prices_1.get_unchecked(0));
-        // assert_eq!(result_1.timestamp, start_time);
-
-        // let result_2 = oracle_client.price(&asset_2, &(250 + start_time)).unwrap();
-        // assert_eq!(result_2.price, prices_1.get_unchecked(1));
-        // assert_eq!(result_2.timestamp, start_time);
-
-        // // verify get prices can fetch both
-        // let result_1_vec = oracle_client.prices(&asset_1, &2).unwrap();
-        // assert_eq!(result_1_vec.len(), 2);
-        // let result_1_0 = result_1_vec.get_unchecked(0);
-        // assert_eq!(result_1_0.price, prices_2.get_unchecked(0));
-        // assert_eq!(result_1_0.timestamp, start_time + 300);
-        // let result_1_1 = result_1_vec.get_unchecked(1);
-        // assert_eq!(result_1_1.price, prices_1.get_unchecked(0));
-        // assert_eq!(result_1_1.timestamp, start_time);
-
-        // let result_2_vec = oracle_client.prices(&asset_2, &2).unwrap();
-        // assert_eq!(result_2_vec.len(), 2);
-        // let result_2_0 = result_2_vec.get_unchecked(0);
-        // assert_eq!(result_2_0.price, prices_2.get_unchecked(1));
-        // assert_eq!(result_2_0.timestamp, start_time + 300);
-        // let result_2_1 = result_2_vec.get_unchecked(1);
-        // assert_eq!(result_2_1.price, prices_1.get_unchecked(1));
-        // assert_eq!(result_2_1.timestamp, start_time);
-
-        // // verify un-normalized timestamps get set to the most recent normalized timestamp
-        // let prices_3: Vec<i128> = Vec::from_array(&e, [10923722794294087742, 10923722794294087742]);
-        // oracle_client.set_price(&prices_3, &(start_time + 600 + 100));
-
-        // let result_1 = oracle_client.lastprice(&asset_1).unwrap();
-        // assert_eq!(result_1.price, prices_3.get_unchecked(0));
-        // assert_eq!(result_1.timestamp, start_time + 600);
-
-        // let result_2 = oracle_client.lastprice(&asset_2).unwrap();
-        // assert_eq!(result_2.price, prices_3.get_unchecked(1));
-        // assert_eq!(result_2.timestamp, start_time + 600);
-
-        // let last_timestamp = oracle_client.last_timestamp();
-        // assert_eq!(last_timestamp, start_time + 600);
-
-        // ===
-
-        // Register the oracle with the Registry
+        // Setup the Oracle Registry
         let registry = create_oracle_registry_contract(&e);
         registry.initialize(&admin, &emergency_admin);
         registry.set_oracle_guard_rails(&admin, &config.oracle_guard_rails);
 
-        registry.register_oracle(&admin, &btc_asset_id, &oracle_id, &14, &1);
+        // Register the BTC oracle with the Registry
+        registry.register_oracle(&admin, &btc_symbol, &oracle_address, &14, &1);
 
         Self {
             env: e,
+            // Addresses
             admin,
             emergency_admin,
             users,
-            oracle: oracle_id,
+
+            // Contracts
             registry,
-            btc_asset_id,
-            eth_asset_id,
+
+            // Assets
+            btc_symbol,
+            eth_symbol,
+            btc_asset,
+            eth_asset,
+
+            // Oracle
+            oracle: oracle_address,
             oracle_client,
             oracle_guard_rails: config.oracle_guard_rails,
-            // init_btc_price,
-            // init_eth_price,
+            initial_btc_price: initial_btc_price as u128,
+            initial_eth_price: initial_eth_price as u128,
         }
     }
 
@@ -249,19 +162,6 @@ impl Setup<'_> {
     }
 }
 
-pub fn jump(e: &Env, time: u64) {
-    e.ledger().set(LedgerInfo {
-        timestamp: e.ledger().timestamp().saturating_add(time),
-        protocol_version: e.ledger().protocol_version(),
-        sequence_number: e.ledger().sequence(),
-        network_id: Default::default(),
-        base_reserve: 10,
-        min_temp_entry_ttl: 999999,
-        min_persistent_entry_ttl: 999999,
-        max_entry_ttl: u32::MAX,
-    });
-}
-
 // (https://github.com/script3/sep-40-oracle/blob/d2d9a19079d95f79c16c3ff506416346d75b537f/mock-sep-40/src/test.rs)
 fn setup_price_feed_oracle<'a>(
     env: &Env,
@@ -271,10 +171,10 @@ fn setup_price_feed_oracle<'a>(
     decimals: u32,
     resolution: u32,
 ) -> (Address, MockPriceOracleClient<'a>) {
-    let oracle_id = env.register(MockPriceOracleWASM, ());
-    let oracle_client = MockPriceOracleClient::new(env, &oracle_id);
+    let oracle_address = env.register(MockPriceOracleWASM, ());
+    let oracle_client = MockPriceOracleClient::new(env, &oracle_address);
     oracle_client.set_data(admin, base, assets, &decimals, &resolution);
-    (oracle_id, oracle_client)
+    (oracle_address, oracle_client)
 }
 
 pub mod oracle_registry {
