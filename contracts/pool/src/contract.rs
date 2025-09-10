@@ -15,15 +15,15 @@ use crate::rewards::get_rewards_manager;
 use crate::storage::{
     get_base_asset, get_fee_fraction, get_insurance_claim, get_insurance_fund_from_router,
     get_is_killed_claim, get_is_killed_deposit, get_is_killed_swap, get_is_killed_withdraw,
-    get_liquidity_minted_synthetic, get_max_liquidity_imbalance, get_mint_cap_fraction, get_plane,
-    get_protocol_fee_a, get_protocol_fee_b, get_protocol_fee_fraction, get_quote_asset,
+    get_max_liquidity_imbalance, get_mint_cap_fraction, get_plane, get_protocol_fee_a,
+    get_protocol_fee_b, get_protocol_fee_fraction, get_quote_asset, get_rebalance_minted,
     get_reserve_a, get_reserve_b, get_router, get_status, get_tier, get_token_a, get_token_b,
     get_token_future_wasm, has_plane, set_base_asset, set_fee_fraction, set_insurance_claim,
     set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap, set_is_killed_withdraw,
-    set_liquidity_minted_synthetic, set_max_liquidity_imbalance, set_mint_cap_fraction,
-    set_oracle_registry, set_plane, set_protocol_fee_a, set_protocol_fee_b,
-    set_protocol_fee_fraction, set_quote_asset, set_reserve_a, set_reserve_b, set_router,
-    set_status, set_tier, set_token_a, set_token_b, set_token_future_wasm,
+    set_max_liquidity_imbalance, set_mint_cap_fraction, set_oracle_registry, set_plane,
+    set_protocol_fee_a, set_protocol_fee_b, set_protocol_fee_fraction, set_quote_asset,
+    set_reserve_a, set_reserve_b, set_router, set_status, set_tier, set_token_a, set_token_b,
+    set_token_future_wasm,
 };
 use crate::token::{burn_synthetic_tokens, create_token_share_contract, transfer_a, transfer_b};
 use access_control::access::{AccessControl, AccessControlTrait};
@@ -295,11 +295,6 @@ impl PoolTrait for Pool {
         // Finds how many synthetic tokens were minted/burned by finding the difference between reserve_a
         let delta_a: i128 = (new_reserve_a as i128).saturating_sub(reserve_a as i128);
 
-        // Update LiquidityMintedSynthetic to track the total # of synthetic tokens minted by the pool
-        let new_liquidity_minted_synthetic =
-            (get_liquidity_minted_synthetic(&e) as i128).safe_add(&e, delta_a);
-        set_liquidity_minted_synthetic(&e, &(new_liquidity_minted_synthetic as u128));
-
         LiquidityPoolEvents::new(&e).deposit_liquidity(
             get_token_b(&e),
             user,
@@ -481,6 +476,7 @@ impl PoolTrait for Pool {
             tokens.get(out_idx).unwrap(),
             in_amount,
             out,
+            lp_fee,
             delta_a_prior,
             delta_a_post,
         );
@@ -696,6 +692,7 @@ impl PoolTrait for Pool {
             tokens.get(out_idx).unwrap(),
             in_amount,
             out_amount,
+            lp_fee,
             delta_a_prior,
             delta_a_post,
         );
@@ -790,7 +787,6 @@ impl PoolTrait for Pool {
             panic_with_error!(&e, PoolValidationError::WrongInputVecSize);
         }
 
-        // FIXME: will there be issues here"
         enter(&e);
 
         if get_is_killed_withdraw(&e) {
@@ -815,7 +811,7 @@ impl PoolTrait for Pool {
         let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
 
         // Now calculate the withdraw amounts
-        let mut out_a = reserve_a.fixed_mul_floor(&e, &share_amount, &total_shares);
+        let out_a = reserve_a.fixed_mul_floor(&e, &share_amount, &total_shares);
         let out_b = reserve_b.fixed_mul_floor(&e, &share_amount, &total_shares);
 
         let min_a = min_amounts.get(0).unwrap();
@@ -825,23 +821,20 @@ impl PoolTrait for Pool {
             panic_with_error!(&e, PoolValidationError::OutMinNotSatisfied);
         }
 
-        // Burn the users proportional share of the pool's total minted token_a amount
-        let liquidity_minted_synthetic = get_liquidity_minted_synthetic(&e);
-        let token_a_to_burn =
-            liquidity_minted_synthetic.fixed_mul_floor(&e, &share_amount, &total_shares);
-        burn_synthetic_tokens(&e, &e.current_contract_address(), token_a_to_burn);
-        out_a = out_a.safe_sub(&e, token_a_to_burn);
+        // Burn the users proportional share of the pool's RebalanceMinted token_a amount
+        let rebalance_minted = get_rebalance_minted(&e);
+        let burn_a = rebalance_minted.fixed_mul_floor(&e, &share_amount, &total_shares);
+        burn_synthetic_tokens(&e, &e.current_contract_address(), burn_a);
 
-        // Update LiquidityMintedSynthetic to track the total # of synthetic tokens minted by the pool
-        set_liquidity_minted_synthetic(
-            &e,
-            &(liquidity_minted_synthetic.safe_sub(&e, token_a_to_burn)),
-        );
+        // Saturate to zero to avoid overflow if burn_a > out_a
+        let actual_out_a = out_a.saturating_sub(burn_a);
 
         // Transfer and update
-        transfer_a(&e, &user, out_a);
+        if actual_out_a > 0 {
+            transfer_a(&e, &user, out_a.safe_sub(&e, burn_a));
+        }
         transfer_b(&e, &user, out_b);
-        let new_reserve_a = reserve_a - out_a;
+        let new_reserve_a = reserve_a - burn_a - actual_out_a;
         let new_reserve_b = reserve_b - out_b;
         set_reserve_a(&e, &new_reserve_a);
         set_reserve_b(&e, &new_reserve_b);
@@ -1003,8 +996,6 @@ impl AdminInterfaceTrait for Pool {
         admin.require_auth();
         require_operations_admin_or_owner(&e, &admin);
 
-        enter(&e);
-
         let base_oracle_price_data = get_oracle_price(&e, &get_base_asset(&e), action);
         let quote_oracle_price_data = get_oracle_price(&e, &get_quote_asset(&e), action);
 
@@ -1020,8 +1011,6 @@ impl AdminInterfaceTrait for Pool {
             base_oracle_price_data.last_oracle_price_twap,
             quote_oracle_price_data.last_oracle_price_twap,
         );
-
-        exit(&e);
 
         delta_a
     }

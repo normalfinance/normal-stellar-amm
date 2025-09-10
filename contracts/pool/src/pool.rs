@@ -8,10 +8,12 @@ use crate::storage::get_fee_fraction;
 use crate::storage::get_last_trade_ts;
 use crate::storage::get_mint_cap_fraction;
 use crate::storage::get_oracle_registry;
+use crate::storage::get_rebalance_minted;
 use crate::storage::get_status;
 use crate::storage::get_total_synthetics;
 use crate::storage::get_volume_30d;
 use crate::storage::set_last_trade_ts;
+use crate::storage::set_rebalance_minted;
 use crate::storage::set_volume_30d;
 use crate::storage::{get_reserve_a, get_reserve_b, set_reserve_a};
 use crate::token::burn_synthetic_tokens;
@@ -327,11 +329,11 @@ pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -> 
     let status = get_status(e);
     let reduce_only = status == PoolStatus::ReduceOnly;
 
-    let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
+    let (reserve_a, reserve_b) = (get_reserve_a(e), get_reserve_b(e));
 
     // Find the ideal reserve_a amount such that the pool's price is equal to the oracle price
     let delta_a = get_delta_a(
-        &e,
+        e,
         reserve_a,
         reserve_b,
         base_oracle_price,
@@ -340,32 +342,32 @@ pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -> 
     if delta_a != 0 {
         if delta_a > 0 {
             if reduce_only {
-                LiquidityPoolEvents::new(&e).capped_mint(
+                LiquidityPoolEvents::new(e).capped_mint(
                     base_oracle_price,
                     quote_oracle_price,
                     delta_a,
                 );
 
-                // allow minting up to 0.1 % of current supply per ledger
+                // allow minting up to 0.1% of current supply per ledger
                 let mint_cap =
-                    (get_total_synthetics(&e) / (get_mint_cap_fraction(&e) as u128)) as i128;
+                    (get_total_synthetics(e) / (get_mint_cap_fraction(e) as u128)) as i128;
 
                 if delta_a > mint_cap {
-                    panic_with_error!(&e, PoolError::SwapReduceOnly);
+                    panic_with_error!(e, PoolError::SwapReduceOnly);
                 }
             } else {
-                mint_synthetic_tokens(&e, &e.current_contract_address(), delta_a);
-                set_reserve_a(&e, &(reserve_a + (delta_a as u128)));
+                mint_synthetic_tokens(e, &e.current_contract_address(), delta_a);
+                set_reserve_a(e, &(reserve_a + (delta_a as u128)));
             }
         }
         if delta_a < 0 {
-            burn_synthetic_tokens(&e, &e.current_contract_address(), delta_a.abs() as u128);
-            set_reserve_a(&e, &(reserve_a - (delta_a.abs() as u128)));
+            burn_synthetic_tokens(e, &e.current_contract_address(), delta_a.abs() as u128);
+            set_reserve_a(e, &(reserve_a - (delta_a.abs() as u128)));
         }
 
-        let (new_reserve_a, new_reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
+        let (new_reserve_a, new_reserve_b) = (get_reserve_a(e), get_reserve_b(e));
 
-        LiquidityPoolEvents::new(&e).rebalance(
+        LiquidityPoolEvents::new(e).rebalance(
             reserve_a,
             reserve_b,
             new_reserve_a,
@@ -373,6 +375,10 @@ pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -> 
             delta_a,
         );
     }
+
+    // Update RebalanceMinted to track the outstanding number of synthetic tokens minted/burned by the pool
+    let rebalance_minted = get_rebalance_minted(e) as i128;
+    set_rebalance_minted(&e, &(rebalance_minted.safe_add(e, delta_a) as u128));
 
     delta_a
 }

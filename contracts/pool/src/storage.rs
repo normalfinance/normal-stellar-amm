@@ -42,9 +42,9 @@ enum DataKey {
     MaxLiquidityImbalance,
 
     // metrics
-    LastTradeTs, // the blockchain unix timestamp at the time of the last trade
-    Volume30d,   // estimated total of volume in market
-    LiquidityMintedSynthetic, // This is incremented only when liquidity is added and token_a is minted by the pool to balance the XLM deposit
+    LastTradeTs,     // the blockchain unix timestamp at the time of the last trade
+    Volume30d,       // estimated total of volume in market
+    RebalanceMinted, // The outstanding number of token_a minted by the Pool to maintain price peg
 
     // paused ops
     IsKilledSwap,
@@ -142,8 +142,8 @@ generate_instance_storage_getter_and_setter_with_default!(
     0
 );
 generate_instance_storage_getter_and_setter_with_default!(
-    liquidity_minted_synthetic,
-    DataKey::LiquidityMintedSynthetic,
+    rebalance_minted,
+    DataKey::RebalanceMinted,
     u128,
     0
 );

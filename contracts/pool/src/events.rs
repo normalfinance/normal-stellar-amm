@@ -51,6 +51,7 @@ pub trait PoolEvents {
         token_out: Address,
         in_amount: u128,
         out_amount: u128,
+        lp_fee: u128,
         delta_a_prior: i128,
         delta_a_post: i128,
     );
@@ -144,13 +145,14 @@ impl PoolEvents for Events {
         token_out: Address,
         in_amount: u128,
         out_amount: u128,
+        lp_fee: u128,
         delta_a_prior: i128,
         delta_a_post: i128,
     ) {
         let e = self.env();
         e.events().publish(
             (Symbol::new(e, "swap"), token_in, token_out, user),
-            (in_amount, out_amount, delta_a_prior, delta_a_post),
+            (in_amount, out_amount, lp_fee, delta_a_prior, delta_a_post),
         );
     }
 
