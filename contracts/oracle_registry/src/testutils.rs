@@ -7,7 +7,7 @@ use utils::state::oracle_registry::{
 };
 use crate::OracleRegistryClient;
 use sep_40_oracle::testutils::{ Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM };
-use soroban_sdk::testutils::Address as _;
+use soroban_sdk::testutils::{Address as _, Ledger};
 
 use soroban_sdk::{ Address, Env, Symbol, Vec };
 use utils::constant::PERCENTAGE_PRECISION_U64;
@@ -78,6 +78,11 @@ impl Setup<'_> {
         let e: Env = Env::default();
         e.mock_all_auths();
         e.cost_estimate().budget().reset_unlimited();
+        
+        // Set initial timestamp to avoid staleness during oracle validation
+        e.ledger().with_mut(|li| {
+            li.timestamp = 1200;
+        });
 
         // addresses
         let users = Self::generate_random_users(&e, config.users_count);
@@ -226,7 +231,7 @@ impl Setup<'_> {
         registry.initialize(&admin, &emergency_admin);
         registry.set_oracle_guard_rails(&admin, &config.oracle_guard_rails);
 
-        registry.register_oracle(&admin, &btc_asset_id, &oracle_id, &btc_addr, &7, &0);
+        registry.register_oracle(&admin, &btc_asset_id, &oracle_id, &btc_addr, &7, &1);
 
         Self {
             env: e,

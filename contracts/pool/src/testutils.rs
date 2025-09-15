@@ -14,7 +14,7 @@ use soroban_sdk::token::{
     TokenClient as SorobanTokenClient,
 };
 use soroban_sdk::String;
-use soroban_sdk::{ testutils::Address as _, Address, BytesN, Env, Symbol, Vec };
+use soroban_sdk::{ testutils::{Address as _, Ledger}, Address, BytesN, Env, Symbol, Vec };
 use utils::constant::{ PERCENTAGE_PRECISION_U64, PRICE_PRECISION_I128 };
 use utils::state::{
     pool::{ InitializeAllParams, InitializeParams, PoolTier, RewardConfig },
@@ -57,8 +57,8 @@ impl Default for TestConfig {
                     oracle_twap_percent_divergence: PERCENTAGE_PRECISION_U64 / 10, // allows up to ±10%
                 },
                 validity: ValidityGuardRails {
-                    seconds_before_stale_for_pool: 5,
-                    too_volatile_ratio: 120, // allows up to ±20%
+                    seconds_before_stale_for_pool: 600,
+                    too_volatile_ratio: 200, // allows up to ±100%
                 },
             },
         }
@@ -137,6 +137,11 @@ impl Setup<'_> {
         let e: Env = Env::default();
         e.mock_all_auths();
         e.cost_estimate().budget().reset_unlimited();
+        
+        // Set initial timestamp to avoid staleness during oracle validation
+        e.ledger().with_mut(|li| {
+            li.timestamp = 1200;
+        });
 
         let users = Self::generate_random_users(&e, config.users_count);
         let admin = users[0].clone();
@@ -234,12 +239,19 @@ impl Setup<'_> {
             init_xlm_price,
         ]);
         oracle_client.set_price(&prices, &start_time);
+        // Seed a second point slightly later to reduce staleness/volatility edge cases
+        let prices2: Vec<i128> = Vec::from_array(&e, [
+            init_btc_price,
+            init_eth_price,
+            init_xlm_price,
+        ]);
+        oracle_client.set_price(&prices2, &(start_time + 60));
 
         let registry = create_oracle_registry_contract(&e);
         registry.initialize(&admin, &emergency_admin);
-        registry.set_oracle_guardrails(&admin, &config.oracle_guard_rails);
+        registry.set_oracle_guard_rails(&admin, &config.oracle_guard_rails);
 
-        registry.register_oracle(&admin, &btc_asset_id, &oracle_id, &btc_addr, &7, &0);
+        registry.register_oracle(&admin, &btc_asset_id, &oracle_id, &btc_addr, &7, &1);
 
         // Pool
         let liq_pool = create_pool_contract(

@@ -34,6 +34,7 @@ use utils::constant::{FEE_DENOMINATOR, PRICE_PRECISION, THIRTY_DAY};
 use utils::math::safe_math::SafeMath;
 use utils::math::stats::calculate_rolling_sum;
 use utils::token::transfer_token;
+use utils::validate;
 
 #[contract]
 pub struct PoolSwapFeeCollector;
@@ -204,7 +205,7 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
             (fee_amount * (lp_revenue_fraction as u128)) / (FEE_DENOMINATOR as u128);
 
         // Add bounds checking to prevent fee calculation underflow when LP fees exceed total fees
-        validate!(&e, fee_amount >= lp_fee_amount, PoolSwapFeeError::InvalidFeeCalculation);
+        validate!(&e, fee_amount >= lp_fee_amount, Error::OutMinNotSatisfied);
         let mut protocol_fee_amount = fee_amount - lp_fee_amount;
 
         // BUFFER

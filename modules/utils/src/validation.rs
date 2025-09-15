@@ -21,7 +21,7 @@ use soroban_sdk::{Env, panic_with_error};
 /// ensure_non_zero(&e, token_amount, PoolValidationError::ZeroAmount);
 /// ```
 #[inline]
-pub fn ensure_non_zero<T: PartialEq + From<u8>, E: Copy>(
+pub fn ensure_non_zero<T: PartialEq + From<u8>, E: Into<soroban_sdk::Error>>(
     env: &Env,
     amount: T,
     error: E,
@@ -52,7 +52,7 @@ pub fn ensure_non_zero<T: PartialEq + From<u8>, E: Copy>(
 /// ensure_non_zero_u128(&e, token_b_amount, PoolValidationError::ZeroAmount);
 /// ```
 #[inline]
-pub fn ensure_non_zero_u128<E: Copy>(env: &Env, amount: u128, error: E) {
+pub fn ensure_non_zero_u128<E: Into<soroban_sdk::Error>>(env: &Env, amount: u128, error: E) {
     if amount == 0 {
         panic_with_error!(env, error);
     }
@@ -79,7 +79,7 @@ pub fn ensure_non_zero_u128<E: Copy>(env: &Env, amount: u128, error: E) {
 /// ensure_non_zero_i128(&e, signed_amount, PoolValidationError::ZeroAmount);
 /// ```
 #[inline]
-pub fn ensure_non_zero_i128<E: Copy>(env: &Env, amount: i128, error: E) {
+pub fn ensure_non_zero_i128<E: Into<soroban_sdk::Error>>(env: &Env, amount: i128, error: E) {
     if amount == 0 {
         panic_with_error!(env, error);
     }
@@ -102,7 +102,7 @@ pub fn validate_positive_denominator<E>(e: &Env, value: u64, error: E)
 where
     E: Into<soroban_sdk::Error>,
 {
-    if value <= 0 {
+    if value == 0 {
         panic_with_error!(e, error);
     }
 }

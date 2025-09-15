@@ -1,0 +1,653 @@
+warning: unused import: `panic_with_error`
+ --> modules/utils/src/macros.rs:1:20
+  |
+1 | use soroban_sdk::{ panic_with_error };
+  |                    ^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `crate::errors::math_errors::MathError`
+ --> modules/utils/src/macros.rs:3:5
+  |
+3 | use crate::errors::math_errors::MathError;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: comparison is useless due to type limits
+  --> modules/utils/src/math/pool.rs:14:13
+   |
+14 |     assert!(last_price_twap >= 0, "last_price_twap must be non-negative");
+   |             ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_comparisons)]` on by default
+
+warning: `utils` (lib) generated 3 warnings (run `cargo fix --lib -p utils` to apply 2 suggestions)
+warning: unused import: `LPTokenStorageTrait`
+ --> modules/incentives/src/manager.rs:3:5
+  |
+3 |     LPTokenStorageTrait,
+  |     ^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused variable: `user`
+  --> modules/incentives/src/manager.rs:43:9
+   |
+43 |         user: &Address,
+   |         ^^^^ help: if this is intentional, prefix it with an underscore: `_user`
+   |
+   = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `total_share`
+  --> modules/incentives/src/manager.rs:45:9
+   |
+45 |         total_share: u128
+   |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_total_share`
+
+warning: `incentives` (lib) generated 3 warnings (run `cargo fix --lib -p incentives` to apply 1 suggestion)
+warning: unused import: `oracle_registry::OraclePriceData`
+  --> contracts/pool/src/contract.rs:55:5
+   |
+55 |     oracle_registry::OraclePriceData,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `utils::state::oracle_registry::OraclePriceData`
+  --> contracts/pool/src/pool.rs:32:5
+   |
+32 | use utils::state::oracle_registry::OraclePriceData;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `utils::state::pool::PoolStatus`
+  --> contracts/pool/src/pool.rs:33:5
+   |
+33 | use utils::state::pool::PoolStatus;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `soroban_fixed_point_math::FixedPoint`
+ --> contracts/pool/src/tests/calculation_tests.rs:5:5
+  |
+5 | use soroban_fixed_point_math::FixedPoint;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `testutils::Address as _`
+ --> contracts/pool/src/tests/security_calculation_tests.rs:4:24
+  |
+4 | use soroban_sdk::{Env, testutils::Address as _};
+  |                        ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `get_net_liquidity_imbalance`
+ --> contracts/pool/src/tests/security_calculation_tests.rs:5:43
+  |
+5 | use crate::pool::{get_delta_a, peg_price, get_net_liquidity_imbalance};
+  |                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `get_total_synthetic_tokens`
+ --> contracts/pool/src/tests/security_calculation_tests.rs:7:19
+  |
+7 | use pool_tokens::{get_total_synthetic_tokens};
+  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Symbol` and `symbol_short`
+ --> contracts/pool/src/working_permission_tests.rs:3:58
+  |
+3 | use soroban_sdk::{testutils::Address as _, Address, Env, Symbol, symbol_short};
+  |                                                          ^^^^^^  ^^^^^^^^^^^^
+
+warning: unused import: `access_control::errors::AccessControlError`
+ --> contracts/pool/src/working_permission_tests.rs:7:5
+  |
+7 | use access_control::errors::AccessControlError;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: crate-level attribute should be in the root module
+ --> contracts/pool/src/events.rs:1:1
+  |
+1 | #![no_std]
+  | ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_attributes)]` on by default
+
+warning: unused variable: `now`
+   --> contracts/pool/src/contract.rs:169:13
+    |
+169 |         let now = e.ledger().timestamp();
+    |             ^^^ help: if this is intentional, prefix it with an underscore: `_now`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `rewards_admin`
+   --> contracts/pool/src/testutils.rs:148:13
+    |
+148 |         let rewards_admin = Address::generate(&e);
+    |             ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_rewards_admin`
+
+warning: unused variable: `operations_admin`
+   --> contracts/pool/src/testutils.rs:149:13
+    |
+149 |         let operations_admin = Address::generate(&e);
+    |             ^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_operations_admin`
+
+warning: unused variable: `pause_admin`
+   --> contracts/pool/src/testutils.rs:150:13
+    |
+150 |         let pause_admin = Address::generate(&e);
+    |             ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_pause_admin`
+
+warning: unused variable: `emergency_pause_admin`
+   --> contracts/pool/src/testutils.rs:151:13
+    |
+151 |         let emergency_pause_admin = Address::generate(&e);
+    |             ^^^^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_emergency_pause_admin`
+
+warning: unused variable: `usdc_addr`
+   --> contracts/pool/src/testutils.rs:207:13
+    |
+207 |         let usdc_addr = Address::generate(&e);
+    |             ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_usdc_addr`
+
+warning: unused variable: `e`
+   --> contracts/pool/src/tests/calculation_tests.rs:152:13
+    |
+152 |         let e = Env::default();
+    |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `e`
+   --> contracts/pool/src/tests/calculation_tests.rs:172:13
+    |
+172 |         let e = Env::default();
+    |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `e`
+   --> contracts/pool/src/tests/calculation_tests.rs:194:13
+    |
+194 |         let e = Env::default();
+    |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `e`
+   --> contracts/pool/src/tests/calculation_tests.rs:217:13
+    |
+217 |         let e = Env::default();
+    |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `e`
+   --> contracts/pool/src/tests/security_calculation_tests.rs:170:13
+    |
+170 |         let e = Env::default();
+    |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `victim_deposit`
+   --> contracts/pool/src/tests/security_calculation_tests.rs:174:13
+    |
+174 |         let victim_deposit = 1000_0000000u128; // Large deposit
+    |             ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_victim_deposit`
+
+warning: unused variable: `e`
+   --> contracts/pool/src/tests/security_calculation_tests.rs:191:13
+    |
+191 |         let e = Env::default();
+    |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `e`
+   --> contracts/pool/src/tests/security_calculation_tests.rs:241:13
+    |
+241 |         let e = Env::default();
+    |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `e`
+   --> contracts/pool/src/tests/security_calculation_tests.rs:256:13
+    |
+256 |         let e = Env::default();
+    |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `e`
+   --> contracts/pool/src/tests/security_calculation_tests.rs:348:13
+    |
+348 |         let e = Env::default();
+    |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `e`
+   --> contracts/pool/src/tests/security_calculation_tests.rs:364:13
+    |
+364 |         let e = Env::default();
+    |             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `admin`
+  --> contracts/pool/src/working_permission_tests.rs:29:9
+   |
+29 |     let admin = Address::generate(&env);
+   |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `user`
+  --> contracts/pool/src/working_permission_tests.rs:56:9
+   |
+56 |     let user = Address::generate(&env);
+   |         ^^^^ help: if this is intentional, prefix it with an underscore: `_user`
+
+warning: unused variable: `pool`
+  --> contracts/pool/src/working_permission_tests.rs:59:9
+   |
+59 |     let pool = PoolClient::new(&env, &pool_id);
+   |         ^^^^ help: if this is intentional, prefix it with an underscore: `_pool`
+
+warning: function `is_recent_oracle_valid` is never used
+   --> contracts/pool/src/pool.rs:266:8
+    |
+266 | pub fn is_recent_oracle_valid(e: &Env, current_ts: u64) -> bool {
+    |        ^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: multiple fields are never read
+   --> contracts/pool/src/testutils.rs:74:16
+    |
+68  | pub(crate) struct Setup<'a> {
+    |                   ----- fields in this struct
+...
+74  |     pub(crate) emergency_admin: Address,
+    |                ^^^^^^^^^^^^^^^
+75  |     pub(crate) rewards_admin: Address,
+    |                ^^^^^^^^^^^^^
+...
+78  |     pub(crate) emergency_pause_admin: Address,
+    |                ^^^^^^^^^^^^^^^^^^^^^
+...
+82  |     pub(crate) router: pool_router::Client<'a>,
+    |                ^^^^^^
+83  |     pub(crate) plane: pool_plane::Client<'a>,
+    |                ^^^^^
+84  |     pub(crate) registry: oracle_registry::Client<'a>,
+    |                ^^^^^^^^
+...
+87  |     pub(crate) oracle: Address,
+    |                ^^^^^^
+88  |     pub(crate) oracle_client: MockPriceOracleClient<'a>,
+    |                ^^^^^^^^^^^^^
+89  |
+90  |     pub(crate) btc_addr: Address,
+    |                ^^^^^^^^
+91  |     pub(crate) eth_addr: Address,
+    |                ^^^^^^^^
+92  |     pub(crate) xlm_addr: Address,
+    |                ^^^^^^^^
+93  |
+94  |     pub(crate) btc_asset: MockAsset,
+    |                ^^^^^^^^^
+95  |     pub(crate) eth_asset: MockAsset,
+    |                ^^^^^^^^^
+96  |     pub(crate) xlm_asset: MockAsset,
+    |                ^^^^^^^^^
+97  |
+98  |     pub(crate) btc_asset_id: Symbol,
+    |                ^^^^^^^^^^^^
+99  |     pub(crate) eth_asset_id: Symbol,
+    |                ^^^^^^^^^^^^
+100 |     pub(crate) xlm_asset_id: Symbol,
+    |                ^^^^^^^^^^^^
+101 |
+102 |     pub(crate) init_btc_price: i128,
+    |                ^^^^^^^^^^^^^^
+103 |     pub(crate) init_eth_price: i128,
+    |                ^^^^^^^^^^^^^^
+104 |     pub(crate) init_xlm_price: i128,
+    |                ^^^^^^^^^^^^^^
+...
+108 |     pub(crate) token1_admin_client: SorobanTokenAdminClient<'a>,
+    |                ^^^^^^^^^^^^^^^^^^^
+...
+111 |     pub(crate) token_reward: SorobanTokenClient<'a>,
+    |                ^^^^^^^^^^^^
+112 |     pub(crate) token_reward_admin_client: SorobanTokenAdminClient<'a>,
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: associated function `target_price` is never used
+   --> contracts/pool/src/testutils.rs:340:19
+    |
+124 | impl Setup<'_> {
+    | -------------- associated function in this implementation
+...
+340 |     pub(crate) fn target_price(setup: &Setup) -> i128 {
+    |                   ^^^^^^^^^^^^
+
+warning: `pool` (lib test) generated 33 warnings (run `cargo fix --lib -p pool --tests` to apply 9 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.23s
+     Running unittests src/lib.rs (target/debug/deps/pool-e8117e1891dccf18)
+
+running 56 tests
+test simple_test::test_basic_math ... ok
+test tests::calculation_tests::peg_price_tests::test_peg_price_zero_handling ... ok
+test tests::calculation_tests::peg_price_tests::test_peg_price_calculation ... ok
+test tests::calculation_tests::peg_price_tests::test_peg_price_precision ... ok
+test tests::calculation_tests::shares_to_mint_tests::test_shares_first_deposit ... ok
+test tests::calculation_tests::shares_to_mint_tests::test_shares_dilution_protection ... ok
+test tests::calculation_tests::shares_to_mint_tests::test_shares_no_synthetic ... ok
+test tests::calculation_tests::shares_to_mint_tests::test_shares_with_synthetic_balanced ... ok
+test tests::calculation_tests::shares_to_mint_tests::test_shares_with_synthetic_imbalanced ... ok
+test simple_test::test_simple_contract_creation ... ok
+test tests::calculation_tests::delta_a_tests::test_delta_a_zero_base_price - should panic ... ok
+test tests::security_calculation_tests::delta_a_security_tests::test_delta_a_extreme_imbalance ... ok
+test tests::calculation_tests::delta_a_tests::test_delta_a_burn_when_above_peg ... ok
+test tests::calculation_tests::delta_a_tests::test_delta_a_zero_when_at_peg ... ok
+test tests::security_calculation_tests::delta_a_security_tests::test_delta_a_overflow_protection ... ok
+test tests::security_calculation_tests::delta_a_security_tests::test_delta_a_precision_attack ... FAILED
+test tests::calculation_tests::delta_a_tests::test_delta_a_mint_when_below_peg ... ok
+test tests::security_calculation_tests::delta_a_security_tests::test_delta_a_dust_amounts ... ok
+test tests::calculation_tests::delta_a_tests::test_delta_a_edge_case_zero_reserves ... ok
+test tests::calculation_tests::delta_a_tests::test_delta_a_extreme_price_ratios ... ok
+test tests::security_calculation_tests::liquidity_imbalance_security_tests::test_imbalance_precision_and_rounding ... ok
+test tests::security_calculation_tests::liquidity_imbalance_security_tests::test_imbalance_calculation_overflow_protection ... FAILED
+test tests::security_calculation_tests::delta_a_security_tests::test_delta_a_rounding_consistency ... FAILED
+test tests::security_calculation_tests::liquidity_imbalance_security_tests::test_imbalance_price_oracle_manipulation ... ok
+test tests::security_calculation_tests::peg_price_security_tests::test_peg_price_extreme_ratios ... ok
+test tests::security_calculation_tests::liquidity_imbalance_security_tests::test_imbalance_extreme_supply_scenarios ... ok
+test tests::security_calculation_tests::peg_price_security_tests::test_peg_price_flash_loan_attack_resistance ... ok
+test tests::security_calculation_tests::peg_price_security_tests::test_peg_price_precision_boundaries ... ok
+test tests::security_calculation_tests::shares_security_tests::test_shares_dilution_attack ... ok
+test tests::security_calculation_tests::shares_security_tests::test_shares_minimum_deposit_protection ... ok
+test tests::security_calculation_tests::shares_security_tests::test_shares_precision_loss_attack ... ok
+test tests::security_calculation_tests::delta_a_security_tests::test_delta_a_price_manipulation_resistance ... ok
+test tests::security_calculation_tests::shares_security_tests::test_shares_zero_total_shares_edge_case ... ok
+test tests::security_calculation_tests::shares_security_tests::test_shares_synthetic_value_manipulation ... ok
+test tests::security_calculation_tests::delta_a_security_tests::test_delta_a_zero_quote_price_panic - should panic ... ok
+test tests::simple_working_tests::test_withdraw_more_than_balance - should panic ... ok
+test tests::simple_working_tests::test_constant_product_with_fees ... FAILED
+test tests::simple_working_tests::test_swap ... FAILED
+test working_permission_tests::test_basic_pool_creation ... ok
+test tests::simple_working_tests::test_pool_initialization ... FAILED
+test tests::simple_working_tests::test_deposit_increases_reserves ... FAILED
+test tests::simple_working_tests::test_share_minting ... FAILED
+test tests::simple_working_tests::test_withdrawal ... FAILED
+test working_permission_tests::test_deposit_when_not_killed ... ok
+test tests::simple_working_tests::test_multiple_depositors ... FAILED
+test tests::simple_working_tests::test_rebalance ... FAILED
+test tests::simple_working_tests::test_share_dilution_scenario ... FAILED
+test working_permission_tests::test_unauthorized_access - should panic ... ok
+test tests::simple_working_tests::test_zero_deposit_fails - should panic ... ok
+test working_permission_tests::test_admin_can_set_status ... FAILED
+test working_permission_tests::test_cannot_deposit_when_killed - should panic ... ok
+test working_permission_tests::test_emergency_pause ... FAILED
+test working_permission_tests::test_status_transitions ... FAILED
+test working_permission_tests::test_role_separation ... FAILED
+test working_permission_tests::test_multiple_admins ... FAILED
+test working_permission_tests::test_cannot_swap_when_paused - should panic ... ok
+
+failures:
+
+---- tests::security_calculation_tests::delta_a_security_tests::test_delta_a_precision_attack stdout ----
+
+thread 'tests::security_calculation_tests::delta_a_security_tests::test_delta_a_precision_attack' panicked at contracts/pool/src/tests/security_calculation_tests.rs:52:13:
+assertion failed: delta_a.abs() < 1000
+Writing test snapshot file for test "tests::security_calculation_tests::delta_a_security_tests::test_delta_a_precision_attack" to "test_snapshots/tests/security_calculation_tests/delta_a_security_tests/test_delta_a_precision_attack.1.json".
+
+---- tests::security_calculation_tests::liquidity_imbalance_security_tests::test_imbalance_calculation_overflow_protection stdout ----
+
+thread 'tests::security_calculation_tests::liquidity_imbalance_security_tests::test_imbalance_calculation_overflow_protection' panicked at contracts/pool/src/tests/security_calculation_tests.rs:356:9:
+assertion failed: base_value_result.is_some()
+
+---- tests::security_calculation_tests::delta_a_security_tests::test_delta_a_rounding_consistency stdout ----
+
+thread 'tests::security_calculation_tests::delta_a_security_tests::test_delta_a_rounding_consistency' panicked at contracts/pool/src/tests/security_calculation_tests.rs:104:13:
+assertion failed: diff2 < 1000
+Writing test snapshot file for test "tests::security_calculation_tests::delta_a_security_tests::test_delta_a_rounding_consistency" to "test_snapshots/tests/security_calculation_tests/delta_a_security_tests/test_delta_a_rounding_consistency.1.json".
+
+---- tests::simple_working_tests::test_constant_product_with_fees stdout ----
+
+thread 'tests::simple_working_tests::test_constant_product_with_fees' panicked at /Users/alponaran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #23)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:["contract call failed", register_oracle, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[log], data:["VM call trapped with HostError", register_oracle, Error(Contract, #23)]
+   3: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:"escalating error to VM trap from failed host function call: fail_with_error"
+   4: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:["failing with contract error", 23]
+   5: [Failed Diagnostic Event (not emitted)] contract:CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, topics:[fn_return, lastprice], data:{price: 500000000000, timestamp: 1200}
+   6: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[fn_call, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, lastprice], data:[Stellar, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6]
+   7: [Diagnostic Event] topics:[fn_call, CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, register_oracle], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]
+
+Writing test snapshot file for test "tests::simple_working_tests::test_constant_product_with_fees" to "test_snapshots/tests/simple_working_tests/test_constant_product_with_fees.1.json".
+
+---- tests::simple_working_tests::test_swap stdout ----
+
+thread 'tests::simple_working_tests::test_swap' panicked at /Users/alponaran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #23)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:["contract call failed", register_oracle, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[log], data:["VM call trapped with HostError", register_oracle, Error(Contract, #23)]
+   3: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:"escalating error to VM trap from failed host function call: fail_with_error"
+   4: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:["failing with contract error", 23]
+   5: [Failed Diagnostic Event (not emitted)] contract:CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, topics:[fn_return, lastprice], data:{price: 500000000000, timestamp: 1200}
+   6: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[fn_call, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, lastprice], data:[Stellar, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6]
+   7: [Diagnostic Event] topics:[fn_call, CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, register_oracle], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]
+
+Writing test snapshot file for test "tests::simple_working_tests::test_swap" to "test_snapshots/tests/simple_working_tests/test_swap.1.json".
+
+---- tests::simple_working_tests::test_pool_initialization stdout ----
+
+thread 'tests::simple_working_tests::test_pool_initialization' panicked at /Users/alponaran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #23)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:["contract call failed", register_oracle, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[log], data:["VM call trapped with HostError", register_oracle, Error(Contract, #23)]
+   3: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:"escalating error to VM trap from failed host function call: fail_with_error"
+   4: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:["failing with contract error", 23]
+   5: [Failed Diagnostic Event (not emitted)] contract:CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, topics:[fn_return, lastprice], data:{price: 500000000000, timestamp: 1200}
+   6: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[fn_call, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, lastprice], data:[Stellar, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6]
+   7: [Diagnostic Event] topics:[fn_call, CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, register_oracle], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]
+
+Writing test snapshot file for test "tests::simple_working_tests::test_pool_initialization" to "test_snapshots/tests/simple_working_tests/test_pool_initialization.1.json".
+
+---- tests::simple_working_tests::test_deposit_increases_reserves stdout ----
+
+thread 'tests::simple_working_tests::test_deposit_increases_reserves' panicked at /Users/alponaran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #23)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:["contract call failed", register_oracle, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[log], data:["VM call trapped with HostError", register_oracle, Error(Contract, #23)]
+   3: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:"escalating error to VM trap from failed host function call: fail_with_error"
+   4: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:["failing with contract error", 23]
+   5: [Failed Diagnostic Event (not emitted)] contract:CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, topics:[fn_return, lastprice], data:{price: 500000000000, timestamp: 1200}
+   6: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[fn_call, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, lastprice], data:[Stellar, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6]
+   7: [Diagnostic Event] topics:[fn_call, CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, register_oracle], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]
+
+Writing test snapshot file for test "tests::simple_working_tests::test_deposit_increases_reserves" to "test_snapshots/tests/simple_working_tests/test_deposit_increases_reserves.1.json".
+
+---- tests::simple_working_tests::test_share_minting stdout ----
+
+thread 'tests::simple_working_tests::test_share_minting' panicked at /Users/alponaran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #23)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:["contract call failed", register_oracle, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[log], data:["VM call trapped with HostError", register_oracle, Error(Contract, #23)]
+   3: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:"escalating error to VM trap from failed host function call: fail_with_error"
+   4: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:["failing with contract error", 23]
+   5: [Failed Diagnostic Event (not emitted)] contract:CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, topics:[fn_return, lastprice], data:{price: 500000000000, timestamp: 1200}
+   6: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[fn_call, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, lastprice], data:[Stellar, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6]
+   7: [Diagnostic Event] topics:[fn_call, CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, register_oracle], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]
+
+Writing test snapshot file for test "tests::simple_working_tests::test_share_minting" to "test_snapshots/tests/simple_working_tests/test_share_minting.1.json".
+
+---- tests::simple_working_tests::test_withdrawal stdout ----
+
+thread 'tests::simple_working_tests::test_withdrawal' panicked at /Users/alponaran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #23)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:["contract call failed", register_oracle, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[log], data:["VM call trapped with HostError", register_oracle, Error(Contract, #23)]
+   3: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:"escalating error to VM trap from failed host function call: fail_with_error"
+   4: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:["failing with contract error", 23]
+   5: [Failed Diagnostic Event (not emitted)] contract:CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, topics:[fn_return, lastprice], data:{price: 500000000000, timestamp: 1200}
+   6: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[fn_call, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, lastprice], data:[Stellar, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6]
+   7: [Diagnostic Event] topics:[fn_call, CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, register_oracle], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]
+
+Writing test snapshot file for test "tests::simple_working_tests::test_withdrawal" to "test_snapshots/tests/simple_working_tests/test_withdrawal.1.json".
+
+---- tests::simple_working_tests::test_multiple_depositors stdout ----
+
+thread 'tests::simple_working_tests::test_multiple_depositors' panicked at /Users/alponaran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #23)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:["contract call failed", register_oracle, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[log], data:["VM call trapped with HostError", register_oracle, Error(Contract, #23)]
+   3: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:"escalating error to VM trap from failed host function call: fail_with_error"
+   4: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:["failing with contract error", 23]
+   5: [Failed Diagnostic Event (not emitted)] contract:CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, topics:[fn_return, lastprice], data:{price: 500000000000, timestamp: 1200}
+   6: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[fn_call, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, lastprice], data:[Stellar, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6]
+   7: [Diagnostic Event] topics:[fn_call, CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, register_oracle], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]
+
+Writing test snapshot file for test "tests::simple_working_tests::test_multiple_depositors" to "test_snapshots/tests/simple_working_tests/test_multiple_depositors.1.json".
+
+---- tests::simple_working_tests::test_rebalance stdout ----
+
+thread 'tests::simple_working_tests::test_rebalance' panicked at /Users/alponaran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #23)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:["contract call failed", register_oracle, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[log], data:["VM call trapped with HostError", register_oracle, Error(Contract, #23)]
+   3: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:"escalating error to VM trap from failed host function call: fail_with_error"
+   4: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:["failing with contract error", 23]
+   5: [Failed Diagnostic Event (not emitted)] contract:CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, topics:[fn_return, lastprice], data:{price: 500000000000, timestamp: 1200}
+   6: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[fn_call, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, lastprice], data:[Stellar, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6]
+   7: [Diagnostic Event] topics:[fn_call, CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, register_oracle], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]
+
+Writing test snapshot file for test "tests::simple_working_tests::test_rebalance" to "test_snapshots/tests/simple_working_tests/test_rebalance.1.json".
+
+---- tests::simple_working_tests::test_share_dilution_scenario stdout ----
+
+thread 'tests::simple_working_tests::test_share_dilution_scenario' panicked at /Users/alponaran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #23)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:["contract call failed", register_oracle, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[log], data:["VM call trapped with HostError", register_oracle, Error(Contract, #23)]
+   3: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:"escalating error to VM trap from failed host function call: fail_with_error"
+   4: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:["failing with contract error", 23]
+   5: [Failed Diagnostic Event (not emitted)] contract:CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, topics:[fn_return, lastprice], data:{price: 500000000000, timestamp: 1200}
+   6: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[fn_call, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, lastprice], data:[Stellar, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6]
+   7: [Diagnostic Event] topics:[fn_call, CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, register_oracle], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]
+
+Writing test snapshot file for test "tests::simple_working_tests::test_share_dilution_scenario" to "test_snapshots/tests/simple_working_tests/test_share_dilution_scenario.1.json".
+
+---- working_permission_tests::test_admin_can_set_status stdout ----
+
+thread 'working_permission_tests::test_admin_can_set_status' panicked at /Users/alponaran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #23)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:["contract call failed", register_oracle, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[log], data:["VM call trapped with HostError", register_oracle, Error(Contract, #23)]
+   3: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:"escalating error to VM trap from failed host function call: fail_with_error"
+   4: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:["failing with contract error", 23]
+   5: [Failed Diagnostic Event (not emitted)] contract:CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, topics:[fn_return, lastprice], data:{price: 500000000000, timestamp: 1200}
+   6: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[fn_call, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, lastprice], data:[Stellar, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6]
+   7: [Diagnostic Event] topics:[fn_call, CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, register_oracle], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]
+
+Writing test snapshot file for test "working_permission_tests::test_admin_can_set_status" to "test_snapshots/working_permission_tests/test_admin_can_set_status.1.json".
+
+---- working_permission_tests::test_emergency_pause stdout ----
+
+thread 'working_permission_tests::test_emergency_pause' panicked at /Users/alponaran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #23)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:["contract call failed", register_oracle, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[log], data:["VM call trapped with HostError", register_oracle, Error(Contract, #23)]
+   3: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:"escalating error to VM trap from failed host function call: fail_with_error"
+   4: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:["failing with contract error", 23]
+   5: [Failed Diagnostic Event (not emitted)] contract:CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, topics:[fn_return, lastprice], data:{price: 500000000000, timestamp: 1200}
+   6: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[fn_call, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, lastprice], data:[Stellar, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6]
+   7: [Diagnostic Event] topics:[fn_call, CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, register_oracle], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]
+
+Writing test snapshot file for test "working_permission_tests::test_emergency_pause" to "test_snapshots/working_permission_tests/test_emergency_pause.1.json".
+
+---- working_permission_tests::test_status_transitions stdout ----
+
+thread 'working_permission_tests::test_status_transitions' panicked at /Users/alponaran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #23)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:["contract call failed", register_oracle, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[log], data:["VM call trapped with HostError", register_oracle, Error(Contract, #23)]
+   3: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:"escalating error to VM trap from failed host function call: fail_with_error"
+   4: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:["failing with contract error", 23]
+   5: [Failed Diagnostic Event (not emitted)] contract:CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, topics:[fn_return, lastprice], data:{price: 500000000000, timestamp: 1200}
+   6: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[fn_call, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, lastprice], data:[Stellar, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6]
+   7: [Diagnostic Event] topics:[fn_call, CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, register_oracle], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]
+
+Writing test snapshot file for test "working_permission_tests::test_status_transitions" to "test_snapshots/working_permission_tests/test_status_transitions.1.json".
+
+---- working_permission_tests::test_role_separation stdout ----
+
+thread 'working_permission_tests::test_role_separation' panicked at /Users/alponaran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #23)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:["contract call failed", register_oracle, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[log], data:["VM call trapped with HostError", register_oracle, Error(Contract, #23)]
+   3: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:"escalating error to VM trap from failed host function call: fail_with_error"
+   4: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:["failing with contract error", 23]
+   5: [Failed Diagnostic Event (not emitted)] contract:CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, topics:[fn_return, lastprice], data:{price: 500000000000, timestamp: 1200}
+   6: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[fn_call, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, lastprice], data:[Stellar, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6]
+   7: [Diagnostic Event] topics:[fn_call, CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, register_oracle], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]
+
+Writing test snapshot file for test "working_permission_tests::test_role_separation" to "test_snapshots/working_permission_tests/test_role_separation.1.json".
+
+---- working_permission_tests::test_multiple_admins stdout ----
+
+thread 'working_permission_tests::test_multiple_admins' panicked at /Users/alponaran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #23)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #23)], data:["contract call failed", register_oracle, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[log], data:["VM call trapped with HostError", register_oracle, Error(Contract, #23)]
+   3: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:"escalating error to VM trap from failed host function call: fail_with_error"
+   4: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[error, Error(Contract, #23)], data:["failing with contract error", 23]
+   5: [Failed Diagnostic Event (not emitted)] contract:CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, topics:[fn_return, lastprice], data:{price: 500000000000, timestamp: 1200}
+   6: [Failed Diagnostic Event (not emitted)] contract:CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, topics:[fn_call, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, lastprice], data:[Stellar, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6]
+   7: [Diagnostic Event] topics:[fn_call, CBG5G3A3EIQYE36FJV6NNZOQXULXBPFBHW6I2NWKJFMPX54MTB75BUSX, register_oracle], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM, BTC, CDPUTG3RVVSZBRDZDZUV6QT6AE4ODVCBM5BF2E5MSO7GXZ646LFFE44J, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABHGT6, 7, 1]
+
+Writing test snapshot file for test "working_permission_tests::test_multiple_admins" to "test_snapshots/working_permission_tests/test_multiple_admins.1.json".
+
+
+failures:
+    tests::security_calculation_tests::delta_a_security_tests::test_delta_a_precision_attack
+    tests::security_calculation_tests::delta_a_security_tests::test_delta_a_rounding_consistency
+    tests::security_calculation_tests::liquidity_imbalance_security_tests::test_imbalance_calculation_overflow_protection
+    tests::simple_working_tests::test_constant_product_with_fees
+    tests::simple_working_tests::test_deposit_increases_reserves
+    tests::simple_working_tests::test_multiple_depositors
+    tests::simple_working_tests::test_pool_initialization
+    tests::simple_working_tests::test_rebalance
+    tests::simple_working_tests::test_share_dilution_scenario
+    tests::simple_working_tests::test_share_minting
+    tests::simple_working_tests::test_swap
+    tests::simple_working_tests::test_withdrawal
+    working_permission_tests::test_admin_can_set_status
+    working_permission_tests::test_emergency_pause
+    working_permission_tests::test_multiple_admins
+    working_permission_tests::test_role_separation
+    working_permission_tests::test_status_transitions
+
+test result: FAILED. 39 passed; 17 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.45s
+
+error: test failed, to rerun pass `-p pool --lib`

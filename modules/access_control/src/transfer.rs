@@ -1,6 +1,7 @@
 use crate::access::AccessControl;
 use crate::constants::ADMIN_ACTIONS_DELAY;
 use crate::errors::AccessControlError;
+use crate::management::SingleAddressManagementTrait;
 use crate::role::Role;
 use crate::storage::StorageTrait;
 use soroban_sdk::{panic_with_error, Address};

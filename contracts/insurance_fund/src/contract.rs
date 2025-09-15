@@ -397,7 +397,7 @@ impl InsuranceFundTrait for InsuranceFund {
 
         stake.decrease_if_shares(&e, if_shares_lost);
 
-        validate!(&e, total_shares >= if_shares_lost, InsuranceFundError::InsufficientShares);
+        validate!(&e, total_shares >= if_shares_lost, InsuranceFundError::InsufficientIFShares);
         set_total_shares(&e, &(total_shares - if_shares_lost));
 
         let if_shares_after = stake.checked_if_shares(&e);
@@ -472,7 +472,7 @@ impl InsuranceFundTrait for InsuranceFund {
         let mut stake = get_stake(&e, &user);
 
         // Add bounds checking to prevent underflow when system clock goes backwards
-        validate!(&e, now >= stake.last_withdraw_request_ts, InsuranceFundError::InvalidTimestamp);
+        validate!(&e, now >= stake.last_withdraw_request_ts, InsuranceFundError::InvalidIFUnstake);
         let time_since_withdraw_request = now - stake.last_withdraw_request_ts;
 
         // Error if the unstaking period has not yet elapsed
@@ -512,11 +512,11 @@ impl InsuranceFundTrait for InsuranceFund {
         stake.decrease_if_shares(&e, n_shares);
 
         // Add bounds checking to prevent underflow when withdrawing more than cost basis
-        validate!(&e, stake.cost_basis >= withdraw_amount, InsuranceFundError::CostBasisUnderflow);
+        validate!(&e, stake.cost_basis >= withdraw_amount, InsuranceFundError::InsufficientCollateral);
         stake.cost_basis = stake.cost_basis - withdraw_amount;
 
         // Add bounds checking to prevent critical share tracking underflow
-        validate!(&e, total_shares >= n_shares, InsuranceFundError::InsufficientShares);
+        validate!(&e, total_shares >= n_shares, InsuranceFundError::InsufficientIFShares);
         set_total_shares(&e, &(total_shares - n_shares));
 
         // reset stake withdraw request info

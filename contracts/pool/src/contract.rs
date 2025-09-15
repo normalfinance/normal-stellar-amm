@@ -46,7 +46,7 @@ use upgrade::events::Events as UpgradeEvents;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::constant::{
     FEE_MULTIPLIER, INSURANCE_A_MAX, INSURANCE_B_MAX, INSURANCE_C_MAX, INSURANCE_SPECULATIVE_MAX,
-    MAX_POOL_FEE,
+    MAX_POOL_FEE, MIN_LIQUIDITY,
 };
 use utils::math::safe_math::SafeMath;
 use utils::state::oracle_registry::NormalAction;
@@ -333,7 +333,7 @@ impl PoolTrait for Pool {
             NormalAction::AddLiquidity
         );
         
-        let shares_to_mint = if total_shares == 0 {
+        let mut shares_to_mint = if total_shares == 0 {
             // First deposit case - initialize pool with 1:1 ratio
             token_b_amount
         } else if reserve_a_after_rebalance == 0 {
@@ -345,7 +345,7 @@ impl PoolTrait for Pool {
             // Both tokens exist - calculate proportional shares based on total pool value
             // Calculate Token A value in Token B terms using oracle prices
             let token_a_value_in_token_b = reserve_a_after_rebalance
-                .fixed_mul_floor(cached_base_oracle_price_data.price, cached_quote_oracle_price_data.price)
+                .fixed_mul_floor(cached_base_oracle_price_data.last_oracle_price, cached_quote_oracle_price_data.last_oracle_price)
                 .unwrap();
             
             // Total pool value in Token B terms (before the deposit)
@@ -365,8 +365,8 @@ impl PoolTrait for Pool {
             total_shares,
             reserve_a_after_rebalance,
             reserve_b_after_deposit - token_b_amount,
-            cached_base_oracle_price_data.price,
-            cached_quote_oracle_price_data.price,
+            cached_base_oracle_price_data.last_oracle_price,
+            cached_quote_oracle_price_data.last_oracle_price,
         );
 
         // First deposit: mint MIN_LIQUIDITY to contract itself to prevent dust attacks
@@ -1157,7 +1157,7 @@ impl AdminInterfaceTrait for Pool {
 
         let max_insurance = pool.insurance_claim.quote_max_insurance;
         let settled_insurance = pool.insurance_claim.quote_settled_insurance;
-        validate!(&e, max_insurance >= settled_insurance, PoolError::SettledExceedsMax);
+        validate!(&e, max_insurance >= settled_insurance, PoolError::MaxIFWithdrawReached);
 
         let max_insurance_withdraw = max_insurance.saturating_sub(settled_insurance);
 
@@ -1277,16 +1277,17 @@ impl AdminInterfaceTrait for Pool {
         require_operations_admin_or_owner(&e, &admin);
 
         let mut pool = get_pool(&e);
+        let status_clone = status.clone();
         pool.status = status;
 
         set_pool(&e, &pool);
                 // Automatically recover minimum liquidity when pool is delisted
-        if status == PoolStatus::Delisted {
+        if status_clone == PoolStatus::Delisted {
                 let contract_address = e.current_contract_address();
                 let locked_balance = get_user_balance_lp(&e, &contract_address);
         
                 if locked_balance > 0 {
-                        burn_lp_tokens(&e, &contract_address, locked_balance as i128);
+                        burn_lp_tokens(&e, &contract_address, locked_balance);
         
                     let total_shares = get_total_lp_tokens(&e);
                     let reserve_b = get_reserve_b(&e);

@@ -206,7 +206,7 @@ impl Setup<'_> {
                 },
             })
         );
-        registry.register_oracle(&admin, &btc_asset_id, &oracle_id, &btc_addr, &7, &0);
+        registry.register_oracle(&admin, &btc_asset_id, &oracle_id, &btc_addr, &7, &1);
 
         // Buffer
         let buffer = create_buffer_contract(&e);

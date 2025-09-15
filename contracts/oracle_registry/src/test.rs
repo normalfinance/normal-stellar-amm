@@ -152,7 +152,7 @@ fn test_register_oracle() {
         asset_addr: setup.eth_addr,
         decimals: 7,
         frozen: false,
-        sanitize_clamp_denominator: 0,
+        sanitize_clamp_denominator: 1,
         last_updated: setup.env.ledger().timestamp(),
     });
 }

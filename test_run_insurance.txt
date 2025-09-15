@@ -1,0 +1,216 @@
+warning: unused import: `panic_with_error`
+ --> modules/utils/src/macros.rs:1:20
+  |
+1 | use soroban_sdk::{ panic_with_error };
+  |                    ^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `crate::errors::math_errors::MathError`
+ --> modules/utils/src/macros.rs:3:5
+  |
+3 | use crate::errors::math_errors::MathError;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: comparison is useless due to type limits
+  --> modules/utils/src/math/pool.rs:14:13
+   |
+14 |     assert!(last_price_twap >= 0, "last_price_twap must be non-negative");
+   |             ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_comparisons)]` on by default
+
+warning: `utils` (lib) generated 3 warnings (run `cargo fix --lib -p utils` to apply 2 suggestions)
+warning: unreachable expression
+  --> contracts/insurance_fund/src/stake.rs:59:28
+   |
+59 |         safe_increment!(e, self.if_shares, delta);
+   |         -------------------^^^^^^^^^^^^^^--------
+   |         |                  |
+   |         |                  unreachable expression
+   |         any code following this expression is unreachable
+   |
+   = note: `#[warn(unreachable_code)]` on by default
+
+warning: unreachable expression
+  --> contracts/insurance_fund/src/stake.rs:64:28
+   |
+64 |         safe_decrement!(e, self.if_shares, delta);
+   |         -------------------^^^^^^^^^^^^^^--------
+   |         |                  |
+   |         |                  unreachable expression
+   |         any code following this expression is unreachable
+
+warning: `insurance-fund` (lib test) generated 2 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.06s
+     Running unittests src/lib.rs (target/debug/deps/insurance_fund-817e035e1275062d)
+
+running 74 tests
+test interest::tests::test_utilization_above_100_percent ... ok
+test interest::tests::test_utilization_100_percent ... ok
+test interest::tests::test_utilization_50_percent ... ok
+test interest::tests::test_zero_coverage_returns_zero ... ok
+test interest::tests::test_utilization_clamps_to_u32_max ... FAILED
+test interest::tests::test_zero_vault_amount ... ok
+test interest::tests::test_utilization_above_100_percent_in_rate ... ok
+test interest::tests::test_negative_base_rate ... ok
+test interest::tests::test_low_utilization_rate ... ok
+test interest::tests::test_zero_utilization ... ok
+test interest::tests::test_max_utilization ... ok
+test interest::tests::test_high_utilization_rate ... ok
+test interest::tests::test_negative_rate ... FAILED
+test interest::tests::test_utilization_at_optimal ... ok
+test interest::tests::test_zero_optimal_utilization - should panic ... ok
+test stake::if_shares_lost_test ... FAILED
+test stake::basic_stake_if_test ... ok
+test test_permissions::test_admin_transfer_ownership_not_committed - should panic ... ok
+test test_permissions::test_admin_transfer_ownership_twice - should panic ... ok
+test test_permissions::test_admin_transfer_ownership_reverted - should panic ... ok
+test test_permissions::test_admin_transfer_ownership_too_early - should panic ... ok
+test test_permissions::test_admin_transfer_ownership ... FAILED
+test test_permissions::test_apply_upgrade_emergency_admin ... ok
+test test_permissions::test_apply_upgrade_third_party_user ... ok
+test test_permissions::test_apply_upgrade_admin ... ok
+test test_permissions::test_emergency_admin_transfer_ownership_not_committed - should panic ... ok
+test test_permissions::test_emergency_admin_transfer_ownership_reverted - should panic ... ok
+test test_permissions::test_kill_deposit ... ok
+test test_permissions::test_emergency_admin_transfer_ownership ... ok
+test test_permissions::test_emergency_admin_transfer_ownership_twice - should panic ... ok
+test test_permissions::test_emergency_admin_transfer_ownership_too_early - should panic ... ok
+test test_permissions::test_commit_upgrade ... ok
+test test_permissions::test_set_emergency_mode_admin ... ok
+test tests::calculation_tests::aave_v3_comparison_tests::test_aave_v3_like_curve ... ok
+test tests::calculation_tests::interest_rate_tests::test_rate_above_optimal ... ok
+test tests::calculation_tests::interest_rate_tests::test_rate_at_100_percent ... ok
+test tests::calculation_tests::interest_rate_tests::test_rate_at_optimal ... ok
+test tests::calculation_tests::interest_rate_tests::test_rate_below_optimal ... ok
+test tests::calculation_tests::interest_rate_tests::test_rate_curve_continuity ... ok
+test test_permissions::test_kill_request_withdraw ... ok
+test tests::calculation_tests::interest_rate_tests::test_rate_invalid_optimal_over_100 - should panic ... ok
+test tests::calculation_tests::interest_rate_tests::test_rate_invalid_optimal_zero - should panic ... ok
+test tests::calculation_tests::interest_rate_tests::test_rate_negative_base ... ok
+test tests::calculation_tests::interest_rate_tests::test_rate_zero_utilization ... ok
+test tests::calculation_tests::utilization_tests::test_utilization_50_percent ... ok
+test tests::calculation_tests::utilization_tests::test_utilization_100_percent ... ok
+test tests::calculation_tests::utilization_tests::test_utilization_over_100_percent ... ok
+test tests::calculation_tests::utilization_tests::test_utilization_precision ... ok
+test tests::calculation_tests::utilization_tests::test_utilization_zero_optimal ... ok
+test tests::calculation_tests::utilization_tests::test_utilization_zero_vault ... ok
+test tests::security_calculation_tests::insurance_fund_integration_attacks::test_flash_loan_utilization_manipulation ... ok
+test tests::security_calculation_tests::insurance_fund_integration_attacks::test_coordinated_utilization_rate_attack ... FAILED
+test tests::security_calculation_tests::insurance_fund_integration_attacks::test_griefing_attack_scenarios ... ok
+test tests::security_calculation_tests::interest_rate_security_tests::test_interest_rate_boundary_conditions ... FAILED
+test tests::security_calculation_tests::interest_rate_security_tests::test_interest_rate_curve_properties ... FAILED
+test tests::security_calculation_tests::interest_rate_security_tests::test_interest_rate_economic_attack_scenarios ... ok
+test tests::security_calculation_tests::interest_rate_security_tests::test_interest_rate_manipulation_resistance ... ok
+test tests::security_calculation_tests::interest_rate_security_tests::test_interest_rate_negative_scenarios ... ok
+test tests::security_calculation_tests::interest_rate_security_tests::test_interest_rate_overflow_protection ... ok
+test tests::security_calculation_tests::interest_rate_security_tests::test_interest_rate_precision_boundaries ... FAILED
+test tests::security_calculation_tests::utilization_security_tests::test_utilization_dust_attack ... ok
+test tests::security_calculation_tests::utilization_security_tests::test_utilization_economic_attack_scenarios ... ok
+test tests::security_calculation_tests::utilization_security_tests::test_utilization_overflow_attack ... FAILED
+test tests::security_calculation_tests::utilization_security_tests::test_utilization_precision_manipulation ... FAILED
+test tests::security_calculation_tests::utilization_security_tests::test_utilization_rapid_changes ... ok
+test tests::security_calculation_tests::utilization_security_tests::test_utilization_whale_deposit_impact ... ok
+test test_permissions::test_kill_withdraw ... ok
+test test_permissions::test_set_emergency_mode_emergency_admin ... ok
+test test_permissions::test_set_emergency_mode_third_party_user ... ok
+test test_permissions::test_set_unstaking_period ... ok
+test test_permissions::test_unkill_deposit ... ok
+test test_permissions::test_unkill_withdraw ... ok
+test test_permissions::test_unkill_request_withdraw ... ok
+test test_permissions::test_transfer_ownership_separate_deadlines ... ok
+
+failures:
+
+---- interest::tests::test_utilization_clamps_to_u32_max stdout ----
+
+thread 'interest::tests::test_utilization_clamps_to_u32_max' panicked at contracts/insurance_fund/src/interest.rs:128:9:
+assertion `left == right` failed
+  left: 0
+ right: 4294967295
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- interest::tests::test_negative_rate stdout ----
+
+thread 'interest::tests::test_negative_rate' panicked at contracts/insurance_fund/src/interest.rs:176:9:
+assertion `left == right` failed
+  left: 700
+ right: -975
+
+---- stake::if_shares_lost_test stdout ----
+
+thread 'stake::if_shares_lost_test' panicked at /Users/alponaran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-22.0.7/src/storage.rs:141:9:
+this function is not accessible outside of a contract, wrap the call with `env.as_contract()` to access it from a particular contract
+Writing test snapshot file for test "stake::if_shares_lost_test" to "test_snapshots/stake/if_shares_lost_test.1.json".
+
+---- test_permissions::test_admin_transfer_ownership stdout ----
+
+thread 'test_permissions::test_admin_transfer_ownership' panicked at /Users/alponaran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #104)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #104)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #104)], data:["contract call failed", commit_transfer_ownership, [CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, Admin, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, topics:[error, Error(Contract, #104)], data:"caught error from function"
+   3: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, topics:[error, Error(Contract, #104)], data:"escalating error to panic"
+   4: [Failed Diagnostic Event (not emitted)] contract:CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, topics:[error, Error(Contract, #104)], data:["failing with contract error", 104]
+   5: [Diagnostic Event] topics:[fn_call, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4, commit_transfer_ownership], data:[CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM, Admin, CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM]
+
+Writing test snapshot file for test "test_permissions::test_admin_transfer_ownership" to "test_snapshots/test_permissions/test_admin_transfer_ownership.1.json".
+
+---- tests::security_calculation_tests::insurance_fund_integration_attacks::test_coordinated_utilization_rate_attack stdout ----
+
+thread 'tests::security_calculation_tests::insurance_fund_integration_attacks::test_coordinated_utilization_rate_attack' panicked at contracts/insurance_fund/src/tests/security_calculation_tests.rs:312:9:
+assertion failed: rate_inflated < 0
+
+---- tests::security_calculation_tests::interest_rate_security_tests::test_interest_rate_boundary_conditions stdout ----
+
+thread 'tests::security_calculation_tests::interest_rate_security_tests::test_interest_rate_boundary_conditions' panicked at /Users/alponaran/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-env-host-22.1.3/src/host.rs:847:9:
+HostError: Error(Contract, #21)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Contract, #21)], data:"escalating error to panic"
+   1: [Diagnostic Event] topics:[error, Error(Contract, #21)], data:["failing with contract error", 21]
+
+
+---- tests::security_calculation_tests::interest_rate_security_tests::test_interest_rate_curve_properties stdout ----
+
+thread 'tests::security_calculation_tests::interest_rate_security_tests::test_interest_rate_curve_properties' panicked at contracts/insurance_fund/src/tests/security_calculation_tests.rs:267:9:
+assertion failed: slope_after > slope_before
+
+---- tests::security_calculation_tests::interest_rate_security_tests::test_interest_rate_precision_boundaries stdout ----
+
+thread 'tests::security_calculation_tests::interest_rate_security_tests::test_interest_rate_precision_boundaries' panicked at contracts/insurance_fund/src/tests/security_calculation_tests.rs:185:9:
+assertion failed: rate_above > rate_at_optimal
+
+---- tests::security_calculation_tests::utilization_security_tests::test_utilization_overflow_attack stdout ----
+
+thread 'tests::security_calculation_tests::utilization_security_tests::test_utilization_overflow_attack' panicked at contracts/insurance_fund/src/tests/security_calculation_tests.rs:21:9:
+assertion `left == right` failed
+  left: 0
+ right: 4294967295
+
+---- tests::security_calculation_tests::utilization_security_tests::test_utilization_precision_manipulation stdout ----
+
+thread 'tests::security_calculation_tests::utilization_security_tests::test_utilization_precision_manipulation' panicked at contracts/insurance_fund/src/tests/security_calculation_tests.rs:33:9:
+assertion `left == right` failed
+  left: 3333333
+ right: 0
+
+
+failures:
+    interest::tests::test_negative_rate
+    interest::tests::test_utilization_clamps_to_u32_max
+    stake::if_shares_lost_test
+    test_permissions::test_admin_transfer_ownership
+    tests::security_calculation_tests::insurance_fund_integration_attacks::test_coordinated_utilization_rate_attack
+    tests::security_calculation_tests::interest_rate_security_tests::test_interest_rate_boundary_conditions
+    tests::security_calculation_tests::interest_rate_security_tests::test_interest_rate_curve_properties
+    tests::security_calculation_tests::interest_rate_security_tests::test_interest_rate_precision_boundaries
+    tests::security_calculation_tests::utilization_security_tests::test_utilization_overflow_attack
+    tests::security_calculation_tests::utilization_security_tests::test_utilization_precision_manipulation
+
+test result: FAILED. 64 passed; 10 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+
+error: test failed, to rerun pass `-p insurance-fund --lib`

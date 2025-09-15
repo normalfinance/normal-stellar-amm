@@ -4,7 +4,7 @@ use crate::errors::PoolError;
 use crate::errors::PoolValidationError;
 use crate::events::Events as LiquidityPoolEvents;
 use crate::events::PoolEvents;
-use crate::plane::pool_plane::HistoricalOracleData;
+use utils::state::oracle_registry::HistoricalOracleData;
 use crate::storage::get_last_oracle_valid;
 use crate::storage::get_last_trade_ts;
 use crate::storage::get_last_update_ts;
