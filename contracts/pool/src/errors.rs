@@ -29,6 +29,8 @@ pub enum PoolError {
     UnfairShareCalculation = 220,
     SettledExceedsMax = 221,
     Unauthorized = 222,
+    ConversionOverflow = 223,
+    ArithmeticOverflow = 224,
 }
 
 #[contracterror]

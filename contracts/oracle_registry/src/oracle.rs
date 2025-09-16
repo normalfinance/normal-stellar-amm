@@ -144,7 +144,7 @@ pub fn oracle_validity(
     // StaleForPool
     let is_stale_for_pool = oracle_delay
         .as_seconds()
-        .gt(&oracle_guard_rails.validity.seconds_before_stale_for_pool);
+        .ge(&oracle_guard_rails.validity.seconds_before_stale_for_pool);
 
     let oracle_validity = if is_oracle_price_nonpositive {
         OracleValidity::NonPositive

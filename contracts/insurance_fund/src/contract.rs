@@ -889,7 +889,10 @@ impl AdminInterface for InsuranceFund {
         let updated_optimal_insurance = if total_liquidity_imbalance <= 0 {
             0_u128
         } else {
-            total_liquidity_imbalance as u128
+            // Safe conversion with bounds checking - prevent silent truncation
+            u128::try_from(total_liquidity_imbalance).unwrap_or_else(|_| {
+                panic_with_error!(&e, InsuranceFundError::ConversionOverflow);
+            })
         };
 
         set_optimal_insurance(&e, &updated_optimal_insurance);

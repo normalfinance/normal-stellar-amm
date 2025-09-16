@@ -31,9 +31,14 @@ pub enum InsuranceFundError {
     UnsupportedToken = 26,
     TokenAlreadyDeleted = 27,
     InvalidOracle = 28,
+    InvalidConfiguration = 29,
 
     // paused ops
     FundDepositKilled = 30,
     FundRequestWithdrawKilled = 31,
     FundWithdrawKilled = 32,
+    
+    // arithmetic safety
+    ConversionOverflow = 33,
+    ArithmeticOverflow = 34,
 }

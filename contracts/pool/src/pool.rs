@@ -248,11 +248,10 @@ pub fn peg_price(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -> 
         return 0;
     }
 
-    base_oracle_price
-        .fixed_div_floor(quote_oracle_price, PRICE_PRECISION)
+    // Calculate quote_oracle_price / base_oracle_price for proper peg price ratio
+    quote_oracle_price
+        .fixed_div_floor(base_oracle_price, PRICE_PRECISION)
         .unwrap()
-    // quote_oracle_price.checked_div(base_oracle_price).unwrap_or(0)
-    // quote_oracle_price.safe_div(e, base_oracle_price)
 }
 
 // Updates the 30 day trading volume metric for the pool using a rolling average.
@@ -306,14 +305,73 @@ pub fn get_delta_a(
     quote_oracle_price: u128,
 ) -> i128 {
     let peg_price = peg_price(e, base_oracle_price, quote_oracle_price);
-    let target_reserve_a = reserve_b
-        .fixed_div_floor(peg_price, PRICE_PRECISION)
-        .unwrap();
-    let delta_a = (target_reserve_a as i128)
-        .checked_sub(reserve_a as i128)
-        .unwrap();
+    
+    // Calculate target reserve with precision-aware smoothing
+    let target_reserve_a = calculate_target_reserve_with_smoothing(
+        e, 
+        reserve_a,
+        reserve_b, 
+        peg_price
+    );
+    
+    // Safe conversion with bounds checking
+    let target_reserve_a_i128 = i128::try_from(target_reserve_a).unwrap_or_else(|_| {
+        panic_with_error!(e, PoolError::ConversionOverflow);
+    });
+    
+    let reserve_a_i128 = i128::try_from(reserve_a).unwrap_or_else(|_| {
+        panic_with_error!(e, PoolError::ConversionOverflow);
+    });
+    
+    let delta_a = target_reserve_a_i128
+        .checked_sub(reserve_a_i128)
+        .unwrap_or_else(|| {
+            panic_with_error!(e, PoolError::ArithmeticOverflow);
+        });
 
     delta_a
+}
+
+// Calculates target reserve A with epsilon-based smoothing to prevent precision attacks.
+//
+// For very small relative changes in price (< 0.01%), treats delta_a as 0 to prevent
+// discontinuous jumps that could be exploited by precision attacks.
+//
+// # Arguments
+// * `e` - Soroban environment reference.
+// * `current_reserve_a` - Current reserve A amount.
+// * `reserve_b` - Current reserve B amount.
+// * `peg_price` - Current peg price.
+//
+// # Returns
+// * `u128` — The smoothed target reserve A amount.
+fn calculate_target_reserve_with_smoothing(
+    e: &Env,
+    current_reserve_a: u128,
+    reserve_b: u128,
+    peg_price: u128,
+) -> u128 {
+    let raw_target_reserve_a = reserve_b
+        .fixed_div_floor(peg_price, PRICE_PRECISION)
+        .unwrap();
+    
+    // Calculate relative change threshold (0.01% = 100 basis points)
+    let epsilon_threshold = current_reserve_a.safe_div(e, 10_000); // 0.01%
+    
+    // If the change is smaller than epsilon, don't rebalance to prevent micro-adjustments
+    let delta_abs = if raw_target_reserve_a > current_reserve_a {
+        raw_target_reserve_a - current_reserve_a
+    } else {
+        current_reserve_a - raw_target_reserve_a
+    };
+    
+    if delta_abs <= epsilon_threshold {
+        // Change is too small, maintain current reserve to prevent precision attacks
+        current_reserve_a
+    } else {
+        // Change is significant enough to warrant rebalancing
+        raw_target_reserve_a
+    }
 }
 
 // Mints or burns synthetic tokens (reserve A) to restore the peg between base and quote assets.
