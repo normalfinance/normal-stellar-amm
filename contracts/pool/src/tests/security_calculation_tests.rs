@@ -195,3 +195,75 @@ fn test_precision_consistency_across_operations() {
         "Round-trip precision loss too large: {} vs {} (diff: {})",
         final_delta, baseline_delta, (final_delta - baseline_delta).abs());
 }
+
+#[test]
+fn test_bounded_drift_regression() {
+    let e = Env::default();
+    
+    // Test for bounded drift over multiple sequential operations
+    let mut reserve_a = 1_000_000 * PRICE_PRECISION;
+    let reserve_b = 1_000_000 * PRICE_PRECISION;
+    let base_price_start = PRICE_PRECISION;
+    let quote_price = PRICE_PRECISION;
+    
+    let mut cumulative_drift = 0i128;
+    let price_changes = [1, -1, 2, -2, 1, -1]; // Small oscillations
+    
+    for &price_change in &price_changes {
+        let current_base_price = (base_price_start as i128 + price_change) as u128;
+        let delta = get_delta_a(&e, reserve_a, reserve_b, current_base_price, quote_price);
+        
+        // Track cumulative drift
+        cumulative_drift += delta;
+        
+        // Apply the change (simulate rebalancing)
+        if delta > 0 {
+            reserve_a += delta as u128;
+        } else {
+            reserve_a = reserve_a.saturating_sub((-delta) as u128);
+        }
+        
+        // Verify delta is bounded per the cap we implemented
+        let max_expected_delta = (reserve_a as i128) / 20; // 5% cap
+        assert!(delta.abs() <= max_expected_delta,
+            "Delta exceeds per-ledger cap: {} > {}", delta.abs(), max_expected_delta);
+    }
+    
+    // Total drift should be bounded over the entire sequence
+    let max_total_drift = (reserve_a as i128) / 100; // 1% max total drift
+    assert!(cumulative_drift.abs() <= max_total_drift,
+        "Cumulative drift too large: {} > {}", cumulative_drift.abs(), max_total_drift);
+}
+
+#[test]
+fn test_rounding_mode_effectiveness() {
+    let e = Env::default();
+    
+    // Test that round-to-nearest reduces bias compared to floor division
+    let reserve_a = 1_000_000 * PRICE_PRECISION;
+    let reserve_b = 1_000_000 * PRICE_PRECISION;
+    
+    let mut floor_bias = 0i128;
+    let mut round_bias = 0i128;
+    
+    // Test with many small price variations
+    for price_offset in -100..=100 {
+        let base_price = PRICE_PRECISION + (price_offset as u128);
+        let quote_price = PRICE_PRECISION;
+        
+        // Our implementation uses round-to-nearest
+        let delta_round = get_delta_a(&e, reserve_a, reserve_b, base_price, quote_price);
+        round_bias += delta_round;
+        
+        // Simulate what floor-only would have produced (for comparison)
+        let peg_floor = quote_price * PRICE_PRECISION / base_price; // floor division
+        let target_floor = reserve_b * PRICE_PRECISION / peg_floor; // floor division
+        let delta_floor = (target_floor as i128) - (reserve_a as i128);
+        floor_bias += delta_floor;
+    }
+    
+    // Round-to-nearest should have significantly less bias than floor-only
+    assert!(round_bias.abs() < floor_bias.abs() / 2,
+        "Round-to-nearest bias {} should be less than half of floor bias {}",
+        round_bias.abs(), floor_bias.abs());
+}

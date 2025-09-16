@@ -493,7 +493,7 @@ impl PoolTrait for Pool {
             panic_with_error!(&e, PoolValidationError::EmptyPool);
         }
 
-        let out = get_amount_out(in_amount, reserve_sell, reserve_buy);
+        let out = get_amount_out(&e, in_amount, reserve_sell, reserve_buy);
 
         if out < out_min {
             panic_with_error!(&e, PoolValidationError::OutMinNotSatisfied);
@@ -610,7 +610,7 @@ impl PoolTrait for Pool {
         let reserve_buy = reserves.get(out_idx).unwrap();
 
         let pool = get_pool(&e);
-        let out = get_amount_out(in_amount, reserve_sell, reserve_buy);
+        let out = get_amount_out(&e, in_amount, reserve_sell, reserve_buy);
 
         let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset, NormalAction::Swap);
         let quote_oracle_price_data = get_oracle_price(&e, &pool.quote_asset, NormalAction::Swap);

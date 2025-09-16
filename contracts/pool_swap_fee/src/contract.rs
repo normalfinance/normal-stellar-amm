@@ -32,7 +32,7 @@ use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::constant::{PRICE_PRECISION, THIRTY_DAY};
 use utils::math::pool::calculate_fee;
-use utils::math::safe_math::SafeMath;
+use utils::math::safe_math::{SafeMath, PrecisionMath};
 use utils::math::stats::calculate_rolling_sum;
 use utils::state::pool::{PoolInfo, SwapDirection};
 use utils::token::transfer_token;
@@ -240,11 +240,12 @@ impl PoolSwapFeeInterface for PoolSwapFeeCollector {
         let mut insurance_premium_paid: u128 = 0;
 
         if insurance_premium_rate > 0 {
-            let estimated_annual_volume = updated_volume_30d.fixed_mul_floor(365, 30).unwrap();
+            // Use round-to-nearest for volume estimation (neutral)
+            let estimated_annual_volume = updated_volume_30d.safe_fixed_mul_round(&e, 365, 30);
 
+            // Use ceiling for premium calculations (favor protocol)
             let total_annual_premium = pool_insurance_coverage
-                .fixed_mul_floor(insurance_premium_rate as u128, PRICE_PRECISION)
-                .unwrap();
+                .safe_fixed_mul_ceil(&e, insurance_premium_rate as u128, PRICE_PRECISION);
 
             let premium_per_dollar_swapped =
                 total_annual_premium.safe_div(&e, estimated_annual_volume);

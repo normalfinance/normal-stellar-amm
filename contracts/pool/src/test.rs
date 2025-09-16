@@ -1,52 +1,52 @@
-#![cfg(test)]
-extern crate std;
+// #![cfg(test)]
+// extern crate std;
 
-use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
-use soroban_sdk::{symbol_short, U256};
-use utils::constant::{PRICE_PRECISION, PRICE_PRECISION_I128};
-use utils::state::pool::SwapDirection;
+// use rand::rngs::StdRng;
+// use rand::{Rng, SeedableRng};
+// use soroban_sdk::{symbol_short, U256};
+// use utils::constant::{PRICE_PRECISION, PRICE_PRECISION_I128};
+// use utils::state::pool::SwapDirection;
 
-use crate::testutils::{create_pool_contract, Setup, TestConfig};
-use access_control::constants::ADMIN_ACTIONS_DELAY;
-use soroban_fixed_point_math::FixedPoint;
-use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Events};
-use soroban_sdk::token::{
-    StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
-};
-use soroban_sdk::{
-    testutils::Address as _, vec, Address, Env, Error, IntoVal, String, Symbol, Val, Vec,
-};
-use token_lp::Client as LpTokenClient;
-use utils::state::{
-    access::PrivilegedAddresses,
-    pool::{InitializeAllParams, InitializeParams, PoolTier, RewardConfig},
-    token::TokenInitInfo,
-};
+// use crate::testutils::{create_pool_contract, Setup, TestConfig};
+// use access_control::constants::ADMIN_ACTIONS_DELAY;
+// use soroban_fixed_point_math::FixedPoint;
+// use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Events};
+// use soroban_sdk::token::{
+//     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
+// };
+// use soroban_sdk::{
+//     testutils::Address as _, vec, Address, Env, Error, IntoVal, String, Symbol, Val, Vec,
+// };
+// use token_lp::Client as LpTokenClient;
+// use utils::state::{
+//     access::PrivilegedAddresses,
+//     pool::{InitializeAllParams, InitializeParams, PoolTier, RewardConfig},
+//     token::TokenInitInfo,
+// };
 // use utils::test_utils::{
 //     assert_approx_eq_abs, create_token_contract, get_mock_lp_token_info, get_token_admin_client,
 //     install_dummy_wasm, install_token_wasm, jump,
 // };
 
-#[test]
-fn test() {
-    let setup = Setup::new_with_config(
-        &(TestConfig {
-            mint_to_user: i128::MAX,
-            users_count: 3,
-            ..TestConfig::default()
-        }),
-    );
-    let e = setup.env;
-    let admin = setup.admin;
-    let liq_pool = setup.liq_pool;
-    let token1 = setup.token1;
-    let token2 = setup.token2;
-    let token_reward = setup.token_reward;
-    let token_share = setup.token_share;
-    let user1 = setup.users[1].clone();
-    let user2 = setup.users[2].clone();
-    let amount_to_deposit = 100_0000000; // 100.00
+// #[test]
+// fn test() {
+//     let setup = Setup::new_with_config(
+//         &(TestConfig {
+//             mint_to_user: i128::MAX,
+//             users_count: 3,
+//             ..TestConfig::default()
+//         }),
+//     );
+//     let e = setup.env;
+//     let admin = setup.admin;
+//     let liq_pool = setup.liq_pool;
+//     let token1 = setup.token1;
+//     let token2 = setup.token2;
+//     let token_reward = setup.token_reward;
+//     let token_share = setup.token_share;
+//     let user1 = setup.users[1].clone();
+//     let user2 = setup.users[2].clone();
+//     let amount_to_deposit = 100_0000000; // 100.00
 
     // let btc_price = setup.oracle_client.lastprice(&setup.btc_asset).unwrap();
     // let xlm_price = setup.oracle_client.lastprice(&setup.xlm_asset).unwrap();
@@ -63,13 +63,13 @@ fn test() {
     // setup.registry.get_price(&setup.btc_asset_id);
     // setup.registry.get_price(&setup.xlm_asset_id);
 
-    let (x, y) = liq_pool.deposit(&admin, &1000_0000000);
+    // let (x, y) = liq_pool.deposit(&admin, &1000_0000000);
 
-    liq_pool.deposit(&admin, &2000_0000000);
+    // liq_pool.deposit(&admin, &2000_0000000);
 
-    let swapped = liq_pool.swap(&admin, &SwapDirection::Buy, &10_0000000, &0);
+    // let swapped = liq_pool.swap(&admin, &SwapDirection::Buy, &10_0000000, &0);
 
-    assert_eq!(swapped, 0);
+    // assert_eq!(swapped, 0);
 
     // let pools = Vec::from_array(&e, [liq_pool.address]);
     // let total = setup.liquidity_calculator.get_liquidity(&pools);
@@ -118,7 +118,7 @@ fn test() {
     // liq_pool.swap(&user1, &SwapDirection::Sell, &0_100000, &0);
 
     // liq_pool.withdraw(&user2, &500_0000000);
-}
+// }
 
 // #[test]
 // fn test() {

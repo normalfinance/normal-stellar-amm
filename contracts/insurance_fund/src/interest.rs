@@ -6,7 +6,7 @@ use soroban_fixed_point_math::FixedPoint;
 use soroban_sdk::{panic_with_error, Env, Symbol, Vec};
 use utils::{
     constant::{PERCENTAGE_PRECISION, PERCENTAGE_PRECISION_I64},
-    math::safe_math::SafeMath,
+    math::safe_math::{SafeMath, PrecisionMath},
     state::oracle_registry::{HistoricalOracleData, OracleValidity},
 };
 
@@ -121,11 +121,9 @@ pub fn calculate_rate(
 
     let rate_i64 = if utilization_i64 <= optimal_utilization_i64 {
         // rate = base + (utilization * slope1 / optimal_utilization)
-        let variable_rate = utilization_i64
-            .fixed_mul_floor(slope1_i64, optimal_utilization_i64)
-            .unwrap_or_else(|| {
-                panic_with_error!(&Env::default(), InsuranceFundError::ArithmeticOverflow);
-            });
+        // Use round-to-nearest for fair interest rate calculation
+        let variable_rate = (utilization_i64 as u128)
+            .safe_fixed_mul_round(&Env::default(), slope1_i64 as u128, optimal_utilization_i64 as u128) as i64;
         
         base_rate_i64.checked_add(variable_rate).unwrap_or_else(|| {
             panic_with_error!(&Env::default(), InsuranceFundError::ArithmeticOverflow);
@@ -145,9 +143,9 @@ pub fn calculate_rate(
             panic_with_error!(&Env::default(), InsuranceFundError::InvalidConfiguration);
         }
 
-        let slope2_part = excess_util.fixed_mul_floor(slope2_i64, remaining).unwrap_or_else(|| {
-            panic_with_error!(&Env::default(), InsuranceFundError::ArithmeticOverflow);
-        });
+        // Use round-to-nearest for fair slope2 calculation
+        let slope2_part = (excess_util as u128)
+            .safe_fixed_mul_round(&Env::default(), slope2_i64 as u128, remaining as u128) as i64;
 
         base_rate_i64
             .checked_add(slope1_i64)

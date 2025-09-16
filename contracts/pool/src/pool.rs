@@ -21,7 +21,7 @@ use utils::constant::PRICE_PRECISION;
 use utils::constant::PRICE_PRECISION_I64;
 use utils::constant::PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO_I128;
 use utils::constant::TWENTY_FOUR_HOUR;
-use utils::math::safe_math::SafeMath;
+use utils::math::safe_math::{SafeMath, SafeConversion, PrecisionMath};
 use utils::math::stats::calculate_rolling_sum;
 use utils::state::oracle_registry::HistoricalOracleData;
 use utils::state::oracle_registry::NormalAction;
@@ -248,10 +248,8 @@ pub fn peg_price(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -> 
         return 0;
     }
 
-    // Calculate quote_oracle_price / base_oracle_price for proper peg price ratio
-    quote_oracle_price
-        .fixed_div_floor(base_oracle_price, PRICE_PRECISION)
-        .unwrap()
+    // Calculate quote_oracle_price / base_oracle_price with round-to-nearest to reduce bias
+    quote_oracle_price.safe_fixed_div_round(e, base_oracle_price, PRICE_PRECISION)
 }
 
 // Updates the 30 day trading volume metric for the pool using a rolling average.
@@ -314,20 +312,27 @@ pub fn get_delta_a(
         peg_price
     );
     
-    // Safe conversion with bounds checking
-    let target_reserve_a_i128 = i128::try_from(target_reserve_a).unwrap_or_else(|_| {
-        panic_with_error!(e, PoolError::ConversionOverflow);
-    });
+    // Safe conversion using our SafeConversion utilities
+    let target_reserve_a_i128 = target_reserve_a.safe_to_i128(e);
+    let reserve_a_i128 = reserve_a.safe_to_i128(e);
     
-    let reserve_a_i128 = i128::try_from(reserve_a).unwrap_or_else(|_| {
-        panic_with_error!(e, PoolError::ConversionOverflow);
-    });
-    
-    let delta_a = target_reserve_a_i128
+    let delta_a_raw = target_reserve_a_i128
         .checked_sub(reserve_a_i128)
         .unwrap_or_else(|| {
             panic_with_error!(e, PoolError::ArithmeticOverflow);
         });
+    
+    // Apply per-ledger delta cap to prevent excessive rebalancing
+    let max_delta_per_ledger = reserve_a.safe_to_i128(e) / 20; // Max 5% change per operation
+    let delta_a = if delta_a_raw.abs() > max_delta_per_ledger {
+        if delta_a_raw > 0 {
+            max_delta_per_ledger
+        } else {
+            -max_delta_per_ledger
+        }
+    } else {
+        delta_a_raw
+    };
 
     delta_a
 }
@@ -351,9 +356,8 @@ fn calculate_target_reserve_with_smoothing(
     reserve_b: u128,
     peg_price: u128,
 ) -> u128 {
-    let raw_target_reserve_a = reserve_b
-        .fixed_div_floor(peg_price, PRICE_PRECISION)
-        .unwrap();
+    // Use round-to-nearest to prevent accumulation bias
+    let raw_target_reserve_a = reserve_b.safe_fixed_div_round(e, peg_price, PRICE_PRECISION);
     
     // Calculate relative change threshold (0.01% = 100 basis points)
     let epsilon_threshold = current_reserve_a.safe_div(e, 10_000); // 0.01%
@@ -468,19 +472,19 @@ pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128, red
 /// let in_amount: u128 = 10_000;
 ///
 /// // Calculate output before fee
-/// let out = contract.get_amount_out(in_amount, reserve_sell, reserve_buy);
+/// let out = contract.get_amount_out(&e, in_amount, reserve_sell, reserve_buy);
 ///
 /// assert!(out > 0);
 /// ```
-pub fn get_amount_out(in_amount: u128, reserve_sell: u128, reserve_buy: u128) -> u128 {
+pub fn get_amount_out(e: &Env, in_amount: u128, reserve_sell: u128, reserve_buy: u128) -> u128 {
     if in_amount == 0 {
         return 0;
     }
 
     // +1 just in case there were some rounding errors & convert to real units in place
+    // Use floor for user payouts (conservative for protocol)
     let result = in_amount
-        .fixed_mul_floor(reserve_buy, reserve_sell.safe_add(&e, in_amount))
-        .unwrap()
+        .safe_fixed_mul_floor(&e, reserve_buy, reserve_sell.safe_add(&e, in_amount))
         + 1;
 
     result

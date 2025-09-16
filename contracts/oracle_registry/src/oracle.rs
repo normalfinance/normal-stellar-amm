@@ -3,7 +3,7 @@ use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{Address, Env, Symbol};
 use utils::{
     constant::{FIVE_MINUTE, PERCENTAGE_PRECISION, PERCENTAGE_PRECISION_U64, PRICE_PRECISION},
-    math::{pool::sanitize_new_price, safe_math::SafeMath, stats::calculate_new_twap},
+    math::{pool::sanitize_new_price, safe_math::{SafeMath, PrecisionMath, SafeConversion}, stats::calculate_new_twap},
     state::oracle_registry::{HistoricalOracleData, OraclePriceData, OracleValidity},
     temporal::Delay,
 };
@@ -135,9 +135,8 @@ pub fn oracle_validity(
         .too_volatile_ratio
         .safe_add(e, PERCENTAGE_PRECISION_U64);
 
-    // let price_delta = oracle_price.safe_div(e, last_oracle_twap.max(1)) as u64;
-    let price_delta =
-        oracle_price.fixed_div_floor(e, &last_oracle_twap, &PERCENTAGE_PRECISION) as u64;
+    // Use round-to-nearest for volatility calculation (fair assessment)
+    let price_delta = oracle_price.safe_fixed_div_round(e, last_oracle_twap, PERCENTAGE_PRECISION).safe_to_u64(e);
 
     let is_oracle_price_too_volatile = price_delta <= lower_bound || upper_bound <= price_delta;
 

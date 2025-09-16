@@ -1,6 +1,7 @@
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{Env, Vec};
 use utils::constant::FEE_MULTIPLIER;
+use utils::math::safe_math::PrecisionMath;
 
 // Derivation of the closed-form result for the integral:
 //
@@ -78,5 +79,6 @@ pub fn get_liquidity(
     _out_idx: u32,
 ) -> u128 {
     let x = reserves.get(in_idx).unwrap();
-    x.fixed_mul_floor(e, &FEE_MULTIPLIER, &(56 * (FEE_MULTIPLIER - fee_fraction)))
+    // Use ceiling for fee calculations to favor the protocol
+    x.safe_fixed_mul_ceil(e, FEE_MULTIPLIER, 56 * (FEE_MULTIPLIER - fee_fraction))
 }
