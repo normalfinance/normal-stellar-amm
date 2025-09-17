@@ -463,7 +463,7 @@ impl AdminInterface for OracleRegistry {
                 delay: Delay::from_timestamp_diff_expect(
                     now,
                     historical_oracle_data.last_oracle_price_twap_ts,
-                    "Historical TWAP timestamp cannot be in the future",
+                    "Historical TWAP timestamp exceeds allowed clock drift tolerance",
                 ),
             }),
         ) == OracleValidity::Valid;

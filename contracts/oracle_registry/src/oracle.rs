@@ -40,7 +40,7 @@ pub fn get_oracle_price(e: &Env, oracle: &Address, asset: &Symbol, now: u64) -> 
     let oracle_delay = Delay::from_timestamp_diff_expect(
         now,
         published_ts,
-        "Oracle published timestamp cannot be in the future",
+        "Oracle published timestamp exceeds allowed clock drift tolerance",
     );
 
     OraclePriceData {
