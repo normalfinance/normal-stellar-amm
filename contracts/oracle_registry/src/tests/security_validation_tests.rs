@@ -1,13 +1,42 @@
 #![cfg(test)]
 
-use soroban_sdk::{Env, testutils::Ledger};
-use utils::state::oracle_registry::{OracleGuardRails, OracleValidity};
-use crate::oracle::Duration;
+use soroban_sdk::{Env, Address};
+use utils::state::oracle_registry::{OracleGuardRails, OracleValidity, OraclePriceData, ValidityGuardRails, PriceDivergenceGuardRails};
+use utils::temporal::Delay;
+use crate::oracle::oracle_validity;
+use crate::storage::set_oracle_guard_rails;
 
-// Mock function to test the staleness validation logic
-fn test_staleness_validation(oracle_delay_seconds: u64, stale_threshold_seconds: u64) -> bool {
-    // Simulate the fixed validation logic: oracle_delay >= threshold (not >)
-    oracle_delay_seconds >= stale_threshold_seconds
+// Helper function to test staleness validation using the real oracle_validity function
+fn test_staleness_validation(e: &Env, oracle_delay_seconds: u64, stale_threshold_seconds: u64) -> bool {
+    use soroban_sdk::testutils::Address as _;
+    
+    let contract_address = Address::generate(e);
+    
+    e.as_contract(&contract_address, || {
+        // Set up oracle guard rails with the test threshold
+        let guard_rails = OracleGuardRails {
+            validity: ValidityGuardRails {
+                seconds_before_stale_for_pool: stale_threshold_seconds,
+                too_volatile_ratio: 200_000, // 20% - not relevant for staleness test
+            },
+            price_divergence: PriceDivergenceGuardRails {
+                oracle_twap_percent_divergence: 100_000, // 10% - not relevant for staleness test
+            },
+        };
+        set_oracle_guard_rails(e, &guard_rails);
+        
+        // Create oracle price data with the specified delay
+        let oracle_price_data = OraclePriceData {
+            price: 1_000_000, // $1 - not relevant for staleness test
+            delay: Delay::from_seconds(oracle_delay_seconds),
+        };
+        
+        // Call the real oracle_validity function
+        let validity = oracle_validity(e, 1_000_000, &oracle_price_data); // TWAP = $1
+        
+        // Return true if oracle is stale
+        matches!(validity, OracleValidity::StaleForPool)
+    })
 }
 
 #[test]
@@ -23,8 +52,9 @@ fn test_oracle_timestamp_validation_boundary() {
         (120, 60, true),   // Well above threshold - stale
     ];
     
+    let e = Env::default();
     for (delay, threshold, expected_stale) in test_cases {
-        let is_stale = test_staleness_validation(delay, threshold);
+        let is_stale = test_staleness_validation(&e, delay, threshold);
         assert_eq!(is_stale, expected_stale,
             "Staleness validation incorrect: delay={}, threshold={}, expected={}, got={}",
             delay, threshold, expected_stale, is_stale);
@@ -38,16 +68,17 @@ fn test_oracle_boundary_precision() {
     // Test the exact boundary case that was problematic
     let exact_threshold = 60;
     
+    let e = Env::default();
     // Before fix: delay > threshold meant 60 > 60 = false (not stale)
     // After fix: delay >= threshold means 60 >= 60 = true (correctly stale)
-    assert!(test_staleness_validation(exact_threshold, exact_threshold),
+    assert!(test_staleness_validation(&e, exact_threshold, exact_threshold),
         "Oracle should be considered stale exactly at threshold");
     
     // Test one second before and after
-    assert!(!test_staleness_validation(exact_threshold - 1, exact_threshold),
+    assert!(!test_staleness_validation(&e, exact_threshold - 1, exact_threshold),
         "Oracle should not be stale one second before threshold");
     
-    assert!(test_staleness_validation(exact_threshold + 1, exact_threshold),
+    assert!(test_staleness_validation(&e, exact_threshold + 1, exact_threshold),
         "Oracle should be stale one second after threshold");
 }
 
@@ -64,8 +95,9 @@ fn test_clock_drift_tolerance() {
         base_threshold + 1,  // Just over
     ];
     
+    let e = Env::default();
     for delay in clock_drift_cases {
-        let is_stale = test_staleness_validation(delay, base_threshold);
+        let is_stale = test_staleness_validation(&e, delay, base_threshold);
         
         if delay >= base_threshold {
             assert!(is_stale, "Should be stale when delay >= threshold: {}", delay);
@@ -87,8 +119,9 @@ fn test_extreme_timestamp_values() {
         (0, u64::MAX, false),   // Zero delay with large threshold - not stale
     ];
     
+    let e = Env::default();
     for (delay, threshold, expected_stale) in test_cases {
-        let is_stale = test_staleness_validation(delay, threshold);
+        let is_stale = test_staleness_validation(&e, delay, threshold);
         assert_eq!(is_stale, expected_stale,
             "Extreme value test failed: delay={}, threshold={}, expected={}, got={}",
             delay, threshold, expected_stale, is_stale);
@@ -139,8 +172,9 @@ fn test_operational_scenarios() {
         },
     ];
     
+    let e = Env::default();
     for scenario in scenarios {
-        let is_stale = test_staleness_validation(scenario.delay_seconds, scenario.threshold_seconds);
+        let is_stale = test_staleness_validation(&e, scenario.delay_seconds, scenario.threshold_seconds);
         assert_eq!(is_stale, scenario.expected_stale, 
             "Scenario '{}' failed: expected={}, got={}", 
             scenario.name, scenario.expected_stale, is_stale);
@@ -174,9 +208,10 @@ fn test_validation_consistency() {
     let delay = 60;
     let threshold = 60;
     
+    let e = Env::default();
     // Call multiple times to ensure consistency
     for _ in 0..100 {
-        let is_stale = test_staleness_validation(delay, threshold);
+        let is_stale = test_staleness_validation(&e, delay, threshold);
         assert!(is_stale, "Validation should be consistent across calls");
     }
 }
@@ -188,8 +223,9 @@ fn test_threshold_edge_cases() {
     let thresholds = [0, 1, 59, 60, 61, 3600, u64::MAX];
     let test_delay = 60;
     
+    let e = Env::default();
     for threshold in thresholds {
-        let is_stale = test_staleness_validation(test_delay, threshold);
+        let is_stale = test_staleness_validation(&e, test_delay, threshold);
         
         if test_delay >= threshold {
             assert!(is_stale, "Should be stale when delay {} >= threshold {}", test_delay, threshold);
