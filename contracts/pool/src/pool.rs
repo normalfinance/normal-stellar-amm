@@ -49,12 +49,18 @@ pub fn get_net_liquidity_imbalance(
     let base_token_supply = get_total_synthetic_tokens(&e);
     let reserve_b = get_reserve_b(e);
 
-    let net_base_asset_value = (base_token_supply as i128)
-        .safe_mul(e, base_oracle_price as i128)
+    // Use safe conversions to prevent overflow during type conversion
+    let base_token_supply_i128 = base_token_supply.safe_to_i128(e);
+    let base_oracle_price_i128 = base_oracle_price.safe_to_i128(e);
+    let reserve_b_i128 = reserve_b.safe_to_i128(e);
+    let quote_oracle_price_i128 = quote_oracle_price.safe_to_i128(e);
+    
+    let net_base_asset_value = base_token_supply_i128
+        .safe_mul(e, base_oracle_price_i128)
         .safe_div(e, PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO_I128);
 
-    let net_quote_asset_value = (reserve_b as i128)
-        .safe_mul(e, quote_oracle_price as i128)
+    let net_quote_asset_value = reserve_b_i128
+        .safe_mul(e, quote_oracle_price_i128)
         .safe_div(e, PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO_I128);
 
     net_quote_asset_value.safe_sub(e, net_base_asset_value)
@@ -147,13 +153,22 @@ pub fn calculate_oracle_twap_price_spread_pct(
     pool_price: u128,
     last_oracle_price_twap: u128,
 ) -> i64 {
-    let price_spread: i64 =
-        (pool_price as i128).safe_sub(&e, last_oracle_price_twap as i128) as i64;
+    // Use safe conversions to prevent overflow
+    let pool_price_i128 = pool_price.safe_to_i128(e);
+    let oracle_price_i128 = last_oracle_price_twap.safe_to_i128(e);
+    
+    let price_spread_i128 = pool_price_i128.safe_sub(e, oracle_price_i128);
+    
+    // Safe conversion to i64 with overflow protection
+    let price_spread = price_spread_i128.safe_to_i64(e);
+    let pool_price_i64 = pool_price.safe_to_i64(e);
 
-    // price_spread_pct
+    // Use safe division instead of unwrap
     price_spread
-        .fixed_div_floor(pool_price as i64, PRICE_PRECISION_I64)
-        .unwrap() as i64
+        .fixed_div_floor(pool_price_i64, PRICE_PRECISION_I64)
+        .unwrap_or_else(|| {
+            panic_with_error!(e, PoolError::ArithmeticOverflow);
+        })
 }
 
 // Determines whether the oracle price diverges too far from the reserve price.
@@ -410,8 +425,14 @@ pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128, red
                 );
 
                 // allow minting up to 0.1 % of current supply per ledger
-                let mint_cap =
-                    (get_total_synthetic_tokens(&e) / (get_mint_cap_fraction(&e) as u128)) as i128;
+                // Use safe arithmetic and conversions
+                let total_supply = get_total_synthetic_tokens(&e);
+                let mint_cap_fraction_u32 = get_mint_cap_fraction(&e);
+                // Safe conversion from u32 to u128 (always safe as u32 fits in u128)
+                // Can still consider using safe conversion here for consistency
+                let mint_cap_fraction = mint_cap_fraction_u32 as u128;
+                let mint_cap_u128 = total_supply.safe_div(e, mint_cap_fraction);
+                let mint_cap = mint_cap_u128.safe_to_i128(e);
 
                 if delta_a > mint_cap {
                     panic_with_error!(&e, PoolError::SwapReduceOnly);
