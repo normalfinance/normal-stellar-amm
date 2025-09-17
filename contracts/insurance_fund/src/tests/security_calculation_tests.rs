@@ -39,7 +39,8 @@ fn test_utilization_overflow_attack() {
     let huge_total_reserve = u128::MAX;
     let small_optimal_insurance = 1_u128;
     
-    let utilization = calculate_utilization(huge_total_reserve, small_optimal_insurance);
+    let e = Env::default();
+    let utilization = calculate_utilization(&e, huge_total_reserve, small_optimal_insurance);
     
     // Should be clamped to u32::MAX, not truncated to 0
     assert_eq!(utilization, u32::MAX);
@@ -61,7 +62,8 @@ fn test_utilization_precision_manipulation() {
     ];
     
     for (total_reserve, optimal, expected_max) in test_cases {
-        let utilization = calculate_utilization(total_reserve, optimal);
+        let e = Env::default();
+        let utilization = calculate_utilization(&e, total_reserve, optimal);
         
         // Verify result is reasonable and not a result of silent truncation
         if optimal == 0 {

@@ -2,7 +2,7 @@ use crate::{
     errors::InsuranceFundError,
     storage::{get_oracle_registry, get_reserve, get_token_whitelist, get_token_whitelist_vec},
 };
-use soroban_fixed_point_math::FixedPoint;
+
 use soroban_sdk::{panic_with_error, Env, Symbol, Vec};
 use utils::{
     constant::{PERCENTAGE_PRECISION, PERCENTAGE_PRECISION_I64},
@@ -55,15 +55,14 @@ pub fn calculate_total_reserve_value(e: &Env) -> u128 {
 //
 // * The utilization percentage as a fixed-point `u32` (e.g. 10_000_000 = 100%).
 //   Returns 0 if either input is zero. The result is scaled by `PERCENTAGE_PRECISION`.
-pub fn calculate_utilization(total_reserve_value: u128, optimal_insurance: u128) -> u32 {
+pub fn calculate_utilization(e: &Env, total_reserve_value: u128, optimal_insurance: u128) -> u32 {
     if total_reserve_value == 0 || optimal_insurance == 0 {
         return 0;
     }
 
-    // Calculate utilization with safe clamping to prevent overflow
+    // Calculate utilization using safe precision math
     let utilization_u128 = total_reserve_value
-        .fixed_div_floor(optimal_insurance, PERCENTAGE_PRECISION)
-        .unwrap_or(0);
+        .safe_fixed_div_floor(e, optimal_insurance, PERCENTAGE_PRECISION);
     
     // Clamp to u32::MAX to prevent silent truncation
     utilization_u128.min(u32::MAX as u128) as u32
@@ -196,41 +195,47 @@ mod tests {
 
     #[test]
     fn test_utilization_100_percent() {
+        let e = Env::default();
         let utilization =
-            calculate_utilization(1_000_000 * PRICE_PRECISION, 1_000_000 * PRICE_PRECISION);
+            calculate_utilization(&e, 1_000_000 * PRICE_PRECISION, 1_000_000 * PRICE_PRECISION);
         assert_eq!(utilization, 1 * PERCENTAGE_PRECISION_U32);
     }
 
     #[test]
     fn test_utilization_50_percent() {
+        let e = Env::default();
         let utilization =
-            calculate_utilization(500_000 * PRICE_PRECISION, 1_000_000 * PRICE_PRECISION);
+            calculate_utilization(&e, 500_000 * PRICE_PRECISION, 1_000_000 * PRICE_PRECISION);
         assert_eq!(utilization, 5_000_000); // 0.5%
     }
 
     #[test]
     fn test_utilization_above_100_percent() {
+        let e = Env::default();
         let utilization =
-            calculate_utilization(2_000_000 * PRICE_PRECISION, 1_000_000 * PRICE_PRECISION);
+            calculate_utilization(&e, 2_000_000 * PRICE_PRECISION, 1_000_000 * PRICE_PRECISION);
         assert_eq!(utilization, 2 * PERCENTAGE_PRECISION_U32);
     }
 
     #[test]
     fn test_zero_coverage_returns_zero() {
-        let utilization = calculate_utilization(1_000_000 * PRICE_PRECISION, 0);
+        let e = Env::default();
+        let utilization = calculate_utilization(&e, 1_000_000 * PRICE_PRECISION, 0);
         assert_eq!(utilization, 0); // Prevent division by zero
     }
 
     #[test]
     fn test_utilization_clamps_to_u32_max_original() {
+        let e = Env::default();
         let huge_value = u128::MAX;
-        let utilization = calculate_utilization(huge_value, 1); // absurdly high ratio
+        let utilization = calculate_utilization(&e, huge_value, 1); // absurdly high ratio
         assert_eq!(utilization, u32::MAX); // Clamped
     }
 
     #[test]
     fn test_zero_vault_amount() {
-        let utilization = calculate_utilization(0, 1_000_000 * PRICE_PRECISION);
+        let e = Env::default();
+        let utilization = calculate_utilization(&e, 0, 1_000_000 * PRICE_PRECISION);
         assert_eq!(utilization, 0); // 0% utilization
     }
 

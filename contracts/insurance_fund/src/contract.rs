@@ -782,7 +782,7 @@ impl InsuranceFundTrait for InsuranceFund {
         let total_reserve_value = calculate_total_reserve_value(&e);
         let optimal_insurance = get_optimal_insurance(&e);
 
-        calculate_utilization(total_reserve_value, optimal_insurance)
+        calculate_utilization(&e, total_reserve_value, optimal_insurance)
     }
 
     // Get the current staking interest rate.
@@ -797,7 +797,7 @@ impl InsuranceFundTrait for InsuranceFund {
 
         let total_reserve_value = calculate_total_reserve_value(&e);
         let optimal_insurance = get_optimal_insurance(&e);
-        let utilization = calculate_utilization(total_reserve_value, optimal_insurance);
+        let utilization = calculate_utilization(&e, total_reserve_value, optimal_insurance);
 
         let (slope1, slope2) = (get_rate_slope_a(&e), get_rate_slope_b(&e));
 

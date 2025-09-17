@@ -163,12 +163,9 @@ pub fn calculate_oracle_twap_price_spread_pct(
     let price_spread = price_spread_i128.safe_to_i64(e);
     let pool_price_i64 = pool_price.safe_to_i64(e);
 
-    // Use safe division instead of unwrap
-    price_spread
-        .fixed_div_floor(pool_price_i64, PRICE_PRECISION_I64)
-        .unwrap_or_else(|| {
-            panic_with_error!(e, PoolError::ArithmeticOverflow);
-        })
+    // Calculate (price_spread * PRICE_PRECISION_I64) / pool_price_i64 using safe arithmetic
+    let numerator = price_spread.safe_mul(e, PRICE_PRECISION_I64);
+    numerator.safe_div(e, pool_price_i64)
 }
 
 // Determines whether the oracle price diverges too far from the reserve price.
