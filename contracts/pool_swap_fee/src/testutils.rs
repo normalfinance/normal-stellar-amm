@@ -119,9 +119,9 @@ impl Setup<'_> {
     }
 }
 
-mod pool_swap_fee {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/pool_swap_fee.wasm");
-}
+// mod pool_swap_fee {
+//     soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/pool_swap_fee.wasm");
+// }
 
 pub fn create_pool_swap_fee_contract<'a>(e: &Env) -> PoolSwapFeeCollectorClient<'a> {
     PoolSwapFeeCollectorClient::new(e, &e.register(crate::PoolSwapFeeCollector, ()))

@@ -12,4 +12,11 @@ mod test;
 mod test_permissions;
 mod testutils;
 
+#[cfg(test)]
+mod tests {
+    pub mod calculation_tests;
+    pub mod security_calculation_tests;
+    pub mod advanced_attack_tests;
+}
+
 pub use crate::contract::{InsuranceFund, InsuranceFundClient};
