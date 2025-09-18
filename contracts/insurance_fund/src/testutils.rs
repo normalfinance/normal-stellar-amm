@@ -1,7 +1,7 @@
 #![cfg(test)]
 extern crate std;
 use crate::InsuranceFundClient;
-use soroban_sdk::testutils::Address as _;
+use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
@@ -52,6 +52,10 @@ pub(crate) struct Setup<'a> {
     // addresses
     pub(crate) admin: Address,
     pub(crate) emergency_admin: Address,
+
+    pub(crate) oracle_registry: Address,
+    pub(crate) pool_router: Address,
+
     pub(crate) users: vec::Vec<Address>,
 
     // contracts
@@ -77,6 +81,90 @@ impl Setup<'_> {
         setup
     }
 
+    // Helper functions for insurance fund testing
+
+    pub(crate) fn pay_premium(&self, amount: i128) {
+        self.insurance_fund.pay_premium(&self.admin, &(amount as u128));
+    }
+
+    pub(crate) fn deposit_and_expect_success(&self, user: &Address, amount: i128) -> u128 {
+        let initial_shares = self.get_user_shares(user);
+        self.insurance_fund.deposit(user, &self.token_a.address, &(amount as u128));
+        let final_shares = self.get_user_shares(user);
+        final_shares - initial_shares
+    }
+
+
+    pub(crate) fn request_withdraw_and_expect_success(&self, user: &Address, shares: u128) {
+        self.insurance_fund.request_withdraw(user, &self.token_a.address, &shares);
+    }
+
+
+    pub(crate) fn withdraw_and_expect_success(&self, user: &Address) -> u128 {
+        let initial_balance = self.token_a.balance(user);
+        self.insurance_fund.withdraw(user, &self.token_a.address);
+        let final_balance = self.token_a.balance(user);
+        (final_balance - initial_balance) as u128
+    }
+
+    pub(crate) fn assert_user_shares(&self, user: &Address, expected_shares: u128) {
+        let actual_shares = self.get_user_shares(user);
+        assert_eq!(actual_shares, expected_shares, "User shares mismatch for {:?}", user);
+    }
+
+    pub(crate) fn assert_vault_balance(&self, expected_balance: u128) {
+        let actual_balance = self.get_vault_balance();
+        assert_eq!(actual_balance, expected_balance, "Vault balance mismatch");
+    }
+
+    pub(crate) fn get_user_shares(&self, user: &Address) -> u128 {
+        let stake = self.insurance_fund.get_stake(user, &self.token_a.address);
+        stake.unchecked_shares()
+    }
+
+    pub(crate) fn get_vault_balance(&self) -> u128 {
+        self.token_a.balance(&self.insurance_fund.address) as u128
+    }
+
+    pub(crate) fn get_reserve(&self) -> crate::reserve::InsuranceFundReserve {
+        self.insurance_fund.get_reserve(&self.token_a.address)
+    }
+
+    pub(crate) fn setup_multiple_deposits(&self, amounts: &[i128]) -> std::vec::Vec<u128> {
+        let mut shares_received = std::vec::Vec::new();
+        for (i, &amount) in amounts.iter().enumerate() {
+            let user = &self.users[i % self.users.len()];
+            let shares = self.deposit_and_expect_success(user, amount);
+            shares_received.push(shares);
+        }
+        shares_received
+    }
+
+    pub(crate) fn advance_time_past_unstaking(&self) {
+        let unstaking_period = self.insurance_fund.get_unstaking_period();
+        self.env.ledger().with_mut(|l| {
+            l.timestamp = l.timestamp + unstaking_period + 1;
+        });
+    }
+
+    pub(crate) fn advance_time(&self, seconds: u64) {
+        self.env.ledger().with_mut(|l| {
+            l.timestamp = l.timestamp + seconds;
+        });
+    }
+
+    pub(crate) fn setup_withdraw_in_progress(&self, user: &Address, shares: u128) {
+        self.request_withdraw_and_expect_success(user, shares);
+    }
+
+    pub(crate) fn get_optimal_insurance(&self) -> u128 {
+        self.insurance_fund.get_optimal_insurance()
+    }
+
+    pub(crate) fn set_optimal_insurance(&self, amount: u128) {
+        self.insurance_fund.set_optimal_insurance(&self.admin, &amount);
+    }
+
     pub(crate) fn setup(config: &TestConfig) -> Self {
         let e: Env = Env::default();
         e.mock_all_auths();
@@ -86,13 +174,18 @@ impl Setup<'_> {
         let admin = users[0].clone();
         let emergency_admin = Address::generate(&e);
 
+
         let token_a = create_token_contract(&e, &admin);
         let token_a_admin_client = get_token_admin_client(&e, &token_a.address.clone());
 
         let insurance_fund = create_insurance_fund_contract(&e);
+        let oracle_registry = Address::generate(&e);
+        let pool_router = Address::generate(&e);
         insurance_fund.initialize(
             &admin,
             &emergency_admin,
+            &oracle_registry,
+            &pool_router,
             &token_a.address,
             &config.unstaking_period,
             &config.optimal_utilization,
@@ -105,6 +198,8 @@ impl Setup<'_> {
             env: e,
             admin,
             emergency_admin,
+            oracle_registry,
+            pool_router,
             users,
             insurance_fund,
             token_a,
