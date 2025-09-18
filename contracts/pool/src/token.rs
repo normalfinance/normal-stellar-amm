@@ -1,8 +1,6 @@
 use crate::storage::{get_token_a, get_token_b, get_total_synthetics, set_total_synthetics};
 use soroban_sdk::{
-    token::{StellarAssetClient, TokenClient},
-    xdr::ToXdr,
-    Address, Bytes, BytesN, Env,
+    log, token::{StellarAssetClient, TokenClient}, xdr::ToXdr, Address, Bytes, BytesN, Env
 };
 use utils::token::transfer_token;
 
@@ -47,6 +45,7 @@ pub fn get_user_balance_synthetic(e: &Env, user: &Address) -> u128 {
 
 pub fn burn_synthetic_tokens(e: &Env, from: &Address, amount: u128) {
     let total_synthetics = get_total_synthetics(e);
+    log!(e, "total_synthetics", total_synthetics);
     set_total_synthetics(e, &(total_synthetics - amount));
 
     let token_client = StellarAssetClient::new(e, &get_token_a(e));

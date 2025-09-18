@@ -392,6 +392,10 @@ pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -> 
             set_reserve_a(e, &(reserve_a - (delta_a.abs() as u128)));
         }
 
+        // Update RebalanceMinted to track the outstanding number of synthetic tokens minted/burned by the pool
+        let rebalance_minted = get_rebalance_minted(e) as i128;
+        set_rebalance_minted(&e, &(rebalance_minted.safe_add(e, delta_a) as u128));
+
         let (new_reserve_a, new_reserve_b) = (get_reserve_a(e), get_reserve_b(e));
 
         LiquidityPoolEvents::new(e).rebalance(
@@ -402,11 +406,6 @@ pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -> 
             delta_a,
         );
     }
-
-    // Update RebalanceMinted to track the outstanding number of synthetic tokens minted/burned by the pool
-    let rebalance_minted = get_rebalance_minted(e) as i128;
-    log!(&e, "rebalance_minted", rebalance_minted);
-    set_rebalance_minted(&e, &(rebalance_minted.safe_add(e, delta_a) as u128));
 
     delta_a
 }

@@ -115,7 +115,7 @@ impl Setup<'_> {
         e.cost_estimate().budget().reset_unlimited();
 
         // let start_time = e.ledger().timestamp();
-        let start_time = 1757703570;
+        let start_time = 1758191744;
         jump(&e, start_time);
 
         let users = Self::generate_random_users(&e, config.users_count);

@@ -389,12 +389,8 @@ impl PoolTrait for Pool {
             &(get_protocol_fee_fraction(&e) as u128),
             &FEE_MULTIPLIER,
         );
-        log!(&e, "out", out);
-        log!(&e, "total_fee", total_fee);
         // (total_fee * (get_protocol_fee_fraction(&e) as u128)) / FEE_MULTIPLIER;
         let lp_fee = total_fee - protocol_fee;
-        log!(&e, "protocol_fee", protocol_fee);
-        log!(&e, "lp_fee", lp_fee);
 
         if out < out_min {
             panic_with_error!(&e, PoolValidationError::OutMinNotSatisfied);
@@ -425,10 +421,6 @@ impl PoolTrait for Pool {
         let protocol_fee_frac =
             (base_fee_fraction * (get_protocol_fee_fraction(&e) as u128)) / FEE_MULTIPLIER; // e.g. 30 * 50 / 100 = 0.15% admin fee
         let pool_fee_frac = base_fee_fraction - protocol_fee_frac; // e.g. 15 = 0.15% stays in pool
-
-        log!(&e, "base_fee_fraction", base_fee_fraction);
-        log!(&e, "protocol_fee_frac", protocol_fee_frac);
-        log!(&e, "pool_fee_frac", pool_fee_frac);
 
         let residue_numerator = FEE_MULTIPLIER - pool_fee_frac; // e.g. 10000 - 15  = 9985
         let residue_denominator = U256::from_u128(&e, FEE_MULTIPLIER);
@@ -465,8 +457,6 @@ impl PoolTrait for Pool {
             new_reserve_a = new_reserve_a - out_a;
             new_reserve_b = new_reserve_b - protocol_fee;
             set_protocol_fee_b(&e, &(get_protocol_fee_b(&e) + protocol_fee));
-            let prot_b = get_protocol_fee_b(&e);
-            log!(&e, "protocol_b_fee", prot_b);
         } else {
             transfer_b(&e, &user, out_b);
             new_reserve_a = new_reserve_a - protocol_fee;
@@ -679,25 +669,11 @@ impl PoolTrait for Pool {
 
         // give trader the exact out_amount
         if out_idx == 0 {
-            if out_amount < reserve_a {
-                let settled = crate::pool::settle_swap_using_insurance(
-                    &e,
-                    out_amount.saturating_sub(reserve_a),
-                    now,
-                );
-            }
             transfer_a(&e, &user, out_amount);
             new_reserve_a = new_reserve_a - out_amount;
             new_reserve_b = new_reserve_b - protocol_fee;
             set_protocol_fee_b(&e, &(get_protocol_fee_b(&e) + protocol_fee));
         } else {
-            if out_amount < reserve_b {
-                let settled = crate::pool::settle_swap_using_insurance(
-                    &e,
-                    out_amount.saturating_sub(reserve_b),
-                    now,
-                );
-            }
             transfer_b(&e, &user, out_amount);
             new_reserve_a = new_reserve_a - protocol_fee;
             new_reserve_b = new_reserve_b - out_amount;
@@ -854,27 +830,33 @@ impl PoolTrait for Pool {
             panic_with_error!(&e, PoolValidationError::OutMinNotSatisfied);
         }
 
+        log!(&e, "out_a", out_a);
+        log!(&e, "out_b", out_b);
+
         // Burn the users proportional share of the pool's RebalanceMinted token_a amount
-        let rebalance_minted = get_rebalance_minted(&e);
-        let burn_a = rebalance_minted.fixed_mul_floor(&e, &share_amount, &total_shares);
-        log!(&e, "reserve_a", reserve_a);
-        burn_synthetic_tokens(&e, &e.current_contract_address(), burn_a);
+        // let rebalance_minted = get_rebalance_minted(&e);
+        // log!(&e, "rebalance_minted", rebalance_minted);
+        // let burn_a = rebalance_minted.fixed_mul_floor(&e, &share_amount, &total_shares);
+        // log!(&e, "burn_a", burn_a);
+        // log!(&e, "reserve_a", reserve_a);
+        // burn_synthetic_tokens(&e, &e.current_contract_address(), burn_a);
 
+        // log!(&e, "burned", reserve_a);
         // Saturate to zero to avoid overflow if burn_a > out_a
-        let actual_out_a = out_a.saturating_sub(burn_a);
+        // let actual_out_a = out_a.saturating_sub(burn_a);
 
-        // Transfer and update
-        if actual_out_a > 0 {
-            transfer_a(&e, &user, out_a.safe_sub(&e, burn_a));
-        }
+        // // Transfer and update
+        // if actual_out_a > 0 {
+        //     transfer_a(&e, &user, out_a.safe_sub(&e, burn_a));
+        // }
         transfer_b(&e, &user, out_b);
-        let new_reserve_a = reserve_a - burn_a - actual_out_a;
+        // let new_reserve_a = reserve_a - burn_a - actual_out_a;
         let new_reserve_b = reserve_b - out_b;
-        set_reserve_a(&e, &new_reserve_a);
+        // set_reserve_a(&e, &new_reserve_a);
         set_reserve_b(&e, &new_reserve_b);
 
         // Rebalance the pool
-        Self::rebalance(e.clone(), user.clone(), action.clone());
+        Self::rebalance(e.clone(), e.current_contract_address(), action.clone());
 
         let reserve_a_after_rebalance = get_reserve_a(&e);
 
