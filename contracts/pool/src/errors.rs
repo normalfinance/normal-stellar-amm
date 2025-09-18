@@ -15,7 +15,6 @@ pub enum PoolError {
     FutureShareIdNotSet = 208,
     PoolWithdrawKilled = 209,
     InvalidOracle = 210,
-    InvalidExpiryTimestamp = 211,
     // pool specific validation errors
     LiquidityDeficitBelowThreshold = 212,
     PoolActionPaused = 213,
@@ -29,6 +28,7 @@ pub enum PoolError {
     UnfairShareCalculation = 220,
     SettledExceedsMax = 221,
     Unauthorized = 222,
+    FileInsuranceClaimError = 223,
 }
 
 #[contracterror]

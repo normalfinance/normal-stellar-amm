@@ -218,5 +218,17 @@ stellar contract invoke \
 
 echo "#############################"
 
+stellar contract invoke \
+    --id $POOL_ROUTER_ADDR \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    --rpc-url $STELLAR_RPC_URL \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
+    --fee $STELLAR_BASE_FEE \
+    -- \
+    set_insurance_fund \
+    --admin $ADMIN_ADDRESS \
+    --insurance_fund $INSURANCE_FUND_ADDR
+
 echo "Initialization complete!"
 

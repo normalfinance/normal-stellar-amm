@@ -33,7 +33,7 @@ pub trait InsuranceFundTrait {
 
     fn withdraw(e: Env, user: Address, token: Address);
 
-    fn pay_premium(e: Env, sender: Address, amount: u128);
+    fn pay_premium(e: Env, sender: Address, amount: u128) -> u128;
 
     // Sync token balances with reserves
     fn sync(e: Env, sender: Address, token: Address);
@@ -99,7 +99,7 @@ pub trait AdminInterface {
 
     fn sync_optimal_insurance(e: Env, admin: Address);
 
-    fn file_claim(e: Env, admin: Address, token: Address, asset: Symbol);
+    fn file_claim(e: Env, caller: Address, token: Address, asset: Symbol, amount: u128) -> u128;
 
     //   ________  _______  ___________  ___________  _______   _______    ________
     //  /"       )/"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )

@@ -201,14 +201,10 @@ pub trait PoolsManagementTrait {
         token_b: Address,
         token_a_sac_address: Address,
         share_token_info: (String, String),
-        fee_fraction: u32,
+        fees_config: (u32, u32),
         tier: PoolTier,
         max_insurance: u128,
     ) -> Address;
-
-    fn delist_pool(e: Env, admin: Address, asset: Symbol);
-
-    fn remove_pool(e: Env, admin: Address, asset: Symbol);
 
     //   _______    _______  ___________  ___________  _______   _______    ________
     //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )

@@ -12,7 +12,6 @@ usage() {
     echo "  -t <tier>                # e.g. A, B, C"
     echo "  -s <status>              # e.g. Active, Paused, Closed"
     echo "  -m <liq_max> <quote_max> # max imbalances (u128s)"
-    echo "  -e <expiry_ts_u64>"
     exit 1
 }
 
@@ -137,37 +136,6 @@ case "$FLAG" in
         --admin "$ADMIN_ADDRESS" \
         --liquidity_max_imbalance "$1" \
         --max_insurance "$2"
-    ;;
-
--e)
-    if [ "$#" -ne 1 ]; then
-        echo "Error: -e requires <expiry_ts>"
-        exit 1
-    fi
-
-    # Check if timestamp is a valid number (only digits)
-    if ! [[ "$EXPIRY_TS" =~ ^[0-9]+$ ]]; then
-        echo "Error: expiry_ts is not a valid number."
-        exit 1
-    fi
-
-    now=$(date +%s)
-    if [ "$EXPIRY_TS" -le "$now" ]; then
-        echo "Error: expiry_ts is not in the future."
-        exit 1
-    fi
-
-    stellar contract invoke \
-        --id "$CONTRACT_ID" \
-        --source "$IDENTITY_STRING" \
-        --network "$NETWORK" \
-        --rpc-url $STELLAR_RPC_URL \
-        --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
-        --fee $STELLAR_BASE_FEE \
-        -- \
-        set_expiry \
-        --admin "$ADMIN_ADDRESS" \
-        --expiry_ts "$1"
     ;;
 
 *)

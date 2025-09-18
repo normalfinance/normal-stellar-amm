@@ -65,6 +65,8 @@ pub(crate) trait InsuranceFundEvents {
 
     fn skim(&self, sender: Address, token: Address, amount: i128);
 
+    fn claim(&self, caller: Address, token: Address, asset: Symbol, amount: u128);
+
     //    _______     __       ____  ____   ________  _______  ________
     //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\
     //   (. |__) :) /    \    |   (  ) : |(:   \___/(: ______)(.  ___  :)
@@ -189,6 +191,13 @@ impl InsuranceFundEvents for Events {
         self.env()
             .events()
             .publish((Symbol::new(self.env(), "skim"), token), (user, amount));
+    }
+
+    fn claim(&self, caller: Address, token: Address, asset: Symbol, amount: u128) {
+        self.env().events().publish(
+            (Symbol::new(self.env(), "claim"), caller),
+            (token, asset, amount),
+        );
     }
 
     //    _______     __       ____  ____   ________  _______  ________

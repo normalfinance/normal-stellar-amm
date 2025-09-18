@@ -55,6 +55,6 @@ stellar contract invoke \
     --token_b "$XLM_ADDRESS" \
     --token_a_sac_address "$ASSET_SAC_ADDRESS" \
     --share_token_info "[\"$POOL_TOKEN_NAME\", \"$POOL_TOKEN_SYMBOL\"]" \
-    --fee_fraction "$FEE_FRACTION" \
+    --fees_config "[\"$FEE_FRACTION\", 30]"\
     --tier "$POOL_TIER" \
     --max_insurance "$MAX_INSURANCE"

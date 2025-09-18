@@ -4,8 +4,9 @@ extern crate std;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use soroban_sdk::{symbol_short, U256};
-use utils::constant::{PRICE_PRECISION, PRICE_PRECISION_I128};
-use utils::state::pool::SwapDirection;
+use utils::constant::{MIN_LIQUIDITY, PRICE_PRECISION, PRICE_PRECISION_I128};
+use utils::state::pool::{PoolStatus, SwapDirection};
+use utils::test_utils::jump;
 
 use crate::testutils::{create_pool_contract, Setup, TestConfig};
 use access_control::constants::ADMIN_ACTIONS_DELAY;
@@ -17,10 +18,10 @@ use soroban_sdk::token::{
 use soroban_sdk::{
     testutils::Address as _, vec, Address, Env, Error, IntoVal, String, Symbol, Val, Vec,
 };
-use token_lp::Client as LpTokenClient;
+use token_share::Client as ShareTokenClient;
 use utils::state::{
     access::PrivilegedAddresses,
-    pool::{InitializeAllParams, InitializeParams, PoolTier, RewardConfig},
+    pool::{InitializeAllParams, PoolTier, RewardConfig},
     token::TokenInitInfo,
 };
 // use utils::test_utils::{
@@ -32,93 +33,349 @@ use utils::state::{
 fn test() {
     let setup = Setup::new_with_config(
         &(TestConfig {
-            mint_to_user: i128::MAX,
-            users_count: 3,
+            // mint_to_user: i128::MAX,
             ..TestConfig::default()
         }),
     );
     let e = setup.env;
-    let admin = setup.admin;
     let liq_pool = setup.liq_pool;
     let token1 = setup.token1;
     let token2 = setup.token2;
     let token_reward = setup.token_reward;
     let token_share = setup.token_share;
-    let user1 = setup.users[1].clone();
-    let user2 = setup.users[2].clone();
-    let amount_to_deposit = 100_0000000; // 100.00
+    let user1 = setup.users[0].clone();
+    let reward_1_tps = 10_5000000_u128;
+    let reward_2_tps = 20_0000000_u128;
+    let reward_3_tps = 6_0000000_u128;
+    let total_reward_1 = reward_1_tps * 60;
+    let amount_to_deposit = 1000_0000000;
 
-    // let btc_price = setup.oracle_client.lastprice(&setup.btc_asset).unwrap();
-    // let xlm_price = setup.oracle_client.lastprice(&setup.xlm_asset).unwrap();
+    let (_, shares_minted, delta_a) = liq_pool.deposit(&user1, &amount_to_deposit, &0);
+    assert_eq!(
+        e.auths()[0],
+        (
+            user1.clone(),
+            AuthorizedInvocation {
+                function: AuthorizedFunction::Contract((
+                    liq_pool.address.clone(),
+                    Symbol::new(&e, "deposit"),
+                    Vec::from_array(
+                        &e,
+                        [
+                            user1.to_val(),
+                            amount_to_deposit.into_val(&e),
+                            (0_u128).into_val(&e),
+                        ]
+                    ),
+                )),
+                sub_invocations: std::vec![
+                    AuthorizedInvocation {
+                        function: AuthorizedFunction::Contract((
+                            token2.address.clone(),
+                            Symbol::new(&e, "transfer"),
+                            Vec::from_array(
+                                &e,
+                                [
+                                    user1.to_val(),
+                                    liq_pool.address.to_val(),
+                                    (amount_to_deposit as i128).into_val(&e),
+                                ]
+                            ),
+                        )),
+                        sub_invocations: std::vec![],
+                    } // AuthorizedInvocation {
+                      //     function: AuthorizedFunction::Contract((
+                      //         setup.sac_address.clone(),
+                      //         Symbol::new(&e, "mint"),
+                      //         Vec::from_array(&e, [
+                      //             liq_pool.address.to_val(),
+                      //             (20000000_i128).into_val(&e),
+                      //         ]),
+                      //     )),
+                      //     sub_invocations: std::vec![],
+                      // }
+                ],
+            },
+        )
+    );
 
-    // let target_price = xlm_price
-    //     .price
-    //     .fixed_div_floor(btc_price.price, PRICE_PRECISION_I128)
-    //     .unwrap();
+    assert_eq!(token_reward.balance(&user1), 0);
+    // 30 seconds passed, half of the reward is available for the user
+    // jump(&e, 30);
+    // assert_eq!(liq_pool.claim(&user1), 3149999999); // total_reward_1 / 2);
+    // assert_eq!(token_reward.balance(&user1) as u128, 3149999999); // total_reward_1 / 2);
+    // 60 seconds more passed. full reward was available though half already claimed
+    // jump(&e, 60);
+    // assert_eq!(liq_pool.claim(&user1), total_reward_1 / 2);
+    // assert_eq!(token_reward.balance(&user1) as u128, total_reward_1);
 
-    // let expected_mint_amount = (amount_to_deposit as i128)
-    //     .fixed_div_floor(target_price, PRICE_PRECISION_I128)
-    //     .unwrap();
+    // // more rewards added with different configs
+    // let total_reward_2 = reward_2_tps * 100;
+    // liq_pool.set_rewards_config(&user1, &e.ledger().timestamp().saturating_add(100), &reward_2_tps);
+    // jump(&e, 105);
+    // let total_reward_3 = reward_3_tps * 50;
+    // liq_pool.set_rewards_config(&user1, &e.ledger().timestamp().saturating_add(50), &reward_3_tps);
+    // jump(&e, 500);
+    // // two rewards available for the user
+    // assert_eq!(liq_pool.claim(&user1), total_reward_2 + total_reward_3);
+    // assert_eq!(
+    //     token_reward.balance(&user1) as u128,
+    //     total_reward_1 + total_reward_2 + total_reward_3
+    // );
 
-    // setup.registry.get_price(&setup.btc_asset_id);
-    // setup.registry.get_price(&setup.xlm_asset_id);
+    // when we deposit equal amounts, we gotta have deposited amount of share tokens
+    // let expected_share_amount = amount_to_deposit as i128;
+    let expected_share_amount = shares_minted as i128;
+    assert_eq!(token_share.balance(&user1), expected_share_amount);
+    assert_eq!(
+        token_share.balance(&liq_pool.address),
+        MIN_LIQUIDITY as i128
+    );
+    assert_eq!(token1.balance(&user1), 0 as i128);
+    assert_eq!(token1.balance(&liq_pool.address), delta_a as i128);
+    assert_eq!(
+        token2.balance(&user1),
+        10000_0000000 - (amount_to_deposit as i128)
+    );
+    assert_eq!(token2.balance(&liq_pool.address), amount_to_deposit as i128);
 
-    let (x, y) = liq_pool.deposit(&admin, &1000_0000000);
+    liq_pool.set_status(&user1, &PoolStatus::Active);
 
-    liq_pool.deposit(&admin, &2000_0000000);
+    let swap_in_amount = 1_0000000_u128;
+    let expected_swap_result = 9871580_u128;
 
-    let swapped = liq_pool.swap(&admin, &SwapDirection::Buy, &10_0000000, &0);
+    assert_eq!(
+        liq_pool
+            .estimate_swap(&SwapDirection::Buy, &swap_in_amount)
+            .0,
+        24900 // expected_swap_result
+    );
+    assert_eq!(
+        liq_pool
+            .swap(&user1, &SwapDirection::Buy, &swap_in_amount, &0)
+            .0,
+        24900 // expected_swap_result
+    );
+    assert_eq!(
+        e.auths()[0],
+        (
+            user1.clone(),
+            AuthorizedInvocation {
+                function: AuthorizedFunction::Contract((
+                    liq_pool.address.clone(),
+                    Symbol::new(&e, "swap"),
+                    (
+                        &user1,
+                        SwapDirection::Buy,
+                        swap_in_amount,
+                        0_u128, //expected_swap_result
+                    )
+                        .into_val(&e),
+                )),
+                sub_invocations: std::vec![AuthorizedInvocation {
+                    function: AuthorizedFunction::Contract((
+                        token2.address.clone(),
+                        Symbol::new(&e, "transfer"),
+                        Vec::from_array(
+                            &e,
+                            [
+                                user1.to_val(),
+                                liq_pool.address.to_val(),
+                                (swap_in_amount as i128).into_val(&e),
+                            ]
+                        ),
+                    )),
+                    sub_invocations: std::vec![],
+                }],
+            },
+        )
+    );
 
-    assert_eq!(swapped, 0);
+    // claim fees
+    assert_eq!(
+        token2.balance(&liq_pool.address),
+        (amount_to_deposit as i128) + (swap_in_amount as i128)
+    );
 
-    // let pools = Vec::from_array(&e, [liq_pool.address]);
-    // let total = setup.liquidity_calculator.get_liquidity(&pools);
-    // assert_eq!(total, U256::from_u128(&e, 0));
-    // assert_eq!(e.auths(), []);
-    // fn print_invocation(inv: &AuthorizedInvocation, indent: usize) {
-    //     let padding = "  ".repeat(indent);
-    //     match &inv.function {
-    //         AuthorizedFunction::Contract((addr, func, args)) => {
-    //             std::println!("{padding}Contract: {addr}");
-    //             std::println!("{padding}Function: {func}");
-    //             std::println!("{padding}Args: {:?}", args);
-    //         }
-    //         _ => std::println!("{padding}Other invocation"),
-    //     }
-    //     for sub in &inv.sub_invocations {
-    //         print_invocation(sub, indent + 1);
-    //     }
-    // }
+    let prot_fees = liq_pool.get_protocol_fees();
+    // let x = prot_fees.get(1).unwrap();
+    assert_eq!(prot_fees, Vec::from_array(&e, [0, 15000]));
 
-    // // Print all auths triggered
-    // for auth in e.auths() {
-    //     std::println!("Authorized by: {}", auth.0);
-    //     print_invocation(&auth.1, 0);
-    // }
+    let fee_destination = Address::generate(&e);
+    let protocol_fee = liq_pool
+        .claim_protocol_fees(&setup.admin, &fee_destination)
+        .get(1)
+        .unwrap();
+    assert!(protocol_fee > 0);
+    assert_eq!(token1.balance(&fee_destination), 0);
+    assert_eq!(token2.balance(&fee_destination), protocol_fee as i128);
 
-    // let reserves = liq_pool.get_reserves();
+    let swap_in_amount_minus_protocol_fee = swap_in_amount - protocol_fee;
 
-    // assert_eq!(liq_pool.get_total_shares(), amount_to_deposit);
-    // // assert_eq!(reserves.get(0).unwrap(), 0_3570000);
-    // assert_eq!(reserves.get(1).unwrap(), amount_to_deposit);
+    // assert_eq!(
+    //     token1.balance(&user1),
+    //     i128::MAX - (amount_to_deposit as i128) - (swap_in_amount as i128)
+    // );
+    // assert_eq!(
+    //     token1.balance(&liq_pool.address),
+    //     (amount_to_deposit as i128) + (swap_in_amount_minus_protocol_fee as i128)
+    // );
+    // assert_eq!(
+    //     token2.balance(&user1),
+    //     i128::MAX - (amount_to_deposit as i128) + (expected_swap_result as i128)
+    // );
+    // assert_eq!(
+    //     token2.balance(&liq_pool.address),
+    //     (amount_to_deposit as i128) - (expected_swap_result as i128)
+    // );
 
-    // let swapped = liq_pool.swap(&user1, &SwapDirection::Buy, &10_0000000, &0);
+    let withdraw_amounts = [
+        0, //amount_to_deposit + swap_in_amount_minus_protocol_fee,
+        0, // amount_to_deposit - expected_swap_result,
+    ];
+    liq_pool.withdraw(
+        &user1,
+        &(expected_share_amount as u128),
+        &Vec::from_array(&e, withdraw_amounts),
+    );
+    assert_eq!(
+        e.auths()[0],
+        (
+            user1.clone(),
+            AuthorizedInvocation {
+                function: AuthorizedFunction::Contract((
+                    liq_pool.address.clone(),
+                    Symbol::new(&e, "withdraw"),
+                    Vec::from_array(
+                        &e,
+                        [
+                            user1.clone().into_val(&e),
+                            (expected_share_amount as u128).into_val(&e),
+                            Vec::from_array(&e, withdraw_amounts).into_val(&e),
+                        ]
+                    ),
+                )),
+                sub_invocations: std::vec![AuthorizedInvocation {
+                    function: AuthorizedFunction::Contract((
+                        token_share.address.clone(),
+                        Symbol::new(&e, "burn"),
+                        Vec::from_array(
+                            &e,
+                            [user1.to_val(), (amount_to_deposit as i128).into_val(&e)]
+                        ),
+                    )),
+                    sub_invocations: std::vec![],
+                }],
+            },
+        )
+    );
 
-    // assert_eq!(token1.balance(&user1), 0_221164);
-    // // assert_eq!(swapped, 10);
+    jump(&e, 600);
+    assert_eq!(liq_pool.claim(&user1), 0);
+    // assert_eq!(
+    //     token_reward.balance(&user1) as u128,
+    //     total_reward_1 + total_reward_2 + total_reward_3
+    // );
 
-    // let new_reserves = liq_pool.get_reserves();
-
-    // // assert_eq!(liq_pool.get_total_shares(), amount_to_deposit);
-    // // assert_eq!(new_reserves.get(0).unwrap(), 0_3570000);
-    // // assert_eq!(new_reserves.get(1).unwrap(), amount_to_deposit);
-
-    // liq_pool.deposit(&user2, &1_000_0000000);
-
-    // liq_pool.swap(&user1, &SwapDirection::Sell, &0_100000, &0);
-
-    // liq_pool.withdraw(&user2, &500_0000000);
+    assert_eq!(token1.balance(&user1), i128::MAX - (protocol_fee as i128));
+    assert_eq!(token2.balance(&user1), i128::MAX);
+    assert_eq!(token_share.balance(&user1), 0);
+    assert_eq!(token1.balance(&liq_pool.address), 0);
+    assert_eq!(token2.balance(&liq_pool.address), 0);
+    assert_eq!(token_share.balance(&liq_pool.address), 0);
 }
+
+// #[test]
+// fn test() {
+//     let setup = Setup::new_with_config(
+//         &(TestConfig {
+//             mint_to_user: i128::MAX,
+//             users_count: 3,
+//             ..TestConfig::default()
+//         }),
+//     );
+//     let e = setup.env;
+//     let admin = setup.admin;
+//     let liq_pool = setup.liq_pool;
+//     let token1 = setup.token1;
+//     let token2 = setup.token2;
+//     let token_reward = setup.token_reward;
+//     let token_share = setup.token_share;
+//     let user1 = setup.users[1].clone();
+//     let user2 = setup.users[2].clone();
+//     let amount_to_deposit = 100_0000000; // 100.00
+
+//     // let btc_price = setup.oracle_client.lastprice(&setup.btc_asset).unwrap();
+//     // let xlm_price = setup.oracle_client.lastprice(&setup.xlm_asset).unwrap();
+
+//     // let target_price = xlm_price
+//     //     .price
+//     //     .fixed_div_floor(btc_price.price, PRICE_PRECISION_I128)
+//     //     .unwrap();
+
+//     // let expected_mint_amount = (amount_to_deposit as i128)
+//     //     .fixed_div_floor(target_price, PRICE_PRECISION_I128)
+//     //     .unwrap();
+
+//     // setup.registry.get_price(&setup.btc_asset_id);
+//     // setup.registry.get_price(&setup.xlm_asset_id);
+
+//     let (x, y) = liq_pool.deposit(&admin, &1000_0000000);
+
+//     liq_pool.deposit(&admin, &2000_0000000);
+
+//     let swapped = liq_pool.swap(&admin, &SwapDirection::Buy, &10_0000000, &0);
+
+//     assert_eq!(swapped, 0);
+
+//     // let pools = Vec::from_array(&e, [liq_pool.address]);
+//     // let total = setup.liquidity_calculator.get_liquidity(&pools);
+//     // assert_eq!(total, U256::from_u128(&e, 0));
+//     // assert_eq!(e.auths(), []);
+//     // fn print_invocation(inv: &AuthorizedInvocation, indent: usize) {
+//     //     let padding = "  ".repeat(indent);
+//     //     match &inv.function {
+//     //         AuthorizedFunction::Contract((addr, func, args)) => {
+//     //             std::println!("{padding}Contract: {addr}");
+//     //             std::println!("{padding}Function: {func}");
+//     //             std::println!("{padding}Args: {:?}", args);
+//     //         }
+//     //         _ => std::println!("{padding}Other invocation"),
+//     //     }
+//     //     for sub in &inv.sub_invocations {
+//     //         print_invocation(sub, indent + 1);
+//     //     }
+//     // }
+
+//     // // Print all auths triggered
+//     // for auth in e.auths() {
+//     //     std::println!("Authorized by: {}", auth.0);
+//     //     print_invocation(&auth.1, 0);
+//     // }
+
+//     // let reserves = liq_pool.get_reserves();
+
+//     // assert_eq!(liq_pool.get_total_shares(), amount_to_deposit);
+//     // // assert_eq!(reserves.get(0).unwrap(), 0_3570000);
+//     // assert_eq!(reserves.get(1).unwrap(), amount_to_deposit);
+
+//     // let swapped = liq_pool.swap(&user1, &SwapDirection::Buy, &10_0000000, &0);
+
+//     // assert_eq!(token1.balance(&user1), 0_221164);
+//     // // assert_eq!(swapped, 10);
+
+//     // let new_reserves = liq_pool.get_reserves();
+
+//     // // assert_eq!(liq_pool.get_total_shares(), amount_to_deposit);
+//     // // assert_eq!(new_reserves.get(0).unwrap(), 0_3570000);
+//     // // assert_eq!(new_reserves.get(1).unwrap(), amount_to_deposit);
+
+//     // liq_pool.deposit(&user2, &1_000_0000000);
+
+//     // liq_pool.swap(&user1, &SwapDirection::Sell, &0_100000, &0);
+
+//     // liq_pool.withdraw(&user2, &500_0000000);
+// }
 
 // #[test]
 // fn test() {

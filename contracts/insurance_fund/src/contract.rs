@@ -665,7 +665,7 @@ impl InsuranceFundTrait for InsuranceFund {
     //
     // # Panics / Errors
     // * If the `sender` fails to authenticate.
-    fn pay_premium(e: Env, sender: Address, amount: u128) {
+    fn pay_premium(e: Env, sender: Address, amount: u128) -> u128 {
         sender.require_auth();
 
         ensure_non_zero_u128(&e, amount);
@@ -688,6 +688,8 @@ impl InsuranceFundTrait for InsuranceFund {
         FundEvents::new(&e).collect_premium(sender, premium_token, amount);
 
         exit(&e);
+
+        amount
     }
 
     // Sync token balances with reserves.
@@ -943,60 +945,41 @@ impl AdminInterface for InsuranceFund {
     // # Panics / Errors
     // * `InsuranceFundError::InsufficientCollateral` if the claim exceeds vault balance.
     // * `InsuranceFundError::InvalidIFDetected` if the payout fully depletes the Insurance Fund.
-    fn file_claim(e: Env, admin: Address, token: Address, asset: Symbol) {
-        admin.require_auth();
-        require_admin(&e, &admin);
+    fn file_claim(e: Env, caller: Address, token: Address, asset: Symbol, amount: u128) -> u128 {
+        caller.require_auth();
+
+        if caller != get_pool_router(&e) {
+            panic_with_error!(&e, InsuranceFundError::AdminNotSet);
+        }
 
         enter(&e);
 
-        match e.try_invoke_contract::<PoolInfo, soroban_sdk::Error>(
-            &get_pool_router(&e),
-            &Symbol::new(&e, "query_pool_details"),
-            Vec::from_array(&e, [asset.into_val(&e)]),
-        ) {
-            Ok(Err(_)) | Err(_) => panic_with_error!(&e, InsuranceFundError::QueryPoolFailed),
-            Ok(Ok(pool_info)) => {
-                let reserve = get_reserve(&e, &token);
+        let current_time = e.ledger().timestamp();
+        let mut reserve = get_reserve(&e, &token);
 
-                // Call `Pool.pay_insurance_claim()` to calculate how much insurance is needed
-                // and to update the `Pool.insurance_claim`
-                match e.try_invoke_contract::<u128, soroban_sdk::Error>(
-                    &pool_info.pool_address,
-                    &Symbol::new(&e, "pay_insurance_claim"),
-                    Vec::from_array(
-                        &e,
-                        [
-                            e.current_contract_address().to_val(),
-                            reserve.balance.into_val(&e),
-                        ],
-                    ),
-                ) {
-                    Ok(Err(_)) | Err(_) => {
-                        panic_with_error!(&e, InsuranceFundError::PayInsuranceClaimFailed)
-                    }
-                    Ok(Ok(pay_from_insurance)) => {
-                        if pay_from_insurance > 0 {
-                            // Error if there is not enough insurance to cover the claim
-                            validate!(
-                                &e,
-                                pay_from_insurance < reserve.balance,
-                                InsuranceFundError::InsufficientCollateral
-                            );
+        // Error if there is not enough insurance to cover the claim
+        validate!(
+            &e,
+            amount < reserve.balance,
+            InsuranceFundError::InsufficientCollateral
+        );
 
-                            // Error if a claim leaves removes all insurance
-                            let updated_reserve = get_reserve(&e, &token);
-                            validate!(
-                                &e,
-                                updated_reserve.balance > 0,
-                                InsuranceFundError::InvalidIFDetected
-                            );
-                        }
+        reserve.claim(amount, current_time);
+        reserve.save(&e);
 
-                        exit(&e);
-                    }
-                };
-            }
-        }
+        transfer_token(
+            &e,
+            &token,
+            &e.current_contract_address(),
+            &caller,
+            &(amount as i128),
+        );
+
+        FundEvents::new(&e).claim(caller, token, asset, amount);
+
+        exit(&e);
+
+        amount
     }
 
     //   ________  _______  ___________  ___________  _______   _______    ________

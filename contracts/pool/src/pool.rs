@@ -4,22 +4,30 @@ use crate::errors::PoolError;
 use crate::errors::PoolValidationError;
 use crate::events::Events as LiquidityPoolEvents;
 use crate::events::PoolEvents;
+use crate::storage::get_base_asset;
 use crate::storage::get_fee_fraction;
+use crate::storage::get_insurance_claim;
+use crate::storage::get_insurance_fund;
 use crate::storage::get_last_trade_ts;
 use crate::storage::get_mint_cap_fraction;
 use crate::storage::get_oracle_registry;
 use crate::storage::get_rebalance_minted;
 use crate::storage::get_status;
+use crate::storage::get_token_insurance;
 use crate::storage::get_total_synthetics;
 use crate::storage::get_volume_30d;
+use crate::storage::set_insurance_claim;
 use crate::storage::set_last_trade_ts;
 use crate::storage::set_rebalance_minted;
+use crate::storage::set_reserve_b;
 use crate::storage::set_volume_30d;
 use crate::storage::{get_reserve_a, get_reserve_b, set_reserve_a};
 use crate::token::burn_synthetic_tokens;
 use crate::token::mint_synthetic_tokens;
 use soroban_fixed_point_math::SorobanFixedPoint;
 
+use soroban_sdk::log;
+use soroban_sdk::IntoVal;
 use soroban_sdk::Symbol;
 use soroban_sdk::Vec;
 use soroban_sdk::{panic_with_error, Env};
@@ -38,8 +46,82 @@ use utils::state::oracle_registry::OracleGuardRails;
 use utils::state::oracle_registry::OracleValidity;
 use utils::state::pool::PoolStatus;
 use utils::state::pool::PoolTier;
+use utils::validate;
 
-// Calculates the net liquidity imbalance between base and quote assets in the pool.
+pub fn settle_swap_using_insurance(e: &Env, amount: u128, current_time: u64) -> u128 {
+    if amount == 0 {
+        return 0;
+    }
+
+    let asset = get_base_asset(e);
+    let insurance_claim = get_insurance_claim(&e);
+    let max_insurance = insurance_claim.max_insurance;
+    let settled_insurance = insurance_claim.settled_insurance;
+
+    validate!(
+        &e,
+        max_insurance >= settled_insurance,
+        PoolError::SettledExceedsMax
+    );
+
+    let max_insurance_withdraw = max_insurance - settled_insurance;
+
+    validate!(
+        &e,
+        max_insurance_withdraw > 0,
+        PoolError::MaxIFWithdrawReached
+    );
+
+    validate!(
+        &e,
+        amount <= max_insurance_withdraw,
+        PoolError::NoIFWithdrawAvailable
+    );
+
+    match e.try_invoke_contract::<u128, soroban_sdk::Error>(
+        &get_insurance_fund(e),
+        &Symbol::new(e, "file_claim"),
+        Vec::from_array(
+            e,
+            [
+                e.current_contract_address().into_val(e),
+                get_token_insurance(e).into_val(e),
+                asset.into_val(e),
+                amount.into_val(e),
+            ],
+        ),
+    ) {
+        Ok(Err(_)) | Err(_) => panic_with_error!(&e, PoolError::FileInsuranceClaimError),
+        Ok(Ok(insurance_paid)) => {
+            // Update the Pool reserve
+            let reserve_b = get_reserve_b(e);
+            set_reserve_b(e, &reserve_b.safe_add(e, insurance_paid));
+
+            // Update the Insurance Claim
+            let mut updated_insurance_claim = insurance_claim.clone();
+            updated_insurance_claim.rev_withdraw_since_last_settle = updated_insurance_claim
+                .rev_withdraw_since_last_settle
+                .safe_add(&e, insurance_paid);
+
+            updated_insurance_claim.settled_insurance = updated_insurance_claim
+                .settled_insurance
+                .safe_add(&e, insurance_paid);
+
+            validate!(
+                &e,
+                updated_insurance_claim.settled_insurance <= updated_insurance_claim.max_insurance,
+                PoolError::MaxIFWithdrawReached
+            );
+
+            updated_insurance_claim.last_revenue_withdraw_ts = current_time;
+            set_insurance_claim(&e, &updated_insurance_claim);
+
+            return insurance_paid;
+        }
+    }
+}
+
+// Calculates the liquidity imbalance between synthetic token and quote asset reserve in the pool.
 //
 // Computes the value of synthetic base tokens using the base oracle price, and compares it to
 // the value of reserve Token B using the quote oracle price. A positive result means excess
@@ -52,23 +134,19 @@ use utils::state::pool::PoolTier;
 //
 // # Returns
 // * `i128` — The imbalance: `quote_value - base_value`. Positive means excess quote asset.
-pub fn get_net_liquidity_imbalance(
-    e: &Env,
-    base_oracle_price: u128,
-    quote_oracle_price: u128,
-) -> i128 {
-    let base_token_supply = get_total_synthetics(&e);
+pub fn get_liquidity_imbalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -> i128 {
+    let total_synthetic_token_supply = get_total_synthetics(&e);
     let reserve_b = get_reserve_b(e);
 
-    let net_base_asset_value = (base_token_supply as i128)
+    let total_synthetic_value = (total_synthetic_token_supply as i128)
         .safe_mul(e, base_oracle_price as i128)
         .safe_div(e, PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO_I128);
 
-    let net_quote_asset_value = (reserve_b as i128)
+    let total_reserve_b_value = (reserve_b as i128)
         .safe_mul(e, quote_oracle_price as i128)
         .safe_div(e, PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO_I128);
 
-    net_quote_asset_value.safe_sub(e, net_base_asset_value)
+    total_reserve_b_value.safe_sub(e, total_synthetic_value)
 }
 
 // Invokes the external Oracle Registry contract to fetch the current price for a given asset.
@@ -79,11 +157,10 @@ pub fn get_net_liquidity_imbalance(
 // # Arguments
 // * `e` - Soroban environment reference.
 // * `asset` - Symbol representing the asset to price.
-// * `action` - The context in which the price is being fetched (e.g. Swap, Rebalance).
 //
 // # Returns
 // * `HistoricalOracleData` — The current oracle price and delay since publication.
-pub fn get_oracle_price(e: &Env, asset: &Symbol, action: NormalAction) -> HistoricalOracleData {
+pub fn get_oracle_price(e: &Env, asset: &Symbol) -> HistoricalOracleData {
     let (historical_oracle_data, oracle_validity): (HistoricalOracleData, OracleValidity) = e
         .invoke_contract(
             &get_oracle_registry(e),
@@ -91,9 +168,7 @@ pub fn get_oracle_price(e: &Env, asset: &Symbol, action: NormalAction) -> Histor
             Vec::from_array(e, [asset.to_val()]),
         );
 
-    let oracle_valid_for_action = is_oracle_valid_for_action(oracle_validity, Some(action));
-
-    if !oracle_valid_for_action {
+    if oracle_validity != OracleValidity::Valid {
         panic_with_error!(e, PoolError::InvalidOracle);
     }
 
@@ -182,58 +257,6 @@ pub fn is_oracle_price_too_divergent(
         .oracle_twap_percent_divergence;
 
     price_spread_pct.unsigned_abs() > max_divergence
-}
-
-/// Determines whether the oracle data is valid for a specific contract action.
-///
-/// The oracle validity is evaluated based on the context of the action:
-///
-/// - `AddLiquidity` / `RemoveLiquidity`: Allowed if oracle data is valid or mildly stale.
-/// - `Swap`: Requires strictly valid oracle data.
-/// - `UpdateTwap`: Allowed if oracle price is positive.
-/// - `Rebalance`: Requires strictly valid oracle data.
-/// - `ClaimInsurance`: Disallowed if oracle is too volatile or non-positive.
-///
-/// If no action is provided, it defaults to requiring strictly valid oracle data.
-///
-/// # Arguments
-/// * `oracle_validity` - Classification of the current oracle state.
-/// * `action` - The protocol action being evaluated (optional).
-///
-/// # Returns
-/// - `true` if the oracle data meets the criteria for the specified action.
-/// - `false` if the action should be blocked due to stale, volatile, or invalid data.
-pub fn is_oracle_valid_for_action(
-    oracle_validity: OracleValidity,
-    action: Option<NormalAction>,
-) -> bool {
-    let is_ok = match action {
-        Some(action) => match action {
-            NormalAction::PoolInit => matches!(oracle_validity, OracleValidity::Valid),
-            NormalAction::AddLiquidity => matches!(
-                oracle_validity,
-                OracleValidity::Valid | OracleValidity::StaleForPool
-            ),
-            NormalAction::RemoveLiquidity => matches!(
-                oracle_validity,
-                OracleValidity::Valid | OracleValidity::StaleForPool
-            ),
-            NormalAction::Swap => matches!(oracle_validity, OracleValidity::Valid),
-            NormalAction::UpdateTwap => !matches!(oracle_validity, OracleValidity::NonPositive),
-            NormalAction::Rebalance => {
-                matches!(oracle_validity, OracleValidity::Valid)
-            }
-            NormalAction::ClaimInsurance => !matches!(
-                oracle_validity,
-                OracleValidity::NonPositive | OracleValidity::TooVolatile
-            ),
-        },
-        None => {
-            matches!(oracle_validity, OracleValidity::Valid)
-        }
-    };
-
-    is_ok
 }
 
 // Calculates the peg price between the base and quote assets based on oracle prices.
@@ -349,16 +372,20 @@ pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -> 
                 );
 
                 // allow minting up to 0.1% of current supply per ledger
-                let mint_cap =
-                    (get_total_synthetics(e) / (get_mint_cap_fraction(e) as u128)) as i128;
+                let mint_cap = get_total_synthetics(e).fixed_mul_ceil(
+                    e,
+                    &(get_mint_cap_fraction(e) as u128),
+                    &FEE_MULTIPLIER,
+                ) as i128;
+                // (get_total_synthetics(e) / (get_mint_cap_fraction(e) as u128)) as i128;
 
                 if delta_a > mint_cap {
                     panic_with_error!(e, PoolError::SwapReduceOnly);
                 }
-            } else {
-                mint_synthetic_tokens(e, &e.current_contract_address(), delta_a);
-                set_reserve_a(e, &(reserve_a + (delta_a as u128)));
             }
+
+            mint_synthetic_tokens(e, &e.current_contract_address(), delta_a);
+            set_reserve_a(e, &(reserve_a + (delta_a as u128)));
         }
         if delta_a < 0 {
             burn_synthetic_tokens(e, &e.current_contract_address(), delta_a.abs() as u128);
@@ -378,6 +405,7 @@ pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -> 
 
     // Update RebalanceMinted to track the outstanding number of synthetic tokens minted/burned by the pool
     let rebalance_minted = get_rebalance_minted(e) as i128;
+    log!(&e, "rebalance_minted", rebalance_minted);
     set_rebalance_minted(&e, &(rebalance_minted.safe_add(e, delta_a) as u128));
 
     delta_a
@@ -562,13 +590,6 @@ pub fn update_volume(e: &Env, amount: u128, current_time: u64) {
 
     set_volume_30d(&e, &updated_volume_30d);
     set_last_trade_ts(&e, &current_time);
-}
-
-pub fn is_in_settlement(status: PoolStatus, now: u64) -> bool {
-    let in_settlement = matches!(status, PoolStatus::Settlement | PoolStatus::Delisted);
-    // let expired = self.expiry_ts != 0 && now >= self.expiry_ts;
-    // in_settlement || expired
-    in_settlement
 }
 
 pub fn get_sanitize_clamp_denominator(tier: &PoolTier) -> Option<i64> {

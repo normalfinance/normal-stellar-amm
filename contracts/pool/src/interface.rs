@@ -104,10 +104,6 @@ pub trait AdminInterfaceTrait {
 
     fn claim_protocol_fees(e: Env, admin: Address, destination: Address) -> Vec<u128>;
 
-    fn pay_insurance_claim(e: Env, sender: Address, insurance_vault_amount: u128) -> u128;
-
-    fn delist(e: Env, admin: Address);
-
     //   ________  _______  ___________  ___________  _______   _______    ________
     //  /"       )/"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
     // (:   \___/(: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
@@ -134,41 +130,19 @@ pub trait AdminInterfaceTrait {
     fn set_max_imbalances(
         e: Env,
         admin: Address,
-        liquidity_max_imbalance: u128,
+        min_collateral_fraction: u32,
         max_insurance: u128,
     );
 
     fn set_mint_cap_fraction(e: Env, admin: Address, mint_cap_fraction: u32);
 
-    // fn set_expiry(e: Env, admin: Address, expiry_ts: u64);
-
     fn set_protocol_fee_fraction(e: Env, admin: Address, new_fraction: u32);
 
-    //    _______     __       ____  ____   ________  _______  ________
-    //   |   __ "\   /""\     ("  _||_ " | /"       )/"     "||"      "\
-    //   (. |__) :) /    \    |   (  ) : |(:   \___/(: ______)(.  ___  :)
-    //   |:  ____/ /' /\  \   (:  |  | . ) \___  \   \/    |  |: \   ) ||
-    //   (|  /    //  __'  \   \\ \__/ //   __/  \\  // ___)_ (| (___\ ||
-    //  /|__/ \  /   /  \\  \  /\\ __ //\  /" \   :)(:      "||:       :)
-    // (_______)(___/    \___)(__________)(_______/  \_______)(________/
+    fn set_oracle_registry(e: Env, admin: Address, oracle_registry: Address);
 
-    // Stop pool instantly
-    fn kill_deposit(e: Env, admin: Address);
-    fn kill_withdraw(e: Env, admin: Address);
-    fn kill_swap(e: Env, admin: Address);
-    fn kill_claim(e: Env, admin: Address);
+    fn set_insurance_fund(e: Env, admin: Address, insurance_fund: Address);
 
-    // Resume pool
-    fn unkill_deposit(e: Env, admin: Address);
-    fn unkill_withdraw(e: Env, admin: Address);
-    fn unkill_swap(e: Env, admin: Address);
-    fn unkill_claim(e: Env, admin: Address);
-
-    // Get killswitch status
-    fn get_is_killed_deposit(e: Env) -> bool;
-    fn get_is_killed_withdraw(e: Env) -> bool;
-    fn get_is_killed_swap(e: Env) -> bool;
-    fn get_is_killed_claim(e: Env) -> bool;
+    fn set_token_insurance(e: Env, admin: Address, token_insurance: Address);
 }
 
 pub trait UpgradeableContract {

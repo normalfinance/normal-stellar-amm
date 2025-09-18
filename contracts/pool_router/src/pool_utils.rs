@@ -2,8 +2,8 @@ use crate::events::{Events, PoolRouterEvents};
 use crate::liquidity_calculator::LiquidityCalculatorClient;
 use crate::rewards::get_rewards_manager;
 use crate::storage::{
-    get_oracle_registry, get_pool, get_pool_hash, get_pool_plane, get_pools_vec,
-    get_token_share_hash, put_pool, set_pools_vec,
+    get_insurance_fund, get_oracle_registry, get_pool, get_pool_hash, get_pool_plane,
+    get_pools_vec, get_token_share_hash, put_pool, set_pools_vec,
 };
 use access_control::access::AccessControl;
 use access_control::management::{MultipleAddressesManagementTrait, SingleAddressManagementTrait};
@@ -73,7 +73,7 @@ pub fn deploy_pool(
     assets: &(Symbol, Symbol),
     token_a_sac_address: &Address,
     share_token_info: &(String, String),
-    fee_fraction: u32,
+    fees_config: &(u32, u32),
     tier: &PoolTier,
     max_insurance: u128,
 ) -> Address {
@@ -92,7 +92,7 @@ pub fn deploy_pool(
         &pool_contract_id,
         token_a_sac_address,
         share_token_info,
-        fee_fraction,
+        fees_config,
         tier,
         max_insurance,
     );
@@ -112,7 +112,7 @@ pub fn deploy_pool(
         Vec::<Val>::from_array(
             e,
             [
-                fee_fraction.into_val(e),
+                fees_config.0.into_val(e),
                 tier.into_val(e),
                 max_insurance.into_val(e),
             ],
@@ -129,10 +129,11 @@ fn init_pool(
     pool_contract_id: &Address,
     token_a_sac_address: &Address,
     share_token_info: &(String, String),
-    fee_fraction: u32,
+    fees_config: &(u32, u32),
     tier: &PoolTier,
     max_insurance: u128,
 ) {
+    let (fee_fraction, protocol_fee_fraction) = *fees_config;
     let share_token_wasm_hash = get_token_share_hash(e);
     let rewards = get_rewards_manager(e);
     let reward_token = rewards.storage().get_reward_token();
@@ -168,6 +169,7 @@ fn init_pool(
             },
             router: e.current_contract_address(),
             oracle_registry: get_oracle_registry(e),
+            insurance_fund: get_insurance_fund(e),
             assets: assets.clone(),
             token_b: token_b.clone(),
             token_a_sac_address: token_a_sac_address.clone(),
@@ -177,7 +179,7 @@ fn init_pool(
                 symbol: share_token_info.1.clone(),
             },
             fee_fraction,
-            protocol_fee_fraction: 0,
+            protocol_fee_fraction,
             status: PoolStatus::Initialized,
             tier: tier.clone(),
             max_insurance,

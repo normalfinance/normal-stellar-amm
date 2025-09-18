@@ -282,7 +282,7 @@ impl AdminInterface for OracleRegistry {
         update_twap(
             &e,
             &asset,
-            &HistoricalOracleData::default_with_current_oracle(oracle_price_data),
+            &HistoricalOracleData::default_with_current_oracle(oracle_price_data, now),
             &oracle_price_data,
             sanitize_clamp_denominator,
             now,

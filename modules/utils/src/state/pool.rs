@@ -14,14 +14,43 @@ pub enum PoolStatus {
     Initialized,
     // all operations allowed
     Active,
-    //
-    Frozen,
-    // swaps only able to reduce liability (sell)
+    // swaps only able to reduce liability (burn token_a)
     ReduceOnly,
-    // pool has determined settlement price and positions are expired must be settled
-    Settlement,
+    //
+    WindDown,
     // pool has no remaining participants
     Delisted,
+}
+
+impl PoolStatus {
+    pub fn can_deposit(&self) -> bool {
+        matches!(self, PoolStatus::Initialized | PoolStatus::Active)
+    }
+
+    pub fn can_withdraw(&self) -> bool {
+        matches!(
+            self,
+            PoolStatus::Initialized
+                | PoolStatus::Active
+                | PoolStatus::ReduceOnly
+                | PoolStatus::WindDown
+        )
+    }
+
+    pub fn can_swap(&self, direction: SwapDirection) -> bool {
+        match self {
+            PoolStatus::Active | PoolStatus::ReduceOnly => true,
+            PoolStatus::WindDown => {
+                // Block buy-side swaps
+                matches!(direction, SwapDirection::Sell)
+            }
+            PoolStatus::Initialized | PoolStatus::Delisted => false,
+        }
+    }
+
+    pub fn is_reduce_only_swap(&self) -> bool {
+        matches!(self, PoolStatus::ReduceOnly)
+    }
 }
 
 #[contracttype]
@@ -40,13 +69,6 @@ pub enum PoolTier {
     HighlySpeculative,
     // no insurance, only single position allowed
     Isolated,
-}
-
-impl PoolTier {
-    pub fn is_as_safe_as(&self, other: &PoolTier) -> bool {
-        // Pool Tier A safest
-        self <= other
-    }
 }
 
 #[contracttype]
@@ -87,6 +109,7 @@ pub struct PoolConfig {
     pub privileged_addrs: PrivilegedAddresses,
     pub router: Address,
     pub oracle_registry: Address,
+    pub insurance_fund: Address,
     pub token_a_sac_address: Address,
     pub token_b: Address,
     pub share_token_info: TokenInitInfo,

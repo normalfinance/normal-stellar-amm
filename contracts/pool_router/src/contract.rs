@@ -9,10 +9,10 @@ use crate::rewards::get_rewards_manager;
 use crate::router_interface::AdminInterface;
 use crate::storage::{
     get_insurance_fund, get_liquidity_calculator, get_pool, get_pool_base, get_pool_plane,
-    get_pools_vec, get_reward_tokens, get_reward_tokens_detailed, get_rewards_config, remove_pool,
+    get_pools_vec, get_reward_tokens, get_reward_tokens_detailed, get_rewards_config,
     set_insurance_fund, set_liquidity_calculator, set_oracle_registry, set_pool_hash,
-    set_pool_plane, set_pools_vec, set_reward_tokens, set_reward_tokens_detailed,
-    set_rewards_config, set_token_share_hash, GlobalRewardsConfig, PoolRewardInfo,
+    set_pool_plane, set_reward_tokens, set_reward_tokens_detailed, set_rewards_config,
+    set_token_share_hash, GlobalRewardsConfig, PoolRewardInfo,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
@@ -23,9 +23,7 @@ use access_control::management::{MultipleAddressesManagementTrait, SingleAddress
 use access_control::role::Role;
 use access_control::role::SymbolRepresentation;
 use access_control::transfer::TransferOwnershipTrait;
-use access_control::utils::{
-    require_admin, require_operations_admin_or_owner, require_rewards_admin_or_owner,
-};
+use access_control::utils::{require_admin, require_rewards_admin_or_owner};
 use reentrancy_guard::{enter, exit};
 use rewards::storage::RewardTokenStorageTrait;
 use soroban_sdk::token::Client as SorobanTokenClient;
@@ -37,7 +35,7 @@ use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::constant::MAX_POOL_FEE;
-use utils::state::pool::{PoolInfo, PoolStatus, PoolTier, SwapDirection};
+use utils::state::pool::{PoolInfo, PoolTier, SwapDirection};
 use utils::validation::ensure_non_zero_u128;
 
 #[contract]
@@ -1026,20 +1024,19 @@ impl PoolsManagementTrait for PoolRouter {
         token_b: Address,
         token_a_sac_address: Address,
         share_token_info: (String, String),
-        fee_fraction: u32,
+        fees_config: (u32, u32),
         tier: PoolTier,
         max_insurance: u128,
     ) -> Address {
         admin.require_auth();
         require_admin(&e, &admin);
 
-        if fee_fraction > MAX_POOL_FEE {
+        if fees_config.0 > MAX_POOL_FEE {
             panic_with_error!(&e, PoolRouterError::BadFee);
         }
 
-        let (base_asset, _) = assets.clone();
-
-        match get_pool_base(&e, base_asset.clone()) {
+        // base_asset
+        match get_pool_base(&e, assets.clone().0) {
             Some(pool_address) => pool_address,
             None => deploy_pool(
                 &e,
@@ -1047,60 +1044,11 @@ impl PoolsManagementTrait for PoolRouter {
                 &assets,
                 &token_a_sac_address,
                 &share_token_info,
-                fee_fraction,
+                &fees_config,
                 &tier,
                 max_insurance,
             ),
         }
-    }
-
-    fn delist_pool(e: Env, admin: Address, asset: Symbol) {
-        admin.require_auth();
-        require_admin(&e, &admin);
-
-        let pool = get_pool(&e, &asset);
-
-        let response: u128 = e.invoke_contract(
-            &pool,
-            &Symbol::new(&e, "delist"),
-            Vec::from_array(&e, [admin.clone().into_val(&e), asset.into_val(&e)]),
-        );
-
-        Events::new(&e).delist_pool(asset, pool);
-    }
-
-    fn remove_pool(e: Env, admin: Address, asset: Symbol) {
-        admin.require_auth();
-        require_admin(&e, &admin);
-
-        let now = e.ledger().timestamp();
-        let pool = get_pool(&e, &asset);
-
-        let pool_info: PoolInfo =
-            e.invoke_contract(&pool, &Symbol::new(&e, "get_info"), Vec::from_array(&e, []));
-
-        let pool_in_settlement = pool_info.pool_response.pool.status == PoolStatus::Settlement;
-        let pool_reserves_empty = pool_info.pool_response.token_a.amount == 0
-            && pool_info.pool_response.token_b.amount == 0;
-
-        // Only remove the Pool if it's in settlement and has emptied it's reserves
-        if pool_in_settlement && pool_reserves_empty {
-            remove_pool(&e, &asset);
-
-            let mut pools_vec = get_pools_vec(&e);
-            for i in 0..pools_vec.len() {
-                if let Some(existing) = pools_vec.get(i) {
-                    if existing == pool {
-                        pools_vec.remove_unchecked(i);
-                    }
-                }
-            }
-            set_pools_vec(&e, &pools_vec);
-
-            set_reward_tokens_detailed(&e, &asset, &(U256::from_u32(&e, 0), false));
-        }
-
-        Events::new(&e).remove_pool(asset, pool);
     }
 
     //   _______    _______  ___________  ___________  _______   _______    ________
