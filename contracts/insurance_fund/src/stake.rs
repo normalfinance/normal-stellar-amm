@@ -430,7 +430,7 @@ pub fn basic_stake_if_test() {
 #[test]
 pub fn if_shares_lost_test() {
     use crate::testutils::Setup;
-    use soroban_sdk::testutils::Address;
+    use soroban_sdk::testutils::Address as _;
     use utils::constant::QUOTE_PRECISION;
 
     let setup = Setup::default();
@@ -441,7 +441,7 @@ pub fn if_shares_lost_test() {
 
     let token = Address::generate(&setup.env);
 
-    let reserve = InsuranceFundReserve::new(token, setup.env.ledger().timestamp());
+    let reserve = InsuranceFundReserve::new(token.clone(), setup.env.ledger().timestamp());
     let mut if_stake = Stake::new(setup.admin, token);
     if_stake.update_shares(&setup.env, 100 * QUOTE_PRECISION);
     if_stake.last_withdraw_request_shares = 100 * QUOTE_PRECISION;
