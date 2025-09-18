@@ -9,4 +9,7 @@ mod test;
 mod test_permissions;
 mod testutils;
 
+#[cfg(test)]
+mod tests;
+
 pub use contract::{OracleRegistry, OracleRegistryClient};

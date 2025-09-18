@@ -18,7 +18,21 @@ impl Delay {
     }
 
     pub fn from_timestamp_diff_expect(now: u64, past_timestamp: u64, msg: &str) -> Self {
-        Self::from_timestamp_diff(now, past_timestamp).unwrap_or_else(|| panic!("{}", msg))
+        Self::from_timestamp_diff_with_tolerance(now, past_timestamp, 60, msg)
+    }
+
+    pub fn from_timestamp_diff_with_tolerance(now: u64, past_timestamp: u64, tolerance_seconds: u64, msg: &str) -> Self {
+        if past_timestamp <= now {
+            // Normal case: past timestamp is in the past
+            Self(now - past_timestamp)
+        } else if past_timestamp - now <= tolerance_seconds {
+            // Oracle timestamp is slightly in the future but within tolerance
+            // Treat as zero delay to handle clock drift gracefully
+            Self(0)
+        } else {
+            // Oracle timestamp is too far in the future, this indicates a real problem
+            panic!("{}", msg)
+        }
     }
 
     pub const ZERO: Self = Self(0);

@@ -782,7 +782,7 @@ impl InsuranceFundTrait for InsuranceFund {
         let total_reserve_value = calculate_total_reserve_value(&e);
         let optimal_insurance = get_optimal_insurance(&e);
 
-        calculate_utilization(total_reserve_value, optimal_insurance)
+        calculate_utilization(&e, total_reserve_value, optimal_insurance)
     }
 
     // Get the current staking interest rate.
@@ -797,7 +797,7 @@ impl InsuranceFundTrait for InsuranceFund {
 
         let total_reserve_value = calculate_total_reserve_value(&e);
         let optimal_insurance = get_optimal_insurance(&e);
-        let utilization = calculate_utilization(total_reserve_value, optimal_insurance);
+        let utilization = calculate_utilization(&e, total_reserve_value, optimal_insurance);
 
         let (slope1, slope2) = (get_rate_slope_a(&e), get_rate_slope_b(&e));
 
@@ -889,7 +889,10 @@ impl AdminInterface for InsuranceFund {
         let updated_optimal_insurance = if total_liquidity_imbalance <= 0 {
             0_u128
         } else {
-            total_liquidity_imbalance as u128
+            // Safe conversion with bounds checking - prevent silent truncation
+            u128::try_from(total_liquidity_imbalance).unwrap_or_else(|_| {
+                panic_with_error!(&e, InsuranceFundError::ConversionOverflow);
+            })
         };
 
         set_optimal_insurance(&e, &updated_optimal_insurance);

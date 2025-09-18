@@ -14,4 +14,9 @@ mod test_permissions;
 mod testutils;
 pub mod token;
 
+#[cfg(test)]
+mod tests {
+    pub mod security_calculation_tests;
+}
+
 pub use contract::{Pool, PoolClient};

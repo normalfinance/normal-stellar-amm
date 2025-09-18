@@ -16,4 +16,10 @@ pub enum MathError {
     MultiplicationOverflow = 514,
     #[doc = "MathError: Division by zero"]
     DivisionByZero = 515,
+    #[doc = "MathError: Type conversion overflow"]
+    ConversionOverflow = 516,
+    #[doc = "MathError: Attempted to convert negative value to unsigned type"]
+    NegativeToUnsigned = 517,
+    #[doc = "MathError: Fixed-point arithmetic overflow"]
+    FixedPointOverflow = 518,
 }

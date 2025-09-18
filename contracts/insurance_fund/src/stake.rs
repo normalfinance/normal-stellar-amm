@@ -5,7 +5,7 @@ use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{contracttype, panic_with_error, Address, Env};
 use utils::bump::bump_persistent;
 use utils::helpers::log10_iter;
-use utils::math::safe_math::SafeMath;
+use utils::math::safe_math::{SafeMath, PrecisionMath};
 use utils::validate;
 
 #[contracttype]
@@ -201,8 +201,8 @@ pub fn apply_rebase_to_stake(e: &Env, stake: &mut Stake) {
 pub fn reserve_amount_to_shares(e: &Env, amount: u128, reserve: &InsuranceFundReserve) -> u128 {
     // relative to the entire pool + total amount minted
     let n_shares = if reserve.balance > 0 {
-        // assumes total_if_shares != 0 (in most cases) for nice result for user
-        amount.fixed_mul_floor(e, &reserve.total_shares, &reserve.balance)
+        // Use round-to-nearest for fair share calculation
+        amount.safe_fixed_mul_round(e, reserve.total_shares, reserve.balance)
     } else {
         // must be case that total_if_shares == 0 for nice result for user
         validate!(
@@ -240,9 +240,8 @@ pub fn shares_to_reserve_amount(e: &Env, n_shares: u128, reserve: &InsuranceFund
     );
 
     let amount = if reserve.total_shares > 0 {
-        reserve
-            .balance
-            .fixed_mul_floor(e, &n_shares, &reserve.total_shares)
+        // Use round-to-nearest for fair withdrawal calculation
+        reserve.balance.safe_fixed_mul_round(e, n_shares, reserve.total_shares)
     } else {
         0
     };

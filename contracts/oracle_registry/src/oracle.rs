@@ -3,7 +3,7 @@ use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{Address, Env, Symbol};
 use utils::{
     constant::{FIVE_MINUTE, PERCENTAGE_PRECISION, PERCENTAGE_PRECISION_U64, PRICE_PRECISION},
-    math::{pool::sanitize_new_price, safe_math::SafeMath, stats::calculate_new_twap},
+    math::{pool::sanitize_new_price, safe_math::{SafeMath, PrecisionMath, SafeConversion}, stats::calculate_new_twap},
     state::oracle_registry::{HistoricalOracleData, OraclePriceData, OracleValidity},
     temporal::Delay,
 };
@@ -40,7 +40,7 @@ pub fn get_oracle_price(e: &Env, oracle: &Address, asset: &Symbol, now: u64) -> 
     let oracle_delay = Delay::from_timestamp_diff_expect(
         now,
         published_ts,
-        "Oracle published timestamp cannot be in the future",
+        "Oracle published timestamp exceeds allowed clock drift tolerance",
     );
 
     OraclePriceData {
@@ -135,16 +135,15 @@ pub fn oracle_validity(
         .too_volatile_ratio
         .safe_add(e, PERCENTAGE_PRECISION_U64);
 
-    // let price_delta = oracle_price.safe_div(e, last_oracle_twap.max(1)) as u64;
-    let price_delta =
-        oracle_price.fixed_div_floor(e, &last_oracle_twap, &PERCENTAGE_PRECISION) as u64;
+    // Use round-to-nearest for volatility calculation (fair assessment)
+    let price_delta = oracle_price.safe_fixed_div_round(e, last_oracle_twap, PERCENTAGE_PRECISION).safe_to_u64(e);
 
     let is_oracle_price_too_volatile = price_delta <= lower_bound || upper_bound <= price_delta;
 
     // StaleForPool
     let is_stale_for_pool = oracle_delay
         .as_seconds()
-        .gt(&oracle_guard_rails.validity.seconds_before_stale_for_pool);
+        .ge(&oracle_guard_rails.validity.seconds_before_stale_for_pool);
 
     let oracle_validity = if is_oracle_price_nonpositive {
         OracleValidity::NonPositive
