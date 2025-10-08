@@ -7,6 +7,7 @@ mod plane;
 mod plane_interface;
 mod pool;
 mod pool_interface;
+mod rebase;
 mod rewards;
 mod storage;
 mod test;

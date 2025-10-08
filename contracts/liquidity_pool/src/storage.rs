@@ -19,6 +19,8 @@ pub enum DataKey {
     FeeFraction, // 1 = 0.01%
     Plane,
     Router,
+    Sink, // address of the Sink contract
+    RebaseEpoch, // amount of time that must elapse between rebasing
     IsKilledSwap,
     IsKilledDeposit,
     IsKilledClaim,
@@ -68,6 +70,7 @@ generate_instance_storage_getter_and_setter_with_default!(
     0
 );
 generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
+generate_instance_storage_getter_and_setter!(sink, DataKey::Sink, Address);
 generate_instance_storage_getter_and_setter!(plane, DataKey::Plane, Address);
 generate_instance_storage_getter_and_setter!(
     token_future_wasm,

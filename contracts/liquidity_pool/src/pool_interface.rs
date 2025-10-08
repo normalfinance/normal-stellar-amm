@@ -39,6 +39,9 @@ pub trait LiquidityPoolTrait {
 
     fn get_tokens(e: Env) -> Vec<Address>;
 
+    //
+    fn rebase(e: Env) -> (i128, i128);
+
     // Deposits token_a and token_b. Also mints pool shares for the "to" Identifier. The amount minted
     // is determined based on the difference between the reserves stored by this contract, and
     // the actual balance of token_a and token_b for this contract.

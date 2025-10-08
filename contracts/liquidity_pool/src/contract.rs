@@ -244,6 +244,38 @@ impl LiquidityPoolTrait for LiquidityPool {
         Vec::from_array(&e, [get_token_a(&e), get_token_b(&e)])
     }
 
+    //
+    fn rebase(e: Env) -> (i128, i128) {
+        user.require_auth();
+
+        // Check rebase threshold
+        let current_time = e.ledger().timestamp();
+        let since_last_rebase - get_last_rebase(&e).safe_sub(current_time);
+
+        if since_last_rebase < get_rebase_threshold(&e) {
+            panic_with_error!(e, LiquidityPoolError::RebaseTooSoon);
+        }
+
+        // Get the price of Token A in the Pool
+        let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
+        let token_a_pool_price = reserve_b.safe_div(reserve_a);
+
+        // Get the price Token A should be from the Oracle
+        let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset);
+        let token_a_oracle_price = base_oracle_price_data.last_price_twap;
+
+        // Compare the prices to determine rebase direction
+        let (token_a_delta, token_b_delta) = crate::rebase::over(&e, &reserve_a, &reserve_b);
+
+        // Update rebase tracking
+        set_last_rebase_ts(&e, &current_time);
+
+        // Emit event
+        PoolEvents::new(&e).rebase(Vec::from_array(&e, [new_reserve_a, new_reserve_b]));
+
+        (token_a_delta, token_b_delta)
+    }
+
     // Deposits tokens into the pool.
     //
     // # Arguments
