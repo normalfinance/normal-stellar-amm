@@ -90,8 +90,6 @@ impl LiquidityPoolCrunch for LiquidityPool {
     //  )
     // * `reward_config` - (
     // *    `reward_token` - The address of the reward token.
-    // *    `reward_boost_token` - The address of the reward boost token.
-    // *    `reward_boost_feed` - The address of the reward boost feed.
     // * )
     // * `plane` - The address of the plane.
     // * `config_storage` - The address of the configuration storage.
@@ -103,11 +101,11 @@ impl LiquidityPoolCrunch for LiquidityPool {
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         fees_config: (u32, u32),
-        reward_config: (Address, Address, Address),
+        reward_config: (Address),
         plane: Address,
         config_storage: Address,
     ) {
-        let (reward_token, reward_boost_token, reward_boost_feed) = reward_config;
+        let (reward_token) = reward_config;
 
         // merge whole initialize process into one because lack of caching of VM components
         // https://github.com/stellar/rs-soroban-env/issues/827
@@ -122,7 +120,6 @@ impl LiquidityPoolCrunch for LiquidityPool {
             tokens,
             fees_config,
         );
-        Self::initialize_boost_config(e.clone(), reward_boost_token, reward_boost_feed);
         Self::initialize_rewards_config(e.clone(), reward_token);
     }
 }

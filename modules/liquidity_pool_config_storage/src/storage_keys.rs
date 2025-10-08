@@ -7,5 +7,4 @@ pub enum WASMDataKey {
     GaugeWASM,
     FutureGaugeWASM,
     ConstantPoolHash,
-    StableSwapPoolHash,
 }

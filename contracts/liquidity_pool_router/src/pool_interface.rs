@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Val, Vec, U256};
+use soroban_sdk::{ Address, BytesN, Env, Map, Symbol, Val, Vec, U256 };
 
 pub trait LiquidityPoolInterfaceTrait {
     // Get symbolic explanation of pool type.
@@ -19,6 +19,9 @@ pub trait LiquidityPoolInterfaceTrait {
     // Getter for the pool balances array.
     fn get_reserves(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Vec<u128>;
 
+    //
+    fn rebase(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>) -> (i128, i128);
+
     // Deposit coins into the pool.
     // desired_amounts: List of amounts of coins to deposit
     // Returns amounts deposited and the amount of LP tokens received in exchange for the deposited tokens.
@@ -28,7 +31,7 @@ pub trait LiquidityPoolInterfaceTrait {
         tokens: Vec<Address>,
         pool_index: BytesN<32>,
         desired_amounts: Vec<u128>,
-        min_shares: u128,
+        min_shares: u128
     ) -> (Vec<u128>, u128);
 
     // Perform an exchange between two coins.
@@ -45,7 +48,7 @@ pub trait LiquidityPoolInterfaceTrait {
         token_out: Address,
         pool_index: BytesN<32>,
         in_amount: u128,
-        out_min: u128,
+        out_min: u128
     ) -> u128;
 
     // Estimate amount of coins to retrieve using swap function
@@ -55,7 +58,7 @@ pub trait LiquidityPoolInterfaceTrait {
         token_in: Address,
         token_out: Address,
         pool_index: BytesN<32>,
-        in_amount: u128,
+        in_amount: u128
     ) -> u128;
 
     // Withdraw coins from the pool.
@@ -68,7 +71,7 @@ pub trait LiquidityPoolInterfaceTrait {
         tokens: Vec<Address>,
         pool_index: BytesN<32>,
         share_amount: u128,
-        min_amounts: Vec<u128>,
+        min_amounts: Vec<u128>
     ) -> Vec<u128>;
 
     fn get_liquidity(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> U256;
@@ -126,7 +129,7 @@ pub trait RewardsInterfaceTrait {
         admin: Address,
         reward_tps: u128,
         expired_at: u64,
-        tokens_votes: Vec<(Vec<Address>, u32)>,
+        tokens_votes: Vec<(Vec<Address>, u32)>
     );
 
     // Fills the aggregated liquidity information for a given set of tokens.
@@ -161,7 +164,7 @@ pub trait RewardsInterfaceTrait {
         e: Env,
         admin: Address,
         tokens: Vec<Address>,
-        pool_index: BytesN<32>,
+        pool_index: BytesN<32>
     ) -> u128;
 
     // Get rewards status for the pool,
@@ -170,12 +173,11 @@ pub trait RewardsInterfaceTrait {
         e: Env,
         user: Address,
         tokens: Vec<Address>,
-        pool_index: BytesN<32>,
+        pool_index: BytesN<32>
     ) -> Map<Symbol, i128>;
 
     // Get amount of reward tokens available for the user to claim.
-    fn get_user_reward(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>)
-        -> u128;
+    fn get_user_reward(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
 
     // Get total amount of accumulated reward for the pool
     fn get_total_accumulated_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
@@ -196,7 +198,7 @@ pub trait RewardsInterfaceTrait {
         user: Address,
         from: Address,
         tokens: Vec<Address>,
-        pool_index: BytesN<32>,
+        pool_index: BytesN<32>
     ) -> u128;
 
     // Claim reward as a user.
@@ -212,16 +214,7 @@ pub trait PoolsManagementTrait {
         e: Env,
         user: Address,
         tokens: Vec<Address>,
-        fee_fraction: u32,
-    ) -> (BytesN<32>, Address);
-
-    // Initialize stableswap pool with custom arguments.
-    // fee_fraction has denominator 10000; 1 = 0.01%, 10 = 0.1%, 100 = 1%
-    fn init_stableswap_pool(
-        e: Env,
-        user: Address,
-        tokens: Vec<Address>,
-        fee_fraction: u32,
+        fee_fraction: u32
     ) -> (BytesN<32>, Address);
 
     // Get pools for given pair
@@ -245,7 +238,7 @@ pub trait PoolsManagementTrait {
     fn get_pools_for_tokens_range(
         e: Env,
         start: u128,
-        end: u128,
+        end: u128
     ) -> Vec<(Vec<Address>, Map<BytesN<32>, Address>)>;
 
     // Returns the protocol fee fraction.
@@ -257,7 +250,7 @@ pub trait PoolsManagementTrait {
         e: Env,
         admin: Address,
         min_reward_equivalent_day: u128,
-        min_duration_seconds: u64,
+        min_duration_seconds: u64
     );
 
     // Getters for pool gauge reward thresholds
@@ -280,7 +273,7 @@ pub trait PoolsManagementTrait {
         tps: u128,
         start_at: Option<u64>,
         duration: u64,
-        swaps_chain_proof: Vec<(Vec<Address>, BytesN<32>, Address)>,
+        swaps_chain_proof: Vec<(Vec<Address>, BytesN<32>, Address)>
     ) -> Address;
 }
 
@@ -290,56 +283,4 @@ pub trait PoolPlaneInterface {
 
     // get pools plane address
     fn get_plane(e: Env) -> Address;
-}
-
-pub trait CombinedSwapInterface {
-    // Executes a chain of token swaps to exchange an input token for an output token.
-    //
-    // # Arguments
-    //
-    // * `user` - The address of the user executing the swaps.
-    // * `swaps_chain` - The series of swaps to be executed. Each swap is represented by a tuple containing:
-    //   - A vector of token addresses liquidity pool belongs to
-    //   - Pool index hash
-    //   - The token to obtain
-    // * `token_in` - The address of the input token to be swapped.
-    // * `in_amount` - The amount of the input token to be swapped.
-    // * `out_min` - The minimum amount of the output token to be received.
-    //
-    // # Returns
-    //
-    // The amount of the output token received after all swaps have been executed.
-    fn swap_chained(
-        e: Env,
-        user: Address,
-        swaps_chain: Vec<(Vec<Address>, BytesN<32>, Address)>,
-        token_in: Address,
-        in_amount: u128,
-        out_min: u128,
-    ) -> u128;
-
-    // Executes a chain of token swaps to exchange an input token for an output token.
-    //
-    // # Arguments
-    //
-    // * `user` - The address of the user executing the swaps.
-    // * `swaps_chain` - The series of swaps to be executed. Each swap is represented by a tuple containing:
-    //   - A vector of token addresses liquidity pool belongs to
-    //   - Pool index hash
-    //   - The token to obtain
-    // * `token_in` - The address of the input token to be swapped.
-    // * `out_amount` - The amount of the output token to be received.
-    // * `in_max` - The max amount of the input token to spend.
-    //
-    // # Returns
-    //
-    // The amount of the input token spent after all swaps have been executed.
-    fn swap_chained_strict_receive(
-        e: Env,
-        user: Address,
-        swaps_chain: Vec<(Vec<Address>, BytesN<32>, Address)>,
-        token_in: Address,
-        out_amount: u128,
-        in_max: u128,
-    ) -> u128;
 }

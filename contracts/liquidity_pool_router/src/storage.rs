@@ -19,8 +19,7 @@ use utils::{
 pub enum LiquidityPoolType {
     MissingPool = 0,
     ConstantProduct = 1,
-    StableSwap = 2,
-    Custom = 3,
+    Custom = 2,
 }
 
 #[contracttype]
@@ -60,7 +59,6 @@ pub(crate) enum DataKey {
     InitStablePoolPaymentAmount,
     InitPoolsPaymentsAddress,
     ConstantPoolHash,
-    StableSwapPoolHash,
     PoolCounter,
     PoolPlane,
     LiquidityCalculator,
@@ -199,22 +197,6 @@ pub fn set_reward_tokens_detailed(
     let result = e.storage().temporary().set(&key, value);
     bump_temporary(e, &key);
     result
-}
-
-// pool hash
-pub fn get_stableswap_pool_hash(e: &Env) -> BytesN<32> {
-    bump_instance(e);
-    match e.storage().instance().get(&DataKey::StableSwapPoolHash) {
-        Some(v) => v,
-        None => panic_with_error!(&e, LiquidityPoolRouterError::StableswapHashMissing),
-    }
-}
-
-pub fn set_stableswap_pool_hash(e: &Env, pool_hash: &BytesN<32>) {
-    bump_instance(e);
-    e.storage()
-        .instance()
-        .set(&DataKey::StableSwapPoolHash, pool_hash)
 }
 
 pub fn get_pools_plain(e: &Env, salt: BytesN<32>) -> Map<BytesN<32>, Address> {

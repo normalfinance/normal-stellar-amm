@@ -5,7 +5,7 @@ use crate::errors::LiquidityPoolRouterError;
 use crate::events::{Events, LiquidityPoolRouterEvents};
 use crate::liquidity_calculator::LiquidityCalculatorClient;
 use crate::pool_interface::{
-    CombinedSwapInterface, LiquidityPoolInterfaceTrait, PoolPlaneInterface, PoolsManagementTrait,
+    LiquidityPoolInterfaceTrait, PoolPlaneInterface, PoolsManagementTrait,
     RewardsInterfaceTrait,
 };
 use crate::pool_utils::{
@@ -61,23 +61,6 @@ pub struct LiquidityPoolRouter;
 // The `LiquidityPoolInterfaceTrait` trait provides the interface for interacting with a liquidity pool.
 #[contractimpl]
 impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
-    // Returns the type of the pool.
-    //
-    // # Arguments
-    //
-    // * `e` - The environment.
-    // * `tokens` - A vector of token addresses.
-    // * `pool_index` - The pool index hash.
-    //
-    // # Returns
-    //
-    // The type of the pool as a Symbol.
-    fn pool_type(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Symbol {
-        assert_tokens_sorted(&e, &tokens);
-        let pool_id = get_pool(&e, &tokens, pool_index);
-        e.invoke_contract(&pool_id, &Symbol::new(&e, "pool_type"), Vec::new(&e))
-    }
-
     // Returns information about the pool.
     //
     // # Arguments
@@ -161,6 +144,32 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         let pool_id = get_pool(&e, &tokens, pool_index);
         e.invoke_contract(&pool_id, &Symbol::new(&e, "get_reserves"), Vec::new(&e))
     }
+
+    fn rebase(
+        e: Env,
+        user: Address,
+        tokens: Vec<Address>,
+        pool_index: BytesN<32>,
+    ) -> (i128, i128) {
+        user.require_auth();
+        assert_tokens_sorted(&e, &tokens);
+
+        let pool_id = get_pool(&e, &tokens, pool_index);
+
+        let (token_a_delta, token_b_delta): (i128, i128) = e.invoke_contract(
+            &pool_id,
+            &symbol_short!("rebase"),
+            Vec::from_array(
+                &e,
+                [
+                    user.clone().into_val(&e)
+                ],
+            ),
+        );
+        Events::new(&e).rebase(tokens, user, pool_id, amounts.clone(), share_amount);
+        (token_a_delta, token_b_delta)
+    }
+    
 
     // Deposits tokens into the pool.
     //
@@ -1245,65 +1254,6 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         }
     }
 
-    // Initializes a stableswap pool with custom arguments.
-    //
-    // # Arguments
-    //
-    // * `user` - The address of the user initializing the pool.
-    // * `tokens` - A vector of token addresses that the pool consists of.
-    // * `fee_fraction` - The fee fraction for the pool. Has denominator 10000; 1 = 0.01%, 10 = 0.1%, 100 = 1%.
-    //
-    // # Returns
-    //
-    // A tuple containing:
-    // * The pool index hash.
-    // * The address of the pool.
-    fn init_stableswap_pool(
-        e: Env,
-        user: Address,
-        tokens: Vec<Address>,
-        fee_fraction: u32,
-    ) -> (BytesN<32>, Address) {
-        user.require_auth();
-        validate_tokens_contracts(&e, &tokens);
-        assert_tokens_sorted(&e, &tokens);
-
-        if fee_fraction > STABLESWAP_MAX_FEE {
-            panic_with_error!(&e, LiquidityPoolRouterError::BadFee);
-        }
-
-        let n_tokens = tokens.len();
-        if n_tokens > STABLESWAP_MAX_TOKENS {
-            panic_with_error!(&e, LiquidityPoolRouterError::UnsupportedTokensNum);
-        }
-
-        let salt = get_tokens_salt(&e, &tokens);
-        let pools = get_pools_plain(&e, salt);
-        let pool_index = get_stableswap_pool_salt(&e);
-
-        match pools.get(pool_index.clone()) {
-            Some(pool_address) => (pool_index, pool_address),
-            None => {
-                // pay for pool creation
-                let init_pool_token = get_init_pool_payment_token(&e);
-                let init_pool_amount = get_init_stable_pool_payment_amount(&e);
-                let init_pool_address = get_init_pool_payment_address(&e);
-                if init_pool_amount > 0 {
-                    SorobanTokenClient::new(&e, &init_pool_token).transfer(
-                        &user,
-                        &init_pool_address,
-                        &(init_pool_amount as i128),
-                    );
-                }
-
-                // calculate amplification factor
-                // Amp = A*N**(N-1)
-                let amp = STABLESWAP_DEFAULT_A * (n_tokens as u128).pow(n_tokens - 1);
-                deploy_stableswap_pool(&e, &tokens, amp, fee_fraction)
-            }
-        }
-    }
-
     // Returns a map of pools for given set of tokens.
     //
     // # Arguments
@@ -1540,322 +1490,6 @@ impl PoolPlaneInterface for LiquidityPoolRouter {
     // Returns the address of the pool plane.
     fn get_plane(e: Env) -> Address {
         get_pool_plane(&e)
-    }
-}
-
-#[contractimpl]
-impl CombinedSwapInterface for LiquidityPoolRouter {
-    // Executes a chain of token swaps to exchange an input token for an output token.
-    //
-    // # Arguments
-    //
-    // * `user` - The address of the user executing the swaps.
-    // * `swaps_chain` - The series of swaps to be executed. Each swap is represented by a tuple containing:
-    //   - A vector of token addresses liquidity pool belongs to
-    //   - Pool index hash
-    //   - The token to obtain
-    // * `token_in` - The address of the input token to be swapped.
-    // * `in_amount` - The amount of the input token to be swapped.
-    // * `out_min` - The minimum amount of the output token to be received.
-    //
-    // # Returns
-    //
-    // The amount of the output token received after all swaps have been executed.
-    fn swap_chained(
-        e: Env,
-        user: Address,
-        swaps_chain: Vec<(Vec<Address>, BytesN<32>, Address)>,
-        token_in: Address,
-        in_amount: u128,
-        out_min: u128,
-    ) -> u128 {
-        user.require_auth();
-        let mut last_token_out: Option<Address> = None;
-        let mut last_swap_result = 0;
-
-        if swaps_chain.len() == 0 {
-            panic_with_error!(&e, LiquidityPoolRouterError::PathIsEmpty);
-        }
-
-        SorobanTokenClient::new(&e, &token_in).transfer(
-            &user,
-            &e.current_contract_address(),
-            &(in_amount as i128),
-        );
-
-        for i in 0..swaps_chain.len() {
-            let (tokens, pool_index, token_out) = swaps_chain.get(i).unwrap();
-            assert_tokens_sorted(&e, &tokens);
-
-            let pool_id = get_pool(&e, &tokens, pool_index);
-
-            let mut out_min_local = 0;
-            let token_in_local;
-            let in_amount_local;
-            if i == 0 {
-                token_in_local = token_in.clone();
-                in_amount_local = in_amount;
-            } else {
-                token_in_local = match last_token_out {
-                    Some(v) => v,
-                    None => panic_with_error!(&e, StorageError::ValueNotInitialized),
-                };
-                in_amount_local = last_swap_result;
-            }
-
-            if i == swaps_chain.len() - 1 {
-                out_min_local = out_min;
-            }
-
-            e.authorize_as_current_contract(vec![
-                &e,
-                InvokerContractAuthEntry::Contract(SubContractInvocation {
-                    context: ContractContext {
-                        contract: token_in_local.clone(),
-                        fn_name: Symbol::new(&e, "transfer"),
-                        args: (
-                            e.current_contract_address(),
-                            pool_id.clone(),
-                            in_amount_local as i128,
-                        )
-                            .into_val(&e),
-                    },
-                    sub_invocations: vec![&e],
-                }),
-            ]);
-
-            last_swap_result = e.invoke_contract(
-                &pool_id,
-                &symbol_short!("swap"),
-                Vec::from_array(
-                    &e,
-                    [
-                        e.current_contract_address().into_val(&e),
-                        tokens
-                            .first_index_of(token_in_local.clone())
-                            .unwrap()
-                            .into_val(&e),
-                        tokens
-                            .first_index_of(token_out.clone())
-                            .unwrap()
-                            .into_val(&e),
-                        in_amount_local.into_val(&e),
-                        out_min_local.into_val(&e),
-                    ],
-                ),
-            );
-
-            Events::new(&e).swap(
-                tokens,
-                user.clone(),
-                pool_id,
-                token_in_local.clone(),
-                token_out.clone(),
-                in_amount_local,
-                last_swap_result,
-            );
-
-            last_token_out = Some(token_out);
-        }
-
-        let token_out_address = match last_token_out {
-            Some(v) => v,
-            None => panic_with_error!(&e, StorageError::ValueNotInitialized),
-        };
-        SorobanTokenClient::new(&e, &token_out_address).transfer(
-            &e.current_contract_address(),
-            &user,
-            &(last_swap_result as i128),
-        );
-
-        last_swap_result
-    }
-
-    // Executes a chain of token swaps to exchange an input token for an output token.
-    //
-    // # Arguments
-    //
-    // * `user` - The address of the user executing the swaps.
-    // * `swaps_chain` - The series of swaps to be executed. Each swap is represented by a tuple containing:
-    //   - A vector of token addresses liquidity pool belongs to
-    //   - Pool index hash
-    //   - The token to obtain
-    // * `token_in` - The address of the input token to be swapped.
-    // * `out_amount` - The amount of the output token to be received.
-    // * `in_max` - The max amount of the input token to spend.
-    //
-    // # Returns
-    //
-    // The amount of the input token spent after all swaps have been executed.
-    // Executes a chain of token swaps with strict receive functionality.
-    fn swap_chained_strict_receive(
-        e: Env,
-        user: Address,
-        swaps_chain: Vec<(Vec<Address>, BytesN<32>, Address)>,
-        token_in: Address,
-        out_amount: u128, // fixed amount of output token to receive
-        max_in: u128,     // maximum input token amount allowed
-    ) -> u128 {
-        user.require_auth();
-
-        if swaps_chain.len() == 0 {
-            panic_with_error!(&e, LiquidityPoolRouterError::PathIsEmpty);
-        }
-
-        // -------------------------------
-        // Reverse pass: compute required inputs per hop
-        // -------------------------------
-        let mut required_amounts: Vec<u128> = Vec::new(&e);
-        let mut desired_out = out_amount;
-
-        let estimate_fn = Symbol::new(&e, "estimate_swap_strict_receive");
-        let swap_fn = Symbol::new(&e, "swap_strict_receive");
-
-        // Process swaps in reverse order
-        for i in (0..swaps_chain.len()).rev() {
-            let (tokens, pool_index, token_out) = swaps_chain.get(i).unwrap();
-            let pool_id = get_pool(&e, &tokens, pool_index);
-            let token_in_for_hop = if i == 0 {
-                token_in.clone()
-            } else {
-                // For a middle hop, the input is the output of the previous swap in the chain.
-                swaps_chain.get(i - 1).unwrap().2.clone()
-            };
-
-            // Calculate required input for this hop using pool pricing.
-            // Assumes the pool has a function like `calc_in_given_out`.
-            let required_in: u128 = e.invoke_contract(
-                &pool_id,
-                &estimate_fn,
-                Vec::from_array(
-                    &e,
-                    [
-                        tokens
-                            .first_index_of(token_in_for_hop.clone())
-                            .unwrap()
-                            .into_val(&e),
-                        tokens
-                            .first_index_of(token_out.clone())
-                            .unwrap()
-                            .into_val(&e),
-                        desired_out.into_val(&e),
-                    ],
-                ),
-            );
-            required_amounts.push_front(required_in);
-            // The output required from the previous hop is the input needed here.
-            desired_out = required_in;
-        }
-        let total_required_input = required_amounts.get_unchecked(0);
-
-        // Verify that the required input does not exceed the maximum provided.
-        if total_required_input > max_in {
-            panic_with_error!(&e, LiquidityPoolRouterError::InMaxNotSatisfied);
-        }
-
-        // -------------------------------
-        // Forward pass: execute the swaps
-        // -------------------------------
-        // Pull the maximum required input from the user.
-        SorobanTokenClient::new(&e, &token_in).transfer(
-            &user,
-            &e.current_contract_address(),
-            &(max_in as i128),
-        );
-        // Return back the difference
-        if max_in > total_required_input {
-            SorobanTokenClient::new(&e, &token_in).transfer(
-                &e.current_contract_address(),
-                &user,
-                &((max_in - total_required_input) as i128),
-            );
-        }
-
-        let mut current_in = total_required_input;
-        let mut last_token_out: Option<Address> = None;
-
-        // Execute each swap in sequence.
-        for i in 0..swaps_chain.len() {
-            let (tokens, pool_index, token_out) = swaps_chain.get(i).unwrap();
-            let pool_id = get_pool(&e, &tokens, pool_index);
-            let token_in_local = if i == 0 {
-                token_in.clone()
-            } else {
-                last_token_out.unwrap()
-            };
-
-            // Set the minimum acceptable output for this hop.
-            // For intermediate hops, this is the required amount computed for the next swap.
-            // For the final hop, it is the desired `out_amount`.
-            let out_local = if i == swaps_chain.len() - 1 {
-                out_amount
-            } else {
-                required_amounts.get_unchecked(i + 1)
-            };
-
-            // Authorize and perform the swap.
-            e.authorize_as_current_contract(vec![
-                &e,
-                InvokerContractAuthEntry::Contract(SubContractInvocation {
-                    context: ContractContext {
-                        contract: token_in_local.clone(),
-                        fn_name: Symbol::new(&e, "transfer"),
-                        args: (
-                            e.current_contract_address(),
-                            pool_id.clone(),
-                            current_in as i128,
-                        )
-                            .into_val(&e),
-                    },
-                    sub_invocations: vec![&e],
-                }),
-            ]);
-
-            let in_local: u128 = e.invoke_contract(
-                &pool_id,
-                &swap_fn,
-                Vec::from_array(
-                    &e,
-                    [
-                        e.current_contract_address().into_val(&e),
-                        tokens
-                            .first_index_of(token_in_local.clone())
-                            .unwrap()
-                            .into_val(&e),
-                        tokens
-                            .first_index_of(token_out.clone())
-                            .unwrap()
-                            .into_val(&e),
-                        out_local.into_val(&e),
-                        current_in.into_val(&e),
-                    ],
-                ),
-            );
-
-            // Emit an event for the swap.
-            Events::new(&e).swap(
-                tokens,
-                user.clone(),
-                pool_id,
-                token_in_local.clone(),
-                token_out.clone(),
-                in_local,
-                out_local,
-            );
-
-            current_in = out_local;
-            last_token_out = Some(token_out);
-        }
-
-        // Finally, transfer the received output tokens to the user.
-        let final_token = last_token_out.unwrap();
-        SorobanTokenClient::new(&e, &final_token).transfer(
-            &e.current_contract_address(),
-            &user,
-            &(current_in as i128),
-        );
-
-        total_required_input
     }
 }
 
