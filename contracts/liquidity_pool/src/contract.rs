@@ -363,6 +363,13 @@ impl LiquidityPoolTrait for LiquidityPool {
         if shares_to_mint < min_shares {
             panic_with_error!(&e, LiquidityPoolValidationError::OutMinNotSatisfied);
         }
+        // First deposit: mint MIN_LIQUIDITY to contract itself to prevent dust attacks
+        if total_shares == 0 {
+            mint_shares(&e, &e.current_contract_address(), MIN_LIQUIDITY as i128);
+            let events = LiquidityPoolEvents::new(&e);
+            events.permanently_locked_liquidity(MIN_LIQUIDITY);
+            shares_to_mint = shares_to_mint.safe_sub(&e, MIN_LIQUIDITY);
+        }
         mint_shares(&e, &user, shares_to_mint as i128);
         put_reserve_a(&e, new_reserve_a);
         put_reserve_b(&e, new_reserve_b);
@@ -432,6 +439,8 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(e, LiquidityPoolValidationError::ZeroAmount);
         }
 
+        // TODO: Circuit breaker
+
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
         let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
@@ -443,6 +452,8 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolValidationError::EmptyPool);
         }
 
+        // TODO: Fee rebate
+        // TODO: Trade tax
         let (out, total_fee) = get_amount_out(&e, in_amount, reserve_sell, reserve_buy);
         let protocol_fee = total_fee * get_protocol_fee_fraction(&e) as u128 / FEE_MULTIPLIER;
         let lp_fee = total_fee - protocol_fee;
@@ -607,6 +618,8 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(e, LiquidityPoolValidationError::ZeroAmount);
         }
 
+        // TODO: Circuit breaker
+
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
         let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
@@ -618,6 +631,8 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolValidationError::EmptyPool);
         }
 
+        // TODO: Fee rebate
+        // TODO: Trade tax
         let (in_amount, total_fee) =
             get_amount_out_strict_receive(&e, out_amount, reserve_sell, reserve_buy);
 
@@ -779,6 +794,10 @@ impl LiquidityPoolTrait for LiquidityPool {
             .manager()
             .checkpoint_user(&user, total_shares, user_shares);
         rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
+
+        if total_shares - share_amount < MIN_LIQUIDITY {
+            panic_with_error!(e, PoolError::WithdrawExceedsMinLiquidity);
+        }
 
         burn_shares(&e, &user, share_amount);
 
