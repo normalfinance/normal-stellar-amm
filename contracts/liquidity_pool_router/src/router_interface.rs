@@ -36,11 +36,6 @@ pub trait AdminInterface {
         to: Address,
     );
 
-    // Getters for init pool payment info
-    fn get_init_pool_payment_token(e: Env) -> Address;
-    fn get_init_pool_payment_address(e: Env) -> Address;
-    fn get_standard_pool_payment_amount(e: Env) -> u128;
-
     // Set reward token address
     fn set_reward_token(e: Env, admin: Address, reward_token: Address);
 

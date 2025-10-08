@@ -54,10 +54,6 @@ pub(crate) enum DataKey {
     GaugeWASM,
     GaugeRewardMinDayAmt,
     GaugeRewardMinDuration,
-    InitPoolPaymentToken,
-    InitStandardPoolPaymentAmount,
-    InitStablePoolPaymentAmount,
-    InitPoolsPaymentsAddress,
     ConstantPoolHash,
     PoolCounter,
     PoolPlane,
@@ -96,26 +92,6 @@ generate_instance_storage_getter_and_setter!(
     BytesN<32>
 );
 generate_instance_storage_getter_and_setter!(token_hash, DataKey::TokenHash, BytesN<32>);
-generate_instance_storage_getter_and_setter!(
-    init_pool_payment_token,
-    DataKey::InitPoolPaymentToken,
-    Address
-);
-generate_instance_storage_getter_and_setter!(
-    init_stable_pool_payment_amount,
-    DataKey::InitStablePoolPaymentAmount,
-    u128
-);
-generate_instance_storage_getter_and_setter!(
-    init_standard_pool_payment_amount,
-    DataKey::InitStandardPoolPaymentAmount,
-    u128
-);
-generate_instance_storage_getter_and_setter!(
-    init_pool_payment_address,
-    DataKey::InitPoolsPaymentsAddress,
-    Address
-);
 generate_instance_storage_getter_and_setter_with_default!(
     pool_counter,
     DataKey::PoolCounter,

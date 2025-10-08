@@ -196,6 +196,8 @@ impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
         user.require_auth();
         assert_tokens_sorted(&e, &tokens);
 
+        ensure_non_zero_u128(&e, desired_amounts);
+
         let pool_id = get_pool(&e, &tokens, pool_index);
 
         let (amounts, share_amount): (Vec<u128>, u128) = e.invoke_contract(
@@ -629,48 +631,6 @@ impl AdminInterface for LiquidityPoolRouter {
             DataKey::GaugeWASM.into_val(&e),
             new_hash.into(),
         );
-    }
-
-    // Configures the stableswap pool deployment payment.
-    //
-    // # Arguments
-    //
-    // * `admin` - The address of the admin.
-    // * `token` - The address of the token.
-    // * `amount` - The amount of the token.
-    // * `to` - The address to send the payment to.
-    fn configure_init_pool_payment(
-        e: Env,
-        admin: Address,
-        token: Address,
-        standard_pool_amount: u128,
-        stable_pool_amount: u128,
-        to: Address,
-    ) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-
-        set_init_pool_payment_token(&e, &token);
-        set_init_stable_pool_payment_amount(&e, &stable_pool_amount);
-        set_init_standard_pool_payment_amount(&e, &standard_pool_amount);
-        set_init_pool_payment_address(&e, &to);
-    }
-
-    // Getters for init pool payment config
-    fn get_init_pool_payment_token(e: Env) -> Address {
-        get_init_pool_payment_token(&e)
-    }
-
-    fn get_init_pool_payment_address(e: Env) -> Address {
-        get_init_pool_payment_address(&e)
-    }
-
-    fn get_stable_pool_payment_amount(e: Env) -> u128 {
-        get_init_stable_pool_payment_amount(&e)
-    }
-
-    fn get_standard_pool_payment_amount(e: Env) -> u128 {
-        get_init_standard_pool_payment_amount(&e)
     }
 
     // Sets the reward token.
@@ -1221,6 +1181,7 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         user: Address,
         tokens: Vec<Address>,
         fee_fraction: u32,
+        oracle: Address,
     ) -> (BytesN<32>, Address) {
         user.require_auth();
         validate_tokens_contracts(&e, &tokens);
@@ -1236,20 +1197,8 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
 
         match pools.get(pool_index.clone()) {
             Some(pool_address) => (pool_index, pool_address),
-            None => {
-                // pay for pool creation
-                let init_pool_token = get_init_pool_payment_token(&e);
-                let init_pool_amount = get_init_standard_pool_payment_amount(&e);
-                let init_pool_address = get_init_pool_payment_address(&e);
-                if init_pool_amount > 0 {
-                    SorobanTokenClient::new(&e, &init_pool_token).transfer(
-                        &user,
-                        &init_pool_address,
-                        &(init_pool_amount as i128),
-                    );
-                }
-
-                deploy_standard_pool(&e, &tokens, fee_fraction)
+            None => 
+                deploy_standard_pool(&e, &tokens, fee_fraction, oracle)
             }
         }
     }

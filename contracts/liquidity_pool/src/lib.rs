@@ -3,6 +3,7 @@
 mod constants;
 mod contract;
 pub mod errors;
+mod oracle;
 mod plane;
 mod plane_interface;
 mod pool;

@@ -140,6 +140,7 @@ impl LiquidityPoolTrait for LiquidityPool {
     //      system fee admin,
     //  ).
     // * `router` - The address of the router.
+    // * `oracle` - The address of the oracle.
     // * `lp_token_wasm_hash` - The hash of the liquidity pool token contract.
     // * `tokens` - A vector of token addresses.
     // * `fees_config` - (
@@ -151,6 +152,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         admin: Address,
         privileged_addrs: (Address, Address, Address, Address, Vec<Address>, Address),
         router: Address,
+        oracle: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         fees_config: (u32, u32),
@@ -169,6 +171,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         access_control.set_role_address(&Role::SystemFeeAdmin, &privileged_addrs.5);
 
         set_router(&e, &router);
+        set_oracle(&e, &oracle);
 
         if tokens.len() != 2 {
             panic_with_error!(&e, LiquidityPoolValidationError::WrongInputVecSize);

@@ -215,6 +215,7 @@ pub trait PoolsManagementTrait {
         user: Address,
         tokens: Vec<Address>,
         fee_fraction: u32
+        oracle: Address
     ) -> (BytesN<32>, Address);
 
     // Get pools for given pair
