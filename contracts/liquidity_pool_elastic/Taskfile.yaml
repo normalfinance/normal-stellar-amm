@@ -16,8 +16,8 @@ tasks:
       - task -d ../rewards_gauge build || exit 1
       - task -d ../token build || exit 1
       - task -d ../liquidity_pool_plane build || exit 1
-      - soroban contract build --package liquidity-pool
-      - soroban contract optimize --wasm ../target/wasm32v1-none/release/liquidity_pool.wasm --wasm-out ../contracts/liquidity_pool.wasm
+      - soroban contract build --package liquidity-pool-elastic
+      - soroban contract optimize --wasm ../target/wasm32v1-none/release/liquidity_pool_elastic.wasm --wasm-out ../contracts/liquidity_pool_elastic.wasm
       - ls -l ../contracts/*.wasm
 
   test:

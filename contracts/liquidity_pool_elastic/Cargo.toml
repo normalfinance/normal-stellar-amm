@@ -1,5 +1,5 @@
 [package]
-name = "liquidity-pool"
+name = "liquidity-pool-elastic"
 version.workspace = true
 edition = "2021"
 publish = false

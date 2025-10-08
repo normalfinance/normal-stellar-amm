@@ -1,4 +1,4 @@
-use crate::constants::{MAX_POOLS_FOR_PAIR, STABLESWAP_MAX_POOLS};
+use crate::constants::{MAX_POOLS_FOR_PAIR, ELASTIC_MAX_POOLS};
 use crate::errors::LiquidityPoolRouterError;
 use crate::pool_utils::get_tokens_salt;
 use paste::paste;
@@ -19,7 +19,8 @@ use utils::{
 pub enum LiquidityPoolType {
     MissingPool = 0,
     ConstantProduct = 1,
-    Custom = 2,
+    ElasticSupply = 2,
+    Custom = 3,
 }
 
 #[contracttype]
@@ -55,6 +56,7 @@ pub(crate) enum DataKey {
     GaugeRewardMinDayAmt,
     GaugeRewardMinDuration,
     ConstantPoolHash,
+    ElasticPoolHash
     PoolCounter,
     PoolPlane,
     LiquidityCalculator,
@@ -175,6 +177,22 @@ pub fn set_reward_tokens_detailed(
     result
 }
 
+// pool hash
+pub fn get_elastic_pool_hash(e: &Env) -> BytesN<32> {
+    bump_instance(e);
+    match e.storage().instance().get(&DataKey::ElasticPoolHash) {
+        Some(v) => v,
+        None => panic_with_error!(&e, LiquidityPoolRouterError::ElasticHashMissing),
+    }
+}
+
+pub fn set_elastic_pool_hash(e: &Env, pool_hash: &BytesN<32>) {
+    bump_instance(e);
+    e.storage()
+        .instance()
+        .set(&DataKey::ElasticPoolHash, pool_hash)
+}
+
 pub fn get_pools_plain(e: &Env, salt: BytesN<32>) -> Map<BytesN<32>, Address> {
     let pools = get_pools(e, salt);
     let mut pools_plain = Map::new(e);
@@ -219,15 +237,15 @@ pub fn add_pool(
         },
     );
 
-    if pool_type == LiquidityPoolType::StableSwap {
-        let mut stableswap_pools_amt = 0;
+    if pool_type == LiquidityPoolType::ElasticSupply {
+        let mut elastic_pools_amt = 0;
         for (_key, value) in pools.iter() {
-            if value.pool_type == LiquidityPoolType::StableSwap {
-                stableswap_pools_amt += 1;
+            if value.pool_type == LiquidityPoolType::ElasticSupply {
+                elastic_pools_amt += 1;
             }
         }
-        if stableswap_pools_amt > STABLESWAP_MAX_POOLS {
-            panic_with_error!(&e, LiquidityPoolRouterError::StableswapPoolsOverMax);
+        if elastic_pools_amt > ELASTIC_MAX_POOLS {
+            panic_with_error!(&e, LiquidityPoolRouterError::ElasticPoolsOverMax);
         }
     }
 

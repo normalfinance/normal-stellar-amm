@@ -6,9 +6,9 @@ use soroban_sdk::contracterror;
 pub enum LiquidityPoolRouterError {
     PoolNotFound = 301,
     BadFee = 302,
-    StableswapHashMissing = 303,
+    ElasticHashMissing = 303,
     PoolsOverMax = 305,
-    StableswapPoolsOverMax = 306,
+    ElasticPoolsOverMax = 306,
     PathIsEmpty = 307,
     TokensAreNotForReward = 308, // unable to find tokens in reward map
     LiquidityNotFilled = 309,    // liquidity info not available yet. run `fill_liquidity` first

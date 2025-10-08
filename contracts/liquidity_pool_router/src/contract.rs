@@ -1,5 +1,5 @@
 use crate::constants::{
-    CONSTANT_PRODUCT_FEE_AVAILABLE, STABLESWAP_DEFAULT_A, STABLESWAP_MAX_FEE, STABLESWAP_MAX_TOKENS,
+    CONSTANT_PRODUCT_FEE_AVAILABLE, ELASTIC_MAX_FEE,
 };
 use crate::errors::LiquidityPoolRouterError;
 use crate::events::{Events, LiquidityPoolRouterEvents};
@@ -9,7 +9,7 @@ use crate::pool_interface::{
     RewardsInterfaceTrait,
 };
 use crate::pool_utils::{
-    assert_tokens_sorted, deploy_stableswap_pool, deploy_standard_pool, get_stableswap_pool_salt,
+    assert_tokens_sorted, deploy_elastic_pool, deploy_standard_pool, get_elastic_pool_salt,
     get_standard_pool_salt, get_tokens_salt, get_total_liquidity, validate_tokens_contracts,
 };
 use crate::rewards::get_rewards_manager;
@@ -20,15 +20,12 @@ use crate::rewards_gauge::{
 };
 use crate::router_interface::AdminInterface;
 use crate::storage::{
-    get_gauge_rewards_enabled_for, get_init_pool_payment_address, get_init_pool_payment_token,
-    get_init_stable_pool_payment_amount, get_init_standard_pool_payment_amount,
     get_liquidity_calculator, get_pool, get_pool_plane, get_pools_plain, get_protocol_fee_fraction,
     get_reward_tokens, get_reward_tokens_detailed, get_rewards_config, get_tokens_set,
     get_tokens_set_count, has_pool, remove_pool, set_constant_product_pool_hash,
-    set_gauge_rewards_enabled_for, set_init_pool_payment_address, set_init_pool_payment_token,
-    set_init_stable_pool_payment_amount, set_init_standard_pool_payment_amount,
+    set_gauge_rewards_enabled_for,
     set_liquidity_calculator, set_pool_plane, set_protocol_fee_fraction, set_reward_tokens,
-    set_reward_tokens_detailed, set_rewards_config, set_stableswap_pool_hash, set_token_hash,
+    set_reward_tokens_detailed, set_rewards_config, set_elastic_pool_hash, set_token_hash,
     DataKey, GlobalRewardsConfig, LiquidityPoolRewardInfo,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
@@ -61,6 +58,23 @@ pub struct LiquidityPoolRouter;
 // The `LiquidityPoolInterfaceTrait` trait provides the interface for interacting with a liquidity pool.
 #[contractimpl]
 impl LiquidityPoolInterfaceTrait for LiquidityPoolRouter {
+    // Returns the type of the pool.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    //
+    // # Returns
+    //
+    // The type of the pool as a Symbol.
+    fn pool_type(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Symbol {
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
+        e.invoke_contract(&pool_id, &Symbol::new(&e, "pool_type"), Vec::new(&e))
+    }
+    
     // Returns information about the pool.
     //
     // # Arguments
@@ -606,15 +620,15 @@ impl AdminInterface for LiquidityPoolRouter {
         set_constant_product_pool_hash(&e, &new_hash);
     }
 
-    // Sets the stableswap pool wasm hash.
+    // Sets the elastic pool wasm hash.
     //
     // # Arguments
     //
-    // * `new_hash` - The new stableswap pool wasm hash.
-    fn set_stableswap_pool_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
+    // * `new_hash` - The new elastic pool wasm hash.
+    fn set_elastic_pool_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-        set_stableswap_pool_hash(&e, &new_hash);
+        set_elastic_pool_hash(&e, &new_hash);
     }
 
     // Sets the rewards gauge wasm hash.
@@ -1181,7 +1195,6 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         user: Address,
         tokens: Vec<Address>,
         fee_fraction: u32,
-        oracle: Address,
     ) -> (BytesN<32>, Address) {
         user.require_auth();
         validate_tokens_contracts(&e, &tokens);
@@ -1198,7 +1211,48 @@ impl PoolsManagementTrait for LiquidityPoolRouter {
         match pools.get(pool_index.clone()) {
             Some(pool_address) => (pool_index, pool_address),
             None => 
-                deploy_standard_pool(&e, &tokens, fee_fraction, oracle)
+                deploy_standard_pool(&e, &tokens, fee_fraction)
+            }
+        }
+    }
+
+    // Initializes an elastic supply pool with custom arguments.
+    //
+    // # Arguments
+    //
+    // * `user` - The address of the user initializing the pool.
+    // * `tokens` - A vector of token addresses that the pool consists of.
+    // * `fee_fraction` - The fee fraction for the pool. Has denominator 10000; 1 = 0.01%, 10 = 0.1%, 100 = 1%.
+    // * `oracle` - The address...
+    //
+    // # Returns
+    //
+    // A tuple containing:
+    // * The pool index hash.
+    // * The address of the pool.
+    fn init_elastic_pool(
+        e: Env,
+        user: Address,
+        tokens: Vec<Address>,
+        fee_fraction: u32,
+        oracle: Address,
+    ) -> (BytesN<32>, Address) {
+        user.require_auth();
+        validate_tokens_contracts(&e, &tokens);
+        assert_tokens_sorted(&e, &tokens);
+
+        if fee_fraction > ELASTIC_MAX_FEE {
+            panic_with_error!(&e, LiquidityPoolRouterError::BadFee);
+        }
+
+        let salt = get_tokens_salt(&e, &tokens);
+        let pools = get_pools_plain(&e, salt);
+        let pool_index = get_elastic_pool_salt(&e);
+
+        match pools.get(pool_index.clone()) {
+            Some(pool_address) => (pool_index, pool_address),
+            None => {
+                deploy_elastic_pool(&e, &tokens, fee_fraction, oracle)
             }
         }
     }

@@ -20,6 +20,12 @@ pub enum DataKey {
 
     Plane,
     Router,
+    Sink, // address of the Sink contract
+    OracleTokenA, // address of the oracle Token A is tracking
+
+    // OracleGuardRails,   // a set of oracle price data validations and protections. 
+    // MintCapFraction, // a bps cap on how much token_a can be minted when the pool is in reduce only mode/
+    RebaseEpoch, // amount of time that must elapse between rebasing
 
     IsKilledSwap,
     IsKilledDeposit,
@@ -70,7 +76,9 @@ generate_instance_storage_getter_and_setter_with_default!(
     0
 );
 generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
+generate_instance_storage_getter_and_setter!(sink, DataKey::Sink, Address);
 generate_instance_storage_getter_and_setter!(plane, DataKey::Plane, Address);
+generate_instance_storage_getter_and_setter!(oracle_token_a, DataKey::OracleTokenA, Address);
 generate_instance_storage_getter_and_setter!(
     token_future_wasm,
     DataKey::TokenFutureWASM,

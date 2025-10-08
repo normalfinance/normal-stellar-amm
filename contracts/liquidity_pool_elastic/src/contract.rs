@@ -74,7 +74,7 @@ impl LiquidityPoolCrunch for LiquidityPool {
     //
     // The type of the pool as a Symbol.
     fn pool_type(e: Env) -> Symbol {
-        Symbol::new(&e, "constant_product")
+        Symbol::new(&e, "elastic_supply")
     }
     
     // Initializes all the components of the liquidity pool.
@@ -161,6 +161,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         admin: Address,
         privileged_addrs: (Address, Address, Address, Address, Vec<Address>, Address),
         router: Address,
+        oracle: Address,
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         fees_config: (u32, u32),
@@ -179,6 +180,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         access_control.set_role_address(&Role::SystemFeeAdmin, &privileged_addrs.5);
 
         set_router(&e, &router);
+        set_oracle(&e, &oracle);
 
         if tokens.len() != 2 {
             panic_with_error!(&e, LiquidityPoolValidationError::WrongInputVecSize);
@@ -240,6 +242,38 @@ impl LiquidityPoolTrait for LiquidityPool {
     // A vector of token addresses.
     fn get_tokens(e: Env) -> Vec<Address> {
         Vec::from_array(&e, [get_token_a(&e), get_token_b(&e)])
+    }
+
+    //
+    fn rebase(e: Env) -> (i128, i128) {
+        user.require_auth();
+
+        // Check rebase threshold
+        let current_time = e.ledger().timestamp();
+        let since_last_rebase - get_last_rebase(&e).safe_sub(current_time);
+
+        if since_last_rebase < get_rebase_threshold(&e) {
+            panic_with_error!(e, LiquidityPoolError::RebaseTooSoon);
+        }
+
+        // Get the price of Token A in the Pool
+        let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
+        let token_a_pool_price = reserve_b.safe_div(reserve_a);
+
+        // Get the price Token A should be from the Oracle
+        let base_oracle_price_data = get_oracle_price(&e, &pool.base_asset);
+        let token_a_oracle_price = base_oracle_price_data.last_price_twap;
+
+        // Compare the prices to determine rebase direction
+        let (token_a_delta, token_b_delta) = crate::rebase::over(&e, &reserve_a, &reserve_b);
+
+        // Update rebase tracking
+        set_last_rebase_ts(&e, &current_time);
+
+        // Emit event
+        PoolEvents::new(&e).rebase(Vec::from_array(&e, [new_reserve_a, new_reserve_b]));
+
+        (token_a_delta, token_b_delta)
     }
 
     // Deposits tokens into the pool.
@@ -417,6 +451,8 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(e, LiquidityPoolValidationError::ZeroAmount);
         }
 
+        // TODO: Circuit breaker
+
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
         let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
@@ -428,6 +464,8 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolValidationError::EmptyPool);
         }
 
+        // TODO: Fee rebate
+        // TODO: Trade tax
         let (out, total_fee) = get_amount_out(&e, in_amount, reserve_sell, reserve_buy);
         let protocol_fee = total_fee * get_protocol_fee_fraction(&e) as u128 / FEE_MULTIPLIER;
         let lp_fee = total_fee - protocol_fee;
@@ -592,6 +630,8 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(e, LiquidityPoolValidationError::ZeroAmount);
         }
 
+        // TODO: Circuit breaker
+
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
         let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
@@ -603,6 +643,8 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, LiquidityPoolValidationError::EmptyPool);
         }
 
+        // TODO: Fee rebate
+        // TODO: Trade tax
         let (in_amount, total_fee) =
             get_amount_out_strict_receive(&e, out_amount, reserve_sell, reserve_buy);
 
