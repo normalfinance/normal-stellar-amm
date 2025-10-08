@@ -5,7 +5,7 @@ use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{contracttype, panic_with_error, Address, Env};
 use utils::bump::bump_persistent;
 use utils::helpers::log10_iter;
-use utils::math::safe_math::{SafeMath, PrecisionMath};
+use utils::math::safe_math::{PrecisionMath, SafeMath};
 use utils::validate;
 
 #[contracttype]
@@ -241,7 +241,9 @@ pub fn shares_to_reserve_amount(e: &Env, n_shares: u128, reserve: &InsuranceFund
 
     let amount = if reserve.total_shares > 0 {
         // Use round-to-nearest for fair withdrawal calculation
-        reserve.balance.safe_fixed_mul_round(e, n_shares, reserve.total_shares)
+        reserve
+            .balance
+            .safe_fixed_mul_round(e, n_shares, reserve.total_shares)
     } else {
         0
     };

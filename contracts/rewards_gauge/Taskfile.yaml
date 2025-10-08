@@ -12,9 +12,9 @@ tasks:
   build:
     cmds:
       - task -d ../config_storage build || exit 1
-      - soroban contract build --package soroban-rewards-gauge-contract
-      - soroban contract optimize --wasm ../target/wasm32v1-none/release/soroban_rewards_gauge_contract.wasm --wasm-out ../contracts/soroban_rewards_gauge_contract.wasm
-      - ls -l ../contracts/*.wasm
+      - soroban contract build --package rewards-gauge
+      - soroban contract optimize --wasm ../../target/wasm32v1-none/release/rewards_gauge.wasm --wasm-out ../../target/wasm32v1-none/release/rewards_gauge.wasm
+      - cp ../../target/wasm32v1-none/release/rewards_gauge.wasm ../../wasm/rewards_gauge.wasm
 
   test:
     deps:

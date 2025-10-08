@@ -6,7 +6,7 @@ use crate::{
 use soroban_sdk::{panic_with_error, Env, Symbol, Vec};
 use utils::{
     constant::{PERCENTAGE_PRECISION, PERCENTAGE_PRECISION_I64},
-    math::safe_math::{SafeMath, PrecisionMath},
+    math::safe_math::{PrecisionMath, SafeMath},
     state::oracle_registry::{HistoricalOracleData, OracleValidity},
 };
 
@@ -61,9 +61,9 @@ pub fn calculate_utilization(e: &Env, total_reserve_value: u128, optimal_insuran
     }
 
     // Calculate utilization using safe precision math
-    let utilization_u128 = total_reserve_value
-        .safe_fixed_div_floor(e, optimal_insurance, PERCENTAGE_PRECISION);
-    
+    let utilization_u128 =
+        total_reserve_value.safe_fixed_div_floor(e, optimal_insurance, PERCENTAGE_PRECISION);
+
     // Clamp to u32::MAX to prevent silent truncation
     utilization_u128.min(u32::MAX as u128) as u32
 }
@@ -119,7 +119,7 @@ pub fn calculate_rate(
         // Cannot have zero optimal utilization as it causes division by zero
         panic_with_error!(&Env::default(), InsuranceFundError::InvalidConfiguration);
     }
-    
+
     if utilization == 0 {
         return base_rate;
     }
@@ -128,17 +128,17 @@ pub fn calculate_rate(
     let utilization_i64 = i64::try_from(utilization).unwrap_or_else(|_| {
         panic_with_error!(&Env::default(), InsuranceFundError::ConversionOverflow);
     });
-    
+
     let optimal_utilization_i64 = i64::try_from(optimal_utilization).unwrap_or_else(|_| {
         panic_with_error!(&Env::default(), InsuranceFundError::ConversionOverflow);
     });
-    
+
     let base_rate_i64 = i64::from(base_rate);
-    
+
     let slope1_i64 = i64::try_from(slope1).unwrap_or_else(|_| {
         panic_with_error!(&Env::default(), InsuranceFundError::ConversionOverflow);
     });
-    
+
     let slope2_i64 = i64::try_from(slope2).unwrap_or_else(|_| {
         panic_with_error!(&Env::default(), InsuranceFundError::ConversionOverflow);
     });
@@ -146,21 +146,28 @@ pub fn calculate_rate(
     let rate_i64 = if utilization_i64 <= optimal_utilization_i64 {
         // rate = base + (utilization * slope1 / optimal_utilization)
         // Use round-to-nearest for fair interest rate calculation
-        let variable_rate = (utilization_i64 as u128)
-            .safe_fixed_mul_round(&Env::default(), slope1_i64 as u128, optimal_utilization_i64 as u128) as i64;
-        
+        let variable_rate = (utilization_i64 as u128).safe_fixed_mul_round(
+            &Env::default(),
+            slope1_i64 as u128,
+            optimal_utilization_i64 as u128,
+        ) as i64;
+
         base_rate_i64.checked_add(variable_rate).unwrap_or_else(|| {
             panic_with_error!(&Env::default(), InsuranceFundError::ArithmeticOverflow);
         })
     } else {
         // rate = base + slope1 + ((utilization - optimal_utilization) * slope2 / (10_000_000 - optimal_utilization))
-        let excess_util = utilization_i64.checked_sub(optimal_utilization_i64).unwrap_or_else(|| {
-            panic_with_error!(&Env::default(), InsuranceFundError::ArithmeticOverflow);
-        });
-        
-        let remaining = PERCENTAGE_PRECISION_I64.checked_sub(optimal_utilization_i64).unwrap_or_else(|| {
-            panic_with_error!(&Env::default(), InsuranceFundError::ArithmeticOverflow);
-        });
+        let excess_util = utilization_i64
+            .checked_sub(optimal_utilization_i64)
+            .unwrap_or_else(|| {
+                panic_with_error!(&Env::default(), InsuranceFundError::ArithmeticOverflow);
+            });
+
+        let remaining = PERCENTAGE_PRECISION_I64
+            .checked_sub(optimal_utilization_i64)
+            .unwrap_or_else(|| {
+                panic_with_error!(&Env::default(), InsuranceFundError::ArithmeticOverflow);
+            });
 
         // Ensure remaining is not zero to prevent division by zero
         if remaining == 0 {
@@ -168,8 +175,11 @@ pub fn calculate_rate(
         }
 
         // Use round-to-nearest for fair slope2 calculation
-        let slope2_part = (excess_util as u128)
-            .safe_fixed_mul_round(&Env::default(), slope2_i64 as u128, remaining as u128) as i64;
+        let slope2_part = (excess_util as u128).safe_fixed_mul_round(
+            &Env::default(),
+            slope2_i64 as u128,
+            remaining as u128,
+        ) as i64;
 
         base_rate_i64
             .checked_add(slope1_i64)

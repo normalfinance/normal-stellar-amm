@@ -4,19 +4,13 @@ use crate::events::SinkEvents;
 use crate::interest::calculate_rate;
 use crate::interest::calculate_total_reserve_value;
 use crate::interest::calculate_utilization;
-use crate::interface::{ AdminInterface, SinkTrait };
+use crate::interface::{AdminInterface, SinkTrait};
 use crate::reserve;
 use crate::reserve::SinkReserve;
 use crate::stake::Stake;
 use crate::stake::{
-    apply_rebase_to_insurance_fund,
-    apply_rebase_to_stake,
-    calculate_shares_lost,
-    get_stake,
-    reserve_amount_to_shares,
-    save_stake,
-    shares_to_reserve_amount,
-    StakeAction,
+    apply_rebase_to_insurance_fund, apply_rebase_to_stake, calculate_shares_lost, get_stake,
+    reserve_amount_to_shares, save_stake, shares_to_reserve_amount, StakeAction,
 };
 use crate::storage::get_contract_token_balance;
 use crate::storage::get_oracle_registry;
@@ -37,51 +31,30 @@ use crate::storage::set_token_whitelist;
 use crate::storage::set_token_whitelist_vec;
 use crate::storage::WhitelistToken;
 use crate::storage::{
-    get_base_rate,
-    get_is_killed_deposit,
-    get_is_killed_request_withdraw,
-    get_is_killed_withdraw,
-    get_optimal_insurance,
-    get_optimal_utilization,
-    get_rate_slope_a,
-    get_rate_slope_b,
-    get_unstaking_period,
-    set_base_rate,
-    set_is_killed_deposit,
-    set_is_killed_request_withdraw,
-    set_is_killed_withdraw,
-    set_optimal_insurance,
-    set_optimal_utilization,
-    set_rate_slope_a,
-    set_rate_slope_b,
-    set_unstaking_period,
+    get_base_rate, get_is_killed_deposit, get_is_killed_request_withdraw, get_is_killed_withdraw,
+    get_optimal_insurance, get_optimal_utilization, get_rate_slope_a, get_rate_slope_b,
+    get_unstaking_period, set_base_rate, set_is_killed_deposit, set_is_killed_request_withdraw,
+    set_is_killed_withdraw, set_optimal_insurance, set_optimal_utilization, set_rate_slope_a,
+    set_rate_slope_b, set_unstaking_period,
 };
-use reentrancy_guard::{ enter, exit };
+use reentrancy_guard::{enter, exit};
 
-use access_control::access::{ AccessControl, AccessControlTrait };
-use access_control::emergency::{ get_emergency_mode, set_emergency_mode };
+use access_control::access::{AccessControl, AccessControlTrait};
+use access_control::emergency::{get_emergency_mode, set_emergency_mode};
 use access_control::errors::AccessControlError;
 use access_control::events::Events as AccessControlEvents;
 use access_control::interface::TransferableContract;
 use access_control::management::SingleAddressManagementTrait;
-use access_control::role::{ Role, SymbolRepresentation };
+use access_control::role::{Role, SymbolRepresentation};
 use access_control::transfer::TransferOwnershipTrait;
 use access_control::utils::require_admin;
 use soroban_sdk::contractmeta;
 use soroban_sdk::{
-    contract,
-    contractimpl,
-    panic_with_error,
-    Address,
-    BytesN,
-    Env,
-    IntoVal,
-    Symbol,
-    Vec,
+    contract, contractimpl, panic_with_error, Address, BytesN, Env, IntoVal, Symbol, Vec,
 };
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
-use upgrade::{ apply_upgrade, commit_upgrade, revert_upgrade };
+use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::math::safe_math::SafeMath;
 use utils::state::pool::PoolInfo;
 use utils::token::transfer_token;
@@ -90,7 +63,10 @@ use utils::validate;
 use utils::validation::ensure_non_zero_u128;
 use utils::validation::validate_percentages;
 
-contractmeta!(key = "Description", val = "Backstop fund to cover pool liquidity deficits");
+contractmeta!(
+    key = "Description",
+    val = "Backstop fund to cover pool liquidity deficits"
+);
 
 #[contract]
 pub struct Sink;
@@ -108,7 +84,7 @@ impl SinkTrait for Sink {
         unstaking_period: u64,
         optimal_utilization: u32,
         base_rate: i32,
-        rate_slopes: (u32, u32)
+        rate_slopes: (u32, u32),
     ) {
         admin.require_auth();
 
@@ -166,7 +142,7 @@ impl SinkTrait for Sink {
         token_b_client.transfer(
             e.current_contract_address(),
             &get_sink_address(e),
-            &(token_b_to_remove as i128)
+            &(token_b_to_remove as i128),
         );
 
         SinkEvents::new(&e).deposit(user.clone(), token.clone());
@@ -196,7 +172,7 @@ impl SinkTrait for Sink {
         token_b_client.transfer(
             &get_sink_address(e),
             e.current_contract_address(),
-            &(token_b_to_deposit as i128)
+            &(token_b_to_deposit as i128),
         );
 
         SinkEvents::new(&e).withdraw(user.clone(), token.clone());
@@ -247,7 +223,7 @@ impl SinkTrait for Sink {
             &premium_token,
             &sender,
             &e.current_contract_address(),
-            &(amount as i128)
+            &(amount as i128),
         );
 
         FundEvents::new(&e).collect_premium(sender, premium_token, amount);
@@ -468,7 +444,13 @@ impl StakingTrait for Sink {
         stake.save(&e);
 
         // Deposit tokens from the user to the Fund
-        transfer_token(&e, &token, &user, &e.current_contract_address(), &(amount as i128));
+        transfer_token(
+            &e,
+            &token,
+            &user,
+            &e.current_contract_address(),
+            &(amount as i128),
+        );
 
         FundEvents::new(&e).insurance_stake_record(
             user.clone(),
@@ -479,7 +461,7 @@ impl StakingTrait for Sink {
             stake_shares_before,
             total_shares_before,
             stake.shares,
-            reserve.total_shares
+            reserve.total_shares,
         );
 
         exit(&e);
@@ -557,7 +539,11 @@ impl StakingTrait for Sink {
 
         // Error if user does not have enough shares to satisfy the request
         let stake_shares = stake.checked_shares(&e);
-        validate!(&e, stake_shares >= n_shares, SinkError::InsufficientIFShares);
+        validate!(
+            &e,
+            stake_shares >= n_shares,
+            SinkError::InsufficientIFShares
+        );
 
         // Update the Stake
         stake.last_withdraw_request_shares = n_shares;
@@ -575,18 +561,20 @@ impl StakingTrait for Sink {
             SinkError::InvalidInsuranceUnstakeSize
         );
 
-        validate!(&e, stake.base == reserve.shares_base, SinkError::InvalidIFRebase);
-
-        stake.last_withdraw_request_value = shares_to_reserve_amount(
+        validate!(
             &e,
-            stake.last_withdraw_request_shares,
-            &reserve
-        ).min(reserve.balance.safe_sub(&e, 1));
+            stake.base == reserve.shares_base,
+            SinkError::InvalidIFRebase
+        );
+
+        stake.last_withdraw_request_value =
+            shares_to_reserve_amount(&e, stake.last_withdraw_request_shares, &reserve)
+                .min(reserve.balance.safe_sub(&e, 1));
 
         validate!(
             &e,
-            stake.last_withdraw_request_value == 0 ||
-                stake.last_withdraw_request_value < reserve.balance,
+            stake.last_withdraw_request_value == 0
+                || stake.last_withdraw_request_value < reserve.balance,
             SinkError::InvalidIFUnstakeSize
         );
 
@@ -605,7 +593,7 @@ impl StakingTrait for Sink {
             stake_shares_before,
             total_shares_before,
             stake.shares,
-            reserve.total_shares
+            reserve.total_shares,
         );
 
         exit(&e);
@@ -670,14 +658,22 @@ impl StakingTrait for Sink {
         let total_shares_before = reserve.total_shares;
 
         // if stake base != base
-        validate!(&e, stake.base == reserve.shares_base, SinkError::InvalidIFRebase);
+        validate!(
+            &e,
+            stake.base == reserve.shares_base,
+            SinkError::InvalidIFRebase
+        );
 
         // Decrease the Stake shares
         let stake_shares_lost = calculate_shares_lost(&e, &stake, &reserve);
 
         stake.decrease_shares(&e, stake_shares_lost);
 
-        validate!(&e, reserve.total_shares >= stake_shares_lost, SinkError::InsufficientIFShares);
+        validate!(
+            &e,
+            reserve.total_shares >= stake_shares_lost,
+            SinkError::InsufficientIFShares
+        );
 
         // Decrease the Fund shares
         reserve.remove_total_shares(&e, stake_shares_lost, now);
@@ -699,7 +695,7 @@ impl StakingTrait for Sink {
             stake_shares_before,
             total_shares_before,
             stake.shares,
-            reserve.total_shares
+            reserve.total_shares,
         );
 
         exit(&e);
@@ -758,7 +754,11 @@ impl StakingTrait for Sink {
         let mut stake = get_stake(&e, &user, &token);
 
         // Add bounds checking to prevent underflow when system clock goes backwards
-        validate!(&e, now >= stake.last_withdraw_request_ts, SinkError::InvalidTimestamp);
+        validate!(
+            &e,
+            now >= stake.last_withdraw_request_ts,
+            SinkError::InvalidTimestamp
+        );
         let time_since_withdraw_request = now - stake.last_withdraw_request_ts;
 
         // Error if the unstaking period has not yet elapsed
@@ -783,7 +783,11 @@ impl StakingTrait for Sink {
         // Must submit withdraw request and wait the escrow period
         validate!(&e, n_shares > 0, SinkError::InvalidIFUnstake);
 
-        validate!(&e, stake_shares_before >= n_shares, SinkError::InsufficientIFShares);
+        validate!(
+            &e,
+            stake_shares_before >= n_shares,
+            SinkError::InsufficientIFShares
+        );
 
         let amount = shares_to_reserve_amount(&e, n_shares, &reserve);
 
@@ -794,11 +798,19 @@ impl StakingTrait for Sink {
         stake.decrease_shares(&e, n_shares);
 
         // Add bounds checking to prevent underflow when withdrawing more than cost basis
-        validate!(&e, stake.cost_basis >= withdraw_amount, SinkError::CostBasisUnderflow);
+        validate!(
+            &e,
+            stake.cost_basis >= withdraw_amount,
+            SinkError::CostBasisUnderflow
+        );
         stake.cost_basis = stake.cost_basis.safe_sub(&e, withdraw_amount);
 
         // Add bounds checking to prevent critical share tracking underflow
-        validate!(&e, reserve.total_shares >= n_shares, SinkError::InsufficientIFShares);
+        validate!(
+            &e,
+            reserve.total_shares >= n_shares,
+            SinkError::InsufficientIFShares
+        );
 
         reserve.remove_total_shares(&e, n_shares, now);
 
@@ -817,7 +829,7 @@ impl StakingTrait for Sink {
             &token,
             &e.current_contract_address(),
             &user,
-            &(withdraw_amount as i128)
+            &(withdraw_amount as i128),
         );
 
         FundEvents::new(&e).insurance_stake_record(
@@ -829,7 +841,7 @@ impl StakingTrait for Sink {
             stake_shares_before,
             total_shares_before,
             stake.shares,
-            reserve.total_shares
+            reserve.total_shares,
         );
 
         // Additional validation
@@ -902,7 +914,7 @@ impl AdminInterface for Sink {
         let total_liquidity_imbalance: i128 = e.invoke_contract(
             &get_pool_router(&e),
             &Symbol::new(&e, "get_total_liquidity_imbalance"),
-            Vec::from_array(&e, [])
+            Vec::from_array(&e, []),
         );
 
         let updated_optimal_insurance = if total_liquidity_imbalance <= 0 {
@@ -919,7 +931,7 @@ impl AdminInterface for Sink {
         FundEvents::new(&e).sync_optimal_insurance(
             admin,
             current_optimal_insurance,
-            updated_optimal_insurance
+            updated_optimal_insurance,
         );
     }
 
@@ -957,7 +969,7 @@ impl AdminInterface for Sink {
         let pool_details_result = e.try_invoke_contract::<PoolInfo, soroban_sdk::Error>(
             &get_pool_router(&e),
             &Symbol::new(&e, "query_pool_details"),
-            Vec::from_array(&e, [asset.into_val(&e)])
+            Vec::from_array(&e, [asset.into_val(&e)]),
         );
 
         match pool_details_result {
@@ -975,10 +987,13 @@ impl AdminInterface for Sink {
                 let pay_from_insurance_result = e.try_invoke_contract::<u128, soroban_sdk::Error>(
                     &pool_info.pool_address,
                     &Symbol::new(&e, "pay_insurance_claim"),
-                    Vec::from_array(&e, [
-                        e.current_contract_address().to_val(),
-                        reserve.balance.into_val(&e),
-                    ])
+                    Vec::from_array(
+                        &e,
+                        [
+                            e.current_contract_address().to_val(),
+                            reserve.balance.into_val(&e),
+                        ],
+                    ),
                 );
 
                 match pay_from_insurance_result {
@@ -1049,7 +1064,7 @@ impl AdminInterface for Sink {
             admin,
             payer,
             old_status,
-            status
+            status,
         );
     }
 
@@ -1066,19 +1081,22 @@ impl AdminInterface for Sink {
         optimal_utilization: u32,
         base_rate: i32,
         rate_slope_a: u32,
-        rate_slope_b: u32
+        rate_slope_b: u32,
     ) {
         admin.require_auth();
         require_admin(&e, &admin);
 
         validate_percentages(
             &e,
-            &Vec::from_array(&e, [
-                optimal_utilization as i32,
-                base_rate,
-                rate_slope_a as i32,
-                rate_slope_b as i32,
-            ])
+            &Vec::from_array(
+                &e,
+                [
+                    optimal_utilization as i32,
+                    base_rate,
+                    rate_slope_a as i32,
+                    rate_slope_b as i32,
+                ],
+            ),
         );
 
         set_optimal_utilization(&e, &optimal_utilization);
@@ -1109,7 +1127,7 @@ impl AdminInterface for Sink {
         let _: u128 = e.invoke_contract(
             &get_oracle_registry(&e),
             &Symbol::new(&e, "get_price"),
-            Vec::from_array(&e, [token.symbol.to_val()])
+            Vec::from_array(&e, [token.symbol.to_val()]),
         );
 
         set_token_whitelist(&e, &token);
@@ -1136,7 +1154,7 @@ impl AdminInterface for Sink {
             &(WhitelistToken {
                 active: status,
                 ..token
-            })
+            }),
         );
     }
 
@@ -1393,11 +1411,10 @@ impl TransferableContract for Sink {
         let access_control = AccessControl::new(&e);
         let role = Role::from_symbol(&e, role_name);
         match access_control.get_transfer_ownership_deadline(&role) {
-            0 =>
-                match access_control.get_role_safe(&role) {
-                    Some(address) => address,
-                    None => panic_with_error!(&e, AccessControlError::RoleNotFound),
-                }
+            0 => match access_control.get_role_safe(&role) {
+                Some(address) => address,
+                None => panic_with_error!(&e, AccessControlError::RoleNotFound),
+            },
             _ => access_control.get_future_address(&role),
         }
     }

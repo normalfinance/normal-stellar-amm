@@ -1,5 +1,5 @@
 [package]
-name = "soroban_config_storage_contract"
+name = "config-storage"
 version.workspace = true
 edition = "2021"
 publish = false

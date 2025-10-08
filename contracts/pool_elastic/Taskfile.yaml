@@ -1,0 +1,43 @@
+version: '3'
+tasks:
+  clean:
+    cmd: cargo clean
+
+  fmt:
+    cmd: cargo fmt --all
+
+
+  check:
+    cmd: cargo check
+
+  build:
+    cmds:
+      - task -d ../config_storage build || exit 1
+      - task -d ../rewards_gauge build || exit 1
+      - task -d ../token build || exit 1
+      - task -d ../pool_plane build || exit 1
+      - soroban contract build --package pool-elastic
+      - soroban contract optimize --wasm ../../target/wasm32v1-none/release/pool_elastic.wasm --wasm-out ../../target/wasm32v1-none/release/pool_elastic.wasm
+      - cp ../../target/wasm32v1-none/release/pool_elastic.wasm ../../wasm/pool_elastic.wasm
+
+  test:
+    deps:
+      - build
+    cmd: cargo test
+
+  test_slow:
+    deps:
+      - build
+    cmd: cargo test --features=slow_tests
+
+  default:
+    cmds:
+      - task: build
+
+  all:
+    cmds:
+      - task: clean
+      - task: fmt
+      - task: build
+      - task: check
+      - task: test

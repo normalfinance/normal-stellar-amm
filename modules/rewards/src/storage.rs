@@ -1,6 +1,6 @@
 use soroban_sdk::{contracttype, panic_with_error, Address, Env, Map, Vec};
 use utils::bump::{bump_instance, bump_persistent};
-use utils::storage_errors::StorageError;
+use utils::errors::storage_errors::StorageError;
 
 // ------------------------------------
 // Data Structures

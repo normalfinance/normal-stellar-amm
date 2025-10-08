@@ -37,7 +37,7 @@ pub enum InsuranceFundError {
     FundDepositKilled = 30,
     FundRequestWithdrawKilled = 31,
     FundWithdrawKilled = 32,
-    
+
     // arithmetic safety
     ConversionOverflow = 33,
     ArithmeticOverflow = 34,

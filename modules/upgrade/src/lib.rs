@@ -7,7 +7,7 @@ pub mod interface;
 mod storage;
 
 use crate::constants::UPGRADE_DELAY;
-use crate::errors::UpgradeError;
+use crate::errors::Error;
 use crate::storage::{
     get_future_wasm, get_upgrade_deadline, put_future_wasm, put_upgrade_deadline,
 };
@@ -17,7 +17,7 @@ use utils::errors::storage_errors::StorageError;
 
 pub fn commit_upgrade(e: &Env, new_wasm_hash: &BytesN<32>) {
     if get_upgrade_deadline(e) != 0 {
-        panic_with_error!(e, UpgradeError::AnotherActionActive);
+        panic_with_error!(e, Error::AnotherActionActive);
     }
 
     let deadline = e.ledger().timestamp() + UPGRADE_DELAY;
@@ -28,11 +28,12 @@ pub fn commit_upgrade(e: &Env, new_wasm_hash: &BytesN<32>) {
 pub fn apply_upgrade(e: &Env) -> BytesN<32> {
     if !get_emergency_mode(e) {
         if e.ledger().timestamp() < get_upgrade_deadline(e) {
-            panic_with_error!(e, UpgradeError::ActionNotReadyYet);
+            panic_with_error!(e, Error::ActionNotReadyYet);
         }
-        if get_upgrade_deadline(e) == 0 {
-            panic_with_error!(e, UpgradeError::NoActionActive);
-        }
+    }
+
+    if get_upgrade_deadline(e) == 0 {
+        panic_with_error!(e, Error::NoActionActive);
     }
 
     put_upgrade_deadline(e, &0);

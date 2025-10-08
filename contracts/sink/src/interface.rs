@@ -4,7 +4,6 @@ use crate::storage::WhitelistToken;
 use crate::{reserve::InsuranceFundReserve, stake::Stake};
 
 pub trait StakingTrait {
-
     fn deposit(e: Env, user: Address, token: Address, amount: u128);
 
     fn request_withdraw(e: Env, user: Address, token: Address, amount: u128);
@@ -39,7 +38,6 @@ pub trait InsuranceFundTrait {
     fn deposit(e: Env, user: Address, token: Address, amount: u128);
 
     fn request_withdraw(e: Env, user: Address, token: Address, amount: u128);
-
 
     fn pay_premium(e: Env, sender: Address, amount: u128);
 

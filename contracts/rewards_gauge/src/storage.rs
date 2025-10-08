@@ -1,7 +1,7 @@
 use paste::paste;
 use soroban_sdk::{contracttype, panic_with_error, Address, Env, Vec, U256};
 use utils::bump::{bump_instance, bump_persistent};
-use utils::storage_errors::StorageError;
+use utils::errors::storage_errors::StorageError;
 use utils::{
     generate_instance_storage_getter, generate_instance_storage_getter_and_setter,
     generate_instance_storage_setter,

@@ -12,4 +12,4 @@ mod test;
 mod test_permissions;
 mod testutils;
 
-pub use crate::contract::{InsuranceFund, InsuranceFundClient};
+pub use crate::contract::{Sink, SinkClient};
