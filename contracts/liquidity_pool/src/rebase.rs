@@ -23,18 +23,23 @@ pub fn over(e: &Env, reserve_a: u128, reserve_b: u128) -> (u128, u128) {
     // Calculate how much Token B to remove
     let token_b_to_remove = 0;
 
-    // Transfer Token B to the Sink
-    let token_b_client = SorobanTokenClient::new(&e, &get_token_b(e));
-    token_b_client.transfer(
-        e.current_contract_address(),
-        &get_sink_address(e),
-        &(token_b_to_remove as i128)
-    );
+    match
+        e.try_invoke_contract::<u32, soroban_sdk::Error>(
+            &get_sink_address(e),
+            &Symbol::new(e, "deposit"),
+            Vec::from_array(e, [user.clone().into_val(e)])
+        )
+    {
+        Ok(Ok(deposit_amount)) => {
+            // Update Reserve B
+            set_reserve_b(&e, &(reserve_b - (deposit_amount as u128)));
 
-    // Update Reserve B
-    set_reserve_b(&e, &(reserve_b - (token_b_to_remove as u128)));
-
-    (token_a_to_mint, token_b_to_remove)
+            (token_a_to_mint, deposit_amount)
+        }
+        Ok(Err(_)) | Err(_) => {
+            panic_with_error();
+        }
+    }
 }
 
 //
@@ -51,13 +56,23 @@ pub fn under(e: &Env, desired_a: u128) -> (u128, u128) {
     // Calculate how much Token B to deposit
     let token_b_to_deposit = 0;
 
-    // Transfer Token B from the Sink to the Pool
-    let token_b_client = SorobanTokenClient::new(&e, &get_token_b(e));
-    token_b_client.transfer(
-        &get_sink_address(e),
-        e.current_contract_address(),
-        &(token_b_to_deposit as i128)
-    );
+    match
+        e.try_invoke_contract::<u32, soroban_sdk::Error>(
+            &get_sink_address(e),
+            &Symbol::new(e, "withdraw"),
+            Vec::from_array(e, [user.clone().into_val(e)])
+        )
+    {
+        Ok(Ok(deposit_amount)) => {
+            // Update Reserve B
+            set_reserve_b(&e, &(reserve_b + (deposit_amount as u128)));
+
+            (token_a_to_mint, deposit_amount);
+        }
+        Ok(Err(_)) | Err(_) => {
+            panic_with_error();
+        }
+    }
 
     // Update Reserve B
     set_reserve_b(&e, &(reserve_b + (token_b_to_deposit as u128)));
