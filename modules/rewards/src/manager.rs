@@ -1,8 +1,7 @@
-use crate::boost_feed::RewardBoostFeedClient;
 use crate::constants::REWARD_PRECISION;
 use crate::errors::RewardsError;
 use crate::storage::{
-    BoostFeedStorageTrait, BoostTokenStorageTrait, PoolRewardConfig, PoolRewardData,
+    PoolRewardConfig, PoolRewardData,
     PoolRewardsStorageTrait, RewardInvDataStorageTrait, RewardTokenStorageTrait, Storage,
     UserRewardData, UserRewardsStorageTrait, WorkingBalancesStorageTrait,
 };
@@ -30,33 +29,6 @@ impl Manager {
     }
 
     // ------------------------------------
-    // Basic getters for boost balances
-    // ------------------------------------
-
-    pub fn get_user_boost_balance(&self, user: &Address) -> u128 {
-        if self.storage.has_reward_boost_token() {
-            match SorobanTokenClient::new(&self.env, &self.storage.get_reward_boost_token())
-                .try_balance(user)
-            {
-                Ok(balance) => balance.unwrap() as u128,
-                // if trustline is not established, return 0
-                Err(_) => 0,
-            }
-        } else {
-            0
-        }
-    }
-
-    pub fn get_total_locked(&self) -> u128 {
-        if self.storage.has_reward_boost_feed() {
-            RewardBoostFeedClient::new(&self.env, &self.storage.get_reward_boost_feed())
-                .total_supply()
-        } else {
-            0
-        }
-    }
-
-    // ------------------------------------
     // Effective balance logic
     // ------------------------------------
 
@@ -67,8 +39,8 @@ impl Manager {
         total_share: u128,
     ) -> u128 {
         // b_u = 2.5 * min(0.4 * b_u + 0.6 * S * w_i / W, b_u)
-        let lock_balance = self.get_user_boost_balance(&user);
-        let total_locked = self.get_total_locked();
+        // let lock_balance = self.get_user_boost_balance(&user);
+        // let total_locked = self.get_total_locked();
 
         let mut adjusted_balance = share_balance;
         if total_locked > 0 {

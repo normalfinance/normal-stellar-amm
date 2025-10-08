@@ -129,15 +129,6 @@ impl LiquidityPoolCrunch for LiquidityPool {
 
 #[contractimpl]
 impl LiquidityPoolTrait for LiquidityPool {
-    // Returns the type of the pool.
-    //
-    // # Returns
-    //
-    // The type of the pool as a Symbol.
-    fn pool_type(e: Env) -> Symbol {
-        Symbol::new(&e, "constant_product")
-    }
-
     // Initializes the liquidity pool.
     //
     // # Arguments
@@ -1222,30 +1213,6 @@ impl RewardsTrait for LiquidityPool {
         }
 
         rewards.storage().put_reward_token(reward_token);
-    }
-
-    fn initialize_boost_config(e: Env, reward_boost_token: Address, reward_boost_feed: Address) {
-        let rewards_storage = get_rewards_manager(&e).storage();
-        if rewards_storage.has_reward_boost_token() {
-            panic_with_error!(&e, LiquidityPoolError::RewardsAlreadyInitialized);
-        }
-
-        rewards_storage.put_reward_boost_token(reward_boost_token);
-        rewards_storage.put_reward_boost_feed(reward_boost_feed);
-    }
-
-    fn set_reward_boost_config(
-        e: Env,
-        admin: Address,
-        reward_boost_token: Address,
-        reward_boost_feed: Address,
-    ) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-
-        let rewards_storage = get_rewards_manager(&e).storage();
-        rewards_storage.put_reward_boost_token(reward_boost_token);
-        rewards_storage.put_reward_boost_feed(reward_boost_feed);
     }
 
     // Sets the rewards configuration.

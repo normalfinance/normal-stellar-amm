@@ -50,8 +50,6 @@ enum DataKey {
     // Reward tokens & lock tokens
     RewardStorage,
     RewardToken,
-    RewardBoostToken,
-    RewardBoostFeed,
 
     // Working balances
     WorkingBalance(Address),
@@ -75,76 +73,6 @@ impl Storage {
             env: e.clone(),
             inv_cache: Map::new(e),
         }
-    }
-}
-
-// ------------------------------------
-// Sub-trait: Boost Token
-// ------------------------------------
-
-pub trait BoostTokenStorageTrait {
-    fn get_reward_boost_token(&self) -> Address;
-    fn put_reward_boost_token(&self, contract: Address);
-    fn has_reward_boost_token(&self) -> bool;
-}
-
-impl BoostTokenStorageTrait for Storage {
-    fn get_reward_boost_token(&self) -> Address {
-        match self
-            .env
-            .storage()
-            .instance()
-            .get(&DataKey::RewardBoostToken)
-        {
-            Some(v) => v,
-            None => panic_with_error!(self.env, StorageError::ValueNotInitialized),
-        }
-    }
-
-    fn put_reward_boost_token(&self, contract: Address) {
-        bump_instance(&self.env);
-        self.env
-            .storage()
-            .instance()
-            .set(&DataKey::RewardBoostToken, &contract);
-    }
-
-    fn has_reward_boost_token(&self) -> bool {
-        self.env
-            .storage()
-            .instance()
-            .has(&DataKey::RewardBoostToken)
-    }
-}
-
-// ------------------------------------
-// Sub-trait: Boost Feed
-// ------------------------------------
-
-pub trait BoostFeedStorageTrait {
-    fn get_reward_boost_feed(&self) -> Address;
-    fn put_reward_boost_feed(&self, contract: Address);
-    fn has_reward_boost_feed(&self) -> bool;
-}
-
-impl BoostFeedStorageTrait for Storage {
-    fn get_reward_boost_feed(&self) -> Address {
-        match self.env.storage().instance().get(&DataKey::RewardBoostFeed) {
-            Some(v) => v,
-            None => panic_with_error!(self.env, StorageError::ValueNotInitialized),
-        }
-    }
-
-    fn put_reward_boost_feed(&self, contract: Address) {
-        bump_instance(&self.env);
-        self.env
-            .storage()
-            .instance()
-            .set(&DataKey::RewardBoostFeed, &contract);
-    }
-
-    fn has_reward_boost_feed(&self) -> bool {
-        self.env.storage().instance().has(&DataKey::RewardBoostFeed)
     }
 }
 

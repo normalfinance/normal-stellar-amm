@@ -17,9 +17,6 @@ pub trait LiquidityPoolCrunch {
 }
 
 pub trait LiquidityPoolTrait {
-    // Get symbolic explanation of pool type.
-    fn pool_type(e: Env) -> Symbol;
-
     // Sets the token contract addresses for this pool
     fn initialize(
         e: Env,
@@ -172,15 +169,6 @@ pub trait UpgradeableContract {
 pub trait RewardsTrait {
     // Initialize rewards token address
     fn initialize_rewards_config(e: Env, reward_token: Address);
-
-    fn initialize_boost_config(e: Env, reward_boost_token: Address, reward_boost_feed: Address);
-
-    fn set_reward_boost_config(
-        e: Env,
-        admin: Address,
-        reward_boost_token: Address,
-        reward_boost_feed: Address,
-    );
 
     // Configure rewards for pool. Every second tps of coins
     // being distributed across all liquidity providers
