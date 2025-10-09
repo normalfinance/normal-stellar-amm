@@ -21,7 +21,7 @@ tasks:
       - task -d contracts/token build || exit 1
       - task -d contracts/token_share build || exit 1
       - task -d contracts/pool_router build || exit 1
-      - task -d contracts/sink build || exit 1
+      # - task -d contracts/sink build || exit 1
       - task -d contracts/rewards_gauge build || exit 1
       - cp ./target/wasm32v1-none/release/*.wasm ./wasm
 

@@ -1185,18 +1185,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sink"
-version = "1.0.0"
-dependencies = [
- "access_control",
- "paste",
- "soroban-fixed-point-math",
- "soroban-sdk",
- "upgrade",
- "utils",
-]
-
-[[package]]
 name = "smallvec"
 version = "1.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
