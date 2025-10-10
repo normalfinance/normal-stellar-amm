@@ -7,6 +7,7 @@ use access_control::constants::ADMIN_ACTIONS_DELAY;
 use pool_config_storage::{
     testutils::deploy_config_storage, testutils::Client as ConfigStorageClient,
 };
+use sep_40_oracle::testutils::{Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM};
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
@@ -59,6 +60,9 @@ pub(crate) struct Setup<'a> {
     pub(crate) pause_admin: Address,
     pub(crate) emergency_pause_admin: Address,
     pub(crate) system_fee_admin: Address,
+
+    pub(crate) oracle_addr: Address,
+    pub(crate) oracle_client: MockPriceOracleClient<'a>,
 }
 
 impl Default for Setup<'_> {
@@ -86,6 +90,10 @@ impl Setup<'_> {
         e.mock_all_auths();
         e.cost_estimate().budget().reset_unlimited();
 
+        // Jump time so oracle works
+        let start_time = 1755271154;
+        jump(&e, start_time);
+
         let users = Self::generate_random_users(&e, config.users_count);
         let admin = users[0].clone();
         let emergency_admin = Address::generate(&e);
@@ -112,10 +120,40 @@ impl Setup<'_> {
         let config_storage = deploy_config_storage(&e, &admin, &emergency_admin);
         let router = Address::generate(&e);
 
+        // Setup oracle
+        let sol_symbol = Symbol::new(&e, "SOL");
+        let usdc_sybmol = Symbol::new(&e, "USDC");
+        let usd_sybmol = Symbol::new(&e, "USD");
+
+        let sol_asset = MockAsset::Other(sol_symbol.clone());
+        let usdc_asset = MockAsset::Other(usdc_sybmol.clone());
+        let usd_asset = MockAsset::Other(usd_sybmol);
+
+        let (oracle_addr, oracle_client) = setup_price_feed_oracle(
+            &e,
+            &admin,
+            &usd_asset,
+            &Vec::from_array(&e, [sol_asset.clone(), usdc_asset.clone()]),
+            14,
+            300,
+        );
+
+        let prices_1: Vec<i128> = Vec::from_array(&e, [230_00000000000000, 1_00000000000000]);
+        oracle_client.set_price(&prices_1, &start_time);
+
+        // verify price data can be fetched
+        let result_1 = oracle_client.lastprice(&sol_asset).unwrap();
+        assert_eq!(result_1.price, prices_1.get_unchecked(0));
+        // assert_eq!(result_1.timestamp, start_time);
+
+        let result_2 = oracle_client.lastprice(&usdc_asset).unwrap();
+        assert_eq!(result_2.price, prices_1.get_unchecked(1));
+
         let liq_pool = create_liqpool_contract(
             &e,
             &admin,
             &router,
+            &oracle_addr,
             &install_token_wasm(&e),
             &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
             &reward_token.address,
@@ -168,6 +206,8 @@ impl Setup<'_> {
             pause_admin,
             emergency_pause_admin,
             system_fee_admin,
+            oracle_addr,
+            oracle_client,
         }
     }
 
@@ -262,7 +302,7 @@ pub fn install_token_wasm(e: &Env) -> BytesN<32> {
 }
 
 mod rewards_gauge {
-    soroban_sdk::contractimport!(file = "../../wasm/rewards_gauge.wasm");
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/rewards_gauge.wasm");
 }
 
 pub(crate) fn deploy_rewards_gauge<'a>(
@@ -277,4 +317,19 @@ pub(crate) fn deploy_rewards_gauge<'a>(
             rewards_gauge::Args::__constructor(pool, reward_token),
         ),
     )
+}
+
+// (https://github.com/script3/sep-40-oracle/blob/d2d9a19079d95f79c16c3ff506416346d75b537f/mock-sep-40/src/test.rs)
+fn setup_price_feed_oracle<'a>(
+    env: &Env,
+    admin: &Address,
+    base: &MockAsset,
+    assets: &Vec<MockAsset>,
+    decimals: u32,
+    resolution: u32,
+) -> (Address, MockPriceOracleClient<'a>) {
+    let oracle_addr = env.register(MockPriceOracleWASM, ());
+    let oracle_client = MockPriceOracleClient::new(env, &oracle_addr);
+    oracle_client.set_data(admin, base, assets, &decimals, &resolution);
+    (oracle_addr, oracle_client)
 }

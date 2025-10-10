@@ -4,7 +4,7 @@ extern crate std;
 use crate::plane::{pool_plane, PoolPlaneClient};
 use crate::LiquidityPoolClient;
 use access_control::constants::ADMIN_ACTIONS_DELAY;
-use liquidity_pool_config_storage::{
+use pool_config_storage::{
     testutils::deploy_config_storage, testutils::Client as ConfigStorageClient,
 };
 use soroban_sdk::token::{
@@ -248,7 +248,7 @@ pub fn create_liqpool_contract<'a>(
             fee_fraction,
             5000, // 50% protocol fee fraction
         ),
-        &(reward_token.clone(),),
+        reward_token,
         plane,
         config_storage,
     );
@@ -260,7 +260,7 @@ pub fn install_token_wasm(e: &Env) -> BytesN<32> {
 }
 
 mod rewards_gauge {
-    soroban_sdk::contractimport!(file = "../../wasm/rewards_gauge.wasm");
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/rewards_gauge.wasm");
 }
 
 pub(crate) fn deploy_rewards_gauge<'a>(

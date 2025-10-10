@@ -1,5 +1,6 @@
 #![no_std]
 
+mod circuit_breaker;
 mod constants;
 mod contract;
 pub mod errors;
@@ -11,6 +12,7 @@ mod pool_interface;
 mod rebase;
 mod rewards;
 mod storage;
+mod tax;
 mod test;
 mod test_permissions;
 mod testutils;

@@ -24,6 +24,9 @@ pub enum PoolValidationError {
     ZeroAmount = 2018,
     InsufficientBalance = 2019,
     InMaxNotSatisfied = 2020,
+    // added
     WithdrawExceedsMinLiquidity = 2021,
     RebaseTooSoon = 2022,
+    CircuitBreaker = 2023,
+    InvalidOracle = 2024,
 }

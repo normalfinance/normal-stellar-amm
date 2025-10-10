@@ -4,6 +4,7 @@ pub use utils::bump::bump_instance;
 use utils::constant::ONE_HOUR;
 use utils::errors::storage_errors::StorageError;
 use utils::generate_instance_storage_getter;
+use utils::state::oracle_registry::{HistoricalOracleData, OracleGuardRails};
 use utils::{
     generate_instance_storage_getter_and_setter,
     generate_instance_storage_getter_and_setter_with_default,
@@ -17,31 +18,52 @@ pub enum DataKey {
     TokenB,
     ReserveA,
     ReserveB,
-    FeeFraction, // 1 = 0.01%
 
     TargetAsset,
+
+    // Rebase
     MinRebaseInterval, // minimum amount of time that must elapse between rebases
     LastRebaseTs,      // the timestamp of the last rebase
 
+    // Contract
     Plane,
     Router,
     Sink,
-    Oracle,
 
-    // OracleGuardRails,   // a set of oracle price data validations and protections.
-    // MintCapFraction, // a bps cap on how much token_a can be minted when the pool is in reduce only mode/
+    // Oracle
+    Oracle,
+    OracleGuardRails, // a set of oracle price data validations and protections.
+    HistoricalOracleData,
+
+    // Tax
+    MinTaxPriceDeviation,
+    BaseTax,
+    TaxScalingFactor,
+    TaxScalingRate,
+    ProtocolTaxB,
+
+    // Circuit Breaker
+    SwapCapFraction, //
+    LastLiquidityWithdrawalTs,
+
+    // Paused Ops
     IsKilledSwap,
     IsKilledDeposit,
     IsKilledClaim,
 
+    // Wasm
     TokenFutureWASM,
     GaugeFutureWASM,
 
+    // Fee
+    FeeFraction,         // 1 = 0.01%
     ProtocolFeeFraction, // part of the fee that goes to the protocol, 5000 = 50% of the fee goes to the protocol
     ProtocolFeeA,
     ProtocolFeeB,
+    FeeRebateFraction,
 }
 
+// Paused Ops
 generate_instance_storage_getter_and_setter_with_default!(
     is_killed_swap,
     DataKey::IsKilledSwap,
@@ -60,6 +82,7 @@ generate_instance_storage_getter_and_setter_with_default!(
     bool,
     false
 );
+// Fee
 generate_instance_storage_getter_and_setter_with_default!(
     protocol_fee_fraction,
     DataKey::ProtocolFeeFraction,
@@ -78,6 +101,12 @@ generate_instance_storage_getter_and_setter_with_default!(
     u128,
     0
 );
+generate_instance_storage_getter_and_setter_with_default!(
+    fee_rebate_fraction,
+    DataKey::FeeRebateFraction,
+    u32,
+    5000 // 50%
+);
 generate_instance_storage_getter_and_setter!(target_asset, DataKey::TargetAsset, Symbol);
 generate_instance_storage_getter_and_setter_with_default!(
     min_rebase_interval,
@@ -91,6 +120,51 @@ generate_instance_storage_getter_and_setter_with_default!(
     u64,
     0
 );
+generate_instance_storage_getter_and_setter_with_default!(
+    oracle_guard_rails,
+    DataKey::OracleGuardRails,
+    OracleGuardRails,
+    OracleGuardRails::default()
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    historical_oracle_data,
+    DataKey::HistoricalOracleData,
+    HistoricalOracleData,
+    HistoricalOracleData::default()
+);
+// Tax
+generate_instance_storage_getter_and_setter_with_default!(
+    min_tax_price_deviation,
+    DataKey::MinTaxPriceDeviation,
+    u32,
+    500 // 5%
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    base_tax,
+    DataKey::BaseTax,
+    u32,
+    1000 // 10%
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    tax_scaling_rate,
+    DataKey::TaxScalingRate,
+    u32,
+    500 // 5%
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    protocol_tax_b,
+    DataKey::ProtocolTaxB,
+    u128,
+    0
+);
+// Circuit Breaker
+generate_instance_storage_getter_and_setter_with_default!(
+    last_liquidity_withdrawal_ts,
+    DataKey::LastLiquidityWithdrawalTs,
+    u64,
+    0
+);
+// Addresses
 generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
 generate_instance_storage_getter_and_setter!(sink, DataKey::Sink, Address);
 generate_instance_storage_getter_and_setter!(plane, DataKey::Plane, Address);

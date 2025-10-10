@@ -59,6 +59,7 @@ pub trait PoolInterfaceTrait {
         token_out: Address,
         pool_index: BytesN<32>,
         in_amount: u128,
+        risk_reducing: bool,
     ) -> u128;
 
     // Withdraw coins from the pool.

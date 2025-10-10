@@ -8,7 +8,7 @@ use crate::testutils::{
 };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use core::cmp::min;
-use liquidity_pool_config_storage::testutils::deploy_config_storage;
+use pool_config_storage::testutils::deploy_config_storage;
 use rewards::storage::{PoolRewardsStorageTrait, UserRewardsStorageTrait};
 use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Events};
 use soroban_sdk::token::{

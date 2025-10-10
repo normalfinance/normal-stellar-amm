@@ -145,7 +145,7 @@ fn test() {
     let expected_swap_result = 9871580_u128;
 
     assert_eq!(
-        liq_pool.estimate_swap(&0, &1, &swap_in_amount),
+        liq_pool.estimate_swap(&0, &1, &swap_in_amount, &false),
         expected_swap_result
     );
     assert_eq!(
@@ -283,13 +283,15 @@ fn test_strict_receive() {
     let expected_swap_result = 9871580_u128;
 
     assert_eq!(
-        setup.liq_pool.estimate_swap(&0, &1, &swap_in_amount),
+        setup
+            .liq_pool
+            .estimate_swap(&0, &1, &swap_in_amount, &false),
         expected_swap_result
     );
     assert_eq!(
         setup
             .liq_pool
-            .estimate_swap_strict_receive(&0, &1, &expected_swap_result),
+            .estimate_swap_strict_receive(&0, &1, &expected_swap_result, &false),
         swap_in_amount
     );
     assert_eq!(
@@ -312,7 +314,7 @@ fn test_strict_receive_over_max() {
 
     assert!(setup
         .liq_pool
-        .try_estimate_swap_strict_receive(&0, &1, &100_0000000)
+        .try_estimate_swap_strict_receive(&0, &1, &100_0000000, &false)
         .is_err());
     assert!(setup
         .liq_pool
@@ -321,7 +323,7 @@ fn test_strict_receive_over_max() {
     // technically we can buy 100_0000000 - 1, but we can't pay for it
     assert!(setup
         .liq_pool
-        .try_estimate_swap_strict_receive(&0, &1, &99_9999999)
+        .try_estimate_swap_strict_receive(&0, &1, &99_9999999, &false)
         .is_ok());
     assert!(setup
         .liq_pool
@@ -331,7 +333,7 @@ fn test_strict_receive_over_max() {
     assert_eq!(
         setup
             .liq_pool
-            .estimate_swap_strict_receive(&0, &1, &99_9999999),
+            .estimate_swap_strict_receive(&0, &1, &99_9999999, &false),
         100300902607_8234705,
     );
     assert_eq!(
@@ -502,6 +504,7 @@ fn initialize_already_initialized() {
             users[0].clone(),
         ),
         &users[0],
+        &setup.oracle_addr,
         &install_token_wasm(&setup.env),
         &Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]),
         &(10_u32, 5000_u32),
@@ -546,14 +549,13 @@ fn test_custom_fee() {
             &setup.env,
             &Address::generate(&setup.env),
             &setup.users[0],
+            &setup.oracle_addr,
             &install_token_wasm(&setup.env),
             &Vec::from_array(
                 &setup.env,
                 [setup.token1.address.clone(), setup.token2.address.clone()],
             ),
             &setup.token_reward.address,
-            &setup.reward_boost_token.address,
-            &setup.reward_boost_feed.address,
             fee_config.0, // ten percent
             &setup.plane.address,
             &setup.config_storage.address,
@@ -563,7 +565,10 @@ fn test_custom_fee() {
             &Vec::from_array(&setup.env, [100_0000000, 100_0000000]),
             &0,
         );
-        assert_eq!(liqpool.estimate_swap(&1, &0, &1_0000000), fee_config.1);
+        assert_eq!(
+            liqpool.estimate_swap(&1, &0, &1_0000000, &false),
+            fee_config.1
+        );
         assert_eq!(
             liqpool.swap(&setup.users[0], &1, &0, &1_0000000, &0),
             fee_config.1
@@ -581,9 +586,12 @@ fn test_custom_fee() {
             &Vec::from_array(&setup.env, [100_0000000, 100_0000000]),
             &0,
         );
-        assert_eq!(liqpool.estimate_swap(&0, &1, &1_0000000), fee_config.1); // re-check swap result didn't change
         assert_eq!(
-            liqpool.estimate_swap_strict_receive(&0, &1, &fee_config.1),
+            liqpool.estimate_swap(&0, &1, &1_0000000, &false),
+            fee_config.1
+        ); // re-check swap result didn't change
+        assert_eq!(
+            liqpool.estimate_swap_strict_receive(&0, &1, &fee_config.1, &false),
             1_0000000
         );
         assert_eq!(
@@ -768,153 +776,6 @@ fn test_two_users_rewards() {
         total_reward_1 / 4 * 3
     );
     assert_eq!(token_reward.balance(&users[1]) as u128, total_reward_1 / 4);
-}
-
-#[test]
-fn test_boosted_rewards() {
-    let setup = Setup::new_with_config(&TestConfig {
-        users_count: 3,
-        ..TestConfig::default()
-    });
-    let env = setup.env;
-    let liq_pool = setup.liq_pool;
-    let token_reward = setup.token_reward;
-    let users = setup.users;
-
-    let locked_token_admin_client =
-        get_token_admin_client(&env, &setup.reward_boost_token.address.clone());
-
-    let total_reward_1 = &TestConfig::default().reward_tps * 60;
-
-    // two users make deposit for equal value. second after 30 seconds after rewards start,
-    //  so it gets only 1/4 of total reward
-    liq_pool.deposit(&users[0], &Vec::from_array(&env, [100, 100]), &0);
-    jump(&env, 30);
-    assert_eq!(liq_pool.claim(&users[0]), total_reward_1 / 2);
-
-    // instead of simple deposit, second user locks tokens to boost rewards, then deposits
-    // second user lock percentage is 50%. this is equilibrium point for 50% shareholder
-    locked_token_admin_client.mint(&users[1], &10_000_0000000);
-    setup
-        .reward_boost_feed
-        .set_total_supply(&setup.operations_admin, &20_000_0000000);
-    liq_pool.deposit(&users[1], &Vec::from_array(&env, [100, 100]), &0);
-
-    jump(&env, 10);
-    // total effective share now 100 + 100 * 2.5 = 350
-    // first user gets ~28% of total reward, second ~72%
-    assert_eq!(liq_pool.claim(&users[0]), total_reward_1 / 6 * 100 / 350);
-    assert_eq!(liq_pool.claim(&users[1]), total_reward_1 / 6 * 250 / 350);
-
-    // third user joins, depositing 50 tokens. no boost yet
-    liq_pool.deposit(&users[2], &Vec::from_array(&env, [50, 50]), &0);
-    let rewards_info = liq_pool.get_rewards_info(&users[2]);
-    assert_eq!(
-        rewards_info
-            .get(Symbol::new(&env, "working_balance"))
-            .unwrap(),
-        50
-    );
-    assert_eq!(
-        rewards_info
-            .get(Symbol::new(&env, "working_supply"))
-            .unwrap(),
-        400
-    );
-
-    jump(&env, 10);
-    // total effective share now 100 + 100 * 2.5 + 50 = 400
-    assert_eq!(liq_pool.claim(&users[0]), total_reward_1 / 6 * 100 / 400);
-    assert_eq!(liq_pool.claim(&users[1]), total_reward_1 / 6 * 250 / 400);
-    assert_eq!(liq_pool.claim(&users[2]), total_reward_1 / 6 * 50 / 400);
-
-    let user3_tokens_to_lock = 1_000_0000000;
-    let new_locked_supply = 25_000_0000000;
-
-    // pre-calculate expected boosted rewards for the third user
-    let supply = rewards_info.get(symbol_short!("supply")).unwrap() as u128;
-    let old_w_balance = rewards_info
-        .get(Symbol::new(&env, "working_balance"))
-        .unwrap() as u128;
-    let old_w_supply = rewards_info
-        .get(Symbol::new(&env, "working_supply"))
-        .unwrap() as u128;
-    let new_w_balance = min(
-        old_w_balance + 3 * user3_tokens_to_lock * supply / new_locked_supply / 2,
-        old_w_balance * 5 / 2,
-    );
-    let new_w_supply = old_w_supply + new_w_balance - old_w_balance;
-    let total_reward_step3 = total_reward_1 / 6; // total reward for 10 seconds
-    let user3_expected_boosted_reward = new_w_balance * total_reward_step3 / new_w_supply;
-
-    // third user locks tokens to boost rewards
-    // effective boost is 1.3
-    // effective share balance is 50 * 1.3 = 65
-    locked_token_admin_client.mint(&users[2], &(user3_tokens_to_lock as i128));
-    setup
-        .reward_boost_feed
-        .set_total_supply(&setup.operations_admin, &new_locked_supply);
-
-    // user checkpoints itself to receive boosted rewards by calling get_rewards_info
-    // rewards info should be updated
-    let new_rewards_info = liq_pool.get_rewards_info(&users[2]);
-    assert_eq!(
-        new_rewards_info
-            .get(Symbol::new(&env, "working_balance"))
-            .unwrap() as u128,
-        old_w_balance
-    );
-    assert_eq!(
-        new_rewards_info
-            .get(Symbol::new(&env, "working_supply"))
-            .unwrap() as u128,
-        old_w_supply
-    );
-    assert_eq!(
-        new_rewards_info
-            .get(Symbol::new(&env, "new_working_balance"))
-            .unwrap() as u128,
-        new_w_balance
-    );
-    assert_eq!(
-        new_rewards_info
-            .get(Symbol::new(&env, "new_working_supply"))
-            .unwrap() as u128,
-        new_w_supply
-    );
-    assert_eq!(
-        new_rewards_info
-            .get(Symbol::new(&env, "boost_balance"))
-            .unwrap() as u128,
-        user3_tokens_to_lock
-    );
-    assert_eq!(
-        new_rewards_info
-            .get(Symbol::new(&env, "boost_supply"))
-            .unwrap() as u128,
-        new_locked_supply
-    );
-    assert_eq!(
-        new_rewards_info.get(symbol_short!("supply")).unwrap() as u128,
-        supply
-    );
-
-    jump(&env, 10);
-    // total effective share now 100 + 100 * 2.5 + 65 = 415
-    assert_eq!(liq_pool.claim(&users[0]), total_reward_1 / 6 * 100 / 415);
-    assert_eq!(liq_pool.claim(&users[1]), total_reward_1 / 6 * 250 / 415);
-    let user3_claim = liq_pool.claim(&users[2]);
-    assert_eq!(user3_claim, total_reward_1 / 6 * 65 / 415);
-    assert_eq!(user3_claim, user3_expected_boosted_reward);
-
-    // total reward is distributed should be distributed to all three users. rounding occurs, so we check with delta
-    assert_approx_eq_abs(
-        token_reward.balance(&users[0]) as u128
-            + token_reward.balance(&users[1]) as u128
-            + token_reward.balance(&users[2]) as u128,
-        total_reward_1,
-        2,
-    );
 }
 
 #[test]
@@ -1293,7 +1154,7 @@ fn test_large_numbers() {
     let swap_in = amount_to_deposit / 1_000;
     // swap out shouldn't differ for more than 0.4% since fee is 0.3%
     let expected_swap_result_delta = swap_in / 250;
-    let estimate_swap_result = liq_pool.estimate_swap(&0, &1, &swap_in);
+    let estimate_swap_result = liq_pool.estimate_swap(&0, &1, &swap_in, &false);
     assert_approx_eq_abs(estimate_swap_result, swap_in, expected_swap_result_delta);
     assert_eq!(
         liq_pool.swap(&user1, &0, &1, &swap_in, &estimate_swap_result),
@@ -1561,8 +1422,6 @@ fn test_withdraw_rewards() {
     let token1_admin_client = get_token_admin_client(&e, &token1.address);
     let token2_admin_client = get_token_admin_client(&e, &token2.address);
     let token_reward_admin_client = SorobanTokenAdminClient::new(&e, &token1.address.clone());
-    let reward_boost_token = create_token_contract(&e, &admin);
-    let reward_boost_feed = create_reward_boost_feed_contract(&e.clone(), &admin, &admin, &admin);
 
     let router = Address::generate(&e);
 
@@ -1570,11 +1429,10 @@ fn test_withdraw_rewards() {
         &e,
         &admin,
         &router,
+        &setup.oracle_addr,
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         &token_reward_admin_client.address,
-        &reward_boost_token.address,
-        &reward_boost_feed.address,
         30,
         &plane.address,
         &deploy_config_storage(&e, &admin, &admin).address,
@@ -1663,8 +1521,6 @@ fn test_deposit_rewards() {
     let token1_admin_client = get_token_admin_client(&e, &token1.address);
     let token2_admin_client = get_token_admin_client(&e, &token2.address);
     let token_reward_admin_client = SorobanTokenAdminClient::new(&e, &token1.address.clone());
-    let reward_boost_token = create_token_contract(&e, &admin);
-    let reward_boost_feed = create_reward_boost_feed_contract(&e.clone(), &admin, &admin, &admin);
 
     let router = Address::generate(&e);
 
@@ -1672,11 +1528,10 @@ fn test_deposit_rewards() {
         &e,
         &admin,
         &router,
+        &setup.oracle_addr,
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         &token_reward_admin_client.address,
-        &reward_boost_token.address,
-        &reward_boost_feed.address,
         30,
         &plane.address,
         &deploy_config_storage(&e, &admin, &admin).address,
@@ -1725,8 +1580,6 @@ fn test_swap_rewards() {
     let token1_admin_client = get_token_admin_client(&e, &token1.address);
     let token2_admin_client = get_token_admin_client(&e, &token2.address);
     let token_reward_admin_client = SorobanTokenAdminClient::new(&e, &token1.address.clone());
-    let reward_boost_token = create_token_contract(&e, &admin);
-    let reward_boost_feed = create_reward_boost_feed_contract(&e.clone(), &admin, &admin, &admin);
 
     let router = Address::generate(&e);
 
@@ -1735,11 +1588,10 @@ fn test_swap_rewards() {
         &e,
         &admin,
         &router,
+        &setup.oracle_addr,
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         &token_reward_admin_client.address,
-        &reward_boost_token.address,
-        &reward_boost_feed.address,
         30,
         &plane.address,
         &deploy_config_storage(&e, &admin, &admin).address,
@@ -1748,11 +1600,10 @@ fn test_swap_rewards() {
         &e,
         &admin,
         &router,
+        &setup.oracle_addr,
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         &token_reward_admin_client.address,
-        &reward_boost_token.address,
-        &reward_boost_feed.address,
         30,
         &plane.address,
         &deploy_config_storage(&e, &admin, &admin).address,
@@ -1770,8 +1621,8 @@ fn test_swap_rewards() {
         Vec::from_array(&e, [100_0000000, 100_0000000])
     );
 
-    let estimate1_before_rewards = liq_pool1.estimate_swap(&0, &1, &10_0000000);
-    let estimate2_before_rewards = liq_pool1.estimate_swap(&1, &0, &10_0000000);
+    let estimate1_before_rewards = liq_pool1.estimate_swap(&0, &1, &10_0000000, &false);
+    let estimate2_before_rewards = liq_pool1.estimate_swap(&1, &0, &10_0000000, &false);
     // swap is balanced, so values should be the same
     assert_eq!(estimate1_before_rewards, estimate2_before_rewards);
 
@@ -1789,8 +1640,8 @@ fn test_swap_rewards() {
     token_reward_admin_client.mint(&liq_pool2.address, &(1_000_0000000 * 100));
     jump(&e, 100);
 
-    let estimate1_after_rewards = liq_pool1.estimate_swap(&0, &1, &10_0000000);
-    let estimate2_after_rewards = liq_pool1.estimate_swap(&1, &0, &10_0000000);
+    let estimate1_after_rewards = liq_pool1.estimate_swap(&0, &1, &10_0000000, &false);
+    let estimate2_after_rewards = liq_pool1.estimate_swap(&1, &0, &10_0000000, &false);
     // balances are out of balance, but reserves are balanced.
     assert_eq!(estimate1_after_rewards, estimate2_after_rewards);
     assert_eq!(estimate1_before_rewards, estimate1_after_rewards);
@@ -1849,8 +1700,6 @@ fn test_claim_rewards() {
     let token1_admin_client = get_token_admin_client(&e, &token1.address);
     let token2_admin_client = get_token_admin_client(&e, &token2.address);
     let token_reward_admin_client = SorobanTokenAdminClient::new(&e, &token1.address.clone());
-    let reward_boost_token = create_token_contract(&e, &admin);
-    let reward_boost_feed = create_reward_boost_feed_contract(&e.clone(), &admin, &admin, &admin);
 
     let router = Address::generate(&e);
 
@@ -1858,11 +1707,10 @@ fn test_claim_rewards() {
         &e,
         &admin,
         &router,
+        &setup.oracle_addr,
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         &token_reward_admin_client.address,
-        &reward_boost_token.address,
-        &reward_boost_feed.address,
         30,
         &plane.address,
         &deploy_config_storage(&e, &admin, &admin).address,
@@ -1956,8 +1804,6 @@ fn test_drain_reserves() {
     let token1_admin_client = get_token_admin_client(&e, &token1.address);
     let token2_admin_client = get_token_admin_client(&e, &token2.address);
     let token_reward_admin_client = SorobanTokenAdminClient::new(&e, &token1.address.clone());
-    let reward_boost_token = create_token_contract(&e, &admin);
-    let reward_boost_feed = create_reward_boost_feed_contract(&e.clone(), &admin, &admin, &admin);
 
     let router = Address::generate(&e);
 
@@ -1965,11 +1811,10 @@ fn test_drain_reserves() {
         &e,
         &admin,
         &router,
+        &setup.oracle_addr,
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         &token_reward_admin_client.address,
-        &reward_boost_token.address,
-        &reward_boost_feed.address,
         30,
         &plane.address,
         &deploy_config_storage(&e, &admin, &admin).address,
@@ -2728,14 +2573,13 @@ fn test_custom_protocol_fee() {
             &setup.env,
             &setup.admin,
             &Address::generate(&setup.env),
+            &setup.oracle_addr,
             &install_token_wasm(&setup.env),
             &Vec::from_array(
                 &setup.env,
                 [setup.token1.address.clone(), setup.token2.address.clone()],
             ),
             &setup.token_reward.address,
-            &setup.reward_boost_token.address,
-            &setup.reward_boost_feed.address,
             30,
             &setup.plane.address,
             &setup.config_storage.address,
@@ -2746,7 +2590,7 @@ fn test_custom_protocol_fee() {
             &Vec::from_array(&setup.env, [100_0000000, 100_0000000]),
             &0,
         );
-        assert_eq!(liqpool.estimate_swap(&1, &0, &1_0000000), 9871580);
+        assert_eq!(liqpool.estimate_swap(&1, &0, &1_0000000, &false), 9871580);
         assert_eq!(
             liqpool.swap(&setup.users[0], &1, &0, &1_0000000, &0),
             9871580
@@ -2769,9 +2613,9 @@ fn test_custom_protocol_fee() {
             &Vec::from_array(&setup.env, [100_0000000, 100_0000000]),
             &0,
         );
-        assert_eq!(liqpool.estimate_swap(&0, &1, &1_0000000), 9871580); // re-check swap result didn't change
+        assert_eq!(liqpool.estimate_swap(&0, &1, &1_0000000, &false), 9871580); // re-check swap result didn't change
         assert_eq!(
-            liqpool.estimate_swap_strict_receive(&0, &1, &9871580),
+            liqpool.estimate_swap_strict_receive(&0, &1, &9871580, &false),
             1_0000000
         );
         assert_eq!(
@@ -2788,113 +2632,6 @@ fn test_custom_protocol_fee() {
             protocol_fee_amount
         );
     }
-}
-
-#[test]
-fn test_boosted_rewards_abuse() {
-    let setup = Setup::new_with_config(&TestConfig {
-        reward_token_in_pool: true,
-        rewards_count: 0,
-        reward_tps: 0,
-        liq_pool_fee: 100,
-        ..TestConfig::default()
-    });
-    let env = setup.env;
-    let liq_pool = setup.liq_pool;
-    let token_reward = setup.token_reward;
-    let market_maker = Address::generate(&env);
-    let user1 = Address::generate(&env);
-    let user2 = Address::generate(&env);
-    for user in [&market_maker, &user1, &user2] {
-        SorobanTokenAdminClient::new(&env, &setup.token1.address).mint(user, &(i128::MAX / 10));
-        SorobanTokenAdminClient::new(&env, &setup.token2.address).mint(user, &(i128::MAX / 10));
-    }
-
-    let locked_token_admin_client =
-        get_token_admin_client(&env, &setup.reward_boost_token.address.clone());
-
-    let reward_tps = 1_0000000_u128;
-    let total_reward_1 = reward_tps * 70;
-    liq_pool.set_rewards_config(
-        &setup.admin,
-        &env.ledger().timestamp().saturating_add(70),
-        &reward_tps,
-    );
-    let configured_reward = liq_pool.get_total_configured_reward();
-    let claimed_reward = liq_pool.get_total_claimed_reward();
-    let reward_to_fill = configured_reward - claimed_reward;
-    setup
-        .token_reward_admin_client
-        .mint(&liq_pool.address, &(reward_to_fill as i128));
-
-    // first user deposits 100 tokens having 10k locked tokens out of 30k.
-    // second user deposits 100 tokens too. but without locked tokens.
-    locked_token_admin_client.mint(&user1, &10_000_0000000);
-    setup
-        .reward_boost_feed
-        .set_total_supply(&setup.operations_admin, &30_000_0000000);
-    liq_pool.deposit(
-        &user1,
-        &Vec::from_array(&env, [100_0000000, 100_0000000]),
-        &0,
-    );
-    liq_pool.deposit(
-        &user2,
-        &Vec::from_array(&env, [100_0000000, 100_0000000]),
-        &0,
-    );
-    jump(&env, 10);
-    jump(&env, 20);
-
-    // chain of swaps to generate protocol fees, then withdraw them
-    for i in 0..100 {
-        liq_pool.swap(&user1, &(i % 2), &((i + 1) % 2), &30_0000000, &0);
-    }
-
-    jump(&env, 50);
-
-    assert_eq!(liq_pool.get_reserves(), vec![&env, 1926153329, 2223956884]);
-    assert_eq!(
-        token_reward.balance(&liq_pool.address) as u128,
-        1926153329 + total_reward_1 + 75000000
-    );
-
-    let user1_claimed = liq_pool.claim(&user1);
-
-    jump(&env, 10);
-
-    // second user tries to abuse rewards by locking tokens and immediately claim, applying retroactive boost.
-    locked_token_admin_client.mint(&user2, &10_000_0000000);
-    setup
-        .reward_boost_feed
-        .set_total_supply(&setup.operations_admin, &40_000_0000000);
-    let user2_claimed = liq_pool.claim(&user2);
-
-    assert_eq!(user1_claimed, 419999999);
-    assert_eq!(user2_claimed, 280000000);
-    assert_eq!(user1_claimed + user2_claimed, total_reward_1 - 1,);
-    assert_eq!(liq_pool.get_total_configured_reward(), total_reward_1);
-    assert_eq!(liq_pool.get_total_claimed_reward(), total_reward_1 - 1,);
-
-    assert_eq!(
-        liq_pool.claim_protocol_fees(&setup.admin, &setup.admin),
-        vec![&env, 75000000, 75000000]
-    );
-    assert_eq!(liq_pool.get_reserves(), vec![&env, 1926153329, 2223956884]);
-
-    // balance cannot drop below reserve
-    let reward_token_idx = liq_pool
-        .get_tokens()
-        .first_index_of(&token_reward.address)
-        .unwrap();
-    assert!(
-        token_reward.balance(&liq_pool.address)
-            > liq_pool.get_reserves().get_unchecked(reward_token_idx) as i128
-    );
-    assert_eq!(
-        token_reward.balance(&liq_pool.address),
-        liq_pool.get_reserves().get_unchecked(reward_token_idx) as i128 + 1, // 1 comes from rewards rounding
-    );
 }
 
 #[test]
@@ -3312,13 +3049,7 @@ fn test_fix_broken_claim() {
     setup.token1_admin_client.mint(&user2, &1_000_0000000);
     setup.token2_admin_client.mint(&user2, &1_000_0000000);
 
-    let boost_admin = get_token_admin_client(&e, &setup.reward_boost_token.address);
-
     // first user is regular depositor. uses lock tokens normally
-    boost_admin.mint(&user1, &10_000_0000000);
-    setup
-        .reward_boost_feed
-        .set_total_supply(&setup.operations_admin, &10_000_0000000);
     liq_pool.deposit(
         &user1,
         &Vec::from_array(&e, [1_000_0000000, 1_000_0000000]),
@@ -3326,10 +3057,6 @@ fn test_fix_broken_claim() {
     );
 
     // second user is the attacker
-    boost_admin.mint(&user2, &10_000_0000000);
-    setup
-        .reward_boost_feed
-        .set_total_supply(&setup.operations_admin, &(10_000_0000000 * 2));
     liq_pool.deposit(
         &user2,
         &Vec::from_array(&e, [1_000_0000000, 1_000_0000000]),
@@ -3416,8 +3143,6 @@ fn test_fix_locked_reward_tokens() {
     setup.token1_admin_client.mint(&user2, &1_000_0000000);
     setup.token2_admin_client.mint(&user2, &1_000_0000000);
 
-    let boost_admin = get_token_admin_client(&e, &setup.reward_boost_token.address);
-
     // pool reward is overinflated due to historical reasons. we've got 1 locked token we'd like to recover
     e.as_contract(&liq_pool.address, || {
         let storage = get_rewards_manager(&e).storage();
@@ -3427,19 +3152,11 @@ fn test_fix_locked_reward_tokens() {
     });
 
     // users behave normally: simple deposit with boost due to locked tokens
-    boost_admin.mint(&user1, &10_000_0000000);
-    setup
-        .reward_boost_feed
-        .set_total_supply(&setup.operations_admin, &10_000_0000000);
     liq_pool.deposit(
         &user1,
         &Vec::from_array(&e, [1_000_0000000, 1_000_0000000]),
         &0,
     );
-    boost_admin.mint(&user2, &10_000_0000000);
-    setup
-        .reward_boost_feed
-        .set_total_supply(&setup.operations_admin, &(10_000_0000000 * 2));
     liq_pool.deposit(
         &user2,
         &Vec::from_array(&e, [1_000_0000000, 1_000_0000000]),

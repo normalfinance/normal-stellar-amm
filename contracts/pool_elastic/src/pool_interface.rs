@@ -1,5 +1,7 @@
 use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Val, Vec};
 
+use crate::tax::TaxConfig;
+
 pub trait LiquidityPoolCrunch {
     // Initialize pool completely to reduce calculations cost
     fn initialize_all(
@@ -70,7 +72,13 @@ pub trait LiquidityPoolTrait {
     ) -> u128;
 
     // Estimate amount of coins to retrieve using swap function
-    fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: u128) -> u128;
+    fn estimate_swap(
+        e: Env,
+        in_idx: u32,
+        out_idx: u32,
+        in_amount: u128,
+        risk_reducing: bool,
+    ) -> u128;
 
     // Perform an exchange between two coins with strict amount to receive.
     // in_idx: Index value for the coin to send
@@ -87,7 +95,13 @@ pub trait LiquidityPoolTrait {
     ) -> u128;
 
     // Estimate amount of coins to retrieve using swap_strict_receive function
-    fn estimate_swap_strict_receive(e: Env, in_idx: u32, out_idx: u32, out_amount: u128) -> u128;
+    fn estimate_swap_strict_receive(
+        e: Env,
+        in_idx: u32,
+        out_idx: u32,
+        out_amount: u128,
+        risk_reducing: bool,
+    ) -> u128;
 
     // Transfers share_amount of pool share tokens to this contract,
     // burns all pools share tokens in this contracts, and sends
@@ -146,6 +160,16 @@ pub trait AdminInterfaceTrait {
 
     // Claims the protocol fees accumulated in the pool.
     fn claim_protocol_fees(e: Env, admin: Address, destination: Address) -> Vec<u128>;
+
+    // Sets the rebate fraction of for the pool.
+    fn set_fee_rebate_fraction(e: Env, admin: Address, new_fraction: u32);
+
+    // Tax
+    fn set_tax_config(e: Env, admin: Address, tax_config: TaxConfig);
+
+    fn get_tax_config(e: Env) -> TaxConfig;
+
+    fn claim_protocol_taxes(e: Env, admin: Address, destination: Address) -> u128;
 }
 
 pub trait UpgradeableContract {

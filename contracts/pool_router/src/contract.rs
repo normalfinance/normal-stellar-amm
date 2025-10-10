@@ -294,6 +294,7 @@ impl PoolInterfaceTrait for PoolRouter {
         token_out: Address,
         pool_index: BytesN<32>,
         in_amount: u128,
+        risk_reducing: bool,
     ) -> u128 {
         assert_tokens_sorted(&e, &tokens);
         let pool_id = get_pool(&e, &tokens, pool_index);
@@ -313,6 +314,7 @@ impl PoolInterfaceTrait for PoolRouter {
                         .unwrap()
                         .into_val(&e),
                     in_amount.into_val(&e),
+                    risk_reducing.into_val(&e),
                 ],
             ),
         )

@@ -58,7 +58,11 @@ pub trait LiquidityPoolEvents {
 
     fn set_protocol_fee_fraction(&self, fraction: u32);
 
+    fn set_fee_rebate_fraction(&self, fraction: u32);
+
     fn claim_protocol_fee(&self, token: Address, destination: Address, amount: u128);
+
+    fn claim_protocol_tax(&self, token: Address, destination: Address, amount: u128);
 
     fn permanently_locked_liquidity(&self, amount: u128);
 }
@@ -248,6 +252,21 @@ impl LiquidityPoolEvents for Events {
             .publish((Symbol::new(e, "set_protocol_fee"),), (fraction,));
     }
 
+    fn set_fee_rebate_fraction(&self, fraction: u32) {
+        // topics
+        // [
+        //   "set_fee_rebate": Symbol, // event identifier
+        // ]
+        //
+        // body
+        // [
+        //   fraction: u32                          // new protocol fee fraction
+        // ]
+        let e = self.env();
+        e.events()
+            .publish((Symbol::new(e, "set_fee_rebate"),), (fraction,));
+    }
+
     fn claim_protocol_fee(&self, token: Address, destination: Address, amount: u128) {
         // topics
         // [
@@ -263,6 +282,25 @@ impl LiquidityPoolEvents for Events {
         let e = self.env();
         e.events().publish(
             (Symbol::new(e, "claim_protocol_fee"), token),
+            (destination, amount as i128),
+        );
+    }
+
+    fn claim_protocol_tax(&self, token: Address, destination: Address, amount: u128) {
+        // topics
+        // [
+        //   "claim_protocol_tax": Symbol,  // event identifier
+        //   asset: Address,                // contract address identifying asset claimed
+        // ]
+        //
+        // body
+        // [
+        //   destination: Address,          // address of account/contract that received the claimed tokens
+        //   amount: i128                   // amount of tokens claimed
+        // ]
+        let e = self.env();
+        e.events().publish(
+            (Symbol::new(e, "claim_protocol_tax"), token),
             (destination, amount as i128),
         );
     }

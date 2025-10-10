@@ -3,13 +3,13 @@
 extern crate std;
 
 use crate::PoolRouterClient;
-use liquidity_pool_config_storage::testutils::deploy_config_storage;
+use pool_config_storage::testutils::deploy_config_storage;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, BytesN, Env, Symbol, Vec};
 
 pub(crate) mod test_token {
     use soroban_sdk::contractimport;
-    contractimport!(file = "../../wasm/soroban_token_contract.wasm");
+    contractimport!(file = "../../target/wasm32v1-none/release/soroban_token_contract.wasm");
 }
 
 pub fn create_token_contract<'a>(e: &Env, admin: &Address) -> test_token::Client<'a> {
@@ -26,12 +26,14 @@ pub fn create_liqpool_router_contract<'a>(e: &Env) -> PoolRouterClient<'a> {
 }
 
 pub fn install_token_wasm(e: &Env) -> BytesN<32> {
-    soroban_sdk::contractimport!(file = "../../wasm/soroban_token_contract.wasm");
+    soroban_sdk::contractimport!(
+        file = "../../target/wasm32v1-none/release/soroban_token_contract.wasm"
+    );
     e.deployer().upload_contract_wasm(WASM)
 }
 
 pub mod standard_pool {
-    soroban_sdk::contractimport!(file = "../../wasm/pool.wasm");
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/pool.wasm");
 }
 
 pub fn install_liq_pool_hash(e: &Env) -> BytesN<32> {
@@ -39,15 +41,15 @@ pub fn install_liq_pool_hash(e: &Env) -> BytesN<32> {
 }
 
 pub mod elastic_pool {
-    soroban_sdk::contractimport!(file = "../../wasm/pool_elastic.wasm");
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/pool_elastic.wasm");
 }
 
-pub fn install_stableswap_liq_pool_hash(e: &Env) -> BytesN<32> {
-    e.deployer().upload_contract_wasm(stableswap_pool::WASM)
+pub fn install_elastic_liq_pool_hash(e: &Env) -> BytesN<32> {
+    e.deployer().upload_contract_wasm(elastic_pool::WASM)
 }
 
 mod pool_plane {
-    soroban_sdk::contractimport!(file = "../../wasm/pool_plane.wasm");
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/pool_plane.wasm");
 }
 
 pub fn create_plane_contract<'a>(e: &Env) -> pool_plane::Client<'a> {
@@ -55,7 +57,9 @@ pub fn create_plane_contract<'a>(e: &Env) -> pool_plane::Client<'a> {
 }
 
 mod liquidity_calculator {
-    soroban_sdk::contractimport!(file = "../../wasm/liquidity_calculator.wasm");
+    soroban_sdk::contractimport!(
+        file = "../../target/wasm32v1-none/release/liquidity_calculator.wasm"
+    );
 }
 
 pub fn create_liquidity_calculator_contract<'a>(e: &Env) -> liquidity_calculator::Client<'a> {
@@ -63,11 +67,11 @@ pub fn create_liquidity_calculator_contract<'a>(e: &Env) -> liquidity_calculator
 }
 
 pub(crate) mod rewards_gauge {
-    soroban_sdk::contractimport!(file = "../../wasm/rewards_gauge.wasm");
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/rewards_gauge.wasm");
 }
 
 pub(crate) mod config_storage {
-    soroban_sdk::contractimport!(file = "../../wasm/config_storage.wasm");
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/config_storage.wasm");
 }
 
 pub(crate) struct Setup<'a> {
@@ -78,7 +82,7 @@ pub(crate) struct Setup<'a> {
     pub(crate) tokens: [test_token::Client<'a>; 4],
     pub(crate) reward_token: test_token::Client<'a>,
 
-    pub(crate) router: LiquidityPoolRouterClient<'a>,
+    pub(crate) router: PoolRouterClient<'a>,
 
     pub(crate) emergency_admin: Address,
     pub(crate) rewards_admin: Address,
@@ -140,7 +144,7 @@ impl Default for Setup<'_> {
             &system_fee_admin,
         );
         router.set_pool_hash(&admin, &pool_hash);
-        router.set_stableswap_pool_hash(&admin, &install_stableswap_liq_pool_hash(&env));
+        router.set_stableswap_pool_hash(&admin, &install_elastic_liq_pool_hash(&env));
         router.set_token_hash(&admin, &token_hash);
         router.set_reward_token(&admin, &reward_token.address);
         router.configure_init_pool_payment(

@@ -2,7 +2,7 @@ use crate::constants::{FEE_MULTIPLIER, MIN_LIQUIDITY};
 use crate::errors::LiquidityPoolError;
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
-use crate::pool;
+use crate::pool::{self, is_swap_risk_reducing};
 use crate::pool::{get_amount_out, get_amount_out_strict_receive};
 use crate::pool_interface::{
     AdminInterfaceTrait, LiquidityPoolCrunch, LiquidityPoolTrait, RewardsTrait, UpgradeableContract,
@@ -10,14 +10,16 @@ use crate::pool_interface::{
 use crate::rewards::get_rewards_manager;
 use crate::storage::{
     get_fee_fraction, get_gauge_future_wasm, get_is_killed_claim, get_is_killed_deposit,
-    get_is_killed_swap, get_last_rebase_ts, get_min_rebase_interval, get_plane, get_protocol_fee_a,
-    get_protocol_fee_b, get_protocol_fee_fraction, get_reserve_a, get_reserve_b, get_router,
-    get_target_asset, get_token_a, get_token_b, get_token_future_wasm, has_plane, put_fee_fraction,
-    put_reserve_a, put_reserve_b, put_token_a, put_token_b, set_gauge_future_wasm,
-    set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap, set_last_rebase_ts, set_oracle,
-    set_plane, set_protocol_fee_a, set_protocol_fee_b, set_protocol_fee_fraction, set_router,
-    set_token_future_wasm,
+    get_is_killed_swap, get_last_rebase_ts, get_min_rebase_interval, get_min_tax_price_deviation,
+    get_plane, get_protocol_fee_a, get_protocol_fee_b, get_protocol_fee_fraction,
+    get_protocol_tax_b, get_reserve_a, get_reserve_b, get_router, get_target_asset, get_token_a,
+    get_token_b, get_token_future_wasm, has_plane, put_fee_fraction, put_reserve_a, put_reserve_b,
+    put_token_a, put_token_b, set_fee_rebate_fraction, set_gauge_future_wasm, set_is_killed_claim,
+    set_is_killed_deposit, set_is_killed_swap, set_last_liquidity_withdrawal_ts,
+    set_last_rebase_ts, set_oracle, set_plane, set_protocol_fee_a, set_protocol_fee_b,
+    set_protocol_fee_fraction, set_protocol_tax_b, set_router, set_token_future_wasm,
 };
+use crate::tax::TaxConfig;
 use crate::token::{create_contract, transfer_a, transfer_b};
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
@@ -82,6 +84,7 @@ impl LiquidityPoolCrunch for LiquidityPool {
     //      system fee admin,
     //  ).
     // * `router` - The address of the router.
+    // * `oracle` - The address of the oracle.
     // * `lp_token_wasm_hash` - The hash of the liquidity pool token contract.
     // * `tokens` - A vector of token addresses.
     // * `fees_config` - (
@@ -262,8 +265,7 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // Get the price Token A should be from the Oracle
         let base_oracle_price_data =
-            crate::oracle::get_oracle_price(&e, &get_target_asset(&e), current_time);
-        let token_a_oracle_price = base_oracle_price_data.price; // TODO: update to twap
+            crate::oracle::get_oracle_price_with_validity(&e, &get_target_asset(&e), current_time);
 
         // Compare the prices to determine rebase direction
         let (token_a_delta, token_b_delta) = crate::rebase::rebase(
@@ -271,7 +273,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             &reserve_a,
             &reserve_b,
             token_a_pool_price,
-            token_a_oracle_price,
+            base_oracle_price_data.last_price_twap,
         );
 
         // Update rebase tracking
@@ -459,8 +461,13 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(e, PoolValidationError::ZeroAmount);
         }
 
-        // TODO: Circuit breaker
+        if crate::circuit_breaker::is_flipped(&e, 0, 0) {
+            panic_with_error!(e, PoolValidationError::CircuitBreaker);
+        }
 
+        // TODO: Circuit breaker OR is swap killed good enough?
+
+        let current_time = e.ledger().timestamp();
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
         let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
@@ -472,9 +479,28 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, PoolValidationError::EmptyPool);
         }
 
-        // TODO: Fee rebate
-        // TODO: Trade tax
-        let (out, total_fee) = get_amount_out(&e, in_amount, reserve_sell, reserve_buy);
+        // Fetch prices
+        let pool_price = crate::pool::pool_price(&e, reserve_a, reserve_b);
+        let oracle_price_data =
+            crate::oracle::get_oracle_price_with_validity(&e, &get_target_asset(&e), current_time);
+
+        // FIXME: Tax
+        if crate::tax::is_trade_taxable(&e, pool_price, oracle_price_data.last_price_twap) {
+            let (_, tax) = crate::tax::get_tax_for_trade(&e, in_amount);
+
+            let protocol_tax_b = get_protocol_tax_b(&e);
+            set_protocol_tax_b(&e, &(protocol_tax_b.safe_add(&e, tax)));
+        }
+
+        // @dev A swap is risk reducing if it moves the pool price closer to the peg price (oracle)
+        let risk_reducing = crate::pool::is_swap_risk_reducing(
+            &e,
+            oracle_price_data.last_price_twap,
+            pool_price,
+            in_idx,
+        );
+        let (out, total_fee) =
+            get_amount_out(&e, in_amount, reserve_sell, reserve_buy, risk_reducing);
         let protocol_fee = (total_fee * (get_protocol_fee_fraction(&e) as u128)) / FEE_MULTIPLIER;
         let lp_fee = total_fee - protocol_fee;
 
@@ -572,7 +598,13 @@ impl LiquidityPoolTrait for LiquidityPool {
     // # Returns
     //
     // The estimated amount of the output token that would be received.
-    fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: u128) -> u128 {
+    fn estimate_swap(
+        e: Env,
+        in_idx: u32,
+        out_idx: u32,
+        in_amount: u128,
+        risk_reducing: bool,
+    ) -> u128 {
         if in_idx == out_idx {
             panic_with_error!(&e, PoolValidationError::CannotSwapSameToken);
         }
@@ -591,7 +623,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let reserve_sell = reserves.get(in_idx).unwrap();
         let reserve_buy = reserves.get(out_idx).unwrap();
 
-        get_amount_out(&e, in_amount, reserve_sell, reserve_buy).0
+        get_amount_out(&e, in_amount, reserve_sell, reserve_buy, risk_reducing).0
     }
 
     // Swaps tokens in the pool.
@@ -638,8 +670,9 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(e, PoolValidationError::ZeroAmount);
         }
 
-        // TODO: Circuit breaker
+        // TODO: Circuit breaker OR is swap killed good enough?
 
+        let current_time = e.ledger().timestamp();
         let reserve_a = get_reserve_a(&e);
         let reserve_b = get_reserve_b(&e);
         let reserves = Vec::from_array(&e, [reserve_a, reserve_b]);
@@ -651,10 +684,28 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, PoolValidationError::EmptyPool);
         }
 
-        // TODO: Fee rebate
-        // TODO: Trade tax
+        // Fetch prices
+        let pool_price = crate::pool::pool_price(&e, reserve_a, reserve_b);
+        let oracle_price_data =
+            crate::oracle::get_oracle_price_with_validity(&e, &get_target_asset(&e), current_time);
+
+        // FIXME: Tax
+        if crate::tax::is_trade_taxable(&e, pool_price, oracle_price_data.last_price_twap) {
+            let (_, tax) = crate::tax::get_tax_for_trade(&e, out_amount);
+
+            let protocol_tax_b = get_protocol_tax_b(&e);
+            set_protocol_tax_b(&e, &(protocol_tax_b.safe_add(&e, tax)));
+        }
+
+        // @dev A swap is risk reducing if it moves the pool price closer to the peg price (oracle)
+        let risk_reducing = crate::pool::is_swap_risk_reducing(
+            &e,
+            oracle_price_data.last_price_twap,
+            pool_price,
+            in_idx,
+        );
         let (in_amount, total_fee) =
-            get_amount_out_strict_receive(&e, out_amount, reserve_sell, reserve_buy);
+            get_amount_out_strict_receive(&e, out_amount, reserve_sell, reserve_buy, risk_reducing);
 
         if in_amount > in_max {
             panic_with_error!(&e, PoolValidationError::InMaxNotSatisfied);
@@ -766,7 +817,13 @@ impl LiquidityPoolTrait for LiquidityPool {
     // # Returns
     //
     // The estimated amount of the output token that would be received.
-    fn estimate_swap_strict_receive(e: Env, in_idx: u32, out_idx: u32, out_amount: u128) -> u128 {
+    fn estimate_swap_strict_receive(
+        e: Env,
+        in_idx: u32,
+        out_idx: u32,
+        out_amount: u128,
+        risk_reducing: bool,
+    ) -> u128 {
         if in_idx == out_idx {
             panic_with_error!(&e, PoolValidationError::CannotSwapSameToken);
         }
@@ -785,7 +842,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let reserve_sell = reserves.get(in_idx).unwrap();
         let reserve_buy = reserves.get(out_idx).unwrap();
 
-        get_amount_out_strict_receive(&e, out_amount, reserve_sell, reserve_buy).0
+        get_amount_out_strict_receive(&e, out_amount, reserve_sell, reserve_buy, risk_reducing).0
     }
 
     // Withdraws tokens from the pool.
@@ -819,9 +876,13 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(e, PoolValidationError::WithdrawExceedsMinLiquidity);
         }
 
-        burn_shares(&e, &user, share_amount);
-
+        let current_time = e.ledger().timestamp();
         let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
+
+        // Circuit Breaker
+        // crate::circuit_breaker::check_withdrawal(&e, share_amount, current_time);
+
+        burn_shares(&e, &user, share_amount);
 
         // Now calculate the withdraw amounts
         let out_a = reserve_a.fixed_mul_floor(&e, &share_amount, &total_shares);
@@ -851,6 +912,9 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // update plane data for every pool update
         update_plane(&e);
+
+        // update last withdrawal ts for circuit breaker
+        set_last_liquidity_withdrawal_ts(&e, &current_time);
 
         let withdraw_amounts = Vec::from_array(&e, [out_a, out_b]);
         PoolEvents::new(&e).withdraw_liquidity(
@@ -1125,6 +1189,57 @@ impl AdminInterfaceTrait for LiquidityPool {
 
         Vec::from_array(&e, [fee_a, fee_b])
     }
+
+    fn set_fee_rebate_fraction(e: Env, admin: Address, new_fraction: u32) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+
+        if (new_fraction as u128) > FEE_MULTIPLIER {
+            panic_with_error!(e, PoolValidationError::FeeOutOfBounds);
+        }
+
+        set_fee_rebate_fraction(&e, &new_fraction);
+        PoolEvents::new(&e).set_fee_rebate_fraction(new_fraction);
+    }
+
+    // Tax
+
+    fn set_tax_config(e: Env, admin: Address, tax_config: TaxConfig) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+
+        // ...
+    }
+
+    fn get_tax_config(e: Env) -> TaxConfig {
+        // ....
+        TaxConfig::default()
+    }
+
+    fn claim_protocol_taxes(e: Env, admin: Address, destination: Address) -> u128 {
+        admin.require_auth();
+        require_system_fee_admin_or_owner(&e, &admin);
+
+        let token_b = get_token_b(&e);
+
+        let tax_b = get_protocol_tax_b(&e);
+
+        if tax_b == 0 {
+            return 0;
+        }
+
+        if tax_b > 0 {
+            SorobanTokenClient::new(&e, &token_b).transfer(
+                &e.current_contract_address(),
+                &destination,
+                &(tax_b as i128),
+            );
+            set_protocol_tax_b(&e, &0);
+            PoolEvents::new(&e).claim_protocol_tax(token_b, destination, tax_b);
+        }
+
+        tax_b
+    }
 }
 
 // The `UpgradeableContract` trait provides the interface for upgrading the contract.
@@ -1141,7 +1256,7 @@ impl UpgradeableContract for LiquidityPool {
 
     // Get contract type symbolic name
     fn contract_name(e: Env) -> Symbol {
-        Symbol::new(&e, "StandardLiquidityPool")
+        Symbol::new(&e, "ElasticLiquidityPool")
     }
 
     // Commits a new wasm hash for a future upgrade.
