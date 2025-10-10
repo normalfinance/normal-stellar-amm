@@ -968,6 +968,24 @@ impl LiquidityPoolTrait for LiquidityPool {
         result.set(symbol_short!("fee"), fee.into_val(&e));
         result
     }
+
+    fn get_rebase_interval(e: Env) -> u64 {
+        crate::storage::get_min_rebase_interval(&e)
+    }
+
+    fn can_rebase(e: Env, ts: Option<u64>) -> bool {
+        let current_time = e.ledger().timestamp();
+        let min_rebase_threshold = get_min_rebase_interval(&e);
+        let last_rebase_ts = get_last_rebase_ts(&e);
+
+        let reference_time = match ts {
+            Some(_) => ts.unwrap(),
+            None => current_time,
+        };
+        let can_rebase = reference_time.safe_sub(&e, last_rebase_ts) >= min_rebase_threshold;
+
+        can_rebase
+    }
 }
 
 #[contractimpl]

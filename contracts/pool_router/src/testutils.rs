@@ -4,6 +4,7 @@ extern crate std;
 
 use crate::PoolRouterClient;
 use pool_config_storage::testutils::deploy_config_storage;
+use sep_40_oracle::testutils::{Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM};
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, BytesN, Env, Symbol, Vec};
 
@@ -90,6 +91,11 @@ pub(crate) struct Setup<'a> {
     pub(crate) pause_admin: Address,
     pub(crate) emergency_pause_admin: Address,
     pub(crate) system_fee_admin: Address,
+
+    pub(crate) oracle_addr: Address,
+    pub(crate) oracle_client: MockPriceOracleClient<'a>,
+    pub(crate) sol_asset: MockAsset,
+    pub(crate) usdc_asset: MockAsset,
 }
 
 impl Default for Setup<'_> {
@@ -98,6 +104,10 @@ impl Default for Setup<'_> {
         let env = Env::default();
         env.mock_all_auths();
         env.cost_estimate().budget().reset_unlimited();
+
+        // Jump time so oracle works
+        let start_time = 1755271154;
+        // jump(&e, start_time);
 
         let admin = Address::generate(&env);
 
@@ -144,16 +154,9 @@ impl Default for Setup<'_> {
             &system_fee_admin,
         );
         router.set_pool_hash(&admin, &pool_hash);
-        router.set_stableswap_pool_hash(&admin, &install_elastic_liq_pool_hash(&env));
+        router.set_elastic_pool_hash(&admin, &install_elastic_liq_pool_hash(&env));
         router.set_token_hash(&admin, &token_hash);
         router.set_reward_token(&admin, &reward_token.address);
-        router.configure_init_pool_payment(
-            &admin,
-            &reward_token.address,
-            &1_0000000,
-            &1_0000000,
-            &payment_for_creation_address,
-        );
         router.set_protocol_fee_fraction(&admin, &5000);
         // min equivalent amount of 10 reward token per day. min tps is ~1157
         router.pool_gauge_set_reward_thresholds(
@@ -181,6 +184,35 @@ impl Default for Setup<'_> {
         liquidity_calculator.set_pools_plane(&admin, &plane.address);
         router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
 
+        // Setup oracle
+        let sol_symbol = Symbol::new(&env, "SOL");
+        let usdc_sybmol = Symbol::new(&env, "USDC");
+        let usd_sybmol = Symbol::new(&env, "USD");
+
+        let sol_asset = MockAsset::Other(sol_symbol.clone());
+        let usdc_asset = MockAsset::Other(usdc_sybmol.clone());
+        let usd_asset = MockAsset::Other(usd_sybmol);
+
+        let (oracle_addr, oracle_client) = setup_price_feed_oracle(
+            &env,
+            &admin,
+            &usd_asset,
+            &Vec::from_array(&env, [sol_asset.clone(), usdc_asset.clone()]),
+            14,
+            300,
+        );
+
+        let prices_1: Vec<i128> = Vec::from_array(&env, [230_00000000000000, 1_00000000000000]);
+        oracle_client.set_price(&prices_1, &start_time);
+
+        // verify price data can be fetched
+        let result_1 = oracle_client.lastprice(&sol_asset).unwrap();
+        assert_eq!(result_1.price, prices_1.get_unchecked(0));
+        // assert_eq!(result_1.timestamp, start_time);
+
+        let result_2 = oracle_client.lastprice(&usdc_asset).unwrap();
+        assert_eq!(result_2.price, prices_1.get_unchecked(1));
+
         Setup {
             env,
             admin,
@@ -193,6 +225,25 @@ impl Default for Setup<'_> {
             pause_admin,
             emergency_pause_admin,
             system_fee_admin,
+
+            oracle_addr,
+            oracle_client,
+            sol_asset,
+            usdc_asset,
         }
     }
+}
+
+pub fn setup_price_feed_oracle<'a>(
+    env: &Env,
+    admin: &Address,
+    base: &MockAsset,
+    assets: &Vec<MockAsset>,
+    decimals: u32,
+    resolution: u32,
+) -> (Address, MockPriceOracleClient<'a>) {
+    let oracle_addr = env.register(MockPriceOracleWASM, ());
+    let oracle_client = MockPriceOracleClient::new(env, &oracle_addr);
+    oracle_client.set_data(admin, base, assets, &decimals, &resolution);
+    (oracle_addr, oracle_client)
 }

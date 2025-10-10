@@ -63,6 +63,8 @@ pub(crate) struct Setup<'a> {
 
     pub(crate) oracle_addr: Address,
     pub(crate) oracle_client: MockPriceOracleClient<'a>,
+    pub(crate) sol_asset: MockAsset,
+    pub(crate) usdc_asset: MockAsset,
 }
 
 impl Default for Setup<'_> {
@@ -208,6 +210,8 @@ impl Setup<'_> {
             system_fee_admin,
             oracle_addr,
             oracle_client,
+            sol_asset,
+            usdc_asset,
         }
     }
 
@@ -319,8 +323,7 @@ pub(crate) fn deploy_rewards_gauge<'a>(
     )
 }
 
-// (https://github.com/script3/sep-40-oracle/blob/d2d9a19079d95f79c16c3ff506416346d75b537f/mock-sep-40/src/test.rs)
-fn setup_price_feed_oracle<'a>(
+pub fn setup_price_feed_oracle<'a>(
     env: &Env,
     admin: &Address,
     base: &MockAsset,

@@ -4,20 +4,23 @@ extern crate std;
 use crate::rewards::get_rewards_manager;
 use crate::testutils::{
     create_liqpool_contract, create_plane_contract, create_token_contract, deploy_rewards_gauge,
-    get_token_admin_client, install_token_wasm, Setup, TestConfig,
+    get_token_admin_client, install_token_wasm, setup_price_feed_oracle, Setup, TestConfig,
 };
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use core::cmp::min;
 use pool_config_storage::testutils::deploy_config_storage;
 use rewards::storage::{PoolRewardsStorageTrait, UserRewardsStorageTrait};
+use sep_40_oracle::testutils::{Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM};
 use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Events};
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
+use soroban_sdk::BytesN;
 use soroban_sdk::{
     symbol_short, testutils::Address as _, vec, Address, Env, Error, IntoVal, Map, Symbol, Val, Vec,
 };
 use token_share::Client as ShareTokenClient;
+use utils::constant::{THIRTEEN_DAY, TWENTY_FOUR_HOUR};
 use utils::test_utils::{assert_approx_eq_abs, install_dummy_wasm, jump};
 
 #[test]
@@ -1425,11 +1428,27 @@ fn test_withdraw_rewards() {
 
     let router = Address::generate(&e);
 
+    // oracle
+    let sol_asset = MockAsset::Other(Symbol::new(&e, "SOL"));
+    let usdc_asset = MockAsset::Other(Symbol::new(&e, "USDC"));
+
+    let (oracle_addr, oracle_client) = setup_price_feed_oracle(
+        &e,
+        &admin,
+        &MockAsset::Other(Symbol::new(&e, "USD")),
+        &Vec::from_array(&e, [sol_asset.clone(), usdc_asset.clone()]),
+        14,
+        300,
+    );
+
+    let prices_1: Vec<i128> = Vec::from_array(&e, [230_00000000000000, 1_00000000000000]);
+    oracle_client.set_price(&prices_1, &1755271154);
+
     let liq_pool = create_liqpool_contract(
         &e,
         &admin,
         &router,
-        &setup.oracle_addr,
+        &oracle_addr,
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         &token_reward_admin_client.address,
@@ -1524,11 +1543,27 @@ fn test_deposit_rewards() {
 
     let router = Address::generate(&e);
 
+    // oracle
+    let sol_asset = MockAsset::Other(Symbol::new(&e, "SOL"));
+    let usdc_asset = MockAsset::Other(Symbol::new(&e, "USDC"));
+
+    let (oracle_addr, oracle_client) = setup_price_feed_oracle(
+        &e,
+        &admin,
+        &MockAsset::Other(Symbol::new(&e, "USD")),
+        &Vec::from_array(&e, [sol_asset.clone(), usdc_asset.clone()]),
+        14,
+        300,
+    );
+
+    let prices_1: Vec<i128> = Vec::from_array(&e, [230_00000000000000, 1_00000000000000]);
+    oracle_client.set_price(&prices_1, &1755271154);
+
     let liq_pool = create_liqpool_contract(
         &e,
         &admin,
         &router,
-        &setup.oracle_addr,
+        &oracle_addr,
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         &token_reward_admin_client.address,
@@ -1583,12 +1618,28 @@ fn test_swap_rewards() {
 
     let router = Address::generate(&e);
 
+    // oracle
+    let sol_asset = MockAsset::Other(Symbol::new(&e, "SOL"));
+    let usdc_asset = MockAsset::Other(Symbol::new(&e, "USDC"));
+
+    let (oracle_addr, oracle_client) = setup_price_feed_oracle(
+        &e,
+        &admin,
+        &MockAsset::Other(Symbol::new(&e, "USD")),
+        &Vec::from_array(&e, [sol_asset.clone(), usdc_asset.clone()]),
+        14,
+        300,
+    );
+
+    let prices_1: Vec<i128> = Vec::from_array(&e, [230_00000000000000, 1_00000000000000]);
+    oracle_client.set_price(&prices_1, &1755271154);
+
     // we compare two pools to check swap in both directions
     let liq_pool1 = create_liqpool_contract(
         &e,
         &admin,
         &router,
-        &setup.oracle_addr,
+        &oracle_addr,
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         &token_reward_admin_client.address,
@@ -1600,7 +1651,7 @@ fn test_swap_rewards() {
         &e,
         &admin,
         &router,
-        &setup.oracle_addr,
+        &oracle_addr,
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         &token_reward_admin_client.address,
@@ -1703,11 +1754,27 @@ fn test_claim_rewards() {
 
     let router = Address::generate(&e);
 
+    // oracle
+    let sol_asset = MockAsset::Other(Symbol::new(&e, "SOL"));
+    let usdc_asset = MockAsset::Other(Symbol::new(&e, "USDC"));
+
+    let (oracle_addr, oracle_client) = setup_price_feed_oracle(
+        &e,
+        &admin,
+        &MockAsset::Other(Symbol::new(&e, "USD")),
+        &Vec::from_array(&e, [sol_asset.clone(), usdc_asset.clone()]),
+        14,
+        300,
+    );
+
+    let prices_1: Vec<i128> = Vec::from_array(&e, [230_00000000000000, 1_00000000000000]);
+    oracle_client.set_price(&prices_1, &1755271154);
+
     let liq_pool = create_liqpool_contract(
         &e,
         &admin,
         &router,
-        &setup.oracle_addr,
+        &oracle_addr,
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         &token_reward_admin_client.address,
@@ -1807,11 +1874,27 @@ fn test_drain_reserves() {
 
     let router = Address::generate(&e);
 
+    // oracle
+    let sol_asset = MockAsset::Other(Symbol::new(&e, "SOL"));
+    let usdc_asset = MockAsset::Other(Symbol::new(&e, "USDC"));
+
+    let (oracle_addr, oracle_client) = setup_price_feed_oracle(
+        &e,
+        &admin,
+        &MockAsset::Other(Symbol::new(&e, "USD")),
+        &Vec::from_array(&e, [sol_asset.clone(), usdc_asset.clone()]),
+        14,
+        300,
+    );
+
+    let prices_1: Vec<i128> = Vec::from_array(&e, [230_00000000000000, 1_00000000000000]);
+    oracle_client.set_price(&prices_1, &1755271154);
+
     let liq_pool = create_liqpool_contract(
         &e,
         &admin,
         &router,
-        &setup.oracle_addr,
+        &oracle_addr,
         &install_token_wasm(&e),
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         &token_reward_admin_client.address,
@@ -3203,3 +3286,162 @@ fn test_fix_locked_reward_tokens() {
         1_0000000
     );
 }
+
+// /** Custom Tests */
+// fn random_bool(env: &Env) -> bool {
+//     // Generate 1 random byte deterministically from the Soroban env
+//     let rand_bytes: BytesN<1> = env.prng().gen();
+//     let b: u8 = rand_bytes.get(0).unwrap();
+
+//     // Even/odd → true/false
+//     b % 2 == 0
+// }
+
+// fn random_in_range(env: &Env, min: u32, max: u32) -> u32 {
+//     assert!(min < max, "min must be less than max");
+
+//     // Generate 4 random bytes
+//     let rand_bytes: BytesN<4> = env.prng().gen();
+//     let mut raw: [u8; 4] = [0; 4];
+//     raw.copy_from_slice(&rand_bytes.to_array());
+
+//     // Convert bytes → u32
+//     let n = u32::from_le_bytes(raw);
+
+//     // Map it into [min, max)
+//     (n % (max - min)) + min
+// }
+
+// fn test_swaps_many_users(seconds_to_simulate: u64) {
+//     // first user (protocol admin) comes as initial liquidity provider
+//     //  synthetic airdropped to many users
+//     //  many users come to swap
+
+//     let setup = Setup::new_with_config(&TestConfig {
+//         users_count: 100,
+//         ..TestConfig::default()
+//     });
+//     let env = setup.env;
+//     let liq_pool = setup.liq_pool;
+//     let users = setup.users;
+//     let token1_admin_client = setup.token1_admin_client;
+//     let token2_admin_client = setup.token2_admin_client;
+
+//     let admin = users[0].clone();
+//     let first_user = Address::generate(&env);
+
+//     let initial_target_price = setup.oracle_client.lastprice(&setup.sol_asset).unwrap().price as u128;
+//     let initial_usdc_liquidity = 1_000_000_0000000_u128; // 1 million
+//     let initial_synthetic_liquidity = initial_usdc_liquidity / initial_target_price;
+
+//     // Airdrop 10% of the initial liquidity amount of synthetic tokens to users
+//     let airdrop_percent_of_liquidity = 0_1000000_u128; // 10%
+//     let airdrop_amount = initial_synthetic_liquidity * airdrop_percent_of_liquidity;
+//     let airdrop_frequency = 3;
+
+//     for i in 0..101 {
+//         let user = match i {
+//             0 => &first_user,
+//             val => &users[val - 1],
+//         };
+//         if i % airdrop_frequency == 0 {
+//             token1_admin_client.mint(user, &(airdrop_amount as i128)); // synthetic
+//         }
+
+//         // usdc
+//         if i == 0 {
+//             token2_admin_client.mint(user, &1_000_000_000_000_000_000_000);
+//         } else {
+//             token2_admin_client.mint(user, &10_000_0000000);
+//         }
+
+//     }
+
+//     // Protocol-owned liquidity (POL) deposit
+//     // Desired amounts set so that initial pool price is at peg (oracle)
+//     liq_pool.deposit(
+//         &first_user,
+//         &Vec::from_array(&env, [initial_synthetic_liquidity, initial_usdc_liquidity]),
+//         &0,
+//     );
+//     jump(&env, 1);
+
+//     // Simulate swaps
+//     let rng_seed = 0;
+//     let rebase_interval = liq_pool.get_rebase_interval();
+//     let usdc_variance = 0_0200000; // 2%
+//     let target_variance = 0_1000000; // 10%
+
+//     for i in 1..seconds_to_simulate as usize {
+//         let current_time = env.ledger().timestamp();
+
+//         // Update oracle prices
+//         let current_sol_oracle_price = setup.oracle_client.lastprice(&setup.sol_asset).unwrap().price;
+//         let current_usdc_oracle_price = setup.oracle_client.lastprice(&setup.usdc_asset).unwrap().price;
+
+//         let sol_price_update_direction = if random_bool(&env) { 1_i128 } else { -1_i128 };
+//         let usdc_price_update_direction = if random_bool(&env) { 1_i128 } else { -1_i128 };
+
+//         let sol_price_change = current_sol_oracle_price * target_variance * sol_price_update_direction;
+//         let usdc_price_change = current_usdc_oracle_price * usdc_variance * usdc_price_update_direction;
+
+//         let new_sol_oracle_price = current_sol_oracle_price + sol_price_change;
+//         let new_usdc_oracle_price = current_usdc_oracle_price + usdc_price_change;
+
+//         let updated_prices = Vec::from_array(&env, [new_sol_oracle_price, new_usdc_oracle_price]);
+//         setup.oracle_client.set_price(&updated_prices, &current_time);
+
+//         // Swap
+//         let will_swap = random_bool(&env);
+//         if will_swap {
+//             let user = &users[i % 10];
+
+//             let user_token1_balance = setup.token1.balance(&user);
+//             let user_token2_balance = setup.token2.balance(&user);
+
+//             let (in_idx, out_idx, in_amount) = if user_token1_balance == 0 {
+//                 let usdc_amount = random_in_range(&env, 1_0000000, user_token1_balance as u32); // FIXME:
+//                 (1, 0, usdc_amount)
+//             } else {
+//                 let buy: bool = random_bool(&env);
+
+//                 if buy {
+//                     (1, 0, random_in_range(&env, 1_0000000, user_token2_balance as u32))
+//                 } else {
+//                     (0, 1, random_in_range(&env, 1_0000000, user_token1_balance as u32))
+//                 }
+//             };
+
+//             liq_pool.swap(
+//                 user,
+//                 &in_idx,
+//                 &out_idx,
+//                 &(in_amount as u128),
+//                 &0
+//             );
+//         }
+
+//         if current_time % rebase_interval == 0 {
+//             liq_pool.rebase(&admin);
+//         }
+
+//         // Increment time by 1 second
+//         jump(&env, 1);
+//     }
+
+//     jump(&env, 100);
+//     env.cost_estimate().budget().reset_default();
+
+//     env.cost_estimate().budget().print();
+// }
+
+// #[test]
+// fn test_swaps_one_day() {
+//     test_swaps_many_users(TWENTY_FOUR_HOUR);
+// }
+
+// #[cfg(feature = "slow_tests")]
+// #[test]
+// fn test_swaps_two_weeks() {
+//     test_swaps_many_users(THIRTEEN_DAY);
+// }

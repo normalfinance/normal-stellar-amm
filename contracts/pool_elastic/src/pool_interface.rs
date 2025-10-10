@@ -120,6 +120,10 @@ pub trait LiquidityPoolTrait {
 
     // Get dictionary of basic pool information: type, fee, special parameters if any.
     fn get_info(e: Env) -> Map<Symbol, Val>;
+
+    fn get_rebase_interval(e: Env) -> u64;
+
+    fn can_rebase(e: Env, ts: Option<u64>) -> bool;
 }
 
 pub trait AdminInterfaceTrait {
