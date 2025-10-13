@@ -339,6 +339,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(&e, PoolValidationError::OutMinNotSatisfied);
         }
         // First deposit: mint MIN_LIQUIDITY to contract itself to prevent dust attacks
+        #[cfg(feature = "dust_attack")]
         if total_shares == 0 {
             mint_shares(&e, &e.current_contract_address(), MIN_LIQUIDITY as i128);
             PoolEvents::new(&e).permanently_locked_liquidity(MIN_LIQUIDITY);
@@ -761,6 +762,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             .checkpoint_user(&user, total_shares, user_shares);
         rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
 
+        #[cfg(feature = "dust_attack")]
         if total_shares - share_amount < MIN_LIQUIDITY {
             panic_with_error!(e, PoolValidationError::WithdrawExceedsMinLiquidity);
         }

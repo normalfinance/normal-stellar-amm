@@ -31,3 +31,4 @@ pool-config-storage = { workspace = true, features = ["testutils"] }
 [features]
 default = []
 slow_tests = []
+dust_attack = []

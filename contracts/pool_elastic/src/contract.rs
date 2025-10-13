@@ -1,4 +1,6 @@
-use crate::constants::{FEE_MULTIPLIER, MIN_LIQUIDITY};
+use crate::constants::FEE_MULTIPLIER;
+#[cfg(feature = "dust_attack")]
+use crate::constants::MIN_LIQUIDITY;
 use crate::errors::LiquidityPoolError;
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
@@ -382,11 +384,16 @@ impl LiquidityPoolTrait for LiquidityPool {
                 .unwrap()
         };
 
+        #[cfg(feature = "dust_attack")]
         let mut shares_to_mint = new_total_shares - total_shares;
+        #[cfg(not(feature = "dust_attack"))]
+        let shares_to_mint = new_total_shares - total_shares;
+
         if shares_to_mint < min_shares {
             panic_with_error!(&e, PoolValidationError::OutMinNotSatisfied);
         }
         // First deposit: mint MIN_LIQUIDITY to contract itself to prevent dust attacks
+        #[cfg(feature = "dust_attack")]
         if total_shares == 0 {
             mint_shares(&e, &e.current_contract_address(), MIN_LIQUIDITY as i128);
             PoolEvents::new(&e).permanently_locked_liquidity(MIN_LIQUIDITY);
@@ -872,6 +879,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             .checkpoint_user(&user, total_shares, user_shares);
         rewards_gauge::operations::checkpoint_user(&e, &user, user_shares, total_shares);
 
+        #[cfg(feature = "dust_attack")]
         if total_shares - share_amount < MIN_LIQUIDITY {
             panic_with_error!(e, PoolValidationError::WithdrawExceedsMinLiquidity);
         }
