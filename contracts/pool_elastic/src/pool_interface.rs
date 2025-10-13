@@ -1,7 +1,5 @@
 use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Val, Vec};
 
-use crate::tax::TaxConfig;
-
 pub trait LiquidityPoolCrunch {
     // Initialize pool completely to reduce calculations cost
     fn initialize_all(
@@ -169,11 +167,11 @@ pub trait AdminInterfaceTrait {
     fn set_fee_rebate_fraction(e: Env, admin: Address, new_fraction: u32);
 
     // Tax
-    fn set_tax_config(e: Env, admin: Address, tax_config: TaxConfig);
+    fn set_base_tax(e: Env, admin: Address, tax: u32);
 
-    fn get_tax_config(e: Env) -> TaxConfig;
+    fn get_base_tax(e: Env) -> u32;
 
-    fn claim_protocol_taxes(e: Env, admin: Address, destination: Address) -> u128;
+    fn claim_protocol_taxes(e: Env, admin: Address, destination: Address) -> Vec<u128>;
 }
 
 pub trait UpgradeableContract {

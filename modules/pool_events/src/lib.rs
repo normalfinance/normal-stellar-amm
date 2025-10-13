@@ -38,6 +38,15 @@ pub trait LiquidityPoolEvents {
         fee_amount: u128,
     );
 
+    fn tax(
+        &self,
+        user: Address,
+        token_in: Address,
+        token_out: Address,
+        original_amount: u128,
+        tax_amount: u128,
+    );
+
     fn update_reserves(&self, reserves: Vec<u128>);
 
     fn kill_deposit(&self);
@@ -164,6 +173,35 @@ impl LiquidityPoolEvents for Events {
         e.events().publish(
             (Symbol::new(e, "trade"), token_in, token_out, user),
             (in_amount as i128, out_amount as i128, fee_amount as i128),
+        );
+    }
+
+    fn tax(
+        &self,
+        user: Address,
+        token_in: Address,
+        token_out: Address,
+        original_amount: u128,
+        tax_amount: u128,
+    ) {
+        // topics
+        // [
+        //   "trade": Symbol,       // event identifier
+        //   sold_asset: Address,   // asset sent to the pool
+        //   bought_asset: Address, // asset received from the pool
+        //   trader: Address        // address of account/contract that initiated the trade
+        // ]
+        // body
+        // [
+        //   sold_amount: i128,   // amount of tokens sent to the pool
+        //   bought_amount: i128, // amount of tokens received from the pool
+        //   fee: i128            // fee charged by the protocol (asset sent to the pool) - optional
+        // ]
+
+        let e = self.env();
+        e.events().publish(
+            (Symbol::new(e, "tax"), token_in, token_out, user),
+            (original_amount as i128, tax_amount as i128),
         );
     }
 

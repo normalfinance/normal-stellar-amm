@@ -344,8 +344,9 @@ impl LiquidityPoolTrait for LiquidityPool {
         let (min_a, min_b) = (0, 0);
 
         // Calculate deposit amounts
-        let amounts =
-            pool::get_deposit_amounts(&e, desired_a, min_a, desired_b, min_b, reserve_a, reserve_b);
+        let amounts = crate::pool::get_deposit_amounts(
+            &e, desired_a, min_a, desired_b, min_b, reserve_a, reserve_b,
+        );
 
         // Increase reserves
         put_reserve_a(&e, reserve_a + amounts.0);
@@ -491,14 +492,6 @@ impl LiquidityPoolTrait for LiquidityPool {
         let oracle_price_data =
             crate::oracle::get_oracle_price_with_validity(&e, &get_target_asset(&e), current_time);
 
-        // FIXME: Tax
-        if crate::tax::is_trade_taxable(&e, pool_price, oracle_price_data.last_price_twap) {
-            let (_, tax) = crate::tax::get_tax_for_trade(&e, in_amount);
-
-            let protocol_tax_b = get_protocol_tax_b(&e);
-            set_protocol_tax_b(&e, &(protocol_tax_b.safe_add(&e, tax)));
-        }
-
         // @dev A swap is risk reducing if it moves the pool price closer to the peg price (oracle)
         let risk_reducing = crate::pool::is_swap_risk_reducing(
             &e,
@@ -506,13 +499,32 @@ impl LiquidityPoolTrait for LiquidityPool {
             pool_price,
             in_idx,
         );
-        let (out, total_fee) =
+
+        let (out, total_fee, total_tax) =
             get_amount_out(&e, in_amount, reserve_sell, reserve_buy, risk_reducing);
         let protocol_fee = (total_fee * (get_protocol_fee_fraction(&e) as u128)) / FEE_MULTIPLIER;
         let lp_fee = total_fee - protocol_fee;
 
         if out < out_min {
             panic_with_error!(&e, PoolValidationError::OutMinNotSatisfied);
+        }
+
+        if total_tax > 0 {
+            if in_idx == 0 {
+                let protocol_tax_a = get_protocol_tax_a(&e);
+                set_protocol_tax_a(&e, &protocol_tax_a.safe_add(&e, total_tax));
+            } else {
+                let protocol_tax_b = get_protocol_tax_b(&e);
+                set_protocol_tax_b(&e, &protocol_tax_b.safe_add(&e, total_tax));
+            }
+
+            PoolEvents::new(&e).tax(
+                user.clone(),
+                tokens.get(in_idx).unwrap(),
+                tokens.get(out_idx).unwrap(),
+                in_amount,
+                total_tax,
+            );
         }
 
         // Transfer the amount being sold to the contract
@@ -696,14 +708,6 @@ impl LiquidityPoolTrait for LiquidityPool {
         let oracle_price_data =
             crate::oracle::get_oracle_price_with_validity(&e, &get_target_asset(&e), current_time);
 
-        // FIXME: Tax
-        if crate::tax::is_trade_taxable(&e, pool_price, oracle_price_data.last_price_twap) {
-            let (_, tax) = crate::tax::get_tax_for_trade(&e, out_amount);
-
-            let protocol_tax_b = get_protocol_tax_b(&e);
-            set_protocol_tax_b(&e, &(protocol_tax_b.safe_add(&e, tax)));
-        }
-
         // @dev A swap is risk reducing if it moves the pool price closer to the peg price (oracle)
         let risk_reducing = crate::pool::is_swap_risk_reducing(
             &e,
@@ -711,11 +715,30 @@ impl LiquidityPoolTrait for LiquidityPool {
             pool_price,
             in_idx,
         );
-        let (in_amount, total_fee) =
+
+        let (in_amount, total_fee, total_tax) =
             get_amount_out_strict_receive(&e, out_amount, reserve_sell, reserve_buy, risk_reducing);
 
         if in_amount > in_max {
             panic_with_error!(&e, PoolValidationError::InMaxNotSatisfied);
+        }
+
+        if total_tax > 0 {
+            if in_idx == 0 {
+                let protocol_tax_a = get_protocol_tax_a(&e);
+                set_protocol_tax_a(&e, &protocol_tax_a.safe_add(&e, total_tax));
+            } else {
+                let protocol_tax_b = get_protocol_tax_b(&e);
+                set_protocol_tax_b(&e, &protocol_tax_b.safe_add(&e, total_tax));
+            }
+
+            PoolEvents::new(&e).tax(
+                user.clone(),
+                tokens.get(in_idx).unwrap(),
+                tokens.get(out_idx).unwrap(),
+                in_amount,
+                total_tax,
+            );
         }
 
         // Transfer the amount being sold to the contract
@@ -1229,31 +1252,40 @@ impl AdminInterfaceTrait for LiquidityPool {
     }
 
     // Tax
-
-    fn set_tax_config(e: Env, admin: Address, tax_config: TaxConfig) {
+    fn set_base_tax(e: Env, admin: Address, tax: u32) {
         admin.require_auth();
         require_operations_admin_or_owner(&e, &admin);
 
-        // ...
+        crate::storage::set_base_tax(&e, &tax);
     }
 
-    fn get_tax_config(e: Env) -> TaxConfig {
-        // ....
-        TaxConfig::default()
+    fn get_base_tax(e: Env) -> u32 {
+        crate::storage::get_base_tax(&e)
     }
 
-    fn claim_protocol_taxes(e: Env, admin: Address, destination: Address) -> u128 {
+    fn claim_protocol_taxes(e: Env, admin: Address, destination: Address) -> Vec<u128> {
         admin.require_auth();
         require_system_fee_admin_or_owner(&e, &admin);
 
+        let token_a = get_token_a(&e);
         let token_b = get_token_b(&e);
 
+        let tax_a = get_protocol_tax_a(&e);
         let tax_b = get_protocol_tax_b(&e);
 
-        if tax_b == 0 {
-            return 0;
+        if tax_a == 0 && tax_b == 0 {
+            return Vec::from_array(&e, [0, 0]);
         }
 
+        if tax_a > 0 {
+            SorobanTokenClient::new(&e, &token_a).transfer(
+                &e.current_contract_address(),
+                &destination,
+                &(tax_a as i128),
+            );
+            set_protocol_tax_a(&e, &0);
+            PoolEvents::new(&e).claim_protocol_tax(token_a, destination.clone(), tax_a);
+        }
         if tax_b > 0 {
             SorobanTokenClient::new(&e, &token_b).transfer(
                 &e.current_contract_address(),
@@ -1264,7 +1296,7 @@ impl AdminInterfaceTrait for LiquidityPool {
             PoolEvents::new(&e).claim_protocol_tax(token_b, destination, tax_b);
         }
 
-        tax_b
+        Vec::from_array(&e, [tax_a, tax_b])
     }
 }
 

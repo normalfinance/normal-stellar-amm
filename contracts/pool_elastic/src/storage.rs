@@ -38,8 +38,7 @@ pub enum DataKey {
     // Tax
     MinTaxPriceDeviation,
     BaseTax,
-    TaxScalingFactor,
-    TaxScalingRate,
+    ProtocolTaxA,
     ProtocolTaxB,
 
     // Circuit Breaker
@@ -146,10 +145,10 @@ generate_instance_storage_getter_and_setter_with_default!(
     1000 // 10%
 );
 generate_instance_storage_getter_and_setter_with_default!(
-    tax_scaling_rate,
-    DataKey::TaxScalingRate,
-    u32,
-    500 // 5%
+    protocol_tax_a,
+    DataKey::ProtocolTaxA,
+    u128,
+    0
 );
 generate_instance_storage_getter_and_setter_with_default!(
     protocol_tax_b,

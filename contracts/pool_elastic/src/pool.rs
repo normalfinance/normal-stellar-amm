@@ -1,5 +1,8 @@
-use crate::storage::get_fee_fraction;
+use crate::storage::{get_base_tax, get_fee_fraction, get_protocol_tax_b, set_protocol_tax_b};
+use crate::tax;
 use crate::{constants::FEE_MULTIPLIER, storage::get_fee_rebate_fraction};
+use pool_events::Events as PoolEvents;
+use pool_events::LiquidityPoolEvents;
 use pool_validation_errors::PoolValidationError;
 use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{panic_with_error, Env};
@@ -42,11 +45,12 @@ pub fn get_amount_out(
     reserve_sell: u128, // x
     reserve_buy: u128,  // y
     risk_reducing: bool,
-) -> (u128, u128) {
+) -> (u128, u128, u128) {
     if in_amount == 0 {
-        return (0, 0);
+        return (0, 0, 0);
     }
 
+    // Fee
     let fee_fraction = get_fee_fraction(e) as u128; // e.g. 30 => 0.3 %
     let fee_rebate_fraction = get_fee_rebate_fraction(e) as u128; // e.g. 5000 => 50%
     let risk_adjusted_fee_fraction = if risk_reducing {
@@ -55,8 +59,23 @@ pub fn get_amount_out(
         fee_fraction
     };
     let in_after_fee = (in_amount * (FEE_MULTIPLIER - risk_adjusted_fee_fraction)) / FEE_MULTIPLIER;
-    let raw_out = in_after_fee.fixed_mul_floor(e, &reserve_buy, &(reserve_sell + in_after_fee));
-    (raw_out, in_amount - in_after_fee) // fee is taken on input
+
+    // Tax
+    let tax_amount = if risk_reducing {
+        0
+    } else {
+        let base_tax = get_base_tax(e);
+        in_amount.fixed_mul_floor(e, &(base_tax as u128), &PRICE_PRECISION)
+    };
+
+    let raw_out = if tax_amount > 0 {
+        let in_after_fee_and_tax = in_after_fee - tax_amount;
+        in_after_fee_and_tax.fixed_mul_floor(e, &reserve_buy, &(reserve_sell + in_after_fee))
+    } else {
+        in_after_fee.fixed_mul_floor(e, &reserve_buy, &(reserve_sell + in_after_fee))
+    };
+
+    (raw_out, in_amount - in_after_fee, tax_amount) // fee is taken on input
 }
 
 pub fn get_amount_out_strict_receive(
@@ -65,9 +84,9 @@ pub fn get_amount_out_strict_receive(
     reserve_sell: u128, // x
     reserve_buy: u128,  // y
     risk_reducing: bool,
-) -> (u128, u128) {
+) -> (u128, u128, u128) {
     if out_amount == 0 {
-        return (0, 0);
+        return (0, 0, 0);
     }
     if out_amount >= reserve_buy {
         panic_with_error!(e, PoolValidationError::InsufficientBalance);
@@ -96,7 +115,15 @@ pub fn get_amount_out_strict_receive(
     // ----------  Step 3: fee = dx_before_fee - dx_after_fee -----------
     let fee = dx_before_fee - dx_after_fee;
 
-    (dx_before_fee, fee)
+    // Tax
+    let tax_amount = if risk_reducing {
+        0
+    } else {
+        let base_tax = get_base_tax(e);
+        dx_before_fee.fixed_mul_floor(e, &(base_tax as u128), &PRICE_PRECISION)
+    };
+
+    (dx_before_fee, fee, tax_amount)
 }
 
 pub fn pool_price(e: &Env, reserve_a: u128, reserve_b: u128) -> u128 {
