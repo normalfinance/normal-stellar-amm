@@ -23,13 +23,7 @@
     "pool:deposit": "./scripts/admin/pool/deposit.sh",
     "pool:withdraw": "./scripts/admin/pool/withdraw.sh",
     "pool:update": "./scripts/admin/pool/update.sh",
-    "pool:swap": "./scripts/admin/pool/swap.sh",
-    "oracle:register": "./scripts/admin/oracle/register.sh",
-    "oracle:update": "./scripts/admin/oracle/update.sh",
-    "oracle:delete": "./scripts/admin/oracle/delete.sh",
-    "insurnace:resolve": "./scripts/admin/insurnace/resolve.sh",
-    "insurnace:update": "./scripts/admin/insurnace/update.sh",
-    "fees:collect": "./scripts/admin/fees/collect.sh"
+    "pool:swap": "./scripts/admin/pool/swap.sh"
   },
   "repository": {
     "type": "git",
