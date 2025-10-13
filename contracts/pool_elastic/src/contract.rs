@@ -4,7 +4,6 @@ use crate::constants::MIN_LIQUIDITY;
 use crate::errors::LiquidityPoolError;
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
-use crate::pool::{self, is_swap_risk_reducing};
 use crate::pool::{get_amount_out, get_amount_out_strict_receive};
 use crate::pool_interface::{
     AdminInterfaceTrait, LiquidityPoolCrunch, LiquidityPoolTrait, RewardsTrait, UpgradeableContract,
@@ -12,16 +11,16 @@ use crate::pool_interface::{
 use crate::rewards::get_rewards_manager;
 use crate::storage::{
     get_fee_fraction, get_gauge_future_wasm, get_is_killed_claim, get_is_killed_deposit,
-    get_is_killed_swap, get_last_rebase_ts, get_min_rebase_interval, get_min_tax_price_deviation,
-    get_plane, get_protocol_fee_a, get_protocol_fee_b, get_protocol_fee_fraction,
-    get_protocol_tax_b, get_reserve_a, get_reserve_b, get_router, get_target_asset, get_token_a,
-    get_token_b, get_token_future_wasm, has_plane, put_fee_fraction, put_reserve_a, put_reserve_b,
-    put_token_a, put_token_b, set_fee_rebate_fraction, set_gauge_future_wasm, set_is_killed_claim,
+    get_is_killed_swap, get_last_rebase_ts, get_min_rebase_interval, get_plane, get_protocol_fee_a,
+    get_protocol_fee_b, get_protocol_fee_fraction, get_protocol_tax_a, get_protocol_tax_b,
+    get_reserve_a, get_reserve_b, get_router, get_target_asset, get_token_a, get_token_b,
+    get_token_future_wasm, has_plane, put_fee_fraction, put_reserve_a, put_reserve_b, put_token_a,
+    put_token_b, set_fee_rebate_fraction, set_gauge_future_wasm, set_is_killed_claim,
     set_is_killed_deposit, set_is_killed_swap, set_last_liquidity_withdrawal_ts,
     set_last_rebase_ts, set_oracle, set_plane, set_protocol_fee_a, set_protocol_fee_b,
-    set_protocol_fee_fraction, set_protocol_tax_b, set_router, set_token_future_wasm,
+    set_protocol_fee_fraction, set_protocol_tax_a, set_protocol_tax_b, set_router,
+    set_token_future_wasm,
 };
-use crate::tax::TaxConfig;
 use crate::token::{create_contract, transfer_a, transfer_b};
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
@@ -469,11 +468,9 @@ impl LiquidityPoolTrait for LiquidityPool {
             panic_with_error!(e, PoolValidationError::ZeroAmount);
         }
 
-        if crate::circuit_breaker::is_flipped(&e, 0, 0) {
-            panic_with_error!(e, PoolValidationError::CircuitBreaker);
-        }
-
-        // TODO: Circuit breaker OR is swap killed good enough?
+        // if crate::circuit_breaker::is_flipped(&e, 0, 0) {
+        //     panic_with_error!(e, PoolValidationError::CircuitBreaker);
+        // }
 
         let current_time = e.ledger().timestamp();
         let reserve_a = get_reserve_a(&e);
@@ -688,8 +685,6 @@ impl LiquidityPoolTrait for LiquidityPool {
         if out_amount == 0 {
             panic_with_error!(e, PoolValidationError::ZeroAmount);
         }
-
-        // TODO: Circuit breaker OR is swap killed good enough?
 
         let current_time = e.ledger().timestamp();
         let reserve_a = get_reserve_a(&e);

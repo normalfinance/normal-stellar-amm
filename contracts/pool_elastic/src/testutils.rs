@@ -306,7 +306,7 @@ pub fn install_token_wasm(e: &Env) -> BytesN<32> {
 }
 
 mod rewards_gauge {
-    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/rewards_gauge.wasm");
+    soroban_sdk::contractimport!(file = "../../wasm/rewards_gauge.wasm");
 }
 
 pub(crate) fn deploy_rewards_gauge<'a>(

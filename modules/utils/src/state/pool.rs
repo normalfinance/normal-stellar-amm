@@ -134,12 +134,6 @@ pub struct PoolInfo {
 
 #[contracttype]
 #[derive(Clone)]
-pub struct RewardConfig {
-    pub reward_token: Address,
-}
-
-#[contracttype]
-#[derive(Clone)]
 pub struct InitializeParams {
     pub admin: Address,
     pub privileged_addrs: PrivilegedAddresses,
@@ -159,7 +153,7 @@ pub struct InitializeParams {
 #[derive(Clone)]
 pub struct InitializeAllParams {
     pub base: InitializeParams,
-    pub reward_config: RewardConfig,
+    // pub reward_config: RewardConfig,
     pub plane: Address,
 }
 
