@@ -1,7 +1,6 @@
 use paste::paste;
 use soroban_sdk::{contracttype, panic_with_error, Address, BytesN, Env, Symbol};
 pub use utils::bump::bump_instance;
-use utils::constant::ONE_HOUR;
 use utils::errors::storage_errors::StorageError;
 use utils::generate_instance_storage_getter;
 use utils::state::oracle_registry::{HistoricalOracleData, OracleGuardRails};
@@ -16,14 +15,10 @@ use utils::{
 pub enum DataKey {
     TokenA,
     TokenB,
+    BaseAsset, // symbol
+    QuoteAsset,
     ReserveA,
     ReserveB,
-
-    TargetAsset,
-
-    // Rebase
-    MinRebaseInterval, // minimum amount of time that must elapse between rebases
-    LastRebaseTs,      // the timestamp of the last rebase
 
     // Contract
     Plane,
@@ -35,32 +30,39 @@ pub enum DataKey {
     OracleGuardRails, // a set of oracle price data validations and protections.
     HistoricalOracleData,
 
+    // Fee
+    FeeFraction, // 1 = 0.01%
+    FeeRebateFraction,
+    ProtocolFeeFraction, // part of the fee that goes to the protocol, 5000 = 50% of the fee goes to the protocol
+    ProtocolFeeA,
+    ProtocolFeeB,
+
     // Tax
-    MinTaxPriceDeviation,
-    BaseTax,
-    ProtocolTaxA,
+    BaseTaxFraction,
+    TaxIncline, // steepness
+    MaxTaxFraction,
     ProtocolTaxB,
 
-    // Circuit Breaker
-    SwapCapFraction, //
-    LastLiquidityWithdrawalTs,
+    // Bonus
+    // MaxBonusFraction,
+    // BonusEscrow(Address),
+    // BonusReserveB,
 
     // Paused Ops
     IsKilledSwap,
     IsKilledDeposit,
     IsKilledClaim,
+    IsKilledTax,
+    IsKilledBonus,
 
     // Wasm
     TokenFutureWASM,
     GaugeFutureWASM,
-
-    // Fee
-    FeeFraction,         // 1 = 0.01%
-    ProtocolFeeFraction, // part of the fee that goes to the protocol, 5000 = 50% of the fee goes to the protocol
-    ProtocolFeeA,
-    ProtocolFeeB,
-    FeeRebateFraction,
 }
+
+// Reserve
+generate_instance_storage_getter_and_setter_with_default!(reserve_a, DataKey::ReserveA, u128, 0);
+generate_instance_storage_getter_and_setter_with_default!(reserve_b, DataKey::ReserveB, u128, 0);
 
 // Paused Ops
 generate_instance_storage_getter_and_setter_with_default!(
@@ -81,7 +83,32 @@ generate_instance_storage_getter_and_setter_with_default!(
     bool,
     false
 );
+generate_instance_storage_getter_and_setter_with_default!(
+    is_killed_tax,
+    DataKey::IsKilledTax,
+    bool,
+    false
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    is_killed_bonus,
+    DataKey::IsKilledBonus,
+    bool,
+    false
+);
+
 // Fee
+generate_instance_storage_getter_and_setter_with_default!(
+    fee_fraction,
+    DataKey::FeeFraction,
+    u32,
+    30 // 0.30%
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    fee_rebate_fraction,
+    DataKey::FeeRebateFraction,
+    u32,
+    10000 // 100% (zero rebate)
+);
 generate_instance_storage_getter_and_setter_with_default!(
     protocol_fee_fraction,
     DataKey::ProtocolFeeFraction,
@@ -100,25 +127,11 @@ generate_instance_storage_getter_and_setter_with_default!(
     u128,
     0
 );
-generate_instance_storage_getter_and_setter_with_default!(
-    fee_rebate_fraction,
-    DataKey::FeeRebateFraction,
-    u32,
-    5000 // 50%
-);
-generate_instance_storage_getter_and_setter!(target_asset, DataKey::TargetAsset, Symbol);
-generate_instance_storage_getter_and_setter_with_default!(
-    min_rebase_interval,
-    DataKey::MinRebaseInterval,
-    u64,
-    ONE_HOUR
-);
-generate_instance_storage_getter_and_setter_with_default!(
-    last_rebase_ts,
-    DataKey::LastRebaseTs,
-    u64,
-    0
-);
+
+// Assets
+generate_instance_storage_getter_and_setter!(base_asset, DataKey::BaseAsset, Symbol);
+generate_instance_storage_getter_and_setter!(quote_asset, DataKey::QuoteAsset, Symbol);
+
 generate_instance_storage_getter_and_setter_with_default!(
     oracle_guard_rails,
     DataKey::OracleGuardRails,
@@ -131,24 +144,25 @@ generate_instance_storage_getter_and_setter_with_default!(
     HistoricalOracleData,
     HistoricalOracleData::default()
 );
+
 // Tax
 generate_instance_storage_getter_and_setter_with_default!(
-    min_tax_price_deviation,
-    DataKey::MinTaxPriceDeviation,
+    base_tax_fraction,
+    DataKey::BaseTaxFraction,
     u32,
-    500 // 5%
+    100 // 0.10%
 );
 generate_instance_storage_getter_and_setter_with_default!(
-    base_tax,
-    DataKey::BaseTax,
+    tax_incline,
+    DataKey::TaxIncline,
     u32,
-    1000 // 10%
+    25
 );
 generate_instance_storage_getter_and_setter_with_default!(
-    protocol_tax_a,
-    DataKey::ProtocolTaxA,
-    u128,
-    0
+    max_tax_fraction,
+    DataKey::MaxTaxFraction,
+    u32,
+    50000 // 50%
 );
 generate_instance_storage_getter_and_setter_with_default!(
     protocol_tax_b,
@@ -156,16 +170,23 @@ generate_instance_storage_getter_and_setter_with_default!(
     u128,
     0
 );
-// Circuit Breaker
-generate_instance_storage_getter_and_setter_with_default!(
-    last_liquidity_withdrawal_ts,
-    DataKey::LastLiquidityWithdrawalTs,
-    u64,
-    0
-);
+
+// Bonus
+// generate_instance_storage_getter_and_setter_with_default!(
+//     max_bonus_fraction,
+//     DataKey::MaxBonusFraction,
+//     u32,
+//     2500 // 25%
+// );
+// generate_instance_storage_getter_and_setter_with_default!(
+//     bonus_reserve_b,
+//     DataKey::BonusReserveB,
+//     u128,
+//     0
+// );
+
 // Addresses
 generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
-generate_instance_storage_getter_and_setter!(sink, DataKey::Sink, Address);
 generate_instance_storage_getter_and_setter!(plane, DataKey::Plane, Address);
 generate_instance_storage_getter_and_setter!(oracle, DataKey::Oracle, Address);
 generate_instance_storage_getter_and_setter!(
@@ -195,22 +216,6 @@ pub fn get_token_b(e: &Env) -> Address {
     }
 }
 
-pub fn get_reserve_a(e: &Env) -> u128 {
-    bump_instance(e);
-    match e.storage().instance().get(&DataKey::ReserveA) {
-        Some(v) => v,
-        None => panic_with_error!(e, StorageError::ValueNotInitialized),
-    }
-}
-
-pub fn get_reserve_b(e: &Env) -> u128 {
-    bump_instance(e);
-    match e.storage().instance().get(&DataKey::ReserveB) {
-        Some(v) => v,
-        None => panic_with_error!(e, StorageError::ValueNotInitialized),
-    }
-}
-
 pub fn put_token_a(e: &Env, contract: Address) {
     bump_instance(e);
     e.storage().instance().set(&DataKey::TokenA, &contract)
@@ -219,29 +224,6 @@ pub fn put_token_a(e: &Env, contract: Address) {
 pub fn put_token_b(e: &Env, contract: Address) {
     bump_instance(e);
     e.storage().instance().set(&DataKey::TokenB, &contract)
-}
-
-pub fn put_reserve_a(e: &Env, amount: u128) {
-    bump_instance(e);
-    e.storage().instance().set(&DataKey::ReserveA, &amount)
-}
-
-pub fn put_reserve_b(e: &Env, amount: u128) {
-    bump_instance(e);
-    e.storage().instance().set(&DataKey::ReserveB, &amount)
-}
-
-pub fn get_fee_fraction(e: &Env) -> u32 {
-    bump_instance(e);
-    match e.storage().instance().get(&DataKey::FeeFraction) {
-        Some(v) => v,
-        None => panic_with_error!(e, StorageError::ValueNotInitialized),
-    }
-}
-
-pub fn put_fee_fraction(e: &Env, value: u32) {
-    bump_instance(e);
-    e.storage().instance().set(&DataKey::FeeFraction, &value)
 }
 
 pub(crate) fn has_plane(e: &Env) -> bool {

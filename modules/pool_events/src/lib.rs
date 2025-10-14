@@ -36,14 +36,6 @@ pub trait LiquidityPoolEvents {
         in_amount: u128,
         out_amount: u128,
         fee_amount: u128,
-    );
-
-    fn tax(
-        &self,
-        user: Address,
-        token_in: Address,
-        token_out: Address,
-        original_amount: u128,
         tax_amount: u128,
     );
 
@@ -65,6 +57,14 @@ pub trait LiquidityPoolEvents {
 
     fn unkill_gauges_claim(&self);
 
+    fn kill_tax(&self);
+
+    fn unkill_tax(&self);
+
+    fn kill_bonus(&self);
+
+    fn unkill_bonus(&self);
+
     fn set_protocol_fee_fraction(&self, fraction: u32);
 
     fn set_fee_rebate_fraction(&self, fraction: u32);
@@ -74,6 +74,9 @@ pub trait LiquidityPoolEvents {
     fn claim_protocol_tax(&self, token: Address, destination: Address, amount: u128);
 
     fn permanently_locked_liquidity(&self, amount: u128);
+
+    // Bonus
+    fn claim_bonus(&self, user: Address, token: Address, amount: u128);
 }
 
 // This trait is used to emit events related to liquidity pool operations.
@@ -154,34 +157,6 @@ impl LiquidityPoolEvents for Events {
         in_amount: u128,
         out_amount: u128,
         fee_amount: u128,
-    ) {
-        // topics
-        // [
-        //   "trade": Symbol,       // event identifier
-        //   sold_asset: Address,   // asset sent to the pool
-        //   bought_asset: Address, // asset received from the pool
-        //   trader: Address        // address of account/contract that initiated the trade
-        // ]
-        // body
-        // [
-        //   sold_amount: i128,   // amount of tokens sent to the pool
-        //   bought_amount: i128, // amount of tokens received from the pool
-        //   fee: i128            // fee charged by the protocol (asset sent to the pool) - optional
-        // ]
-
-        let e = self.env();
-        e.events().publish(
-            (Symbol::new(e, "trade"), token_in, token_out, user),
-            (in_amount as i128, out_amount as i128, fee_amount as i128),
-        );
-    }
-
-    fn tax(
-        &self,
-        user: Address,
-        token_in: Address,
-        token_out: Address,
-        original_amount: u128,
         tax_amount: u128,
     ) {
         // topics
@@ -196,12 +171,18 @@ impl LiquidityPoolEvents for Events {
         //   sold_amount: i128,   // amount of tokens sent to the pool
         //   bought_amount: i128, // amount of tokens received from the pool
         //   fee: i128            // fee charged by the protocol (asset sent to the pool) - optional
+        //   tax: u128 - optional
         // ]
 
         let e = self.env();
         e.events().publish(
-            (Symbol::new(e, "tax"), token_in, token_out, user),
-            (original_amount as i128, tax_amount as i128),
+            (Symbol::new(e, "trade"), token_in, token_out, user),
+            (
+                in_amount as i128,
+                out_amount as i128,
+                fee_amount as i128,
+                tax_amount as i128,
+            ),
         );
     }
 
@@ -273,6 +254,30 @@ impl LiquidityPoolEvents for Events {
         self.env()
             .events()
             .publish((Symbol::new(self.env(), "unkill_gauges_claim"),), ())
+    }
+
+    fn kill_tax(&self) {
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "kill_tax"),), ())
+    }
+
+    fn unkill_tax(&self) {
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "unkill_tax"),), ())
+    }
+
+    fn kill_bonus(&self) {
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "kill_bonus"),), ())
+    }
+
+    fn unkill_bonus(&self) {
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "unkill_bonus"),), ())
     }
 
     fn set_protocol_fee_fraction(&self, fraction: u32) {
@@ -347,5 +352,27 @@ impl LiquidityPoolEvents for Events {
         let e = self.env();
         e.events()
             .publish((Symbol::new(e, "permanently_locked_liquidity"),), amount);
+    }
+
+    // Bonus
+
+    fn claim_bonus(&self, user: Address, token: Address, amount: u128) {
+        // topics
+        // [
+        //   "claim_bonus": Symbol,       // event identifier
+        //   sold_asset: Address,   // asset sent to the pool
+        //   bought_asset: Address, // asset received from the pool
+        //   trader: Address        // address of account/contract that initiated the trade
+        // ]
+        // body
+        // [
+        //   sold_amount: i128,   // amount of tokens sent to the pool
+        //   bought_amount: i128, // amount of tokens received from the pool
+        //   fee: i128            // fee charged by the protocol (asset sent to the pool) - optional
+        // ]
+
+        let e = self.env();
+        e.events()
+            .publish((Symbol::new(e, "claim_bonus"), user, token), amount as i128);
     }
 }

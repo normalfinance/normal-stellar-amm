@@ -1208,6 +1208,7 @@ impl PoolsManagementTrait for PoolRouter {
         tokens: Vec<Address>,
         fee_fraction: u32,
         oracle: Address,
+        base_asset: Symbol,
     ) -> (BytesN<32>, Address) {
         user.require_auth();
         validate_tokens_contracts(&e, &tokens);
@@ -1220,9 +1221,11 @@ impl PoolsManagementTrait for PoolRouter {
         let pools = get_pools_plain(&e, salt);
         let pool_index = get_elastic_pool_salt(&e);
 
+        let assets_config = (base_asset, Symbol::new(&e, "USDC"));
+
         match pools.get(pool_index.clone()) {
             Some(pool_address) => (pool_index, pool_address),
-            None => deploy_elastic_pool(&e, &tokens, fee_fraction, &oracle),
+            None => deploy_elastic_pool(&e, &tokens, fee_fraction, &oracle, &assets_config),
         }
     }
 

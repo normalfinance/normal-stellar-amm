@@ -96,6 +96,9 @@ pub(crate) struct Setup<'a> {
     pub(crate) oracle_client: MockPriceOracleClient<'a>,
     pub(crate) sol_asset: MockAsset,
     pub(crate) usdc_asset: MockAsset,
+    pub(crate) sol_symbol: Symbol,
+    pub(crate) usdc_symbol: Symbol,
+    pub(crate) eth_symbol: Symbol,
 }
 
 impl Default for Setup<'_> {
@@ -185,12 +188,13 @@ impl Default for Setup<'_> {
         router.set_liquidity_calculator(&admin, &liquidity_calculator.address);
 
         // Setup oracle
+        let eth_symbol = Symbol::new(&env, "ETH");
         let sol_symbol = Symbol::new(&env, "SOL");
-        let usdc_sybmol = Symbol::new(&env, "USDC");
+        let usdc_symbol = Symbol::new(&env, "USDC");
         let usd_sybmol = Symbol::new(&env, "USD");
 
         let sol_asset = MockAsset::Other(sol_symbol.clone());
-        let usdc_asset = MockAsset::Other(usdc_sybmol.clone());
+        let usdc_asset = MockAsset::Other(usdc_symbol.clone());
         let usd_asset = MockAsset::Other(usd_sybmol);
 
         let (oracle_addr, oracle_client) = setup_price_feed_oracle(
@@ -230,6 +234,9 @@ impl Default for Setup<'_> {
             oracle_client,
             sol_asset,
             usdc_asset,
+            sol_symbol,
+            usdc_symbol,
+            eth_symbol,
         }
     }
 }

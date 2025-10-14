@@ -506,6 +506,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             in_amount,
             out,
             lp_fee,
+            0,
         );
         PoolEvents::new(&e).update_reserves(Vec::from_array(&e, [new_reserve_a, new_reserve_b]));
 
@@ -696,6 +697,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             in_amount,
             out_amount,
             lp_fee,
+            0,
         );
         PoolEvents::new(&e).update_reserves(Vec::from_array(&e, [new_reserve_a, new_reserve_b]));
 

@@ -1,6 +1,6 @@
 #![no_std]
 
-mod circuit_breaker;
+// mod bonus;
 mod constants;
 mod contract;
 pub mod errors;
@@ -9,7 +9,6 @@ mod plane;
 mod plane_interface;
 mod pool;
 mod pool_interface;
-mod rebase;
 mod rewards;
 mod storage;
 mod tax;

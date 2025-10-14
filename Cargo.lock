@@ -890,6 +890,7 @@ dependencies = [
  "soroban-fixed-point-math",
  "soroban-sdk",
  "token_share",
+ "token_synthetic",
  "upgrade",
  "utils",
 ]
@@ -927,6 +928,7 @@ dependencies = [
  "paste",
  "pool-config-storage",
  "rewards",
+ "sep-40-oracle",
  "soroban-sdk",
  "token_share",
  "upgrade",

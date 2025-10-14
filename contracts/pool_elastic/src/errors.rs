@@ -13,4 +13,10 @@ pub enum LiquidityPoolError {
     PoolClaimKilled = 207,
     FutureShareIdNotSet = 208,
     // pool specific validation errors
+
+    // custom errors
+    SinkDepositFailure = 209,
+    SinkWithdrawFailure = 210,
+    InvalidTokenADelta = 211,
+    // BonusClaimTooEarly = 212,
 }

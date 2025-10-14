@@ -2,44 +2,101 @@ use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{contracttype, Env};
 use utils::{
     constant::{PRICE_PRECISION, PRICE_PRECISION_I64},
-    math::safe_math::{SafeConversion, SafeMath},
+    math::safe_math::{PrecisionMath, SafeConversion, SafeMath},
 };
 
-use crate::storage::{get_base_tax, get_min_tax_price_deviation};
+use crate::storage::{get_base_tax_fraction, get_max_tax_fraction, get_tax_incline};
 
-// #[contracttype]
-// #[derive(Default, Clone, Copy, Debug)]
-// pub struct TaxConfig {
-//     pub min_tax_price_deviation: u128,
-//     pub base_tax: u32,
-//     pub tax_scaling_factor: u32,
-//     pub tax_scaling_rate: u32,
-// }
+// | Deviation | Tax rate |
+// | --------- | -------- |
+// | 0%        | 0.10%    |
+// | 2%        | 1.1%     |
+// | 5%        | 5.5%     |
+// | 10%       | 27%      |
+// | 20%       | 49%      |
+pub fn calculate_tax_rate(e: &Env, pool_price: u128, peg_price: u128) -> u32 {
+    // let deviation = (pool_price / peg_price) - 1.0;
+    // let abs_dev = deviation.abs();
 
-pub fn is_trade_taxable(e: &Env, pool_price: u128, oracle_price: u128) -> bool {
-    let min_price_deviation = get_min_tax_price_deviation(e);
+    let base_tax = get_base_tax_fraction(e);
+    // let max_tax = get_max_tax_fraction(e);
+    // let k = get_tax_incline(e);
 
-    let price_spread_pct = calculate_price_spread_pct(e, pool_price, oracle_price);
+    // let tax_rate = base_tax + (max_tax - base_tax) * (1.0 - (-k * abs_dev).exp());
 
-    if price_spread_pct.abs() >= (min_price_deviation as i64) {
-        true
-    } else {
-        false
-    }
+    // Cap at max_tax to be safe from rounding
+    // tax_rate.min(max_tax)
+
+    base_tax
 }
 
-pub fn calculate_price_spread_pct(e: &Env, price_a: u128, price_b: u128) -> i64 {
-    // Use safe conversions to prevent overflow
-    let price_a_i128 = price_a.safe_to_i128(e);
-    let price_b_i128 = price_b.safe_to_i128(e);
+/// Tax curve based on exponential deviation from peg.
+/// Example reference points:
+/// | Deviation | Tax rate |
+/// |------------|-----------|
+/// | 0%         | 0.10%     |
+/// | 2%         | 1.1%      |
+/// | 5%         | 5.5%      |
+/// | 10%        | 27%       |
+/// | 20%        | 49%       |
+// pub fn calculate_tax_rate(e: &Env, pool_price: u128, peg_price: u128) -> u32 {
+//     // Guard against zero division
+//     if peg_price == 0 {
+//         return get_max_tax_fraction(e);
+//     }
 
-    let price_spread_i128 = price_a_i128.safe_sub(e, price_b_i128);
+//     // ratio = pool_price / peg_price (fixed-point)
+//     let ratio = pool_price.safe_fixed_div_floor(e, peg_price, PRICE_PRECISION);
 
-    // Safe conversion to i64 with overflow protection
-    let price_spread = price_spread_i128.safe_to_i64(e);
-    let price_a_i64 = price_a.safe_to_i64(e);
+//     // deviation = |ratio - 1.0|
+//     let deviation = if ratio > PRICE_PRECISION {
+//         ratio.safe_sub(e, PRICE_PRECISION)
+//     } else {
+//         PRICE_PRECISION.safe_sub(e, ratio)
+//     };
 
-    // Calculate (price_spread * PRICE_PRECISION_I64) / price_a_i64 using safe arithmetic
-    let numerator = price_spread.safe_mul(e, PRICE_PRECISION_I64);
-    numerator.safe_div(e, price_a_i64)
+//     // Load curve parameters (scaled to PRICE_PRECISION)
+//     let base_tax = get_base_tax_fraction(e);
+//     let max_tax = get_max_tax_fraction(e);
+//     let k = get_tax_incline(e); // incline coefficient (scaled)
+
+//     // Compute exp(-k * abs_dev / PRICE_PRECISION)
+//     // Using truncated Taylor series for fixed-point: e^(-x) ≈ 1 - x + x²/2 - x³/6
+//     let x = k.safe_fixed_mul_floor(e, deviation, PRICE_PRECISION);
+//     let x2 = x.safe_fixed_mul_floor(e, x, PRICE_PRECISION);
+//     let x3 = x2.safe_fixed_mul_floor(e, x, PRICE_PRECISION);
+
+//     let exp_neg = PRICE_PRECISION
+//         .safe_sub(e, x)
+//         .safe_add(e, x2.safe_div(e, 2))
+//         .safe_sub(e, x3.safe_div(e, 6));
+
+//     // Clamp exp_neg within [0, 1]
+//     let exp_neg_clamped = exp_neg.min(PRICE_PRECISION);
+
+//     // tax_rate = base_tax + (max_tax - base_tax) * (1 - exp_neg)
+//     let diff = max_tax.safe_sub(e, base_tax);
+//     let one_minus_exp = PRICE_PRECISION.safe_sub(e, exp_neg_clamped);
+//     let mut tax_rate = base_tax.safe_add(
+//         e,
+//         diff.safe_fixed_mul_floor(e, one_minus_exp, PRICE_PRECISION),
+//     );
+
+//     // Cap at max_tax
+//     if tax_rate > max_tax {
+//         tax_rate = max_tax;
+//     }
+
+//     tax_rate
+// }
+
+pub fn calculate_tax_amount(
+    e: &Env,
+    trade_amount: u128,
+    pool_price: u128,
+    peg_price: u128,
+) -> u128 {
+    let tax_rate = calculate_tax_rate(e, pool_price, peg_price);
+
+    trade_amount.fixed_mul_floor(e, &(tax_rate as u128), &PRICE_PRECISION)
 }

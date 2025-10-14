@@ -65,6 +65,8 @@ pub(crate) struct Setup<'a> {
     pub(crate) oracle_client: MockPriceOracleClient<'a>,
     pub(crate) sol_asset: MockAsset,
     pub(crate) usdc_asset: MockAsset,
+    pub(crate) sol_symbol: Symbol,
+    pub(crate) usdc_symbol: Symbol,
 }
 
 impl Default for Setup<'_> {
@@ -124,11 +126,11 @@ impl Setup<'_> {
 
         // Setup oracle
         let sol_symbol = Symbol::new(&e, "SOL");
-        let usdc_sybmol = Symbol::new(&e, "USDC");
+        let usdc_symbol = Symbol::new(&e, "USDC");
         let usd_sybmol = Symbol::new(&e, "USD");
 
         let sol_asset = MockAsset::Other(sol_symbol.clone());
-        let usdc_asset = MockAsset::Other(usdc_sybmol.clone());
+        let usdc_asset = MockAsset::Other(usdc_symbol.clone());
         let usd_asset = MockAsset::Other(usd_sybmol);
 
         let (oracle_addr, oracle_client) = setup_price_feed_oracle(
@@ -160,6 +162,7 @@ impl Setup<'_> {
             &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
             &reward_token.address,
             config.liq_pool_fee,
+            &sol_symbol,
             &plane.address,
             &config_storage.address,
         );
@@ -212,6 +215,8 @@ impl Setup<'_> {
             oracle_client,
             sol_asset,
             usdc_asset,
+            sol_symbol,
+            usdc_symbol,
         }
     }
 
@@ -272,6 +277,7 @@ pub fn create_liqpool_contract<'a>(
     tokens: &Vec<Address>,
     reward_token: &Address,
     fee_fraction: u32,
+    base_asset: &Symbol,
     plane: &Address,
     config_storage: &Address,
 ) -> LiquidityPoolClient<'a> {
@@ -294,9 +300,8 @@ pub fn create_liqpool_contract<'a>(
             fee_fraction,
             5000, // 50% protocol fee fraction
         ),
-        &(reward_token.clone()),
-        plane,
-        config_storage,
+        &(base_asset.clone(), Symbol::new(e, "USDC")),
+        &(reward_token.clone(), plane.clone(), config_storage.clone()),
     );
     liqpool
 }

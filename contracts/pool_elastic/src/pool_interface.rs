@@ -11,9 +11,8 @@ pub trait LiquidityPoolCrunch {
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         fees_config: (u32, u32),
-        reward_token: Address,
-        plane: Address,
-        config_storage: Address,
+        assets_config: (Symbol, Symbol),
+        extra_addrs: (Address, Address, Address),
     );
 }
 
@@ -31,6 +30,7 @@ pub trait LiquidityPoolTrait {
         lp_token_wasm_hash: BytesN<32>,
         tokens: Vec<Address>,
         fees_config: (u32, u32),
+        assets_config: (Symbol, Symbol),
     );
 
     // Returns the token contract address for the pool share token
@@ -40,9 +40,6 @@ pub trait LiquidityPoolTrait {
     fn get_total_shares(e: Env) -> u128;
 
     fn get_tokens(e: Env) -> Vec<Address>;
-
-    //
-    fn rebase(e: Env, user: Address) -> (i128, i128);
 
     // Deposits token_a and token_b. Also mints pool shares for the "to" Identifier. The amount minted
     // is determined based on the difference between the reserves stored by this contract, and
@@ -119,9 +116,8 @@ pub trait LiquidityPoolTrait {
     // Get dictionary of basic pool information: type, fee, special parameters if any.
     fn get_info(e: Env) -> Map<Symbol, Val>;
 
-    fn get_rebase_interval(e: Env) -> u64;
-
-    fn can_rebase(e: Env, ts: Option<u64>) -> bool;
+    // Bonus
+    // fn claim_bonus(e: Env, user: Address);
 }
 
 pub trait AdminInterfaceTrait {
@@ -143,16 +139,22 @@ pub trait AdminInterfaceTrait {
     fn kill_deposit(e: Env, admin: Address);
     fn kill_swap(e: Env, admin: Address);
     fn kill_claim(e: Env, admin: Address);
+    fn kill_tax(e: Env, admin: Address);
+    fn kill_bonus(e: Env, admin: Address);
 
     // Resume pool
     fn unkill_deposit(e: Env, admin: Address);
     fn unkill_swap(e: Env, admin: Address);
     fn unkill_claim(e: Env, admin: Address);
+    fn unkill_tax(e: Env, admin: Address);
+    fn unkill_bonus(e: Env, admin: Address);
 
     // Get killswitch status
     fn get_is_killed_deposit(e: Env) -> bool;
     fn get_is_killed_swap(e: Env) -> bool;
     fn get_is_killed_claim(e: Env) -> bool;
+    fn get_is_killed_tax(e: Env) -> bool;
+    fn get_is_killed_bonus(e: Env) -> bool;
 
     // Sets the protocol fraction of total fee for the pool.
     fn set_protocol_fee_fraction(e: Env, admin: Address, new_fraction: u32);
@@ -167,11 +169,16 @@ pub trait AdminInterfaceTrait {
     fn set_fee_rebate_fraction(e: Env, admin: Address, new_fraction: u32);
 
     // Tax
-    fn set_base_tax(e: Env, admin: Address, tax: u32);
+    fn set_base_tax_fraction(e: Env, admin: Address, tax_fraction: u32);
 
-    fn get_base_tax(e: Env) -> u32;
+    fn set_tax_incline(e: Env, admin: Address, tax_incline: u32);
 
-    fn claim_protocol_taxes(e: Env, admin: Address, destination: Address) -> Vec<u128>;
+    fn set_max_tax_fraction(e: Env, admin: Address, max_tax_fraction: u32);
+
+    fn get_tax_config(e: Env) -> (u32, u32, u32);
+
+    // Bonus
+    // fn set_max_bonus_fraction(e: Env, admin: Address, max_bonus_fraction: u32);
 }
 
 pub trait UpgradeableContract {

@@ -511,6 +511,7 @@ fn initialize_already_initialized() {
         &install_token_wasm(&setup.env),
         &Vec::from_array(&setup.env, [token1.address.clone(), token2.address.clone()]),
         &(10_u32, 5000_u32),
+        &(setup.sol_symbol, setup.usdc_symbol),
     );
 }
 
@@ -560,6 +561,7 @@ fn test_custom_fee() {
             ),
             &setup.token_reward.address,
             fee_config.0, // ten percent
+            &setup.sol_symbol,
             &setup.plane.address,
             &setup.config_storage.address,
         );
@@ -1429,7 +1431,8 @@ fn test_withdraw_rewards() {
     let router = Address::generate(&e);
 
     // oracle
-    let sol_asset = MockAsset::Other(Symbol::new(&e, "SOL"));
+    let sol_symbol = Symbol::new(&e, "SOL");
+    let sol_asset = MockAsset::Other(sol_symbol.clone());
     let usdc_asset = MockAsset::Other(Symbol::new(&e, "USDC"));
 
     let (oracle_addr, oracle_client) = setup_price_feed_oracle(
@@ -1453,6 +1456,7 @@ fn test_withdraw_rewards() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         &token_reward_admin_client.address,
         30,
+        &sol_symbol,
         &plane.address,
         &deploy_config_storage(&e, &admin, &admin).address,
     );
@@ -1568,6 +1572,7 @@ fn test_deposit_rewards() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         &token_reward_admin_client.address,
         30,
+        &Symbol::new(&e, "SOL"),
         &plane.address,
         &deploy_config_storage(&e, &admin, &admin).address,
     );
@@ -1644,6 +1649,7 @@ fn test_swap_rewards() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         &token_reward_admin_client.address,
         30,
+        &Symbol::new(&e, "SOL"),
         &plane.address,
         &deploy_config_storage(&e, &admin, &admin).address,
     );
@@ -1656,6 +1662,7 @@ fn test_swap_rewards() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         &token_reward_admin_client.address,
         30,
+        &Symbol::new(&e, "ETH"),
         &plane.address,
         &deploy_config_storage(&e, &admin, &admin).address,
     );
@@ -1779,6 +1786,7 @@ fn test_claim_rewards() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         &token_reward_admin_client.address,
         30,
+        &Symbol::new(&e, "SOL"),
         &plane.address,
         &deploy_config_storage(&e, &admin, &admin).address,
     );
@@ -1899,6 +1907,7 @@ fn test_drain_reserves() {
         &Vec::from_array(&e, [token1.address.clone(), token2.address.clone()]),
         &token_reward_admin_client.address,
         30,
+        &Symbol::new(&e, "SOL"),
         &plane.address,
         &deploy_config_storage(&e, &admin, &admin).address,
     );
@@ -2664,6 +2673,7 @@ fn test_custom_protocol_fee() {
             ),
             &setup.token_reward.address,
             30,
+            &Symbol::new(&setup.env, "SOL"),
             &setup.plane.address,
             &setup.config_storage.address,
         );
