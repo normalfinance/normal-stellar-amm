@@ -1,4 +1,4 @@
-use crate::storage::{get_base_tax_fraction, get_fee_fraction};
+use crate::storage::get_fee_fraction;
 use crate::{constants::FEE_MULTIPLIER, storage::get_fee_rebate_fraction};
 use pool_validation_errors::PoolValidationError;
 use soroban_fixed_point_math::SorobanFixedPoint;

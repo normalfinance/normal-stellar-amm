@@ -1,5 +1,5 @@
 use crate::temporal::Delay;
-use soroban_sdk::{contracttype, Address};
+use soroban_sdk::contracttype;
 
 use crate::{
     constant::{FIVE_MINUTE, PERCENTAGE_PRECISION_U64, PRICE_PRECISION},

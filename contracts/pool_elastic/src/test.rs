@@ -11,16 +11,18 @@ use core::cmp::min;
 use pool_config_storage::testutils::deploy_config_storage;
 use rewards::storage::{PoolRewardsStorageTrait, UserRewardsStorageTrait};
 use sep_40_oracle::testutils::{Asset as MockAsset, MockPriceOracleClient, MockPriceOracleWASM};
+use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::testutils::{AuthorizedFunction, AuthorizedInvocation, Events};
 use soroban_sdk::token::{
     StellarAssetClient as SorobanTokenAdminClient, TokenClient as SorobanTokenClient,
 };
-use soroban_sdk::BytesN;
+use soroban_sdk::{log, BytesN};
 use soroban_sdk::{
     symbol_short, testutils::Address as _, vec, Address, Env, Error, IntoVal, Map, Symbol, Val, Vec,
 };
 use token_share::Client as ShareTokenClient;
-use utils::constant::{THIRTEEN_DAY, TWENTY_FOUR_HOUR};
+use utils::constant::{PRICE_PRECISION, PRICE_PRECISION_I128, THIRTEEN_DAY, TWENTY_FOUR_HOUR};
+use utils::math::safe_math::SafeMath;
 use utils::test_utils::{assert_approx_eq_abs, install_dummy_wasm, jump};
 
 #[test]
@@ -148,7 +150,7 @@ fn test() {
     let expected_swap_result = 9871580_u128;
 
     assert_eq!(
-        liq_pool.estimate_swap(&0, &1, &swap_in_amount, &false),
+        liq_pool.estimate_swap(&0, &1, &swap_in_amount),
         expected_swap_result
     );
     assert_eq!(
@@ -286,15 +288,13 @@ fn test_strict_receive() {
     let expected_swap_result = 9871580_u128;
 
     assert_eq!(
-        setup
-            .liq_pool
-            .estimate_swap(&0, &1, &swap_in_amount, &false),
+        setup.liq_pool.estimate_swap(&0, &1, &swap_in_amount),
         expected_swap_result
     );
     assert_eq!(
         setup
             .liq_pool
-            .estimate_swap_strict_receive(&0, &1, &expected_swap_result, &false),
+            .estimate_swap_strict_receive(&0, &1, &expected_swap_result),
         swap_in_amount
     );
     assert_eq!(
@@ -317,7 +317,7 @@ fn test_strict_receive_over_max() {
 
     assert!(setup
         .liq_pool
-        .try_estimate_swap_strict_receive(&0, &1, &100_0000000, &false)
+        .try_estimate_swap_strict_receive(&0, &1, &100_0000000)
         .is_err());
     assert!(setup
         .liq_pool
@@ -326,7 +326,7 @@ fn test_strict_receive_over_max() {
     // technically we can buy 100_0000000 - 1, but we can't pay for it
     assert!(setup
         .liq_pool
-        .try_estimate_swap_strict_receive(&0, &1, &99_9999999, &false)
+        .try_estimate_swap_strict_receive(&0, &1, &99_9999999)
         .is_ok());
     assert!(setup
         .liq_pool
@@ -336,7 +336,7 @@ fn test_strict_receive_over_max() {
     assert_eq!(
         setup
             .liq_pool
-            .estimate_swap_strict_receive(&0, &1, &99_9999999, &false),
+            .estimate_swap_strict_receive(&0, &1, &99_9999999),
         100300902607_8234705,
     );
     assert_eq!(
@@ -570,10 +570,7 @@ fn test_custom_fee() {
             &Vec::from_array(&setup.env, [100_0000000, 100_0000000]),
             &0,
         );
-        assert_eq!(
-            liqpool.estimate_swap(&1, &0, &1_0000000, &false),
-            fee_config.1
-        );
+        assert_eq!(liqpool.estimate_swap(&1, &0, &1_0000000), fee_config.1);
         assert_eq!(
             liqpool.swap(&setup.users[0], &1, &0, &1_0000000, &0),
             fee_config.1
@@ -591,12 +588,9 @@ fn test_custom_fee() {
             &Vec::from_array(&setup.env, [100_0000000, 100_0000000]),
             &0,
         );
+        assert_eq!(liqpool.estimate_swap(&0, &1, &1_0000000), fee_config.1); // re-check swap result didn't change
         assert_eq!(
-            liqpool.estimate_swap(&0, &1, &1_0000000, &false),
-            fee_config.1
-        ); // re-check swap result didn't change
-        assert_eq!(
-            liqpool.estimate_swap_strict_receive(&0, &1, &fee_config.1, &false),
+            liqpool.estimate_swap_strict_receive(&0, &1, &fee_config.1),
             1_0000000
         );
         assert_eq!(
@@ -1159,7 +1153,7 @@ fn test_large_numbers() {
     let swap_in = amount_to_deposit / 1_000;
     // swap out shouldn't differ for more than 0.4% since fee is 0.3%
     let expected_swap_result_delta = swap_in / 250;
-    let estimate_swap_result = liq_pool.estimate_swap(&0, &1, &swap_in, &false);
+    let estimate_swap_result = liq_pool.estimate_swap(&0, &1, &swap_in);
     assert_approx_eq_abs(estimate_swap_result, swap_in, expected_swap_result_delta);
     assert_eq!(
         liq_pool.swap(&user1, &0, &1, &swap_in, &estimate_swap_result),
@@ -1679,8 +1673,8 @@ fn test_swap_rewards() {
         Vec::from_array(&e, [100_0000000, 100_0000000])
     );
 
-    let estimate1_before_rewards = liq_pool1.estimate_swap(&0, &1, &10_0000000, &false);
-    let estimate2_before_rewards = liq_pool1.estimate_swap(&1, &0, &10_0000000, &false);
+    let estimate1_before_rewards = liq_pool1.estimate_swap(&0, &1, &10_0000000);
+    let estimate2_before_rewards = liq_pool1.estimate_swap(&1, &0, &10_0000000);
     // swap is balanced, so values should be the same
     assert_eq!(estimate1_before_rewards, estimate2_before_rewards);
 
@@ -1698,8 +1692,8 @@ fn test_swap_rewards() {
     token_reward_admin_client.mint(&liq_pool2.address, &(1_000_0000000 * 100));
     jump(&e, 100);
 
-    let estimate1_after_rewards = liq_pool1.estimate_swap(&0, &1, &10_0000000, &false);
-    let estimate2_after_rewards = liq_pool1.estimate_swap(&1, &0, &10_0000000, &false);
+    let estimate1_after_rewards = liq_pool1.estimate_swap(&0, &1, &10_0000000);
+    let estimate2_after_rewards = liq_pool1.estimate_swap(&1, &0, &10_0000000);
     // balances are out of balance, but reserves are balanced.
     assert_eq!(estimate1_after_rewards, estimate2_after_rewards);
     assert_eq!(estimate1_before_rewards, estimate1_after_rewards);
@@ -2683,7 +2677,7 @@ fn test_custom_protocol_fee() {
             &Vec::from_array(&setup.env, [100_0000000, 100_0000000]),
             &0,
         );
-        assert_eq!(liqpool.estimate_swap(&1, &0, &1_0000000, &false), 9871580);
+        assert_eq!(liqpool.estimate_swap(&1, &0, &1_0000000), 9871580);
         assert_eq!(
             liqpool.swap(&setup.users[0], &1, &0, &1_0000000, &0),
             9871580
@@ -2706,9 +2700,9 @@ fn test_custom_protocol_fee() {
             &Vec::from_array(&setup.env, [100_0000000, 100_0000000]),
             &0,
         );
-        assert_eq!(liqpool.estimate_swap(&0, &1, &1_0000000, &false), 9871580); // re-check swap result didn't change
+        assert_eq!(liqpool.estimate_swap(&0, &1, &1_0000000), 9871580); // re-check swap result didn't change
         assert_eq!(
-            liqpool.estimate_swap_strict_receive(&0, &1, &9871580, &false),
+            liqpool.estimate_swap_strict_receive(&0, &1, &9871580),
             1_0000000
         );
         assert_eq!(
@@ -3322,6 +3316,58 @@ fn test_fix_locked_reward_tokens() {
 //     (n % (max - min)) + min
 // }
 
+// /// Generates a pseudo-random number between -1000 and +1000 (scaled by PRECISION)
+// /// using on-chain values (deterministic per ledger and iteration).
+// fn pseudo_random_i64(e: &Env, seed: i64, range: i64) -> i64 {
+//     // Combine environment attributes and seed into a pseudo random hash
+//     let ledger_seq = e.ledger().sequence() as i64;
+//     let nonce = e.ledger().timestamp() as i64;
+//     let hash = ledger_seq
+//         .wrapping_mul(31)
+//         .wrapping_add(nonce)
+//         .wrapping_add(seed)
+//         .wrapping_mul(1103515245)
+//         .wrapping_add(12345);
+//     let abs_hash = (hash & 0x7fffffff) % (2 * range);
+//     abs_hash - range
+// }
+
+// Generates a simulated BTC price series over `seconds` using fixed-point math.
+// - `seconds`: number of seconds to simulate
+// - `start_price`: starting price scaled by PRICE_PRECISION
+// - `volatility_bps`: volatility in basis points (e.g., 500 = 5%)
+// pub fn generate_btc_price_series(
+//     e: &Env,
+//     seconds: u64,
+//     start_price: i128,
+//     volatility_bps: i64,
+// ) -> Vec<i128> {
+//     let mut prices = Vec::new(e);
+//     let mut price = start_price;
+
+//     for t in 0..seconds {
+//         // pseudo-random value between -volatility_bps and +volatility_bps
+//         let random_delta = pseudo_random_i64(e, t as i64, volatility_bps);
+//         log!(e, "random_delta={}", random_delta);
+
+//         // delta is in basis points (1/10,000)
+//         SorobanFixedPoint::fixed_div_floor(&self, e, random_delta, 10_000);
+//         let delta_fraction = (random_delta as i128).safe_div(e, 10_000);
+//         log!(e, "delta_fraction={}", delta_fraction);
+
+//         // new_price = price * (1 + delta_fraction)
+//         let change = price.safe_mul(e, delta_fraction)
+//             / 1;
+//         log!(e, "change={}", change);
+
+//         price = (price + change).max(1); // avoid 0 or negative
+
+//         prices.push_back(price);
+//     }
+
+//     prices
+// }
+
 // fn test_swaps_many_users(seconds_to_simulate: u64) {
 //     // first user (protocol admin) comes as initial liquidity provider
 //     //  synthetic airdropped to many users
@@ -3332,122 +3378,135 @@ fn test_fix_locked_reward_tokens() {
 //         ..TestConfig::default()
 //     });
 //     let env = setup.env;
-//     let liq_pool = setup.liq_pool;
-//     let users = setup.users;
-//     let token1_admin_client = setup.token1_admin_client;
-//     let token2_admin_client = setup.token2_admin_client;
+//     // let liq_pool = setup.liq_pool;
+//     // let users = setup.users;
+//     // let token1_admin_client = setup.token1_admin_client;
+//     // let token2_admin_client = setup.token2_admin_client;
 
-//     let admin = users[0].clone();
-//     let first_user = Address::generate(&env);
-
-//     let initial_target_price = setup.oracle_client.lastprice(&setup.sol_asset).unwrap().price as u128;
-//     let initial_usdc_liquidity = 1_000_000_0000000_u128; // 1 million
-//     let initial_synthetic_liquidity = initial_usdc_liquidity / initial_target_price;
-
-//     // Airdrop 10% of the initial liquidity amount of synthetic tokens to users
-//     let airdrop_percent_of_liquidity = 0_1000000_u128; // 10%
-//     let airdrop_amount = initial_synthetic_liquidity * airdrop_percent_of_liquidity;
-//     let airdrop_frequency = 3;
-
-//     for i in 0..101 {
-//         let user = match i {
-//             0 => &first_user,
-//             val => &users[val - 1],
-//         };
-//         if i % airdrop_frequency == 0 {
-//             token1_admin_client.mint(user, &(airdrop_amount as i128)); // synthetic
-//         }
-
-//         // usdc
-//         if i == 0 {
-//             token2_admin_client.mint(user, &1_000_000_000_000_000_000_000);
-//         } else {
-//             token2_admin_client.mint(user, &10_000_0000000);
-//         }
-
-//     }
-
-//     // Protocol-owned liquidity (POL) deposit
-//     // Desired amounts set so that initial pool price is at peg (oracle)
-//     liq_pool.deposit(
-//         &first_user,
-//         &Vec::from_array(&env, [initial_synthetic_liquidity, initial_usdc_liquidity]),
-//         &0,
+//     let prices = generate_btc_price_series(
+//         &env,
+//         seconds_to_simulate,
+//         (68_000 * PRICE_PRECISION as i128),
+//         500,
 //     );
-//     jump(&env, 1);
-
-//     // Simulate swaps
-//     let rng_seed = 0;
-//     let rebase_interval = liq_pool.get_rebase_interval();
-//     let usdc_variance = 0_0200000; // 2%
-//     let target_variance = 0_1000000; // 10%
-
-//     for i in 1..seconds_to_simulate as usize {
-//         let current_time = env.ledger().timestamp();
-
-//         // Update oracle prices
-//         let current_sol_oracle_price = setup.oracle_client.lastprice(&setup.sol_asset).unwrap().price;
-//         let current_usdc_oracle_price = setup.oracle_client.lastprice(&setup.usdc_asset).unwrap().price;
-
-//         let sol_price_update_direction = if random_bool(&env) { 1_i128 } else { -1_i128 };
-//         let usdc_price_update_direction = if random_bool(&env) { 1_i128 } else { -1_i128 };
-
-//         let sol_price_change = current_sol_oracle_price * target_variance * sol_price_update_direction;
-//         let usdc_price_change = current_usdc_oracle_price * usdc_variance * usdc_price_update_direction;
-
-//         let new_sol_oracle_price = current_sol_oracle_price + sol_price_change;
-//         let new_usdc_oracle_price = current_usdc_oracle_price + usdc_price_change;
-
-//         let updated_prices = Vec::from_array(&env, [new_sol_oracle_price, new_usdc_oracle_price]);
-//         setup.oracle_client.set_price(&updated_prices, &current_time);
-
-//         // Swap
-//         let will_swap = random_bool(&env);
-//         if will_swap {
-//             let user = &users[i % 10];
-
-//             let user_token1_balance = setup.token1.balance(&user);
-//             let user_token2_balance = setup.token2.balance(&user);
-
-//             let (in_idx, out_idx, in_amount) = if user_token1_balance == 0 {
-//                 let usdc_amount = random_in_range(&env, 1_0000000, user_token1_balance as u32); // FIXME:
-//                 (1, 0, usdc_amount)
-//             } else {
-//                 let buy: bool = random_bool(&env);
-
-//                 if buy {
-//                     (1, 0, random_in_range(&env, 1_0000000, user_token2_balance as u32))
-//                 } else {
-//                     (0, 1, random_in_range(&env, 1_0000000, user_token1_balance as u32))
-//                 }
-//             };
-
-//             liq_pool.swap(
-//                 user,
-//                 &in_idx,
-//                 &out_idx,
-//                 &(in_amount as u128),
-//                 &0
-//             );
-//         }
-
-//         if current_time % rebase_interval == 0 {
-//             liq_pool.rebase(&admin);
-//         }
-
-//         // Increment time by 1 second
-//         jump(&env, 1);
+//     for (i, p) in prices.iter().enumerate() {
+//         log!(&env, "price={}", p / PRICE_PRECISION_I128);
 //     }
 
-//     jump(&env, 100);
-//     env.cost_estimate().budget().reset_default();
+//     assert_eq!(false, true);
 
-//     env.cost_estimate().budget().print();
+//     // let admin = users[0].clone();
+//     // let first_user = Address::generate(&env);
+
+//     // let initial_target_price = setup.oracle_client.lastprice(&setup.sol_asset).unwrap().price as u128;
+//     // let initial_usdc_liquidity = 1_000_000_0000000_u128; // 1 million
+//     // let initial_synthetic_liquidity = initial_usdc_liquidity / initial_target_price;
+
+//     // // Airdrop 10% of the initial liquidity amount of synthetic tokens to users
+//     // let airdrop_percent_of_liquidity = 0_1000000_u128; // 10%
+//     // let airdrop_amount = initial_synthetic_liquidity * airdrop_percent_of_liquidity;
+//     // let airdrop_frequency = 3;
+
+//     // for i in 0..101 {
+//     //     let user = match i {
+//     //         0 => &first_user,
+//     //         val => &users[val - 1],
+//     //     };
+//     //     if i % airdrop_frequency == 0 {
+//     //         token1_admin_client.mint(user, &(airdrop_amount as i128)); // synthetic
+//     //     }
+
+//     //     // usdc
+//     //     if i == 0 {
+//     //         token2_admin_client.mint(user, &1_000_000_000_000_000_000_000);
+//     //     } else {
+//     //         token2_admin_client.mint(user, &10_000_0000000);
+//     //     }
+
+//     // }
+
+//     // // Protocol-owned liquidity (POL) deposit
+//     // // Desired amounts set so that initial pool price is at peg (oracle)
+//     // liq_pool.deposit(
+//     //     &first_user,
+//     //     &Vec::from_array(&env, [initial_synthetic_liquidity, initial_usdc_liquidity]),
+//     //     &0,
+//     // );
+//     // jump(&env, 1);
+
+//     // // Simulate swaps
+//     // let rng_seed = 0;
+//     // let rebase_interval = liq_pool.get_rebase_interval();
+//     // let usdc_variance = 0_0200000; // 2%
+//     // let target_variance = 0_1000000; // 10%
+
+//     // for i in 1..seconds_to_simulate as usize {
+//     //     let current_time = env.ledger().timestamp();
+
+//     //     // Update oracle prices
+//     //     let current_sol_oracle_price = setup.oracle_client.lastprice(&setup.sol_asset).unwrap().price;
+//     //     let current_usdc_oracle_price = setup.oracle_client.lastprice(&setup.usdc_asset).unwrap().price;
+
+//     //     let sol_price_update_direction = if random_bool(&env) { 1_i128 } else { -1_i128 };
+//     //     let usdc_price_update_direction = if random_bool(&env) { 1_i128 } else { -1_i128 };
+
+//     //     let sol_price_change = current_sol_oracle_price * target_variance * sol_price_update_direction;
+//     //     let usdc_price_change = current_usdc_oracle_price * usdc_variance * usdc_price_update_direction;
+
+//     //     let new_sol_oracle_price = current_sol_oracle_price + sol_price_change;
+//     //     let new_usdc_oracle_price = current_usdc_oracle_price + usdc_price_change;
+
+//     //     let updated_prices = Vec::from_array(&env, [new_sol_oracle_price, new_usdc_oracle_price]);
+//     //     setup.oracle_client.set_price(&updated_prices, &current_time);
+
+//     //     // Swap
+//     //     let will_swap = random_bool(&env);
+//     //     if will_swap {
+//     //         let user = &users[i % 10];
+
+//     //         let user_token1_balance = setup.token1.balance(&user);
+//     //         let user_token2_balance = setup.token2.balance(&user);
+
+//     //         let (in_idx, out_idx, in_amount) = if user_token1_balance == 0 {
+//     //             let usdc_amount = random_in_range(&env, 1_0000000, user_token1_balance as u32); // FIXME:
+//     //             (1, 0, usdc_amount)
+//     //         } else {
+//     //             let buy: bool = random_bool(&env);
+
+//     //             if buy {
+//     //                 (1, 0, random_in_range(&env, 1_0000000, user_token2_balance as u32))
+//     //             } else {
+//     //                 (0, 1, random_in_range(&env, 1_0000000, user_token1_balance as u32))
+//     //             }
+//     //         };
+
+//     //         liq_pool.swap(
+//     //             user,
+//     //             &in_idx,
+//     //             &out_idx,
+//     //             &(in_amount as u128),
+//     //             &0
+//     //         );
+//     //     }
+
+//     //     if current_time % rebase_interval == 0 {
+//     //         liq_pool.rebase(&admin);
+//     //     }
+
+//     //     // Increment time by 1 second
+//     //     jump(&env, 1);
+//     // }
+
+//     // jump(&env, 100);
+//     // env.cost_estimate().budget().reset_default();
+
+//     // env.cost_estimate().budget().print();
 // }
 
 // #[test]
 // fn test_swaps_one_day() {
-//     test_swaps_many_users(TWENTY_FOUR_HOUR);
+//     // test_swaps_many_users(TWENTY_FOUR_HOUR);
+//     test_swaps_many_users(60);
 // }
 
 // #[cfg(feature = "slow_tests")]

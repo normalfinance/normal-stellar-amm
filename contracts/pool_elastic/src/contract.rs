@@ -6,19 +6,20 @@ use crate::plane::update_plane;
 use crate::plane_interface::Plane;
 use crate::pool::{get_amount_out, get_amount_out_strict_receive};
 use crate::pool_interface::{
-    AdminInterfaceTrait, LiquidityPoolCrunch, LiquidityPoolTrait, RewardsTrait, UpgradeableContract,
+    AdminInterfaceTrait, ElasticPoolCrunch, ElasticPoolTrait, RewardsTrait, UpgradeableContract,
 };
 use crate::rewards::get_rewards_manager;
 use crate::storage::{
-    get_base_asset, get_fee_fraction, get_gauge_future_wasm, get_is_killed_bonus,
-    get_is_killed_claim, get_is_killed_deposit, get_is_killed_swap, get_is_killed_tax, get_plane,
-    get_protocol_fee_a, get_protocol_fee_b, get_protocol_fee_fraction, get_protocol_tax_b,
-    get_quote_asset, get_reserve_a, get_reserve_b, get_router, get_token_a, get_token_b,
-    get_token_future_wasm, has_plane, put_token_a, put_token_b, set_base_asset, set_fee_fraction,
-    set_fee_rebate_fraction, set_gauge_future_wasm, set_is_killed_bonus, set_is_killed_claim,
-    set_is_killed_deposit, set_is_killed_swap, set_is_killed_tax, set_oracle, set_plane,
-    set_protocol_fee_a, set_protocol_fee_b, set_protocol_fee_fraction, set_protocol_tax_b,
-    set_quote_asset, set_reserve_a, set_reserve_b, set_router, set_token_future_wasm,
+    get_base_asset, get_fee_fraction, get_gauge_future_wasm, get_historical_oracle_data,
+    get_is_killed_bonus, get_is_killed_claim, get_is_killed_deposit, get_is_killed_swap,
+    get_is_killed_tax, get_plane, get_protocol_fee_a, get_protocol_fee_b,
+    get_protocol_fee_fraction, get_protocol_tax_b, get_quote_asset, get_reserve_a, get_reserve_b,
+    get_router, get_token_a, get_token_b, get_token_future_wasm, has_plane, put_token_a,
+    put_token_b, set_base_asset, set_fee_fraction, set_fee_rebate_fraction, set_gauge_future_wasm,
+    set_is_killed_bonus, set_is_killed_claim, set_is_killed_deposit, set_is_killed_swap,
+    set_is_killed_tax, set_oracle, set_oracle_guard_rails, set_plane, set_protocol_fee_a,
+    set_protocol_fee_b, set_protocol_fee_fraction, set_protocol_tax_b, set_quote_asset,
+    set_reserve_a, set_reserve_b, set_router, set_token_future_wasm,
 };
 use crate::token::{create_contract, transfer_a, transfer_b};
 use access_control::access::{AccessControl, AccessControlTrait};
@@ -58,6 +59,10 @@ use upgrade::events::Events as UpgradeEvents;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 use utils::math::safe_math::SafeMath;
 use utils::math::u256_math::ExtraMath;
+use utils::state::oracle::{
+    HistoricalOracleData, OracleGuardRails, OraclePriceData, PriceDivergenceGuardRails,
+    ValidityGuardRails,
+};
 
 // Metadata that is added on to the WASM custom section
 contractmeta!(
@@ -66,10 +71,10 @@ contractmeta!(
 );
 
 #[contract]
-pub struct LiquidityPool;
+pub struct ElasticPool;
 
 #[contractimpl]
-impl LiquidityPoolCrunch for LiquidityPool {
+impl ElasticPoolCrunch for ElasticPool {
     // Initializes all the components of the liquidity pool.
     //
     // # Arguments
@@ -133,14 +138,14 @@ impl LiquidityPoolCrunch for LiquidityPool {
 }
 
 #[contractimpl]
-impl LiquidityPoolTrait for LiquidityPool {
+impl ElasticPoolTrait for ElasticPool {
     // Returns the type of the pool.
     //
     // # Returns
     //
     // The type of the pool as a Symbol.
     fn pool_type(e: Env) -> Symbol {
-        Symbol::new(&e, "elastic_supply")
+        Symbol::new(&e, "elastic")
     }
 
     // Initializes the liquidity pool.
@@ -229,6 +234,58 @@ impl LiquidityPoolTrait for LiquidityPool {
 
         // update plane data for every pool update
         update_plane(&e);
+    }
+
+    fn get_pool_price(e: Env, token_a: bool) -> u128 {
+        let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
+
+        if reserve_a == 0 || reserve_b == 0 {
+            return 0;
+        };
+
+        if token_a {
+            return reserve_a.safe_div(&e, reserve_b);
+        } else {
+            return reserve_a.safe_div(&e, reserve_b);
+        };
+    }
+
+    fn get_oracle_price(e: Env, base: bool) -> OraclePriceData {
+        let current_time = e.ledger().timestamp();
+
+        let asset = if base {
+            get_base_asset(&e)
+        } else {
+            get_quote_asset(&e)
+        };
+
+        crate::oracle::get_oracle_price(&e, &asset, current_time)
+    }
+
+    fn get_historical_oracle_price(e: Env, base: bool) -> HistoricalOracleData {
+        let asset = if base {
+            get_base_asset(&e)
+        } else {
+            get_quote_asset(&e)
+        };
+
+        get_historical_oracle_data(&e, &asset)
+    }
+
+    fn get_peg_price(e: Env) -> u128 {
+        let current_time = e.ledger().timestamp();
+
+        let base_oracle_price_data =
+            crate::oracle::get_oracle_price_with_validity(&e, &get_base_asset(&e), current_time);
+
+        let quote_oracle_price_data =
+            crate::oracle::get_oracle_price_with_validity(&e, &get_quote_asset(&e), current_time);
+
+        crate::pool::peg_price(
+            &e,
+            base_oracle_price_data.last_price_twap,
+            quote_oracle_price_data.last_price_twap,
+        )
     }
 
     // Returns the pool's share token address.
@@ -464,8 +521,8 @@ impl LiquidityPoolTrait for LiquidityPool {
             quote_oracle_price_data.last_price_twap,
         );
 
-        let price_deviation_pre = crate::pool::calculate_price_deviation(&e, pool_price, peg_price);
-        let risk_reducing = crate::pool::is_swap_risk_reducing(&e, price_deviation_pre, in_idx);
+        let price_deviation = crate::pool::calculate_price_deviation(&e, pool_price, peg_price);
+        let risk_reducing = crate::pool::is_swap_risk_reducing(&e, price_deviation, in_idx);
 
         let (out, total_fee) =
             get_amount_out(&e, in_amount, reserve_sell, reserve_buy, risk_reducing);
@@ -488,7 +545,7 @@ impl LiquidityPoolTrait for LiquidityPool {
             }
         }
 
-        // Record bonus
+        // TODO: Record bonus
         // if risk_reducing && !get_is_killed_bonus(&e) {
         //     crate::bonus::record_bonus(&e, &user, pool_price, peg_price, in_amount, current_time);
         // }
@@ -634,13 +691,7 @@ impl LiquidityPoolTrait for LiquidityPool {
     // # Returns
     //
     // The estimated amount of the output token that would be received.
-    fn estimate_swap(
-        e: Env,
-        in_idx: u32,
-        out_idx: u32,
-        in_amount: u128,
-        risk_reducing: bool,
-    ) -> u128 {
+    fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: u128) -> u128 {
         if in_idx == out_idx {
             panic_with_error!(&e, PoolValidationError::CannotSwapSameToken);
         }
@@ -659,7 +710,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let reserve_sell = reserves.get(in_idx).unwrap();
         let reserve_buy = reserves.get(out_idx).unwrap();
 
-        get_amount_out(&e, in_amount, reserve_sell, reserve_buy, risk_reducing).0
+        get_amount_out(&e, in_amount, reserve_sell, reserve_buy, false).0
     }
 
     // Swaps tokens in the pool.
@@ -866,13 +917,7 @@ impl LiquidityPoolTrait for LiquidityPool {
     // # Returns
     //
     // The estimated amount of the output token that would be received.
-    fn estimate_swap_strict_receive(
-        e: Env,
-        in_idx: u32,
-        out_idx: u32,
-        out_amount: u128,
-        risk_reducing: bool,
-    ) -> u128 {
+    fn estimate_swap_strict_receive(e: Env, in_idx: u32, out_idx: u32, out_amount: u128) -> u128 {
         if in_idx == out_idx {
             panic_with_error!(&e, PoolValidationError::CannotSwapSameToken);
         }
@@ -891,7 +936,7 @@ impl LiquidityPoolTrait for LiquidityPool {
         let reserve_sell = reserves.get(in_idx).unwrap();
         let reserve_buy = reserves.get(out_idx).unwrap();
 
-        get_amount_out_strict_receive(&e, out_amount, reserve_sell, reserve_buy, risk_reducing).0
+        get_amount_out_strict_receive(&e, out_amount, reserve_sell, reserve_buy, false).0
     }
 
     // Withdraws tokens from the pool.
@@ -1015,7 +1060,7 @@ impl LiquidityPoolTrait for LiquidityPool {
 }
 
 #[contractimpl]
-impl AdminInterfaceTrait for LiquidityPool {
+impl AdminInterfaceTrait for ElasticPool {
     // Sets the privileged addresses.
     //
     // # Arguments
@@ -1084,6 +1129,34 @@ impl AdminInterfaceTrait for LiquidityPool {
         );
 
         result
+    }
+
+    // Oracle
+
+    fn set_oracle_guard_rails(
+        e: Env,
+        admin: Address,
+        twap_divergence: u64,
+        stale_limit: u64,
+        too_volatile_ratio: u64,
+    ) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+
+        let new = OracleGuardRails {
+            price_divergence: PriceDivergenceGuardRails {
+                oracle_twap_percent_divergence: twap_divergence,
+            },
+            validity: ValidityGuardRails {
+                seconds_before_stale_for_pool: stale_limit,
+                too_volatile_ratio: too_volatile_ratio,
+            },
+        };
+        set_oracle_guard_rails(&e, &new);
+    }
+
+    fn get_oracle_guard_rails(e: Env) -> OracleGuardRails {
+        crate::storage::get_oracle_guard_rails(&e)
     }
 
     // Stops the pool deposits instantly.
@@ -1315,54 +1388,36 @@ impl AdminInterfaceTrait for LiquidityPool {
         )
     }
 
-    // Bonus
-    // fn set_max_bonus_fraction(e: Env, admin: Address, max_bonus_fraction: u32) {
-    //     admin.require_auth();
-    //     require_operations_admin_or_owner(&e, &admin);
+    // Claims the protocol tax accumulated in the pool.
+    fn claim_protocol_tax(e: Env, admin: Address, destination: Address) -> u128 {
+        admin.require_auth();
+        require_system_fee_admin_or_owner(&e, &admin);
 
-    //     crate::storage::set_max_bonus_fraction(&e, &max_bonus_fraction);
-    // }
+        let token_b = get_token_b(&e);
 
-    // fn claim_protocol_taxes(e: Env, admin: Address, destination: Address) -> Vec<u128> {
-    //     admin.require_auth();
-    //     require_system_fee_admin_or_owner(&e, &admin);
+        let tax_b = get_protocol_tax_b(&e);
 
-    //     let token_a = get_token_a(&e);
-    //     let token_b = get_token_b(&e);
+        if tax_b == 0 {
+            return 0;
+        }
 
-    //     let tax_a = get_protocol_tax_a(&e);
-    //     let tax_b = get_protocol_tax_b(&e);
+        if tax_b > 0 {
+            SorobanTokenClient::new(&e, &token_b).transfer(
+                &e.current_contract_address(),
+                &destination,
+                &(tax_b as i128),
+            );
+            set_protocol_tax_b(&e, &0);
+            PoolEvents::new(&e).claim_protocol_tax(token_b, destination, tax_b);
+        }
 
-    //     if tax_a == 0 && tax_b == 0 {
-    //         return Vec::from_array(&e, [0, 0]);
-    //     }
-
-    //     if tax_a > 0 {
-    //         SorobanTokenClient::new(&e, &token_a).transfer(
-    //             &e.current_contract_address(),
-    //             &destination,
-    //             &(tax_a as i128),
-    //         );
-    //         set_protocol_tax_a(&e, &0);
-    //         PoolEvents::new(&e).claim_protocol_tax(token_a, destination.clone(), tax_a);
-    //     }
-    //     if tax_b > 0 {
-    //         SorobanTokenClient::new(&e, &token_b).transfer(
-    //             &e.current_contract_address(),
-    //             &destination,
-    //             &(tax_b as i128),
-    //         );
-    //         set_protocol_tax_b(&e, &0);
-    //         PoolEvents::new(&e).claim_protocol_tax(token_b, destination, tax_b);
-    //     }
-
-    //     Vec::from_array(&e, [tax_a, tax_b])
-    // }
+        tax_b
+    }
 }
 
 // The `UpgradeableContract` trait provides the interface for upgrading the contract.
 #[contractimpl]
-impl UpgradeableContract for LiquidityPool {
+impl UpgradeableContract for ElasticPool {
     // Returns the version of the contract.
     //
     // # Returns
@@ -1374,7 +1429,7 @@ impl UpgradeableContract for LiquidityPool {
 
     // Get contract type symbolic name
     fn contract_name(e: Env) -> Symbol {
-        Symbol::new(&e, "ElasticLiquidityPool")
+        Symbol::new(&e, "ElasticElasticPool")
     }
 
     // Commits a new wasm hash for a future upgrade.
@@ -1468,7 +1523,7 @@ impl UpgradeableContract for LiquidityPool {
 }
 
 #[contractimpl]
-impl RewardsTrait for LiquidityPool {
+impl RewardsTrait for ElasticPool {
     // Initializes the rewards configuration.
     //
     // # Arguments
@@ -1787,7 +1842,7 @@ impl RewardsTrait for LiquidityPool {
 }
 
 #[contractimpl]
-impl RewardsGaugeInterface for LiquidityPool {
+impl RewardsGaugeInterface for ElasticPool {
     fn gauge_add(e: Env, admin: Address, gauge_address: Address) {
         admin.require_auth();
 
@@ -1873,7 +1928,7 @@ impl RewardsGaugeInterface for LiquidityPool {
 }
 
 #[contractimpl]
-impl Plane for LiquidityPool {
+impl Plane for ElasticPool {
     // Sets the plane for the pool.
     //
     // # Arguments
@@ -1920,7 +1975,7 @@ impl Plane for LiquidityPool {
 
 // The `TransferableContract` trait provides the interface for transferring ownership of the contract.
 #[contractimpl]
-impl TransferableContract for LiquidityPool {
+impl TransferableContract for ElasticPool {
     // Commits an ownership transfer.
     //
     // # Arguments
@@ -2000,7 +2055,7 @@ impl TransferableContract for LiquidityPool {
 }
 
 #[contractimpl]
-impl ConfigStorageInterface for LiquidityPool {
+impl ConfigStorageInterface for ElasticPool {
     fn init_config_storage(e: Env, admin: Address, config_storage: Address) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);

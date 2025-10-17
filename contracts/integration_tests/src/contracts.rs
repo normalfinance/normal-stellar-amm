@@ -1,27 +1,26 @@
-pub(crate) mod pool {
-    soroban_sdk::contractimport!(file = "../../wasm/pool.wasm");
+pub(crate) mod constant_product_pool {
+    soroban_sdk::contractimport!(file = "../contracts/pool.wasm");
 }
-pub(crate) mod pool_swap_fee {
-    soroban_sdk::contractimport!(file = "../../wasm/pool_swap_fee.wasm");
-}
-pub(crate) mod pool_router {
-    soroban_sdk::contractimport!(file = "../../wasm/pool_router.wasm");
-}
-
-pub(crate) mod oracle_registry {
-    soroban_sdk::contractimport!(file = "../../wasm/oracle_registry.wasm");
-}
-
-pub(crate) mod pool_plane {
-    soroban_sdk::contractimport!(file = "../../wasm/pool_plane.wasm");
-}
-
 pub(crate) mod liquidity_calculator {
-    soroban_sdk::contractimport!(file = "../../wasm/liquidity_calculator.wasm");
+    soroban_sdk::contractimport!(file = "../contracts/liquidity_calculator.wasm");
 }
-pub(crate) mod insurance_fund {
-    soroban_sdk::contractimport!(file = "../../wasm/insurance_fund.wasm");
+pub(crate) mod pool_plane {
+    soroban_sdk::contractimport!(file = "../contracts/pool_plane.wasm");
 }
-pub(crate) mod lp_token {
-    soroban_sdk::contractimport!(file = "../../wasm/lp_token.wasm");
+pub(crate) mod router {
+    soroban_sdk::contractimport!(file = "../contracts/pool_router.wasm");
+}
+pub(crate) mod elastic_pool {
+    soroban_sdk::contractimport!(file = "../contracts/pool_elastic.wasm");
+}
+pub(crate) mod token_share {
+    soroban_sdk::contractimport!(file = "../contracts/token_share.wasm");
+}
+
+pub(crate) mod config_storage {
+    soroban_sdk::contractimport!(file = "../contracts/config_storage.wasm");
+}
+
+pub(crate) mod rewards_gauge {
+    soroban_sdk::contractimport!(file = "../contracts/rewards_gauge.wasm");
 }

@@ -17,4 +17,4 @@ mod test_permissions;
 mod testutils;
 pub mod token;
 
-pub use contract::{LiquidityPool, LiquidityPoolClient};
+pub use contract::{ElasticPool, ElasticPoolClient};

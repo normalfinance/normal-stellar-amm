@@ -1,11 +1,11 @@
-use crate::constants::{FEE_MULTIPLIER, MIN_LIQUIDITY};
+use crate::constants::FEE_MULTIPLIER;
 use crate::errors::LiquidityPoolError;
 use crate::plane::update_plane;
 use crate::plane_interface::Plane;
 use crate::pool;
 use crate::pool::{get_amount_out, get_amount_out_strict_receive};
 use crate::pool_interface::{
-    AdminInterfaceTrait, LiquidityPoolCrunch, LiquidityPoolTrait, RewardsTrait, UpgradeableContract,
+    AdminInterfaceTrait, PoolCrunch, PoolTrait, RewardsTrait, UpgradeableContract,
 };
 use crate::rewards::get_rewards_manager;
 use crate::storage::{
@@ -63,10 +63,10 @@ contractmeta!(
 );
 
 #[contract]
-pub struct LiquidityPool;
+pub struct Pool;
 
 #[contractimpl]
-impl LiquidityPoolCrunch for LiquidityPool {
+impl PoolCrunch for Pool {
     // Initializes all the components of the liquidity pool.
     //
     // # Arguments
@@ -122,7 +122,7 @@ impl LiquidityPoolCrunch for LiquidityPool {
 }
 
 #[contractimpl]
-impl LiquidityPoolTrait for LiquidityPool {
+impl PoolTrait for Pool {
     // Returns the type of the pool.
     //
     // # Returns
@@ -857,7 +857,7 @@ impl LiquidityPoolTrait for LiquidityPool {
 }
 
 #[contractimpl]
-impl AdminInterfaceTrait for LiquidityPool {
+impl AdminInterfaceTrait for Pool {
     // Sets the privileged addresses.
     //
     // # Arguments
@@ -1079,7 +1079,7 @@ impl AdminInterfaceTrait for LiquidityPool {
 
 // The `UpgradeableContract` trait provides the interface for upgrading the contract.
 #[contractimpl]
-impl UpgradeableContract for LiquidityPool {
+impl UpgradeableContract for Pool {
     // Returns the version of the contract.
     //
     // # Returns
@@ -1091,7 +1091,7 @@ impl UpgradeableContract for LiquidityPool {
 
     // Get contract type symbolic name
     fn contract_name(e: Env) -> Symbol {
-        Symbol::new(&e, "StandardLiquidityPool")
+        Symbol::new(&e, "StandardPool")
     }
 
     // Commits a new wasm hash for a future upgrade.
@@ -1185,7 +1185,7 @@ impl UpgradeableContract for LiquidityPool {
 }
 
 #[contractimpl]
-impl RewardsTrait for LiquidityPool {
+impl RewardsTrait for Pool {
     // Initializes the rewards configuration.
     //
     // # Arguments
@@ -1504,7 +1504,7 @@ impl RewardsTrait for LiquidityPool {
 }
 
 #[contractimpl]
-impl RewardsGaugeInterface for LiquidityPool {
+impl RewardsGaugeInterface for Pool {
     fn gauge_add(e: Env, admin: Address, gauge_address: Address) {
         admin.require_auth();
 
@@ -1590,7 +1590,7 @@ impl RewardsGaugeInterface for LiquidityPool {
 }
 
 #[contractimpl]
-impl Plane for LiquidityPool {
+impl Plane for Pool {
     // Sets the plane for the pool.
     //
     // # Arguments
@@ -1637,7 +1637,7 @@ impl Plane for LiquidityPool {
 
 // The `TransferableContract` trait provides the interface for transferring ownership of the contract.
 #[contractimpl]
-impl TransferableContract for LiquidityPool {
+impl TransferableContract for Pool {
     // Commits an ownership transfer.
     //
     // # Arguments
@@ -1717,7 +1717,7 @@ impl TransferableContract for LiquidityPool {
 }
 
 #[contractimpl]
-impl ConfigStorageInterface for LiquidityPool {
+impl ConfigStorageInterface for Pool {
     fn init_config_storage(e: Env, admin: Address, config_storage: Address) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);

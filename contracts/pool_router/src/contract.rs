@@ -156,21 +156,6 @@ impl PoolInterfaceTrait for PoolRouter {
         e.invoke_contract(&pool_id, &Symbol::new(&e, "get_reserves"), Vec::new(&e))
     }
 
-    fn rebase(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>) -> (i128, i128) {
-        user.require_auth();
-        assert_tokens_sorted(&e, &tokens);
-
-        let pool_id = get_pool(&e, &tokens, pool_index);
-
-        let (token_a_delta, token_b_delta): (i128, i128) = e.invoke_contract(
-            &pool_id,
-            &symbol_short!("rebase"),
-            Vec::from_array(&e, [user.clone().into_val(&e)]),
-        );
-        Events::new(&e).rebase();
-        (token_a_delta, token_b_delta)
-    }
-
     // Deposits tokens into the pool.
     //
     // # Arguments
@@ -195,8 +180,6 @@ impl PoolInterfaceTrait for PoolRouter {
     ) -> (Vec<u128>, u128) {
         user.require_auth();
         assert_tokens_sorted(&e, &tokens);
-
-        // ensure_non_zero_u128(&e, desired_amounts);
 
         let pool_id = get_pool(&e, &tokens, pool_index);
 
@@ -294,7 +277,6 @@ impl PoolInterfaceTrait for PoolRouter {
         token_out: Address,
         pool_index: BytesN<32>,
         in_amount: u128,
-        risk_reducing: bool,
     ) -> u128 {
         assert_tokens_sorted(&e, &tokens);
         let pool_id = get_pool(&e, &tokens, pool_index);
@@ -314,7 +296,6 @@ impl PoolInterfaceTrait for PoolRouter {
                         .unwrap()
                         .into_val(&e),
                     in_amount.into_val(&e),
-                    risk_reducing.into_val(&e),
                 ],
             ),
         )
@@ -1208,10 +1189,11 @@ impl PoolsManagementTrait for PoolRouter {
         tokens: Vec<Address>,
         fee_fraction: u32,
         oracle: Address,
-        base_asset: Symbol,
+        assets_config: (Symbol, Symbol),
     ) -> (BytesN<32>, Address) {
         user.require_auth();
         validate_tokens_contracts(&e, &tokens);
+        assert_tokens_sorted(&e, &tokens);
 
         if fee_fraction > ELASTIC_MAX_FEE {
             panic_with_error!(&e, PoolRouterError::BadFee);
@@ -1220,8 +1202,6 @@ impl PoolsManagementTrait for PoolRouter {
         let salt = get_tokens_salt(&e, &tokens);
         let pools = get_pools_plain(&e, salt);
         let pool_index = get_elastic_pool_salt(&e);
-
-        let assets_config = (base_asset, Symbol::new(&e, "USDC"));
 
         match pools.get(pool_index.clone()) {
             Some(pool_address) => (pool_index, pool_address),

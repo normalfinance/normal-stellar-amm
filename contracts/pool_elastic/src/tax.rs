@@ -1,11 +1,8 @@
 use soroban_fixed_point_math::SorobanFixedPoint;
-use soroban_sdk::{contracttype, Env};
-use utils::{
-    constant::{PRICE_PRECISION, PRICE_PRECISION_I64},
-    math::safe_math::{PrecisionMath, SafeConversion, SafeMath},
-};
+use soroban_sdk::Env;
+use utils::constant::PRICE_PRECISION;
 
-use crate::storage::{get_base_tax_fraction, get_max_tax_fraction, get_tax_incline};
+use crate::storage::get_base_tax_fraction;
 
 // | Deviation | Tax rate |
 // | --------- | -------- |
@@ -15,6 +12,11 @@ use crate::storage::{get_base_tax_fraction, get_max_tax_fraction, get_tax_inclin
 // | 10%       | 27%      |
 // | 20%       | 49%      |
 pub fn calculate_tax_rate(e: &Env, pool_price: u128, peg_price: u128) -> u32 {
+    // Guard against zero division
+    if peg_price == 0 || pool_price == 0 {
+        return get_base_tax_fraction(e);
+    }
+
     // let deviation = (pool_price / peg_price) - 1.0;
     // let abs_dev = deviation.abs();
 
@@ -89,14 +91,70 @@ pub fn calculate_tax_rate(e: &Env, pool_price: u128, peg_price: u128) -> u32 {
 
 //     tax_rate
 // }
-
 pub fn calculate_tax_amount(
     e: &Env,
     trade_amount: u128,
     pool_price: u128,
     peg_price: u128,
 ) -> u128 {
+    if pool_price == 0 || peg_price == 0 {
+        return 0;
+    }
+
     let tax_rate = calculate_tax_rate(e, pool_price, peg_price);
 
     trade_amount.fixed_mul_floor(e, &(tax_rate as u128), &PRICE_PRECISION)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_calculate_tax_rate_zero_prices() {
+        let e = Env::default();
+        e.mock_all_auths();
+
+        let base_tax_fraction = get_base_tax_fraction(&e);
+
+        assert_eq!(calculate_tax_rate(&e, 0, 0), base_tax_fraction);
+        assert_eq!(calculate_tax_rate(&e, 1, 0), base_tax_fraction);
+        assert_eq!(calculate_tax_rate(&e, 0, 1), base_tax_fraction);
+    }
+
+    #[test]
+    fn test_calculate_tax_rate() {
+        let e = Env::default();
+        e.mock_all_auths();
+
+        let base_tax_fraction = get_base_tax_fraction(&e);
+
+        let tax_rate = calculate_tax_rate(&e, 1_0000000, 1_0000000);
+
+        assert_eq!(tax_rate, base_tax_fraction);
+    }
+
+    #[test]
+    fn test_calculate_tax_amount_zero_prices() {
+        let e = Env::default();
+        e.mock_all_auths();
+
+        let trade_amount = 100_0000000;
+
+        assert_eq!(calculate_tax_amount(&e, trade_amount, 0, 0), 0);
+        assert_eq!(calculate_tax_amount(&e, trade_amount, 1_0000000, 0), 0);
+        assert_eq!(calculate_tax_amount(&e, trade_amount, 0, 1_0000000), 0);
+    }
+
+    #[test]
+    fn test_calculate_tax_amount() {
+        let e = Env::default();
+        e.mock_all_auths();
+
+        let trade_amount = 100_0000000;
+
+        let tax_amount = calculate_tax_amount(&e, trade_amount, 1_0000000, 1_0000000);
+
+        assert_eq!(tax_amount, 0_1000000);
+    }
 }

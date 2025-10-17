@@ -1,9 +1,10 @@
 use paste::paste;
 use soroban_sdk::{contracttype, panic_with_error, Address, BytesN, Env, Symbol};
 pub use utils::bump::bump_instance;
+use utils::bump::bump_persistent;
 use utils::errors::storage_errors::StorageError;
 use utils::generate_instance_storage_getter;
-use utils::state::oracle_registry::{HistoricalOracleData, OracleGuardRails};
+use utils::state::oracle::{HistoricalOracleData, OracleGuardRails};
 use utils::{
     generate_instance_storage_getter_and_setter,
     generate_instance_storage_getter_and_setter_with_default,
@@ -28,7 +29,7 @@ pub enum DataKey {
     // Oracle
     Oracle,
     OracleGuardRails, // a set of oracle price data validations and protections.
-    HistoricalOracleData,
+    HistoricalOracleData(Symbol),
 
     // Fee
     FeeFraction, // 1 = 0.01%
@@ -138,12 +139,6 @@ generate_instance_storage_getter_and_setter_with_default!(
     OracleGuardRails,
     OracleGuardRails::default()
 );
-generate_instance_storage_getter_and_setter_with_default!(
-    historical_oracle_data,
-    DataKey::HistoricalOracleData,
-    HistoricalOracleData,
-    HistoricalOracleData::default()
-);
 
 // Tax
 generate_instance_storage_getter_and_setter_with_default!(
@@ -170,20 +165,6 @@ generate_instance_storage_getter_and_setter_with_default!(
     u128,
     0
 );
-
-// Bonus
-// generate_instance_storage_getter_and_setter_with_default!(
-//     max_bonus_fraction,
-//     DataKey::MaxBonusFraction,
-//     u32,
-//     2500 // 25%
-// );
-// generate_instance_storage_getter_and_setter_with_default!(
-//     bonus_reserve_b,
-//     DataKey::BonusReserveB,
-//     u128,
-//     0
-// );
 
 // Addresses
 generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
@@ -229,4 +210,27 @@ pub fn put_token_b(e: &Env, contract: Address) {
 pub(crate) fn has_plane(e: &Env) -> bool {
     let key = DataKey::Plane;
     e.storage().instance().has(&key)
+}
+
+// Historical Oracle Data
+
+pub(crate) fn get_historical_oracle_data(e: &Env, asset: &Symbol) -> HistoricalOracleData {
+    let key = DataKey::HistoricalOracleData(asset.clone());
+    match e.storage().persistent().get(&key) {
+        Some(value) => {
+            bump_persistent(e, &key);
+            value
+        }
+        None => HistoricalOracleData::default_quote_oracle(),
+    }
+}
+
+pub(crate) fn put_historical_oracle_data(
+    e: &Env,
+    asset: &Symbol,
+    oracle_data: &HistoricalOracleData,
+) {
+    let key = DataKey::HistoricalOracleData(asset.clone());
+    e.storage().persistent().set(&key, oracle_data);
+    bump_persistent(e, &key);
 }

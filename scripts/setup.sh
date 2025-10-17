@@ -17,49 +17,31 @@ source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh" "$NETWORK"
 # Fetch the admin's address
 ADMIN_ADDRESS=$(soroban keys address $IDENTITY_STRING)
 
-#     ______     _______        __       ______   ___       _______   ________
-#    /    " \   /"      \      /""\     /" _  "\ |"  |     /"     "| /"       )
-#   // ____  \ |:        |    /    \   (: ( \___)||  |    (: ______)(:   \___/
-#  /  /    ) :)|_____/   )   /' /\  \   \/ \     |:  |     \/    |   \___  \
-# (: (____/ //  //      /   //  __'  \  //  \ _   \  |___  // ___)_   __/  \\
-#  \        /  |:  __   \  /   /  \\  \(:   _) \ ( \_|:  \(:      "| /" \   :)
-#   \"_____/   |__|  \___)(___/    \___)\_______) \_______)\_______)(_______/
+echo "Setup pool plane..."
 
-echo "Setup oracle registry..."
-
-# Transaction Fee: 13.8046416 XLM
 stellar contract invoke \
-    --id $ORACLE_REGISTRY_ADDR \
+    --id $POOL_PLANE_ADDR \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     --rpc-url $STELLAR_RPC_URL \
     --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     -- \
-    initialize \
-    --admin $ADMIN_ADDRESS \
-    --emergency_admin $ADMIN_ADDRESS
+    init_admin \
+    --account $ADMIN_ADDRESS
 
-# Transaction Fee: 0.4171378 XLM
+echo "Setup liquidity calculator..."
+
 stellar contract invoke \
-    --id $ORACLE_REGISTRY_ADDR \
+    --id $LIQUIDITY_CALCULATOR_ADDR \
     --source $IDENTITY_STRING \
     --network $NETWORK \
     --rpc-url $STELLAR_RPC_URL \
     --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     -- \
-    set_oracle_guard_rails \
-    --admin $ADMIN_ADDRESS \
-    --oracle_guard_rails '{
-        "price_divergence": {
-            "oracle_twap_percent_divergence": 1000000
-        },
-        "validity": {
-            "seconds_before_stale_for_pool": 300,
-            "too_volatile_ratio": 2000000
-        }
-    }'
+    init_admin \
+    --account $ADMIN_ADDRESS
 
 #   _______     ______    ____  ____  ___________  _______   _______
 #  /"      \   /    " \  ("  _||_ " |("     _   ")/"     "| /"      \
@@ -90,6 +72,34 @@ stellar contract invoke \
     --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     -- \
+    set_privileged_addrs \
+    --admin $ADMIN_ADDRESS \
+    --rewards_admin $ADMIN_ADDRESS \
+    --operations_admin $ADMIN_ADDRESS \
+    --pause_admin $ADMIN_ADDRESS \
+    --emergency_pause_admins "[{\"address\":\"$ADMIN_ADDRESS\"}]" \
+    --system_fee_admin $ADMIN_ADDRESS
+
+stellar contract invoke \
+    --id $POOL_ROUTER_ADDR \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    --rpc-url $STELLAR_RPC_URL \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
+    --fee $STELLAR_BASE_FEE \
+    -- \
+    set_token_hash \
+    --admin $ADMIN_ADDRESS \
+    --new_hash $TOKEN_SHARE_WASM_HASH
+
+stellar contract invoke \
+    --id $POOL_ROUTER_ADDR \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    --rpc-url $STELLAR_RPC_URL \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
+    --fee $STELLAR_BASE_FEE \
+    -- \
     set_pool_hash \
     --admin $ADMIN_ADDRESS \
     --new_hash $POOL_WASM_HASH
@@ -102,9 +112,33 @@ stellar contract invoke \
     --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     -- \
-    set_lp_token_hash \
+    set_elastic_pool_hash \
     --admin $ADMIN_ADDRESS \
-    --new_hash $LP_TOKEN_WASM_HASH
+    --new_hash $POOL_ELASTIC_WASM_HASH
+
+stellar contract invoke \
+    --id $POOL_ROUTER_ADDR \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    --rpc-url $STELLAR_RPC_URL \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
+    --fee $STELLAR_BASE_FEE \
+    -- \
+    init_config_storage \
+    --admin $ADMIN_ADDRESS \
+    --config_storage $CONFIG_STORAGE_ADDR
+
+stellar contract invoke \
+    --id $POOL_ROUTER_ADDR \
+    --source $IDENTITY_STRING \
+    --network $NETWORK \
+    --rpc-url $STELLAR_RPC_URL \
+    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
+    --fee $STELLAR_BASE_FEE \
+    -- \
+    set_rewards_gauge_hash \
+    --admin $ADMIN_ADDRESS \
+    --new_hash $REWARDS_GAUGE_WASM_HASH
 
 stellar contract invoke \
     --id $POOL_ROUTER_ADDR \
@@ -126,12 +160,9 @@ stellar contract invoke \
     --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     -- \
-    set_privileged_addrs \
+    set_protocol_fee_fraction \
     --admin $ADMIN_ADDRESS \
-    --rewards_admin $ADMIN_ADDRESS \
-    --operations_admin $ADMIN_ADDRESS \
-    --pause_admin $ADMIN_ADDRESS \
-    --emergency_pause_admins "[{\"address\":\"$ADMIN_ADDRESS\"}]"
+    --new_fraction 5000
 
 stellar contract invoke \
     --id $POOL_ROUTER_ADDR \
@@ -157,109 +188,7 @@ stellar contract invoke \
     --admin $ADMIN_ADDRESS \
     --calculator $LIQUIDITY_CALCULATOR_ADDR
 
-stellar contract invoke \
-    --id $POOL_ROUTER_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
-    --fee $STELLAR_BASE_FEE \
-    -- \
-    set_oracle_registry \
-    --admin $ADMIN_ADDRESS \
-    --oracle_registry $ORACLE_REGISTRY_ADDR
-
 echo "Tokens and pool router deployed."
-
-#   __    _____  ___    ________  ____  ____   _______        __      _____  ___    ______    _______
-#  |" \  (\"   \|"  \  /"       )("  _||_ " | /"      \      /""\    (\"   \|"  \  /" _  "\  /"     "|
-#  ||  | |.\\   \    |(:   \___/ |   (  ) : ||:        |    /    \   |.\\   \    |(: ( \___)(: ______)
-#  |:  | |: \.   \\  | \___  \   (:  |  | . )|_____/   )   /' /\  \  |: \.   \\  | \/ \      \/    |
-#  |.  | |.  \    \. |  __/  \\   \\ \__/ //  //      /   //  __'  \ |.  \    \. | //  \ _   // ___)_
-#  /\  |\|    \    \ | /" \   :)  /\\ __ //\ |:  __   \  /   /  \\  \|    \    \ |(:   _) \ (:      "|
-# (__\_|_)\___|\____\)(_______/  (__________)|__|  \___)(___/    \___)\___|\____\) \_______) \_______)
-
-echo "Setup insurance fund..."
-
-THIRTEEN_DAYS=$((ONE_HOUR * 24 * 13))
-
-stellar contract invoke \
-    --id $INSURANCE_FUND_ADDR \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
-    --fee $STELLAR_BASE_FEE \
-    -- \
-    initialize \
-    --admin $ADMIN_ADDRESS \
-    --emergency_admin $ADMIN_ADDRESS \
-    --oracle_registry $ORACLE_REGISTRY_ADDR \
-    --pool_router $POOL_ROUTER_ADDR \
-    --premium_token $XLM_ADDRESS \
-    --whitelist_tokens "[\"$XLM_ADDRESS\"]" \
-    --unstaking_period $THIRTEEN_DAYS \
-    --optimal_utilization 8000 \
-    --base_rate 200 \
-    --rate_slopes '[2000, 6000]'
-
-#   _______   _______   _______       ______    ______    ___      ___       _______   ______  ___________  ______     _______
-#  /"     "| /"     "| /"     "|     /" _  "\  /    " \  |"  |    |"  |     /"     "| /" _  "\("     _   ")/    " \   /"      \
-# (: ______)(: ______)(: ______)    (: ( \___)// ____  \ ||  |    ||  |    (: ______)(: ( \___))__/  \\__// ____  \ |:        |
-#  \/    |   \/    |   \/    |       \/ \    /  /    ) :)|:  |    |:  |     \/    |   \/ \        \\_ /  /  /    ) :)|_____/   )
-#  // ___)   // ___)_  // ___)_      //  \ _(: (____/ //  \  |___  \  |___  // ___)_  //  \ _     |.  | (: (____/ //  //      /
-# (:  (     (:      "|(:      "|    (:   _) \\        /  ( \_|:  \( \_|:  \(:      "|(:   _) \    \:  |  \        /  |:  __   \
-#  \__/      \_______) \_______)     \_______)\"_____/    \_______)\_______)\_______) \_______)    \__|   \"_____/   |__|  \___)
-
-echo "Setup fee collector..."
-
-stellar contract invoke \
-    --id $POOL_SWAP_FEE \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
-    --fee $STELLAR_BASE_FEE \
-    -- \
-    init_admin \
-    --admin $ADMIN_ADDRESS \
-    --emergency_admin $ADMIN_ADDRESS
-
-stellar contract invoke \
-    --id $POOL_SWAP_FEE \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
-    --fee $STELLAR_BASE_FEE \
-    -- \
-    set_router \
-    --admin $ADMIN_ADDRESS \
-    --router $POOL_ROUTER_ADDR
-
-stellar contract invoke \
-    --id $POOL_SWAP_FEE \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
-    --fee $STELLAR_BASE_FEE \
-    -- \
-    set_insurance_fund \
-    --admin $ADMIN_ADDRESS \
-    --insurance_fund $INSURANCE_FUND_ADDR
-
-stellar contract invoke \
-    --id $POOL_SWAP_FEE \
-    --source $IDENTITY_STRING \
-    --network $NETWORK \
-    --rpc-url $STELLAR_RPC_URL \
-    --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
-    --fee $STELLAR_BASE_FEE \
-    -- \
-    set_fee_destination \
-    --admin $ADMIN_ADDRESS \
-    --fee_destination $ADMIN_ADDRESS
 
 echo "#############################"
 

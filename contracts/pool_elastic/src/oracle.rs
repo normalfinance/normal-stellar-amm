@@ -11,14 +11,12 @@ use utils::{
         safe_math::{PrecisionMath, SafeConversion, SafeMath},
         stats::calculate_new_twap,
     },
-    state::oracle_registry::{
-        HistoricalOracleData, OracleGuardRails, OraclePriceData, OracleValidity,
-    },
+    state::oracle::{HistoricalOracleData, OracleGuardRails, OraclePriceData, OracleValidity},
     temporal::Delay,
 };
 
 use crate::storage::{
-    get_historical_oracle_data, get_oracle, get_oracle_guard_rails, set_historical_oracle_data,
+    get_historical_oracle_data, get_oracle, get_oracle_guard_rails, put_historical_oracle_data,
 };
 
 // Fetches the latest oracle price and timestamp for a given asset.
@@ -74,6 +72,7 @@ pub fn get_oracle_price(e: &Env, asset: &Symbol, now: u64) -> OraclePriceData {
 // * `now` - Current timestamp.
 pub fn update_twap(
     e: &Env,
+    asset: &Symbol,
     historical_oracle_data: &HistoricalOracleData,
     oracle_price_data: &OraclePriceData,
     sanitize_clamp_denominator: u64,
@@ -95,8 +94,9 @@ pub fn update_twap(
         FIVE_MINUTE as u64,
     );
 
-    set_historical_oracle_data(
+    put_historical_oracle_data(
         e,
+        asset,
         &(HistoricalOracleData {
             last_price_twap: oracle_price_twap,
             last_price: oracle_price_data.price,
@@ -176,7 +176,7 @@ pub fn get_oracle_price_with_validity(
 ) -> HistoricalOracleData {
     let oracle_price_data = get_oracle_price(&e, &asset, current_time);
 
-    let historical_oracle_data = get_historical_oracle_data(e);
+    let historical_oracle_data = get_historical_oracle_data(e, asset);
 
     let oracle_validity = oracle_validity(
         &e,
@@ -190,13 +190,14 @@ pub fn get_oracle_price_with_validity(
 
     update_twap(
         e,
+        asset,
         &historical_oracle_data,
         &oracle_price_data,
         1,
         current_time,
     );
 
-    get_historical_oracle_data(e)
+    get_historical_oracle_data(e, asset)
 }
 
 // Calculates the percentage difference between the pool price and oracle TWAP.
@@ -252,25 +253,4 @@ pub fn is_oracle_price_too_divergent(
         .oracle_twap_percent_divergence;
 
     price_spread_pct.unsigned_abs() > max_divergence
-}
-
-// Calculates the peg price between the base and quote assets based on oracle prices.
-//
-// Returns `quote / base` to represent the current price ratio. If either price is zero,
-// returns 0 to indicate an invalid state.
-//
-// # Arguments
-// * `e` - Soroban environment reference.
-// * `base_oracle_price` - Oracle price of the base asset.
-// * `quote_oracle_price` - Oracle price of the quote asset.
-//
-// # Returns
-// * `u128` — The derived peg price (scaled by `PRICE_PRECISION`), or 0 if invalid.
-pub fn peg_price(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -> u128 {
-    if base_oracle_price == 0 || quote_oracle_price == 0 {
-        return 0;
-    }
-
-    // Calculate quote_oracle_price / base_oracle_price with round-to-nearest to reduce bias
-    quote_oracle_price.safe_fixed_div_round(e, base_oracle_price, PRICE_PRECISION)
 }

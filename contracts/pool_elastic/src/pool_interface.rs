@@ -1,6 +1,7 @@
 use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Val, Vec};
+use utils::state::oracle::{HistoricalOracleData, OracleGuardRails, OraclePriceData};
 
-pub trait LiquidityPoolCrunch {
+pub trait ElasticPoolCrunch {
     // Initialize pool completely to reduce calculations cost
     fn initialize_all(
         e: Env,
@@ -16,7 +17,7 @@ pub trait LiquidityPoolCrunch {
     );
 }
 
-pub trait LiquidityPoolTrait {
+pub trait ElasticPoolTrait {
     // Get symbolic explanation of pool type.
     fn pool_type(e: Env) -> Symbol;
 
@@ -32,6 +33,14 @@ pub trait LiquidityPoolTrait {
         fees_config: (u32, u32),
         assets_config: (Symbol, Symbol),
     );
+
+    fn get_pool_price(e: Env, token_a: bool) -> u128;
+
+    fn get_oracle_price(e: Env, base: bool) -> OraclePriceData;
+
+    fn get_historical_oracle_price(e: Env, base: bool) -> HistoricalOracleData;
+
+    fn get_peg_price(e: Env) -> u128;
 
     // Returns the token contract address for the pool share token
     fn share_id(e: Env) -> Address;
@@ -67,13 +76,7 @@ pub trait LiquidityPoolTrait {
     ) -> u128;
 
     // Estimate amount of coins to retrieve using swap function
-    fn estimate_swap(
-        e: Env,
-        in_idx: u32,
-        out_idx: u32,
-        in_amount: u128,
-        risk_reducing: bool,
-    ) -> u128;
+    fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: u128) -> u128;
 
     // Perform an exchange between two coins with strict amount to receive.
     // in_idx: Index value for the coin to send
@@ -90,13 +93,7 @@ pub trait LiquidityPoolTrait {
     ) -> u128;
 
     // Estimate amount of coins to retrieve using swap_strict_receive function
-    fn estimate_swap_strict_receive(
-        e: Env,
-        in_idx: u32,
-        out_idx: u32,
-        out_amount: u128,
-        risk_reducing: bool,
-    ) -> u128;
+    fn estimate_swap_strict_receive(e: Env, in_idx: u32, out_idx: u32, out_amount: u128) -> u128;
 
     // Transfers share_amount of pool share tokens to this contract,
     // burns all pools share tokens in this contracts, and sends
@@ -115,9 +112,6 @@ pub trait LiquidityPoolTrait {
 
     // Get dictionary of basic pool information: type, fee, special parameters if any.
     fn get_info(e: Env) -> Map<Symbol, Val>;
-
-    // Bonus
-    // fn claim_bonus(e: Env, user: Address);
 }
 
 pub trait AdminInterfaceTrait {
@@ -134,6 +128,17 @@ pub trait AdminInterfaceTrait {
 
     // Get map of privileged roles
     fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>>;
+
+    // Oracle
+    fn set_oracle_guard_rails(
+        e: Env,
+        admin: Address,
+        twap_divergence: u64,
+        stale_limit: u64,
+        too_volatile_ratio: u64,
+    );
+
+    fn get_oracle_guard_rails(e: Env) -> OracleGuardRails;
 
     // Stop pool instantly
     fn kill_deposit(e: Env, admin: Address);
@@ -177,8 +182,7 @@ pub trait AdminInterfaceTrait {
 
     fn get_tax_config(e: Env) -> (u32, u32, u32);
 
-    // Bonus
-    // fn set_max_bonus_fraction(e: Env, admin: Address, max_bonus_fraction: u32);
+    fn claim_protocol_tax(e: Env, admin: Address, destination: Address) -> u128;
 }
 
 pub trait UpgradeableContract {

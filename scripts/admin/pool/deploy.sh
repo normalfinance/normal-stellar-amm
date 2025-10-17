@@ -4,34 +4,29 @@ set -e
 # Usage
 usage() {
     echo "Usage:"
-    echo "  $0 <identity_string> <network> <token_target> <token_symbol> <fee_fraction> <pool_tier> <max_insurance>"
+    echo "  $0 <identity_string> <network> <normal_token> <fee_fraction> <base_asset> <quote_asset>"
     echo ""
     echo "Example:"
-    echo "  $0 admin testnet BTC nBTC 30 A 1000000"
+    echo "  $0 admin testnet 30 CA....123 BTC USDC"
     exit 1
 }
 
 # Validate args
-if [ "$#" -ne 7 ]; then
+if [ "$#" -ne 6 ]; then
     usage
 fi
 
 # Parse arguments
 IDENTITY_STRING="$1"
 NETWORK=$2
-NORMAL_TOKEN_TARGET="$3"
-NORMAL_TOKEN_SYMBOL="$4"
-FEE_FRACTION="$5"
-POOL_TIER="$6"
-MAX_INSURANCE="$7"
+NORMAL_TOKEN="$3"
+FEE_FRACTION="$4"
+BASE_ASSET="$5"
+QUOTE_ASSET="$6"
 
 # Load env vars dynamically
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 source "$REPO_ROOT/scripts/load-env.sh" "$NETWORK"
-
-# Derive LP token info
-LP_TOKEN_NAME="$NORMAL_TOKEN_SYMBOL-XLM LP Token"
-LP_TOKEN_SYMBOL="$NORMAL_TOKEN_SYMBOL-XLM-LP"
 
 cd target/wasm32v1-none/release
 
@@ -39,9 +34,9 @@ cd target/wasm32v1-none/release
 ADMIN_ADDRESS=$(soroban keys address "$IDENTITY_STRING")
 
 # Initialize pool
-echo "📦 Initializing $NORMAL_TOKEN_SYMBOL/XLM pool through Pool Router..."
+echo "📦 Initializing pool through Pool Router..."
 
-stellar contract invoke \
+POOL_RESPONSE=$(stellar contract invoke \
     --id "$POOL_ROUTER_ADDR" \
     --source "$IDENTITY_STRING" \
     --network "$NETWORK" \
@@ -49,23 +44,12 @@ stellar contract invoke \
     --network-passphrase "$STELLAR_NETWORK_PASSPHRASE" \
     --fee $STELLAR_BASE_FEE \
     -- \
-    init_pool \
-    --admin "$ADMIN_ADDRESS" \
-    --assets "[\"$NORMAL_TOKEN_TARGET\", \"XLM\"]" \
-    --token_b "$XLM_ADDRESS" \
-    --synthetic_sac_address "$ASSET_SAC_ADDRESS" \
-    --lp_token_info "[\"$LP_TOKEN_NAME\", \"$LP_TOKEN_SYMBOL\"]" \
+    init_elastic_pool \
+    --user "$ADMIN_ADDRESS" \
+    --tokens "[\"$NORMAL_TOKEN\", \"$USDC_ADDRESS\"]" \
     --fee_fraction "$FEE_FRACTION" \
-    --tier "$POOL_TIER" \
-    --quote_max_insurance "$MAX_INSURANCE"
+    --oracle "$REFLECTOR_ORACLE" \
+    --assets_config "[\"$BASE_ASSET\", \"$QUOTE_ASSET\"]"
+)
 
-# Query initialized pool
-echo "🔍 Querying $NORMAL_TOKEN_SYMBOL/XLM pool address..."
-POOL_ADDR=$(soroban contract invoke \
-    --id "$POOL_ROUTER_ADDR" \
-    --source "$IDENTITY_STRING" \
-    --network "$NETWORK" --fee 100 \
-    -- \
-    get_pools | jq -r '.[0]')
-
-echo "✅ Pool contract initialized at: $POOL_ADDR"
+echo "✅ Pool contract initialized at: $POOL_RESPONSE"

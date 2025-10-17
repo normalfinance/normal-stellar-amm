@@ -19,9 +19,6 @@ pub trait PoolInterfaceTrait {
     // Getter for the pool balances array.
     fn get_reserves(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Vec<u128>;
 
-    //
-    fn rebase(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>) -> (i128, i128);
-
     // Deposit coins into the pool.
     // desired_amounts: List of amounts of coins to deposit
     // Returns amounts deposited and the amount of LP tokens received in exchange for the deposited tokens.
@@ -59,7 +56,6 @@ pub trait PoolInterfaceTrait {
         token_out: Address,
         pool_index: BytesN<32>,
         in_amount: u128,
-        risk_reducing: bool,
     ) -> u128;
 
     // Withdraw coins from the pool.
@@ -227,7 +223,7 @@ pub trait PoolsManagementTrait {
         tokens: Vec<Address>,
         fee_fraction: u32,
         oracle: Address,
-        base_asset: Symbol,
+        assets_config: (Symbol, Symbol),
     ) -> (BytesN<32>, Address);
 
     // Get pools for given pair

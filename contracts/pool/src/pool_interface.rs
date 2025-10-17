@@ -1,6 +1,6 @@
 use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Val, Vec};
 
-pub trait LiquidityPoolCrunch {
+pub trait PoolCrunch {
     // Initialize pool completely to reduce calculations cost
     fn initialize_all(
         e: Env,
@@ -16,7 +16,7 @@ pub trait LiquidityPoolCrunch {
     );
 }
 
-pub trait LiquidityPoolTrait {
+pub trait PoolTrait {
     // Get symbolic explanation of pool type.
     fn pool_type(e: Env) -> Symbol;
 

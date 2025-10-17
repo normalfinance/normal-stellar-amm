@@ -2,7 +2,7 @@
 #![cfg(test)]
 extern crate std;
 use crate::plane::{pool_plane, PoolPlaneClient};
-use crate::LiquidityPoolClient;
+use crate::ElasticPoolClient;
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use pool_config_storage::{
     testutils::deploy_config_storage, testutils::Client as ConfigStorageClient,
@@ -50,7 +50,7 @@ pub(crate) struct Setup<'a> {
     pub(crate) token_reward: SorobanTokenClient<'a>,
     pub(crate) token_reward_admin_client: SorobanTokenAdminClient<'a>,
     pub(crate) token_share: ShareTokenClient<'a>,
-    pub(crate) liq_pool: LiquidityPoolClient<'a>,
+    pub(crate) liq_pool: ElasticPoolClient<'a>,
     pub(crate) plane: PoolPlaneClient<'a>,
 
     pub(crate) admin: Address,
@@ -280,8 +280,8 @@ pub fn create_liqpool_contract<'a>(
     base_asset: &Symbol,
     plane: &Address,
     config_storage: &Address,
-) -> LiquidityPoolClient<'a> {
-    let liqpool = LiquidityPoolClient::new(e, &e.register(crate::LiquidityPool {}, ()));
+) -> ElasticPoolClient<'a> {
+    let liqpool = ElasticPoolClient::new(e, &e.register(crate::ElasticPool {}, ()));
     liqpool.initialize_all(
         &admin,
         &(
