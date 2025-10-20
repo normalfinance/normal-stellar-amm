@@ -15,7 +15,7 @@ usage() {
 if [ "$#" -ne 4 ]; then
     usage
 fi
-GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
+
 # Parse arguments
 IDENTITY_STRING=$1
 NETWORK=$2

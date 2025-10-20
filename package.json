@@ -25,7 +25,8 @@
     "pool:deposit": "./scripts/admin/pool/deposit.sh",
     "pool:withdraw": "./scripts/admin/pool/withdraw.sh",
     "pool:update": "./scripts/admin/pool/update.sh",
-    "pool:swap": "./scripts/admin/pool/swap.sh"
+    "pool:swap": "./scripts/admin/pool/swap.sh",
+    "pool:reward:init": "./scripts/admin/pool/rewards/set_config.sh"
   },
   "repository": {
     "type": "git",

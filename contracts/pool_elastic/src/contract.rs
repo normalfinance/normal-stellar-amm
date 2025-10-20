@@ -236,57 +236,57 @@ impl ElasticPoolTrait for ElasticPool {
         update_plane(&e);
     }
 
-    fn get_pool_price(e: Env, token_a: bool) -> u128 {
-        let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
+    // fn get_pool_price(e: Env, token_a: bool) -> u128 {
+    //     let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
 
-        if reserve_a == 0 || reserve_b == 0 {
-            return 0;
-        };
+    //     if reserve_a == 0 || reserve_b == 0 {
+    //         return 0;
+    //     };
 
-        if token_a {
-            return reserve_a.safe_div(&e, reserve_b);
-        } else {
-            return reserve_a.safe_div(&e, reserve_b);
-        };
-    }
+    //     if token_a {
+    //         return reserve_a.safe_div(&e, reserve_b);
+    //     } else {
+    //         return reserve_a.safe_div(&e, reserve_b);
+    //     };
+    // }
 
-    fn get_oracle_price(e: Env, base: bool) -> OraclePriceData {
-        let current_time = e.ledger().timestamp();
+    // fn get_oracle_price(e: Env, base: bool) -> OraclePriceData {
+    //     let current_time = e.ledger().timestamp();
 
-        let asset = if base {
-            get_base_asset(&e)
-        } else {
-            get_quote_asset(&e)
-        };
+    //     let asset = if base {
+    //         get_base_asset(&e)
+    //     } else {
+    //         get_quote_asset(&e)
+    //     };
 
-        crate::oracle::get_oracle_price(&e, &asset, current_time)
-    }
+    //     crate::oracle::get_oracle_price(&e, &asset, current_time)
+    // }
 
-    fn get_historical_oracle_price(e: Env, base: bool) -> HistoricalOracleData {
-        let asset = if base {
-            get_base_asset(&e)
-        } else {
-            get_quote_asset(&e)
-        };
+    // fn get_historical_oracle_price(e: Env, base: bool) -> HistoricalOracleData {
+    //     let asset = if base {
+    //         get_base_asset(&e)
+    //     } else {
+    //         get_quote_asset(&e)
+    //     };
 
-        get_historical_oracle_data(&e, &asset)
-    }
+    //     get_historical_oracle_data(&e, &asset)
+    // }
 
-    fn get_peg_price(e: Env) -> u128 {
-        let current_time = e.ledger().timestamp();
+    // fn get_peg_price(e: Env) -> u128 {
+    //     let current_time = e.ledger().timestamp();
 
-        let base_oracle_price_data =
-            crate::oracle::get_oracle_price_with_validity(&e, &get_base_asset(&e), current_time);
+    //     let base_oracle_price_data =
+    //         crate::oracle::get_oracle_price_with_validity(&e, &get_base_asset(&e), current_time);
 
-        let quote_oracle_price_data =
-            crate::oracle::get_oracle_price_with_validity(&e, &get_quote_asset(&e), current_time);
+    //     let quote_oracle_price_data =
+    //         crate::oracle::get_oracle_price_with_validity(&e, &get_quote_asset(&e), current_time);
 
-        crate::pool::peg_price(
-            &e,
-            base_oracle_price_data.last_price_twap,
-            quote_oracle_price_data.last_price_twap,
-        )
-    }
+    //     crate::pool::peg_price(
+    //         &e,
+    //         base_oracle_price_data.last_price_twap,
+    //         quote_oracle_price_data.last_price_twap,
+    //     )
+    // }
 
     // Returns the pool's share token address.
     //

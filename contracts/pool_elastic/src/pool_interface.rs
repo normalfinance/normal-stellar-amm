@@ -34,13 +34,13 @@ pub trait ElasticPoolTrait {
         assets_config: (Symbol, Symbol),
     );
 
-    fn get_pool_price(e: Env, token_a: bool) -> u128;
+    // fn get_pool_price(e: Env, token_a: bool) -> u128;
 
-    fn get_oracle_price(e: Env, base: bool) -> OraclePriceData;
+    // fn get_oracle_price(e: Env, base: bool) -> OraclePriceData;
 
-    fn get_historical_oracle_price(e: Env, base: bool) -> HistoricalOracleData;
+    // fn get_historical_oracle_price(e: Env, base: bool) -> HistoricalOracleData;
 
-    fn get_peg_price(e: Env) -> u128;
+    // fn get_peg_price(e: Env) -> u128;
 
     // Returns the token contract address for the pool share token
     fn share_id(e: Env) -> Address;
