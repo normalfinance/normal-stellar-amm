@@ -508,24 +508,23 @@ impl ElasticPoolTrait for ElasticPool {
         }
 
         // Fetch prices
-        let pool_price = crate::pool::pool_price(&e, reserve_a, reserve_b);
+        // let pool_price = crate::pool::pool_price(&e, reserve_a, reserve_b);
 
-        let base_oracle_price_data =
-            crate::oracle::get_oracle_price_with_validity(&e, &get_base_asset(&e), current_time);
-        let quote_oracle_price_data =
-            crate::oracle::get_oracle_price_with_validity(&e, &get_quote_asset(&e), current_time);
+        // let base_oracle_price_data =
+        //     crate::oracle::get_oracle_price_with_validity(&e, &get_base_asset(&e), current_time);
+        // let quote_oracle_price_data =
+        //     crate::oracle::get_oracle_price_with_validity(&e, &get_quote_asset(&e), current_time);
 
-        let peg_price = crate::pool::peg_price(
-            &e,
-            base_oracle_price_data.last_price_twap,
-            quote_oracle_price_data.last_price_twap,
-        );
+        // let peg_price = crate::pool::peg_price(
+        //     &e,
+        //     base_oracle_price_data.last_price_twap,
+        //     quote_oracle_price_data.last_price_twap,
+        // );
 
-        let price_deviation = crate::pool::calculate_price_deviation(&e, pool_price, peg_price);
-        let risk_reducing = crate::pool::is_swap_risk_reducing(&e, price_deviation, in_idx);
+        // let price_deviation = crate::pool::calculate_price_deviation(&e, pool_price, peg_price);
+        // let risk_reducing = crate::pool::is_swap_risk_reducing(&e, price_deviation, in_idx);
 
-        let (out, total_fee) =
-            get_amount_out(&e, in_amount, reserve_sell, reserve_buy, risk_reducing);
+        let (out, total_fee) = get_amount_out(&e, in_amount, reserve_sell, reserve_buy, false); // FIXME: replace with risk_reducing
         let protocol_fee = (total_fee * (get_protocol_fee_fraction(&e) as u128)) / FEE_MULTIPLIER;
         let lp_fee = total_fee - protocol_fee;
 
@@ -534,16 +533,16 @@ impl ElasticPoolTrait for ElasticPool {
         }
 
         // Collect tax
-        let mut tax_amount = 0_u128;
+        // let mut tax_amount = 0_u128;
 
-        if !get_is_killed_tax(&e) {
-            tax_amount = crate::tax::calculate_tax_amount(&e, in_amount, pool_price, peg_price);
+        // if !get_is_killed_tax(&e) {
+        //     tax_amount = crate::tax::calculate_tax_amount(&e, in_amount, pool_price, peg_price);
 
-            if tax_amount > 0 {
-                let protocol_tax_b = get_protocol_tax_b(&e);
-                set_protocol_tax_b(&e, &protocol_tax_b.safe_add(&e, tax_amount));
-            }
-        }
+        //     if tax_amount > 0 {
+        //         let protocol_tax_b = get_protocol_tax_b(&e);
+        //         set_protocol_tax_b(&e, &protocol_tax_b.safe_add(&e, tax_amount));
+        //     }
+        // }
 
         // TODO: Record bonus
         // if risk_reducing && !get_is_killed_bonus(&e) {
@@ -558,7 +557,7 @@ impl ElasticPoolTrait for ElasticPool {
         if in_idx == 0 {
             set_reserve_a(&e, &(reserve_a + in_amount));
         } else {
-            set_reserve_b(&e, &(reserve_b + in_amount - tax_amount));
+            set_reserve_b(&e, &(reserve_b + in_amount)); // - tax_amount
         }
 
         let (mut new_reserve_a, mut new_reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
@@ -607,7 +606,7 @@ impl ElasticPoolTrait for ElasticPool {
         } else {
             transfer_b(&e, &user, out_b);
             new_reserve_a = new_reserve_a - protocol_fee;
-            new_reserve_b = new_reserve_b - out_b - tax_amount;
+            new_reserve_b = new_reserve_b - out_b; // - tax_amount
             set_protocol_fee_a(&e, &(get_protocol_fee_a(&e) + protocol_fee));
         }
         set_reserve_a(&e, &new_reserve_a);
@@ -630,7 +629,7 @@ impl ElasticPoolTrait for ElasticPool {
             in_amount,
             out,
             lp_fee,
-            tax_amount,
+            0, // tax_amount
         );
         PoolEvents::new(&e).update_reserves(Vec::from_array(&e, [new_reserve_a, new_reserve_b]));
 
@@ -770,40 +769,40 @@ impl ElasticPoolTrait for ElasticPool {
         }
 
         // Fetch prices
-        let pool_price = crate::pool::pool_price(&e, reserve_a, reserve_b);
+        // let pool_price = crate::pool::pool_price(&e, reserve_a, reserve_b);
 
-        let base_oracle_price_data =
-            crate::oracle::get_oracle_price_with_validity(&e, &get_base_asset(&e), current_time);
-        let quote_oracle_price_data =
-            crate::oracle::get_oracle_price_with_validity(&e, &get_quote_asset(&e), current_time);
+        // let base_oracle_price_data =
+        //     crate::oracle::get_oracle_price_with_validity(&e, &get_base_asset(&e), current_time);
+        // let quote_oracle_price_data =
+        //     crate::oracle::get_oracle_price_with_validity(&e, &get_quote_asset(&e), current_time);
 
-        let peg_price = crate::pool::peg_price(
-            &e,
-            base_oracle_price_data.last_price_twap,
-            quote_oracle_price_data.last_price_twap,
-        );
+        // let peg_price = crate::pool::peg_price(
+        //     &e,
+        //     base_oracle_price_data.last_price_twap,
+        //     quote_oracle_price_data.last_price_twap,
+        // );
 
-        let price_deviation_pre = crate::pool::calculate_price_deviation(&e, pool_price, peg_price);
-        let risk_reducing = crate::pool::is_swap_risk_reducing(&e, price_deviation_pre, in_idx);
+        // let price_deviation_pre = crate::pool::calculate_price_deviation(&e, pool_price, peg_price);
+        // let risk_reducing = crate::pool::is_swap_risk_reducing(&e, price_deviation_pre, in_idx);
 
         let (in_amount, total_fee) =
-            get_amount_out_strict_receive(&e, out_amount, reserve_sell, reserve_buy, risk_reducing);
+            get_amount_out_strict_receive(&e, out_amount, reserve_sell, reserve_buy, false); // risk_reducing
 
         if in_amount > in_max {
             panic_with_error!(&e, PoolValidationError::InMaxNotSatisfied);
         }
 
         // Collect tax
-        let mut tax_amount = 0_u128;
+        // let mut tax_amount = 0_u128;
 
-        if !get_is_killed_tax(&e) {
-            tax_amount = crate::tax::calculate_tax_amount(&e, in_amount, pool_price, peg_price);
+        // if !get_is_killed_tax(&e) {
+        //     tax_amount = crate::tax::calculate_tax_amount(&e, in_amount, pool_price, peg_price);
 
-            if tax_amount > 0 {
-                let protocol_tax_b = get_protocol_tax_b(&e);
-                set_protocol_tax_b(&e, &protocol_tax_b.safe_add(&e, tax_amount));
-            }
-        }
+        //     if tax_amount > 0 {
+        //         let protocol_tax_b = get_protocol_tax_b(&e);
+        //         set_protocol_tax_b(&e, &protocol_tax_b.safe_add(&e, tax_amount));
+        //     }
+        // }
 
         // Record bonus
         // if risk_reducing && !get_is_killed_bonus(&e) {
@@ -825,7 +824,7 @@ impl ElasticPoolTrait for ElasticPool {
         if in_idx == 0 {
             set_reserve_a(&e, &(reserve_a + in_amount));
         } else {
-            set_reserve_b(&e, &(reserve_b + in_amount - tax_amount));
+            set_reserve_b(&e, &(reserve_b + in_amount)); // - tax_amount
         }
 
         let (mut new_reserve_a, mut new_reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
@@ -883,7 +882,7 @@ impl ElasticPoolTrait for ElasticPool {
         } else {
             transfer_b(&e, &user, out_amount);
             new_reserve_a = new_reserve_a - protocol_fee;
-            new_reserve_b = new_reserve_b - out_amount - tax_amount;
+            new_reserve_b = new_reserve_b - out_amount; // - tax_amount
             set_protocol_fee_a(&e, &(get_protocol_fee_a(&e) + protocol_fee));
         }
         set_reserve_a(&e, &new_reserve_a);
@@ -899,7 +898,7 @@ impl ElasticPoolTrait for ElasticPool {
             in_amount,
             out_amount,
             lp_fee,
-            tax_amount,
+            0, // tax_amount
         );
         PoolEvents::new(&e).update_reserves(Vec::from_array(&e, [new_reserve_a, new_reserve_b]));
 
