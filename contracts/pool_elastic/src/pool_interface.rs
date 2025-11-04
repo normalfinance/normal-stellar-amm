@@ -95,6 +95,13 @@ pub trait ElasticPoolTrait {
     // Estimate amount of coins to retrieve using swap_strict_receive function
     fn estimate_swap_strict_receive(e: Env, in_idx: u32, out_idx: u32, out_amount: u128) -> u128;
 
+    // Claims the vested bonus for the user.
+    // Returns the amount of bonus tokens transferred to the user.
+    fn claim_bonus(e: Env, user: Address) -> u128;
+
+    // Returns bonus information for the user including amount, vesting status, etc.
+    fn get_bonus_info(e: Env, user: Address) -> Map<Symbol, Val>;
+
     // Transfers share_amount of pool share tokens to this contract,
     // burns all pools share tokens in this contracts, and sends
     // the corresponding amount of tokens to user.
@@ -183,6 +190,15 @@ pub trait AdminInterfaceTrait {
     fn get_tax_config(e: Env) -> (u32, u32, u32);
 
     fn claim_protocol_tax(e: Env, admin: Address, destination: Address) -> u128;
+
+    // Bonus configuration
+    fn set_bonus_vesting_period(e: Env, admin: Address, vesting_period: u64);
+
+    fn set_max_bonus_fraction(e: Env, admin: Address, max_bonus_fraction: u32);
+
+    fn get_bonus_config(e: Env) -> (u32, u64, u128);
+
+    fn get_bonus_reserve(e: Env) -> u128;
 }
 
 pub trait UpgradeableContract {

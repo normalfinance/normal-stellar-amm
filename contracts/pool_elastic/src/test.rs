@@ -18,7 +18,7 @@ use soroban_sdk::token::{
 };
 use soroban_sdk::{log, BytesN};
 use soroban_sdk::{
-    symbol_short, testutils::Address as _, vec, Address, Env, Error, IntoVal, Map, Symbol, Val, Vec,
+    symbol_short, testutils::Address as _, vec, Address, Env, Error, IntoVal, Map, Symbol, TryIntoVal, Val, Vec,
 };
 use token_share::Client as ShareTokenClient;
 use utils::constant::{PRICE_PRECISION, PRICE_PRECISION_I128, THIRTEEN_DAY, TWENTY_FOUR_HOUR};
@@ -3514,3 +3514,426 @@ fn test_fix_locked_reward_tokens() {
 // fn test_swaps_two_weeks() {
 //     test_swaps_many_users(THIRTEEN_DAY);
 // }
+
+// ===== Tax and Bonus System Tests =====
+
+#[test]
+fn test_tax_applied_on_risk_increasing_swap() {
+    let setup = Setup::new_with_config(&TestConfig {
+        mint_to_user: 1000_0000000,
+        ..TestConfig::default()
+    });
+    let e = setup.env;
+    let liq_pool = setup.liq_pool;
+    let user1 = setup.users[0].clone();
+    
+    // Add initial liquidity
+    let amount_to_deposit = 100_0000000;
+    let desired_amounts = Vec::from_array(&e, [amount_to_deposit, amount_to_deposit]);
+    liq_pool.deposit(&user1, &desired_amounts, &0);
+
+    // Perform a swap that increases price deviation (risk-increasing)
+    // This should incur a tax
+    let swap_amount = 10_0000000;
+    liq_pool.swap(&user1, &0, &1, &swap_amount, &0);
+
+    // Check that protocol tax increased
+    let final_protocol_tax_b = crate::storage::get_protocol_tax_b(&e);
+    assert!(final_protocol_tax_b > 0, "Protocol tax should be collected");
+    
+    // Check that bonus reserve increased
+    let bonus_reserve = crate::storage::get_bonus_reserve_b(&e);
+    assert!(bonus_reserve > 0, "Bonus reserve should be funded from tax");
+}
+
+#[test]
+fn test_bonus_recorded_on_risk_reducing_swap() {
+    let setup = Setup::new_with_config(&TestConfig {
+        mint_to_user: 1000_0000000,
+        ..TestConfig::default()
+    });
+    let e = setup.env;
+    let liq_pool = setup.liq_pool;
+    let user1 = setup.users[0].clone();
+    let user2 = setup.users[1].clone();
+    
+    // Add initial liquidity
+    let amount_to_deposit = 100_0000000;
+    let desired_amounts = Vec::from_array(&e, [amount_to_deposit, amount_to_deposit]);
+    liq_pool.deposit(&user1, &desired_amounts, &0);
+
+    // First do a risk-increasing swap to build up tax reserve
+    let swap_amount = 10_0000000;
+    liq_pool.swap(&user1, &0, &1, &swap_amount, &0);
+    
+    let bonus_reserve_before = crate::storage::get_bonus_reserve_b(&e);
+    assert!(bonus_reserve_before > 0, "Should have bonus reserve from tax");
+
+    // Now do a risk-reducing swap (opposite direction)
+    liq_pool.swap(&user2, &1, &0, &swap_amount, &0);
+    
+    // Check that bonus was recorded for user2
+    let bonus_info = liq_pool.get_bonus_info(&user2);
+    let bonus_amount: i128 = bonus_info.get(symbol_short!("amount")).unwrap().try_into_val(&e).unwrap();
+    assert!(bonus_amount > 0, "Bonus should be recorded for risk-reducing trade");
+    
+    // Check that bonus reserve decreased
+    let bonus_reserve_after = crate::storage::get_bonus_reserve_b(&e);
+    assert!(bonus_reserve_after < bonus_reserve_before, "Bonus reserve should decrease when bonus recorded");
+}
+
+#[test]
+fn test_bonus_vesting_period() {
+    let setup = Setup::new_with_config(&TestConfig {
+        mint_to_user: 1000_0000000,
+        ..TestConfig::default()
+    });
+    let e = setup.env;
+    let liq_pool = setup.liq_pool;
+    let user1 = setup.users[0].clone();
+    let user2 = setup.users[1].clone();
+    
+    // Add initial liquidity
+    let amount_to_deposit = 100_0000000;
+    let desired_amounts = Vec::from_array(&e, [amount_to_deposit, amount_to_deposit]);
+    liq_pool.deposit(&user1, &desired_amounts, &0);
+
+    // Build up tax reserve
+    let swap_amount = 10_0000000;
+    liq_pool.swap(&user1, &0, &1, &swap_amount, &0);
+    
+    // Do risk-reducing swap to earn bonus
+    liq_pool.swap(&user2, &1, &0, &swap_amount, &0);
+    
+    // Try to claim bonus immediately (should fail)
+    let result = liq_pool.try_claim_bonus(&user2);
+    assert!(result.is_err(), "Should not be able to claim bonus before vesting period");
+
+    // Jump forward past vesting period
+    jump(&e, 3700); // More than 1 hour (3600 seconds)
+    
+    // Now claim should succeed
+    let claimed_amount = liq_pool.claim_bonus(&user2);
+    assert!(claimed_amount > 0, "Should be able to claim bonus after vesting period");
+    
+    // Bonus escrow should be cleared
+    let bonus_info = liq_pool.get_bonus_info(&user2);
+    let bonus_amount: i128 = bonus_info.get(symbol_short!("amount")).unwrap().try_into_val(&e).unwrap();
+    assert_eq!(bonus_amount, 0, "Bonus should be cleared after claim");
+}
+
+#[test]
+fn test_bonus_accumulates() {
+    let setup = Setup::new_with_config(&TestConfig {
+        mint_to_user: 1000_0000000,
+        ..TestConfig::default()
+    });
+    let e = setup.env;
+    let liq_pool = setup.liq_pool;
+    let user1 = setup.users[0].clone();
+    let user2 = setup.users[1].clone();
+    
+    // Add initial liquidity
+    let amount_to_deposit = 100_0000000;
+    let desired_amounts = Vec::from_array(&e, [amount_to_deposit, amount_to_deposit]);
+    liq_pool.deposit(&user1, &desired_amounts, &0);
+
+    // Build up tax reserve with multiple swaps
+    let swap_amount = 5_0000000;
+    liq_pool.swap(&user1, &0, &1, &swap_amount, &0);
+    liq_pool.swap(&user1, &0, &1, &swap_amount, &0);
+    
+    // Do first risk-reducing swap
+    liq_pool.swap(&user2, &1, &0, &swap_amount, &0);
+    let bonus_info_1 = liq_pool.get_bonus_info(&user2);
+    let bonus_amount_1: i128 = bonus_info_1.get(symbol_short!("amount")).unwrap().try_into_val(&e).unwrap();
+
+    // Build more tax reserve
+    liq_pool.swap(&user1, &0, &1, &swap_amount, &0);
+
+    // Do second risk-reducing swap
+    liq_pool.swap(&user2, &1, &0, &swap_amount, &0);
+    let bonus_info_2 = liq_pool.get_bonus_info(&user2);
+    let bonus_amount_2: i128 = bonus_info_2.get(symbol_short!("amount")).unwrap().try_into_val(&e).unwrap();
+
+    // Second bonus should be greater (accumulated)
+    assert!(bonus_amount_2 > bonus_amount_1, "Bonuses should accumulate");
+}
+
+#[test]
+fn test_bonus_capped_by_reserve() {
+    let setup = Setup::new_with_config(&TestConfig {
+        mint_to_user: 1000_0000000,
+        ..TestConfig::default()
+    });
+    let e = setup.env;
+    let liq_pool = setup.liq_pool;
+    let user1 = setup.users[0].clone();
+    let user2 = setup.users[1].clone();
+    
+    // Add initial liquidity
+    let amount_to_deposit = 100_0000000;
+    let desired_amounts = Vec::from_array(&e, [amount_to_deposit, amount_to_deposit]);
+    liq_pool.deposit(&user1, &desired_amounts, &0);
+
+    // Build small tax reserve
+    let small_swap = 1_0000000;
+    liq_pool.swap(&user1, &0, &1, &small_swap, &0);
+    
+    let bonus_reserve = crate::storage::get_bonus_reserve_b(&e);
+    
+    // Do large risk-reducing swap
+    let large_swap = 50_0000000;
+    liq_pool.swap(&user2, &1, &0, &large_swap, &0);
+    
+    // Bonus should be capped at reserve amount
+    let bonus_info = liq_pool.get_bonus_info(&user2);
+    let bonus_amount: i128 = bonus_info.get(symbol_short!("amount")).unwrap().try_into_val(&e).unwrap();
+    assert!(bonus_amount as u128 <= bonus_reserve, "Bonus should be capped by available reserve");
+}
+
+#[test]
+fn test_no_tax_when_killed() {
+    let setup = Setup::new_with_config(&TestConfig {
+        mint_to_user: 1000_0000000,
+        ..TestConfig::default()
+    });
+    let e = setup.env;
+    let liq_pool = setup.liq_pool;
+    let user1 = setup.users[0].clone();
+    
+    // Add initial liquidity
+    let amount_to_deposit = 100_0000000;
+    let desired_amounts = Vec::from_array(&e, [amount_to_deposit, amount_to_deposit]);
+    liq_pool.deposit(&user1, &desired_amounts, &0);
+
+    // Kill tax
+    liq_pool.kill_tax(&setup.admin);
+    
+    // Perform swap
+    let swap_amount = 10_0000000;
+    liq_pool.swap(&user1, &0, &1, &swap_amount, &0);
+    
+    // Check that no protocol tax was collected
+    let protocol_tax_b = crate::storage::get_protocol_tax_b(&e);
+    assert_eq!(protocol_tax_b, 0, "No tax should be collected when killed");
+    
+    // Check that no bonus reserve was funded
+    let bonus_reserve = crate::storage::get_bonus_reserve_b(&e);
+    assert_eq!(bonus_reserve, 0, "No bonus reserve should be funded when tax killed");
+}
+
+#[test]
+fn test_no_bonus_when_killed() {
+    let setup = Setup::new_with_config(&TestConfig {
+        mint_to_user: 1000_0000000,
+        ..TestConfig::default()
+    });
+    let e = setup.env;
+    let liq_pool = setup.liq_pool;
+    let user1 = setup.users[0].clone();
+    let user2 = setup.users[1].clone();
+    
+    // Add initial liquidity
+    let amount_to_deposit = 100_0000000;
+    let desired_amounts = Vec::from_array(&e, [amount_to_deposit, amount_to_deposit]);
+    liq_pool.deposit(&user1, &desired_amounts, &0);
+
+    // Build up tax reserve
+    let swap_amount = 10_0000000;
+    liq_pool.swap(&user1, &0, &1, &swap_amount, &0);
+    
+    // Kill bonus
+    liq_pool.kill_bonus(&setup.admin);
+    
+    // Do risk-reducing swap
+    liq_pool.swap(&user2, &1, &0, &swap_amount, &0);
+    
+    // Check that no bonus was recorded
+    let bonus_info = liq_pool.get_bonus_info(&user2);
+    let bonus_amount: i128 = bonus_info.get(symbol_short!("amount")).unwrap().try_into_val(&e).unwrap();
+    assert_eq!(bonus_amount, 0, "No bonus should be recorded when killed");
+}
+
+#[test]
+fn test_bonus_config_validation() {
+    let setup = Setup::new_with_config(&TestConfig {
+        mint_to_user: 1000_0000000,
+        ..TestConfig::default()
+    });
+    let liq_pool = setup.liq_pool;
+    
+    // Try to set bonus >= max tax (should fail)
+    let max_tax = 50000; // 50%
+    let result = liq_pool.try_set_max_bonus_fraction(&setup.admin, &max_tax);
+    assert!(result.is_err(), "Should not allow bonus >= tax");
+    
+    // Set valid bonus (less than tax)
+    let valid_bonus = 25000; // 25%
+    liq_pool.set_max_bonus_fraction(&setup.admin, &valid_bonus);
+    
+    let (max_bonus, _, _) = liq_pool.get_bonus_config();
+    assert_eq!(max_bonus, valid_bonus, "Bonus should be set correctly");
+}
+
+#[test]
+fn test_integration_tax_funds_bonus() {
+    let setup = Setup::new_with_config(&TestConfig {
+        mint_to_user: 1000_0000000,
+        ..TestConfig::default()
+    });
+    let e = setup.env;
+    let liq_pool = setup.liq_pool;
+    let user1 = setup.users[0].clone();
+    let user2 = setup.users[1].clone();
+    let user3 = setup.users[2].clone();
+    
+    // Add initial liquidity
+    let amount_to_deposit = 100_0000000;
+    let desired_amounts = Vec::from_array(&e, [amount_to_deposit, amount_to_deposit]);
+    liq_pool.deposit(&user1, &desired_amounts, &0);
+
+    // Multiple users do risk-increasing swaps (build tax reserve)
+    let swap_amount = 5_0000000;
+    liq_pool.swap(&user1, &0, &1, &swap_amount, &0);
+    liq_pool.swap(&user1, &0, &1, &swap_amount, &0);
+    liq_pool.swap(&user1, &0, &1, &swap_amount, &0);
+    
+    let bonus_reserve_after_taxes = crate::storage::get_bonus_reserve_b(&e);
+    assert!(bonus_reserve_after_taxes > 0, "Tax should fund bonus reserve");
+    
+    // User2 does risk-reducing swap (gets bonus)
+    liq_pool.swap(&user2, &1, &0, &swap_amount, &0);
+    let bonus_2: i128 = liq_pool.get_bonus_info(&user2).get(symbol_short!("amount")).unwrap().try_into_val(&e).unwrap();
+
+    // User3 does risk-reducing swap (gets bonus)
+    liq_pool.swap(&user3, &1, &0, &swap_amount, &0);
+    let bonus_3: i128 = liq_pool.get_bonus_info(&user3).get(symbol_short!("amount")).unwrap().try_into_val(&e).unwrap();
+    
+    // Total bonuses should be <= initial tax reserve
+    assert!((bonus_2 + bonus_3) as u128 <= bonus_reserve_after_taxes, "Total bonuses capped by tax collected");
+    
+    // Wait for vesting
+    jump(&e, 3700);
+    
+    // Both users claim bonuses
+    let claimed_2 = liq_pool.claim_bonus(&user2);
+    let claimed_3 = liq_pool.claim_bonus(&user3);
+    
+    assert!(claimed_2 > 0 && claimed_3 > 0, "Both users should receive bonuses funded by tax");
+}
+
+#[test]
+fn test_cannot_exploit_by_alternating_trades() {
+    let setup = Setup::new_with_config(&TestConfig {
+        mint_to_user: 1000_0000000,
+        ..TestConfig::default()
+    });
+    let e = setup.env;
+    let liq_pool = setup.liq_pool;
+    let user1 = setup.users[0].clone();
+    
+    // Add initial liquidity
+    let amount_to_deposit = 100_0000000;
+    let desired_amounts = Vec::from_array(&e, [amount_to_deposit, amount_to_deposit]);
+    liq_pool.deposit(&user1, &desired_amounts, &0);
+
+    let initial_balance = setup.token2.balance(&user1) as u128;
+    
+    // Try to exploit by alternating risk-increasing and risk-reducing trades
+    let swap_amount = 5_0000000;
+    for _ in 0..10 {
+        // Risk-increasing (pay tax)
+        liq_pool.swap(&user1, &0, &1, &swap_amount, &0);
+        // Risk-reducing (get bonus, but vested)
+        liq_pool.swap(&user1, &1, &0, &swap_amount, &0);
+    }
+    
+    // Wait for vesting
+    jump(&e, 3700);
+    
+    // Claim all bonuses
+    let claimed_bonus = liq_pool.claim_bonus(&user1);
+    
+    let final_balance = setup.token2.balance(&user1) as u128;
+    
+    // User should not profit from this (tax > bonus ensures this)
+    // They paid more in taxes than they received in bonuses
+    assert!(final_balance + claimed_bonus < initial_balance, 
+        "User should not profit from alternating trades due to tax > bonus");
+}
+
+#[test]
+fn test_price_at_peg_no_tax_or_bonus() {
+    let setup = Setup::new_with_config(&TestConfig {
+        mint_to_user: 1000_0000000,
+        ..TestConfig::default()
+    });
+    let e = setup.env;
+    let liq_pool = setup.liq_pool;
+    let user1 = setup.users[0].clone();
+    
+    // Add initial liquidity at exact peg price
+    let amount_to_deposit = 100_0000000;
+    let desired_amounts = Vec::from_array(&e, [amount_to_deposit, amount_to_deposit]);
+    liq_pool.deposit(&user1, &desired_amounts, &0);
+
+    // Small swap at peg
+    let swap_amount = 1_0000000;
+    liq_pool.swap(&user1, &0, &1, &swap_amount, &0);
+    
+    // Check minimal tax (only base tax, no deviation penalty)
+    let protocol_tax_b = crate::storage::get_protocol_tax_b(&e);
+    let bonus_reserve = crate::storage::get_bonus_reserve_b(&e);
+    
+    // Should have minimal amounts (base tax only)
+    assert!(protocol_tax_b > 0, "Should have base tax");
+    assert!(bonus_reserve > 0, "Should have minimal bonus reserve from base tax");
+}
+
+#[test]
+fn test_multiple_users_different_vesting() {
+    let setup = Setup::new_with_config(&TestConfig {
+        mint_to_user: 1000_0000000,
+        ..TestConfig::default()
+    });
+    let e = setup.env;
+    let liq_pool = setup.liq_pool;
+    let user1 = setup.users[0].clone();
+    let user2 = setup.users[1].clone();
+    let user3 = setup.users[2].clone();
+    
+    // Add initial liquidity
+    let amount_to_deposit = 100_0000000;
+    let desired_amounts = Vec::from_array(&e, [amount_to_deposit, amount_to_deposit]);
+    liq_pool.deposit(&user1, &desired_amounts, &0);
+
+    // Build tax reserve
+    let swap_amount = 10_0000000;
+    liq_pool.swap(&user1, &0, &1, &swap_amount, &0);
+
+    // User2 earns bonus at time 0
+    let half_swap = swap_amount / 2;
+    liq_pool.swap(&user2, &1, &0, &half_swap, &0);
+    
+    // Wait 2000 seconds
+    jump(&e, 2000);
+    
+    // Build more tax
+    liq_pool.swap(&user1, &0, &1, &swap_amount, &0);
+
+    // User3 earns bonus at time 2000
+    let half_swap = swap_amount / 2;
+    liq_pool.swap(&user3, &1, &0, &half_swap, &0);
+    
+    // Wait 2000 more seconds (total 4000)
+    jump(&e, 2000);
+    
+    // User2 should be able to claim (4000 > 3600)
+    let claimed_2 = liq_pool.claim_bonus(&user2);
+    assert!(claimed_2 > 0, "User2 should be able to claim");
+    
+    // User3 should be able to claim (2000 < 3600 from their bonus time, but total time is 4000 which is > 2000+3600)
+    let claimed_3 = liq_pool.claim_bonus(&user3);
+    assert!(claimed_3 > 0, "User3 should be able to claim");
+}

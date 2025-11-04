@@ -508,23 +508,23 @@ impl ElasticPoolTrait for ElasticPool {
         }
 
         // Fetch prices
-        // let pool_price = crate::pool::pool_price(&e, reserve_a, reserve_b);
+        let pool_price = crate::pool::pool_price(&e, reserve_a, reserve_b);
 
-        // let base_oracle_price_data =
-        //     crate::oracle::get_oracle_price_with_validity(&e, &get_base_asset(&e), current_time);
-        // let quote_oracle_price_data =
-        //     crate::oracle::get_oracle_price_with_validity(&e, &get_quote_asset(&e), current_time);
+        let base_oracle_price_data =
+            crate::oracle::get_oracle_price_with_validity(&e, &get_base_asset(&e), current_time);
+        let quote_oracle_price_data =
+            crate::oracle::get_oracle_price_with_validity(&e, &get_quote_asset(&e), current_time);
 
-        // let peg_price = crate::pool::peg_price(
-        //     &e,
-        //     base_oracle_price_data.last_price_twap,
-        //     quote_oracle_price_data.last_price_twap,
-        // );
+        let peg_price = crate::pool::peg_price(
+            &e,
+            base_oracle_price_data.last_price_twap,
+            quote_oracle_price_data.last_price_twap,
+        );
 
-        // let price_deviation = crate::pool::calculate_price_deviation(&e, pool_price, peg_price);
-        // let risk_reducing = crate::pool::is_swap_risk_reducing(&e, price_deviation, in_idx);
+        let price_deviation = crate::pool::calculate_price_deviation(&e, pool_price, peg_price);
+        let risk_reducing = crate::pool::is_swap_risk_reducing(&e, price_deviation, in_idx);
 
-        let (out, total_fee) = get_amount_out(&e, in_amount, reserve_sell, reserve_buy, false); // FIXME: replace with risk_reducing
+        let (out, total_fee) = get_amount_out(&e, in_amount, reserve_sell, reserve_buy, risk_reducing);
         let protocol_fee = (total_fee * (get_protocol_fee_fraction(&e) as u128)) / FEE_MULTIPLIER;
         let lp_fee = total_fee - protocol_fee;
 
@@ -532,22 +532,31 @@ impl ElasticPoolTrait for ElasticPool {
             panic_with_error!(&e, PoolValidationError::OutMinNotSatisfied);
         }
 
-        // Collect tax
-        // let mut tax_amount = 0_u128;
+        // Collect tax and record bonus
+        let mut tax_amount = 0_u128;
 
-        // if !get_is_killed_tax(&e) {
-        //     tax_amount = crate::tax::calculate_tax_amount(&e, in_amount, pool_price, peg_price);
+        if !risk_reducing && !get_is_killed_tax(&e) {
+            // Tax is applied to risk-increasing trades (moving price away from peg)
+            tax_amount = crate::tax::calculate_tax_amount(&e, in_amount, pool_price, peg_price);
 
-        //     if tax_amount > 0 {
-        //         let protocol_tax_b = get_protocol_tax_b(&e);
-        //         set_protocol_tax_b(&e, &protocol_tax_b.safe_add(&e, tax_amount));
-        //     }
-        // }
+            if tax_amount > 0 {
+                // Split tax between protocol and bonus reserve
+                let protocol_fee_fraction = get_protocol_fee_fraction(&e) as u128;
+                let protocol_share = tax_amount.fixed_mul_floor(&e, &protocol_fee_fraction, &FEE_MULTIPLIER);
+                let bonus_reserve_share = tax_amount.safe_sub(&e, protocol_share);
 
-        // TODO: Record bonus
-        // if risk_reducing && !get_is_killed_bonus(&e) {
-        //     crate::bonus::record_bonus(&e, &user, pool_price, peg_price, in_amount, current_time);
-        // }
+                // Add protocol share to protocol tax
+                let protocol_tax_b = get_protocol_tax_b(&e);
+                set_protocol_tax_b(&e, &protocol_tax_b.safe_add(&e, protocol_share));
+
+                // Add remainder to bonus reserve
+                let bonus_reserve = crate::storage::get_bonus_reserve_b(&e);
+                crate::storage::set_bonus_reserve_b(&e, &bonus_reserve.safe_add(&e, bonus_reserve_share));
+            }
+        } else if risk_reducing && !get_is_killed_bonus(&e) {
+            // Bonus is recorded for risk-reducing trades (moving price toward peg)
+            crate::bonus::record_bonus(&e, &user, pool_price, peg_price, in_amount, current_time);
+        }
 
         // Transfer the amount being sold to the contract
         let sell_token = tokens.get(in_idx).unwrap();
@@ -606,7 +615,7 @@ impl ElasticPoolTrait for ElasticPool {
         } else {
             transfer_b(&e, &user, out_b);
             new_reserve_a = new_reserve_a - protocol_fee;
-            new_reserve_b = new_reserve_b - out_b; // - tax_amount
+            new_reserve_b = new_reserve_b - out_b;
             set_protocol_fee_a(&e, &(get_protocol_fee_a(&e) + protocol_fee));
         }
         set_reserve_a(&e, &new_reserve_a);
@@ -615,13 +624,6 @@ impl ElasticPoolTrait for ElasticPool {
         // update plane data for every pool update
         update_plane(&e);
 
-        // TODO: Handle bonus
-        // let updated_pool_price = crate::pool::pool_price(&e, new_reserve_a, new_reserve_b);
-        // let price_deviation_post = crate::pool::calculate_price_deviation(&e, updated_pool_price, peg_price);
-
-        // let deviation_delta = price_deviation_before_swap.safe_sub(&e, price_deviation_post).max(0);
-        // let bonus_amount = crate::bonus::calculate_bonus_amount(&e, bonus_reserve, bonus_rate, trade_amount)
-
         PoolEvents::new(&e).trade(
             user,
             sell_token,
@@ -629,55 +631,85 @@ impl ElasticPoolTrait for ElasticPool {
             in_amount,
             out,
             lp_fee,
-            0, // tax_amount
+            tax_amount,
         );
         PoolEvents::new(&e).update_reserves(Vec::from_array(&e, [new_reserve_a, new_reserve_b]));
 
         out
     }
 
-    // fn claim_bonus(e: Env, user: Address) {
-    //     user.require_auth();
+    // Claims the vested bonus for the user.
+    //
+    // # Arguments
+    //
+    // * `user` - The address of the user claiming the bonus.
+    //
+    // # Returns
+    //
+    // The amount of bonus tokens transferred to the user.
+    fn claim_bonus(e: Env, user: Address) -> u128 {
+        user.require_auth();
 
-    //     let current_time = e.ledger().timestamp();
-    //     let mut bonus = get_bonus(&e, &user);
+        if get_is_killed_claim(&e) {
+            panic_with_error!(e, LiquidityPoolError::PoolClaimKilled);
+        }
 
-    //     if current_time < bonus.valid_after {
-    //         panic_with_error!(&e, LiquidityPoolError::BonusClaimTooEarly);
-    //     }
+        let current_time = e.ledger().timestamp();
+        let bonus_escrow = crate::storage::get_bonus_escrow(&e, &user);
 
-    //     let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
+        // Check if there's a bonus to claim
+        if bonus_escrow.amount == 0 {
+            panic_with_error!(&e, LiquidityPoolError::NoBonusToClaim);
+        }
 
-    //     let pool_price = crate::pool::pool_price(&e, reserve_a, reserve_b);
+        // Check if vesting period has elapsed
+        if current_time < bonus_escrow.valid_after {
+            panic_with_error!(&e, LiquidityPoolError::BonusClaimTooEarly);
+        }
 
-    //     let base_oracle_price_data =
-    //         crate::oracle::get_oracle_price_with_validity(&e, &get_base_asset(&e), current_time);
-    //     let quote_oracle_price_data =
-    //         crate::oracle::get_oracle_price_with_validity(&e, &get_quote_asset(&e), current_time);
+        let bonus_amount = bonus_escrow.amount;
 
-    //     let peg_price = crate::pool::peg_price(
-    //         &e,
-    //         base_oracle_price_data.last_price_twap,
-    //         quote_oracle_price_data.last_price_twap,
-    //     );
+        // Transfer bonus to user (bonus is in token_b)
+        SorobanTokenClient::new(&e, &get_token_b(&e)).transfer(
+            &e.current_contract_address(),
+            &user,
+            &(bonus_amount as i128),
+        );
 
-    //     let deviation = crate::pool::calculate_price_spread_pct(&e, pool_price, peg_price);
+        // Clear user's bonus escrow
+        crate::storage::delete_bonus_escrow(&e, &user);
 
-    //     // If price deviation has improved since escrow creation, fulfill the claim
-    //     if deviation < bonus.pre_dev {
-    //         let amount = bonus.amount;
-    //         bonus.claim(current_time);
-    //         bonus.save(&e);
+        // Emit event
+        PoolEvents::new(&e).claim_bonus(user.clone(), user, bonus_amount);
 
-    //         SorobanTokenClient::new(&e, &get_token_b(&e)).transfer(
-    //             &e.current_contract_address(),
-    //             &user,
-    //             &(amount as i128),
-    //         );
+        bonus_amount
+    }
 
-    //         PoolEvents::new(&e).claim_bonus(user, user, amount);
-    //     }
-    // }
+    // Returns bonus information for the user.
+    //
+    // # Arguments
+    //
+    // * `user` - The address of the user.
+    //
+    // # Returns
+    //
+    // A map of bonus information including amount, vesting status, etc.
+    fn get_bonus_info(e: Env, user: Address) -> Map<Symbol, Val> {
+        let bonus_escrow = crate::storage::get_bonus_escrow(&e, &user);
+        let current_time = e.ledger().timestamp();
+
+        let mut result = Map::new(&e);
+        result.set(symbol_short!("amount"), (bonus_escrow.amount as i128).into_val(&e));
+        result.set(symbol_short!("upd_at"), (bonus_escrow.updated_at as i128).into_val(&e));
+        result.set(symbol_short!("valid_at"), (bonus_escrow.valid_after as i128).into_val(&e));
+        result.set(symbol_short!("now"), (current_time as i128).into_val(&e));
+        result.set(
+            symbol_short!("claimable"),
+            (current_time >= bonus_escrow.valid_after && bonus_escrow.amount > 0).into_val(&e),
+        );
+
+        result
+    }
 
     // Estimates the result of a swap operation.
     //
@@ -769,45 +801,54 @@ impl ElasticPoolTrait for ElasticPool {
         }
 
         // Fetch prices
-        // let pool_price = crate::pool::pool_price(&e, reserve_a, reserve_b);
+        let pool_price = crate::pool::pool_price(&e, reserve_a, reserve_b);
 
-        // let base_oracle_price_data =
-        //     crate::oracle::get_oracle_price_with_validity(&e, &get_base_asset(&e), current_time);
-        // let quote_oracle_price_data =
-        //     crate::oracle::get_oracle_price_with_validity(&e, &get_quote_asset(&e), current_time);
+        let base_oracle_price_data =
+            crate::oracle::get_oracle_price_with_validity(&e, &get_base_asset(&e), current_time);
+        let quote_oracle_price_data =
+            crate::oracle::get_oracle_price_with_validity(&e, &get_quote_asset(&e), current_time);
 
-        // let peg_price = crate::pool::peg_price(
-        //     &e,
-        //     base_oracle_price_data.last_price_twap,
-        //     quote_oracle_price_data.last_price_twap,
-        // );
+        let peg_price = crate::pool::peg_price(
+            &e,
+            base_oracle_price_data.last_price_twap,
+            quote_oracle_price_data.last_price_twap,
+        );
 
-        // let price_deviation_pre = crate::pool::calculate_price_deviation(&e, pool_price, peg_price);
-        // let risk_reducing = crate::pool::is_swap_risk_reducing(&e, price_deviation_pre, in_idx);
+        let price_deviation = crate::pool::calculate_price_deviation(&e, pool_price, peg_price);
+        let risk_reducing = crate::pool::is_swap_risk_reducing(&e, price_deviation, in_idx);
 
         let (in_amount, total_fee) =
-            get_amount_out_strict_receive(&e, out_amount, reserve_sell, reserve_buy, false); // risk_reducing
+            get_amount_out_strict_receive(&e, out_amount, reserve_sell, reserve_buy, risk_reducing);
 
         if in_amount > in_max {
             panic_with_error!(&e, PoolValidationError::InMaxNotSatisfied);
         }
 
-        // Collect tax
-        // let mut tax_amount = 0_u128;
+        // Collect tax and record bonus
+        let mut tax_amount = 0_u128;
 
-        // if !get_is_killed_tax(&e) {
-        //     tax_amount = crate::tax::calculate_tax_amount(&e, in_amount, pool_price, peg_price);
+        if !risk_reducing && !get_is_killed_tax(&e) {
+            // Tax is applied to risk-increasing trades (moving price away from peg)
+            tax_amount = crate::tax::calculate_tax_amount(&e, in_amount, pool_price, peg_price);
 
-        //     if tax_amount > 0 {
-        //         let protocol_tax_b = get_protocol_tax_b(&e);
-        //         set_protocol_tax_b(&e, &protocol_tax_b.safe_add(&e, tax_amount));
-        //     }
-        // }
+            if tax_amount > 0 {
+                // Split tax between protocol and bonus reserve
+                let protocol_fee_fraction = get_protocol_fee_fraction(&e) as u128;
+                let protocol_share = tax_amount.fixed_mul_floor(&e, &protocol_fee_fraction, &FEE_MULTIPLIER);
+                let bonus_reserve_share = tax_amount.safe_sub(&e, protocol_share);
 
-        // Record bonus
-        // if risk_reducing && !get_is_killed_bonus(&e) {
-        //     crate::bonus::record_bonus(&e, &user, pool_price, peg_price, in_amount, current_time);
-        // }
+                // Add protocol share to protocol tax
+                let protocol_tax_b = get_protocol_tax_b(&e);
+                set_protocol_tax_b(&e, &protocol_tax_b.safe_add(&e, protocol_share));
+
+                // Add remainder to bonus reserve
+                let bonus_reserve = crate::storage::get_bonus_reserve_b(&e);
+                crate::storage::set_bonus_reserve_b(&e, &bonus_reserve.safe_add(&e, bonus_reserve_share));
+            }
+        } else if risk_reducing && !get_is_killed_bonus(&e) {
+            // Bonus is recorded for risk-reducing trades (moving price toward peg)
+            crate::bonus::record_bonus(&e, &user, pool_price, peg_price, in_amount, current_time);
+        }
 
         // Transfer the amount being sold to the contract
         let sell_token = tokens.get(in_idx).unwrap();
@@ -824,7 +865,8 @@ impl ElasticPoolTrait for ElasticPool {
         if in_idx == 0 {
             set_reserve_a(&e, &(reserve_a + in_amount));
         } else {
-            set_reserve_b(&e, &(reserve_b + in_amount)); // - tax_amount
+            // Deduct tax from what goes into reserves
+            set_reserve_b(&e, &(reserve_b + in_amount - tax_amount));
         }
 
         let (mut new_reserve_a, mut new_reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
@@ -882,7 +924,7 @@ impl ElasticPoolTrait for ElasticPool {
         } else {
             transfer_b(&e, &user, out_amount);
             new_reserve_a = new_reserve_a - protocol_fee;
-            new_reserve_b = new_reserve_b - out_amount; // - tax_amount
+            new_reserve_b = new_reserve_b - out_amount;
             set_protocol_fee_a(&e, &(get_protocol_fee_a(&e) + protocol_fee));
         }
         set_reserve_a(&e, &new_reserve_a);
@@ -898,7 +940,7 @@ impl ElasticPoolTrait for ElasticPool {
             in_amount,
             out_amount,
             lp_fee,
-            0, // tax_amount
+            tax_amount,
         );
         PoolEvents::new(&e).update_reserves(Vec::from_array(&e, [new_reserve_a, new_reserve_b]));
 
@@ -1411,6 +1453,39 @@ impl AdminInterfaceTrait for ElasticPool {
         }
 
         tax_b
+    }
+
+    // Bonus configuration
+    fn set_bonus_vesting_period(e: Env, admin: Address, vesting_period: u64) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+
+        crate::storage::set_bonus_vesting_period(&e, &vesting_period);
+    }
+
+    fn set_max_bonus_fraction(e: Env, admin: Address, max_bonus_fraction: u32) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+
+        // Validate that bonus is less than max tax to prevent exploitation
+        let max_tax = crate::storage::get_max_tax_fraction(&e);
+        if max_bonus_fraction >= max_tax {
+            panic_with_error!(e, PoolValidationError::FeeOutOfBounds);
+        }
+
+        crate::storage::set_max_bonus_fraction(&e, &max_bonus_fraction);
+    }
+
+    fn get_bonus_config(e: Env) -> (u32, u64, u128) {
+        (
+            crate::storage::get_max_bonus_fraction(&e),
+            crate::storage::get_bonus_vesting_period(&e),
+            crate::storage::get_bonus_reserve_b(&e),
+        )
+    }
+
+    fn get_bonus_reserve(e: Env) -> u128 {
+        crate::storage::get_bonus_reserve_b(&e)
     }
 }
 

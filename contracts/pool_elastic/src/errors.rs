@@ -18,5 +18,7 @@ pub enum LiquidityPoolError {
     SinkDepositFailure = 209,
     SinkWithdrawFailure = 210,
     InvalidTokenADelta = 211,
-    // BonusClaimTooEarly = 212,
+    BonusClaimTooEarly = 212,
+    InsufficientBonusReserve = 213,
+    NoBonusToClaim = 214,
 }

@@ -45,9 +45,10 @@ pub enum DataKey {
     ProtocolTaxB,
 
     // Bonus
-    // MaxBonusFraction,
-    // BonusEscrow(Address),
-    // BonusReserveB,
+    MaxBonusFraction,
+    BonusVestingPeriod,
+    BonusEscrow(Address),
+    BonusReserveB,
 
     // Paused Ops
     IsKilledSwap,
@@ -166,6 +167,26 @@ generate_instance_storage_getter_and_setter_with_default!(
     0
 );
 
+// Bonus
+generate_instance_storage_getter_and_setter_with_default!(
+    max_bonus_fraction,
+    DataKey::MaxBonusFraction,
+    u32,
+    25000 // 25% (half of max tax)
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    bonus_vesting_period,
+    DataKey::BonusVestingPeriod,
+    u64,
+    3600 // 1 hour in seconds
+);
+generate_instance_storage_getter_and_setter_with_default!(
+    bonus_reserve_b,
+    DataKey::BonusReserveB,
+    u128,
+    0
+);
+
 // Addresses
 generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
 generate_instance_storage_getter_and_setter!(plane, DataKey::Plane, Address);
@@ -233,4 +254,46 @@ pub(crate) fn put_historical_oracle_data(
     let key = DataKey::HistoricalOracleData(asset.clone());
     e.storage().persistent().set(&key, oracle_data);
     bump_persistent(e, &key);
+}
+
+// Bonus Escrow
+
+#[derive(Clone)]
+#[contracttype]
+pub struct BonusEscrow {
+    pub amount: u128,        // bonus amount in token units
+    pub updated_at: u64,     // ledger timestamp when recorded
+    pub valid_after: u64,    // timestamp when bonus becomes claimable
+}
+
+impl BonusEscrow {
+    pub fn new() -> Self {
+        BonusEscrow {
+            amount: 0,
+            updated_at: 0,
+            valid_after: 0,
+        }
+    }
+}
+
+pub(crate) fn get_bonus_escrow(e: &Env, user: &Address) -> BonusEscrow {
+    let key = DataKey::BonusEscrow(user.clone());
+    match e.storage().persistent().get(&key) {
+        Some(value) => {
+            bump_persistent(e, &key);
+            value
+        }
+        None => BonusEscrow::new(),
+    }
+}
+
+pub(crate) fn put_bonus_escrow(e: &Env, user: &Address, bonus_escrow: &BonusEscrow) {
+    let key = DataKey::BonusEscrow(user.clone());
+    e.storage().persistent().set(&key, bonus_escrow);
+    bump_persistent(e, &key);
+}
+
+pub(crate) fn delete_bonus_escrow(e: &Env, user: &Address) {
+    let key = DataKey::BonusEscrow(user.clone());
+    e.storage().persistent().remove(&key);
 }
