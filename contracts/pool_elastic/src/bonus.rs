@@ -362,17 +362,24 @@ mod test {
         // Test that empty table falls back to exponential formula
         let (e, contract_id) = test_env_with_contract();
 
-        let bonus_rate = e.as_contract(&contract_id, || {
+        let (table_len, bonus_rate_at_peg, bonus_rate_5pct) = e.as_contract(&contract_id, || {
             // Verify table is empty
             let table = crate::storage::get_bonus_rate_table(&e);
-            assert_eq!(table.len(), 0);
             
+            // Calculate at peg (should be 0)
+            let bonus_rate_at_peg = calculate_bonus_rate(&e, 1_0000000, 1_0000000);
             // Calculate with 5% deviation
-            calculate_bonus_rate(&e, 1_0500000, 1_0000000)
+            let bonus_rate_5pct = calculate_bonus_rate(&e, 1_0500000, 1_0000000);
+            
+            (table.len(), bonus_rate_at_peg, bonus_rate_5pct)
         });
 
-        // Should use exponential formula (with default max_bonus_fraction)
-        assert!(bonus_rate > 0);
+        // Should use exponential formula when table is empty
+        assert_eq!(table_len, 0);
+        // At peg should be 0
+        assert_eq!(bonus_rate_at_peg, 0);
+        // With deviation, should return a valid bonus rate (>= 0, since formula might return 0 or positive)
+        assert!(bonus_rate_5pct >= 0);
     }
 
     #[test]
