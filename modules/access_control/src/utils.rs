@@ -3,12 +3,6 @@ use crate::errors::AccessControlError;
 use crate::role::Role;
 use soroban_sdk::{panic_with_error, Address, Env};
 
-pub fn require_admin(e: &Env, address: &Address) {
-    let access_control = AccessControl::new(e);
-    let _ = access_control.address_has_role(address, &Role::Admin)
-        || panic_with_error!(e, AccessControlError::Unauthorized);
-}
-
 pub fn require_rewards_admin_or_owner(e: &Env, address: &Address) {
     let access_control = AccessControl::new(e);
     let _ = access_control.address_has_role(address, &Role::Admin)
@@ -19,6 +13,13 @@ pub fn require_rewards_admin_or_owner(e: &Env, address: &Address) {
 pub fn require_operations_admin_or_owner(e: &Env, address: &Address) {
     let access_control = AccessControl::new(e);
     let _ = access_control.address_has_role(address, &Role::OperationsAdmin)
+        || access_control.address_has_role(address, &Role::Admin)
+        || panic_with_error!(e, AccessControlError::Unauthorized);
+}
+
+pub fn require_system_fee_admin_or_owner(e: &Env, address: &Address) {
+    let access_control = AccessControl::new(e);
+    let _ = access_control.address_has_role(address, &Role::SystemFeeAdmin)
         || access_control.address_has_role(address, &Role::Admin)
         || panic_with_error!(e, AccessControlError::Unauthorized);
 }

@@ -1,0 +1,37 @@
+[package]
+name = "pool-elastic"
+version.workspace = true
+edition = "2021"
+publish = false
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true }
+rewards = { workspace = true }
+token_share = { workspace = true }
+token_synthetic = { workspace = true }
+access_control = { workspace = true }
+utils = { workspace = true }
+pool-validation-errors = { workspace = true }
+pool-events = { workspace = true }
+pool-rewards-gauge = { workspace = true }
+pool-config-storage = { workspace = true }
+soroban-fixed-point-math = { workspace = true }
+paste = { workspace = true }
+upgrade = { workspace = true }
+sep-40-oracle = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+utils = { workspace = true, features = ["testutils"] }
+pool-config-storage = { workspace = true, features = ["testutils"] }
+sep-40-oracle = { workspace = true, features = ["testutils"] }
+
+[features]
+default = []
+slow_tests = []
+dust_attack = []

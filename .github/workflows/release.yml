@@ -10,23 +10,33 @@ permissions: # required permissions for the workflow
   attestations: write
 
 jobs:
-  # Insurance Fund contract
-  release-contract-insurance-fund:
+  # Config Storage contract
+  release-contract-config-storage:
     uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
     with:
       release_name: ${{ github.ref_name }}
       release_description: "Contract release"
-      relative_path: "contracts/insurance_fund"
+      relative_path: "contracts/config_storage"
     secrets:
       release_token: ${{ secrets.GITHUB_TOKEN }}
 
-  # Oracle Registry contract
-  release-contract-oracle-registry:
+  # Rewards Gauge contract
+  release-contract-rewards-gauge:
     uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
     with:
       release_name: ${{ github.ref_name }}
       release_description: "Contract release"
-      relative_path: "contracts/oracle_registry"
+      relative_path: "contracts/rewards_gauge"
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
+
+  # Token Share contract
+  release-contract-lp-token:
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
+    with:
+      release_name: ${{ github.ref_name }}
+      release_description: "Contract release"
+      relative_path: "contracts/token_share"
     secrets:
       release_token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -37,49 +47,5 @@ jobs:
       release_name: ${{ github.ref_name }}
       release_description: "Contract release"
       relative_path: "contracts/pool_plane"
-    secrets:
-      release_token: ${{ secrets.GITHUB_TOKEN }}
-
-  # Liquidity Calculator contract
-  release-contract-liquidity_calculator:
-    uses: normalfinance/soroban-build-workflow/.github/workflows/release.yml@feat/contract-dependency
-    with:
-      release_name: ${{ github.ref_name }}
-      release_description: "Contract release"
-      relative_path: "contracts/liquidity_calculator"
-      required_package: "pool_plane"
-    secrets:
-      release_token: ${{ secrets.GITHUB_TOKEN }}
-
-  # LP Token contract
-  release-contract-lp-token:
-    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
-    with:
-      release_name: ${{ github.ref_name }}
-      release_description: "Contract release"
-      relative_path: "contracts/lp_token"
-    secrets:
-      release_token: ${{ secrets.GITHUB_TOKEN }}
-
-  # Pool Router contract
-  release-contract-pool-router:
-    uses: normalfinance/soroban-build-workflow/.github/workflows/release.yml@feat/contract-dependency
-    with:
-      release_name: ${{ github.ref_name }}
-      release_description: "Contract release"
-      relative_path: "contracts/pool_router"
-      required_package_b: "pool_plane"
-      required_package: "liquidity_calculator"
-    secrets:
-      release_token: ${{ secrets.GITHUB_TOKEN }}
-
-  # Pool Swap Fee contract
-  release-contract-pool-swap-fee:
-    uses: normalfinance/soroban-build-workflow/.github/workflows/release.yml@feat/contract-dependency
-    with:
-      release_name: ${{ github.ref_name }}
-      release_description: "Contract release"
-      relative_path: "contracts/pool_swap_fee"
-      required_package: "lp_token"
     secrets:
       release_token: ${{ secrets.GITHUB_TOKEN }}

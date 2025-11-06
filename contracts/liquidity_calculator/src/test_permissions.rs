@@ -1,10 +1,9 @@
 #![cfg(test)]
 
-use crate::testutils::{create_contract, Setup};
+use crate::testutils::{create_contract, install_dummy_wasm, jump, Setup};
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{symbol_short, Address, Env, Symbol};
-use utils::test_utils::{install_dummy_wasm, jump};
 
 // test admin transfer ownership
 #[test]
@@ -365,7 +364,7 @@ fn test_set_emergency_mode_third_party_user() {
 }
 
 #[test]
-fn test_set_emergency_mode_emergency_admin() {
+fn test_set_emergency_mode_admin() {
     let setup = Setup::default();
     let calculator = setup.calculator;
     assert!(calculator
@@ -374,7 +373,7 @@ fn test_set_emergency_mode_emergency_admin() {
 }
 
 #[test]
-fn test_set_emergency_mode_admin() {
+fn test_set_emergency_mode_emergency_admin() {
     let setup = Setup::default();
     let calculator = setup.calculator;
     assert!(calculator

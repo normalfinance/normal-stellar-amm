@@ -21,7 +21,12 @@ impl Delay {
         Self::from_timestamp_diff_with_tolerance(now, past_timestamp, 60, msg)
     }
 
-    pub fn from_timestamp_diff_with_tolerance(now: u64, past_timestamp: u64, tolerance_seconds: u64, msg: &str) -> Self {
+    pub fn from_timestamp_diff_with_tolerance(
+        now: u64,
+        past_timestamp: u64,
+        tolerance_seconds: u64,
+        msg: &str,
+    ) -> Self {
         if past_timestamp <= now {
             // Normal case: past timestamp is in the past
             Self(now - past_timestamp)

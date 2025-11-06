@@ -1,9 +1,10 @@
-use soroban_sdk::{Address, BytesN, Env, Vec};
+use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Vec};
 
 pub trait AdminInterface {
     // Initialize admin user. Will panic if called twice
     fn init_admin(e: Env, account: Address);
 
+    // Set privileged addresses
     fn set_privileged_addrs(
         e: Env,
         admin: Address,
@@ -11,27 +12,27 @@ pub trait AdminInterface {
         operations_admin: Address,
         pause_admin: Address,
         emergency_pause_admins: Vec<Address>,
+        system_fee_admin: Address,
     );
 
-    fn set_insurance_fund(e: Env, admin: Address, insurance_fund: Address);
+    // Get map of privileged roles
+    fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>>;
 
-    fn set_liquidity_calculator(e: Env, admin: Address, calculator: Address);
+    // Set liquidity pool token wasm hash
+    fn set_token_hash(e: Env, admin: Address, new_hash: BytesN<32>);
 
-    fn set_oracle_registry(e: Env, admin: Address, oracle_registry: Address);
-
-    fn set_lp_token_hash(e: Env, admin: Address, new_hash: BytesN<32>);
-
+    // Set standard pool wasm hash
     fn set_pool_hash(e: Env, admin: Address, new_hash: BytesN<32>);
 
+    // Set elastic pool wasm hash
+    fn set_elastic_pool_hash(e: Env, admin: Address, new_hash: BytesN<32>);
+
+    // Set rewards gauge wasm hash
+    fn set_rewards_gauge_hash(e: Env, admin: Address, new_hash: BytesN<32>);
+
+    // Set reward token address
     fn set_reward_token(e: Env, admin: Address, reward_token: Address);
 
-    //   _______    _______  ___________  ___________  _______   _______    ________
-    //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
-    // (: ( \___) (: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
-    //  \/ \       \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
-    //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
-    // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
-    //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
-
-    fn get_insurance_fund(e: Env) -> Address;
+    // Sets the protocol fraction of total fee for the pool.
+    fn set_protocol_fee_fraction(e: Env, admin: Address, new_fraction: u32);
 }

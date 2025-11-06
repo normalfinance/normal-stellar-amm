@@ -36,17 +36,19 @@ impl PlaneInterface for PoolPlane {
     // # Arguments
     //
     // * `pool` - The address of the pool.
+    // * `pool_type` - The type of the pool.
     // * `init_args` - The initialization arguments for the pool.
     // * `reserves` - The reserves of the pool.
-    fn update(e: Env, pool: Address, init_args: Vec<u128>, reserves: Vec<u128>) {
+    fn update(e: Env, pool: Address, pool_type: Symbol, init_args: Vec<u128>, reserves: Vec<u128>) {
         pool.require_auth();
         update(
             &e,
             pool,
-            &(PoolPlaneType {
+            &PoolPlaneType {
+                pool_type,
                 init_args,
                 reserves,
-            }),
+            },
         );
     }
 
@@ -59,12 +61,12 @@ impl PlaneInterface for PoolPlane {
     // # Returns
     //
     // * A vector of tuples, each containing the type of the pool, the initialization arguments, and the reserves of the pool.
-    fn get(e: Env, pools: Vec<Address>) -> Vec<(Vec<u128>, Vec<u128>)> {
+    fn get(e: Env, pools: Vec<Address>) -> Vec<(Symbol, Vec<u128>, Vec<u128>)> {
         let mut result = Vec::new(&e);
         for i in 0..pools.len() {
             let pool = pools.get(i).unwrap();
             let data = get(&e, pool);
-            result.push_back((data.init_args, data.reserves));
+            result.push_back((data.pool_type, data.init_args, data.reserves));
         }
         result
     }
@@ -80,6 +82,11 @@ impl UpgradeableContract for PoolPlane {
     // The version of the contract as a u32.
     fn version() -> u32 {
         100
+    }
+
+    // Get contract type symbolic name
+    fn contract_name(e: Env) -> Symbol {
+        Symbol::new(&e, "PoolPlane")
     }
 
     // Commits a new wasm hash for a future upgrade.

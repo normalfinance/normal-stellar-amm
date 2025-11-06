@@ -1,5 +1,4 @@
-use soroban_sdk::{Address, Env, Symbol, Val, Vec};
-use utils::state::pool::SwapDirection;
+use soroban_sdk::{Address, BytesN, Env, Symbol, Val, Vec};
 
 #[derive(Clone)]
 pub(crate) struct Events(Env);
@@ -17,151 +16,181 @@ impl Events {
 }
 
 pub(crate) trait PoolRouterEvents {
-    fn deposit_liquidity(
+    fn rebase(&self);
+
+    fn deposit(
         &self,
-        asset: Symbol,
-        pool: Address,
+        tokens: Vec<Address>,
         user: Address,
-        amount: u128,
+        pool_id: Address,
+        amounts: Vec<u128>,
         share_amount: u128,
-        delta_a: i128,
     );
 
     fn swap(
         &self,
-        asset: Symbol,
-        pool: Address,
+        tokens: Vec<Address>,
         user: Address,
-        direction: SwapDirection,
+        pool_id: Address,
+        token_in: Address,
+        token_out: Address,
         in_amount: u128,
-        out_amount: u128,
-        delta_a_pre: i128,
-        delta_a_post: i128,
+        out_amt: u128,
     );
 
-    fn withdraw_liquidity(
+    fn withdraw(
         &self,
-        asset: Symbol,
-        pool: Address,
+        tokens: Vec<Address>,
         user: Address,
+        pool_id: Address,
+        amounts: Vec<u128>,
         share_amount: u128,
-        amount: u128,
-        delta_a: i128,
     );
 
-    fn add_pool(&self, asset: Symbol, token_b: Address, pool: Address, init_args: Vec<Val>);
+    fn add_pool(
+        &self,
+        tokens: Vec<Address>,
+        pool_address: Address,
+        pool_type: Symbol,
+        subpool_salt: BytesN<32>,
+        init_args: Vec<Val>,
+    );
 
-    fn delist_pool(&self, asset: Symbol, pool: Address);
-
-    fn remove_pool(&self, asset: Symbol, pool: Address);
-
-    fn config_rewards(&self, asset: Symbol, pool: Address, pool_tps: u128, expired_at: u64);
+    fn config_rewards(
+        &self,
+        tokens: Vec<Address>,
+        pool_address: Address,
+        pool_tps: u128,
+        expired_at: u64,
+    );
 
     fn claim(
         &self,
-        asset: Symbol,
-        pool: Address,
+        tokens: Vec<Address>,
         user: Address,
+        pool_address: Address,
         reward_token: Address,
         reward_amount: u128,
     );
+
+    fn set_protocol_fee_fraction(&self, fraction: u32);
+
+    fn pool_gauge_switch_token(&self, token: Address, enabled: bool);
 }
 
 impl PoolRouterEvents for Events {
-    fn deposit_liquidity(
+    fn rebase(&self) {
+        self.env()
+            .events()
+            .publish((Symbol::new(self.env(), "rebase"),), ());
+    }
+
+    fn deposit(
         &self,
-        asset: Symbol,
-        pool: Address,
+        tokens: Vec<Address>,
         user: Address,
-        amount: u128,
+        pool_id: Address,
+        amounts: Vec<u128>,
         share_amount: u128,
-        delta_a: i128,
     ) {
         self.env().events().publish(
-            (
-                Symbol::new(self.env(), "deposit_liquidity"),
-                asset,
-                pool,
-                user,
-            ),
-            (amount, share_amount, delta_a),
+            (Symbol::new(self.env(), "deposit"), tokens, user),
+            (pool_id, amounts.clone(), share_amount),
         );
     }
 
     fn swap(
         &self,
-        asset: Symbol,
-        pool: Address,
+        tokens: Vec<Address>,
         user: Address,
-        direction: SwapDirection,
+        pool_id: Address,
+        token_in: Address,
+        token_out: Address,
         in_amount: u128,
-        out_amount: u128,
-        delta_a_pre: i128,
-        delta_a_post: i128,
+        out_amt: u128,
     ) {
         self.env().events().publish(
-            (Symbol::new(self.env(), "swap"), asset, pool, user),
-            (direction, in_amount, out_amount, delta_a_pre, delta_a_post),
+            (Symbol::new(self.env(), "swap"), tokens, user),
+            (pool_id, token_in, token_out, in_amount, out_amt),
         );
     }
 
-    fn withdraw_liquidity(
+    fn withdraw(
         &self,
-        asset: Symbol,
-        pool: Address,
+        tokens: Vec<Address>,
         user: Address,
+        pool_id: Address,
+        amounts: Vec<u128>,
         share_amount: u128,
-        amount: u128,
-        delta_a: i128,
     ) {
         self.env().events().publish(
-            (
-                Symbol::new(self.env(), "withdraw_liquidity"),
-                asset,
-                pool,
-                user,
-            ),
-            (share_amount, amount, delta_a),
+            (Symbol::new(self.env(), "withdraw"), tokens, user),
+            (pool_id, share_amount, amounts),
         );
     }
 
-    fn add_pool(&self, asset: Symbol, token_b: Address, pool: Address, init_args: Vec<Val>) {
+    fn add_pool(
+        &self,
+        tokens: Vec<Address>,
+        pool_address: Address,
+        pool_type: Symbol,
+        subpool_salt: BytesN<32>,
+        init_args: Vec<Val>,
+    ) {
         self.env().events().publish(
-            (Symbol::new(self.env(), "add_pool"), asset),
-            (pool, token_b, init_args),
+            (Symbol::new(self.env(), "add_pool"), tokens),
+            (pool_address, pool_type, subpool_salt, init_args),
         );
     }
 
-    fn delist_pool(&self, asset: Symbol, pool: Address) {
-        self.env()
-            .events()
-            .publish((Symbol::new(self.env(), "delist_pool"), asset), pool);
-    }
-
-    fn remove_pool(&self, asset: Symbol, pool: Address) {
-        self.env()
-            .events()
-            .publish((Symbol::new(self.env(), "remove_pool"), asset), pool);
-    }
-
-    fn config_rewards(&self, asset: Symbol, pool: Address, pool_tps: u128, expired_at: u64) {
+    fn config_rewards(
+        &self,
+        tokens: Vec<Address>,
+        pool_address: Address,
+        pool_tps: u128,
+        expired_at: u64,
+    ) {
         self.env().events().publish(
-            (Symbol::new(self.env(), "config_rewards"), asset, pool),
-            (pool_tps, expired_at),
+            (Symbol::new(self.env(), "config_rewards"), tokens),
+            (pool_address, pool_tps, expired_at),
         );
     }
 
     fn claim(
         &self,
-        asset: Symbol,
-        pool: Address,
+        tokens: Vec<Address>,
         user: Address,
+        pool_address: Address,
         reward_token: Address,
         reward_amount: u128,
     ) {
         self.env().events().publish(
-            (Symbol::new(self.env(), "claim"), asset, pool, user),
-            (reward_token, reward_amount),
+            (Symbol::new(self.env(), "claim"), tokens, user),
+            (pool_address, reward_token, reward_amount),
         );
+    }
+
+    fn set_protocol_fee_fraction(&self, fraction: u32) {
+        // topics
+        // [
+        //   "pool_gauge_switch_token": Symbol, // event identifier
+        //   token: Address, // token address
+        // ]
+        //
+        // body
+        // [
+        //   enabled: bool
+        // ]
+        let e = self.env();
+        e.events()
+            .publish((Symbol::new(e, "set_protocol_fee"),), (fraction,));
+    }
+
+    fn pool_gauge_switch_token(&self, token: Address, enabled: bool) {
+        let e = self.env();
+        e.events().publish(
+            (Symbol::new(e, "pool_gauge_switch_token"), token),
+            (enabled,),
+        )
     }
 }

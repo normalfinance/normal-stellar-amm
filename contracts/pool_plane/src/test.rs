@@ -1,12 +1,11 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::testutils::Setup;
+use crate::testutils::{install_dummy_wasm, jump, Setup};
 use crate::{contract::PoolPlane, PoolPlaneClient};
 use access_control::constants::ADMIN_ACTIONS_DELAY;
 use soroban_sdk::testutils::{Address as _, Events};
 use soroban_sdk::{symbol_short, vec, Address, Env, IntoVal, Symbol, Vec};
-use utils::test_utils::{install_dummy_wasm, jump};
 
 fn create_plane_contract<'a>(e: &Env) -> PoolPlaneClient<'a> {
     let client = PoolPlaneClient::new(e, &e.register(PoolPlane {}, ()));
@@ -20,20 +19,36 @@ fn test() {
     e.cost_estimate().budget().reset_unlimited();
 
     let address1 = Address::generate(&e);
+    let address2 = Address::generate(&e);
 
     let plane = create_plane_contract(&e);
     plane.init_admin(&Address::generate(&e));
     plane.update(
         &address1,
+        &symbol_short!("standard"),
         &Vec::from_array(&e, [30_u128]),
         &Vec::from_array(&e, [1000_u128, 1000_u128]),
     );
-
-    let data = plane.get(&Vec::from_array(&e, [address1]));
+    plane.update(
+        &address2,
+        &symbol_short!("stable"),
+        &Vec::from_array(&e, [6_u128, 85_u128, 0_u128, 85_u128, 0_u128]),
+        &Vec::from_array(&e, [800_u128, 900_u128]),
+    );
+    let data = plane.get(&Vec::from_array(&e, [address1, address2]));
 
     let data1 = data.get(0).unwrap();
-    assert_eq!(data1.0, Vec::from_array(&e, [30_u128]));
-    assert_eq!(data1.1, Vec::from_array(&e, [1000_u128, 1000_u128]));
+    assert_eq!(data1.0, symbol_short!("standard"));
+    assert_eq!(data1.1, Vec::from_array(&e, [30_u128]));
+    assert_eq!(data1.2, Vec::from_array(&e, [1000_u128, 1000_u128]));
+
+    let data2 = data.get(1).unwrap();
+    assert_eq!(data2.0, symbol_short!("stable"));
+    assert_eq!(
+        data2.1,
+        Vec::from_array(&e, [6_u128, 85_u128, 0_u128, 85_u128, 0_u128])
+    );
+    assert_eq!(data2.2, Vec::from_array(&e, [800_u128, 900_u128]));
 }
 
 #[should_panic(expected = "Error(Contract, #103)")]
@@ -68,7 +83,7 @@ fn test_transfer_ownership_events() {
                 )
                     .into_val(&setup.env),
                 (new_admin.clone(),).into_val(&setup.env),
-            )
+            ),
         ]
     );
 
@@ -85,7 +100,7 @@ fn test_transfer_ownership_events() {
                 )
                     .into_val(&setup.env),
                 ().into_val(&setup.env),
-            )
+            ),
         ]
     );
 
@@ -104,7 +119,7 @@ fn test_transfer_ownership_events() {
                 )
                     .into_val(&setup.env),
                 (new_admin.clone(),).into_val(&setup.env),
-            )
+            ),
         ]
     );
 }
@@ -124,7 +139,7 @@ fn test_upgrade_events() {
                 contract.address.clone(),
                 (Symbol::new(&setup.env, "commit_upgrade"),).into_val(&setup.env),
                 (new_wasm_hash.clone(),).into_val(&setup.env),
-            )
+            ),
         ]
     );
 
@@ -137,7 +152,7 @@ fn test_upgrade_events() {
                 contract.address.clone(),
                 (Symbol::new(&setup.env, "revert_upgrade"),).into_val(&setup.env),
                 ().into_val(&setup.env),
-            )
+            ),
         ]
     );
 
@@ -152,7 +167,7 @@ fn test_upgrade_events() {
                 contract.address.clone(),
                 (Symbol::new(&setup.env, "apply_upgrade"),).into_val(&setup.env),
                 (new_wasm_hash.clone(),).into_val(&setup.env),
-            )
+            ),
         ]
     );
 }
@@ -171,7 +186,7 @@ fn test_emergency_mode_events() {
                 contract.address.clone(),
                 (Symbol::new(&setup.env, "enable_emergency_mode"),).into_val(&setup.env),
                 ().into_val(&setup.env),
-            )
+            ),
         ]
     );
     contract.set_emergency_mode(&setup.emergency_admin, &false);
@@ -183,7 +198,7 @@ fn test_emergency_mode_events() {
                 contract.address.clone(),
                 (Symbol::new(&setup.env, "disable_emergency_mode"),).into_val(&setup.env),
                 ().into_val(&setup.env),
-            )
+            ),
         ]
     );
 }

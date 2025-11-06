@@ -1,73 +1,86 @@
-use soroban_sdk::{Address, Env, Map, String, Symbol, Val, Vec, U256};
-use utils::state::pool::{PoolInfo, PoolTier, SwapDirection};
+use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Val, Vec, U256};
 
 pub trait PoolInterfaceTrait {
-    //  ___      ___       __        __    _____  ___
-    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
-    //  \   \  //   |    /    \     ||  | |.\\   \    |
-    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
-    // |: \.        |  //  __'  \   |.  | |.  \    \. |
-    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
-    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
+    // Get symbolic explanation of pool type.
+    fn pool_type(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Symbol;
 
-    fn deposit(e: Env, user: Address, asset: Symbol, token_b_amount: u128) -> (u128, u128);
+    // Get dictionary of basic pool information: type, fee, special parameters if any.
+    fn get_info(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Map<Symbol, Val>;
 
+    // Get address for specified pool index.
+    fn get_pool(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Address;
+
+    // Returns the token contract address for the pool share token.
+    fn share_id(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Address;
+
+    // Returns the total amount of shares
+    fn get_total_shares(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
+
+    // Getter for the pool balances array.
+    fn get_reserves(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Vec<u128>;
+
+    // Deposit coins into the pool.
+    // desired_amounts: List of amounts of coins to deposit
+    // Returns amounts deposited and the amount of LP tokens received in exchange for the deposited tokens.
+    fn deposit(
+        e: Env,
+        user: Address,
+        tokens: Vec<Address>,
+        pool_index: BytesN<32>,
+        desired_amounts: Vec<u128>,
+        min_shares: u128,
+    ) -> (Vec<u128>, u128);
+
+    // Perform an exchange between two coins.
+    // token_in: token to send
+    // token_out: token to receive
+    // in_amount: Amount of token_in being exchanged
+    // out_min: Minimum amount of token_out to receive
+    // Returns the actual amount of coin out received
     fn swap(
         e: Env,
         user: Address,
-        asset: Symbol,
-        direction: SwapDirection,
+        tokens: Vec<Address>,
+        token_in: Address,
+        token_out: Address,
+        pool_index: BytesN<32>,
         in_amount: u128,
         out_min: u128,
     ) -> u128;
 
+    // Estimate amount of coins to retrieve using swap function
     fn estimate_swap(
         e: Env,
-        asset: Symbol,
-        direction: SwapDirection,
+        tokens: Vec<Address>,
+        token_in: Address,
+        token_out: Address,
+        pool_index: BytesN<32>,
         in_amount: u128,
-    ) -> (u128, i128);
+    ) -> u128;
 
-    fn withdraw(e: Env, user: Address, asset: Symbol, share_amount: u128) -> u128;
+    // Withdraw coins from the pool.
+    // share_amount: Quantity of LP tokens to burn in the withdrawal
+    // min_amounts: Minimum amounts of underlying coins to receive
+    // Returns a list of the amounts for each coin that was withdrawn.
+    fn withdraw(
+        e: Env,
+        user: Address,
+        tokens: Vec<Address>,
+        pool_index: BytesN<32>,
+        share_amount: u128,
+        min_amounts: Vec<u128>,
+    ) -> Vec<u128>;
 
-    //   _______    _______  ___________  ___________  _______   _______    ________
-    //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
-    // (: ( \___) (: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
-    //  \/ \       \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
-    //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
-    // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
-    //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
+    fn get_liquidity(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> U256;
 
-    // Get dictionary of basic pool information: type, fee, special parameters if any.
-    fn get_info(e: Env, asset: Symbol) -> Map<Symbol, Val>;
+    // Set liquidity calculator address. it's separate contract optimized to estimate liquidity for multiple pools
+    fn set_liquidity_calculator(e: Env, admin: Address, calculator: Address);
 
-    // Get address for specified pool index.
-    fn get_pool(e: Env, asset: Symbol) -> Address;
-
-    // Returns the token contract address for the pool share token.
-    fn share_id(e: Env, asset: Symbol) -> Address;
-
-    // Returns the total amount of shares
-    fn get_total_shares(e: Env, asset: Symbol) -> u128;
-
-    // Getter for the pool balances array.
-    fn get_reserves(e: Env, asset: Symbol) -> Vec<u128>;
-
-    // Fee fraction getter. 1 = 0.01%
-    fn get_fee_fraction(e: Env, asset: Symbol) -> u32;
-
-    // Insurance Claim - Max quote insurance getter.
-    fn get_insurance_coverage(e: Env, asset: Symbol) -> u128;
-
-    fn get_liquidity(e: Env, asset: Symbol) -> U256;
-
+    // Get liquidity calculator address
     fn get_liquidity_calculator(e: Env) -> Address;
-
-    // Get map of privileged roles
-    fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>>;
 }
 
-pub trait IncentivesInterfaceTrait {
+pub trait RewardsInterfaceTrait {
     // Retrieves the global rewards configuration and returns it as a `Map`.
     //
     // This function fetches the global rewards configuration from the contract's state.
@@ -77,23 +90,27 @@ pub trait IncentivesInterfaceTrait {
     //
     // A `Map` where each key is a `Symbol` representing a configuration parameter, and the value is the corresponding value.
     // The keys are "tps" and "expired_at".
-    fn get_incentives_config(e: Env) -> Map<Symbol, i128>;
+    fn get_rewards_config(e: Env) -> Map<Symbol, i128>;
 
     // Returns a mapping of token addresses to their respective reward information.
     //
     // # Returns
     //
-    // A `Map` where each key is a `Symbol` representing an oracle id, and the value is a tuple
-    // `(bool, U256)`. The tuple elements represent the processed status, and total liquidity
+    // A `Map` where each key is a `Vec<Address>` representing a set of token addresses, and the value is a tuple
+    // `(u32, bool, U256)`. The tuple elements represent the voting share, processed status, and total liquidity
     // of the tokens respectively.
-    fn get_tokens_for_reward(e: Env) -> Map<Symbol, (bool, U256)>;
+    fn get_tokens_for_reward(e: Env) -> Map<Vec<Address>, (u32, bool, U256)>;
 
     // Sums up the liquidity of all pools for given tokens set and returns the total liquidity
+    //
+    // # Arguments
+    //
+    // * `tokens` - A vector of token addresses for which to calculate the total liquidity.
     //
     // # Returns
     //
     // A `U256` value representing the total liquidity for the given set of tokens.
-    fn get_total_liquidity(e: Env, asset: Symbol) -> U256;
+    fn get_total_liquidity(e: Env, tokens: Vec<Address>) -> U256;
 
     // Configures the global rewards for the liquidity pool.
     //
@@ -106,14 +123,18 @@ pub trait IncentivesInterfaceTrait {
     //   The voting share is a value between 0 and 1, scaled by 1e7 for precision.
     fn config_global_rewards(
         e: Env,
-        user: Address,
+        admin: Address,
         reward_tps: u128,
         expired_at: u64,
-        assets: Vec<Symbol>,
+        tokens_votes: Vec<(Vec<Address>, u32)>,
     );
 
     // Fills the aggregated liquidity information for a given set of tokens.
-    fn fill_liquidity(e: Env, user: Address, asset: Symbol);
+    //
+    // # Arguments
+    //
+    // * `tokens` - A vector of token addresses for which to fill the liquidity.
+    fn fill_liquidity(e: Env, admin: Address, tokens: Vec<Address>);
 
     // Configures the rewards for a specific pool.
     //
@@ -136,79 +157,133 @@ pub trait IncentivesInterfaceTrait {
     // * The pool does not exist.
     // * The tokens are not found in the current rewards configuration.
     // * The liquidity for the tokens has not been filled.
-    fn config_pool_rewards(e: Env, user: Address, asset: Symbol) -> u128;
+    fn config_pool_rewards(
+        e: Env,
+        admin: Address,
+        tokens: Vec<Address>,
+        pool_index: BytesN<32>,
+    ) -> u128;
 
     // Get rewards status for the pool,
     // including amount available for the user
-    fn get_incentives_info(e: Env, user: Address, asset: Symbol) -> Map<Symbol, i128>;
+    fn get_rewards_info(
+        e: Env,
+        user: Address,
+        tokens: Vec<Address>,
+        pool_index: BytesN<32>,
+    ) -> Map<Symbol, i128>;
 
     // Get amount of reward tokens available for the user to claim.
-    fn get_user_reward(e: Env, user: Address, asset: Symbol) -> u128;
-
-    // Get amount of LP fees available for the user to claim.
-    fn get_user_fees(e: Env, user: Address, asset: Symbol) -> u128;
+    fn get_user_reward(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>)
+        -> u128;
 
     // Get total amount of accumulated reward for the pool
-    fn get_total_accumulated_reward(e: Env, asset: Symbol) -> u128;
+    fn get_total_accumulated_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
 
     // Get total amount of generated plus configured reward for the pool
-    fn get_total_configured_reward(e: Env, asset: Symbol) -> u128;
+    fn get_total_configured_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
 
     // Get total amount of claimed reward for the pool
-    fn get_total_claimed_reward(e: Env, asset: Symbol) -> u128;
+    fn get_total_claimed_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
 
     // Calculate difference between total configured reward and total claimed reward.
     // Helps to estimate the amount of missing reward tokens pool has configured to distribute
-    fn get_total_outstanding_reward(e: Env, asset: Symbol) -> u128;
+    fn get_total_outstanding_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
 
     // Transfer outstanding reward to the pool
-    fn distribute_outstanding_reward(e: Env, user: Address, from: Address, asset: Symbol) -> u128;
+    fn distribute_outstanding_reward(
+        e: Env,
+        user: Address,
+        from: Address,
+        tokens: Vec<Address>,
+        pool_index: BytesN<32>,
+    ) -> u128;
 
     // Claim reward as a user.
     // returns amount of tokens rewarded to the user
-    fn claim(e: Env, user: Address, asset: Symbol) -> u128;
+    fn claim(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128;
 }
 
 pub trait PoolsManagementTrait {
-    //  ___      ___       __        __    _____  ___
-    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
-    //  \   \  //   |    /    \     ||  | |.\\   \    |
-    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
-    // |: \.        |  //  __'  \   |.  | |.  \    \. |
-    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
-    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
+    // Initialize standard pool with custom arguments.
+    // fee_fraction should match pre-defined set of values: 0.1%, 0.3%, 1%
+    // 10 = 0.1%, 30 = 0.3%, 100 = 1%
+    fn init_standard_pool(
+        e: Env,
+        user: Address,
+        tokens: Vec<Address>,
+        fee_fraction: u32,
+    ) -> (BytesN<32>, Address);
 
-    fn init_pool(
+    // Initialize elastic pool with custom arguments.
+    // fee_fraction has denominator 10000; 1 = 0.01%, 10 = 0.1%, 100 = 1%
+    fn init_elastic_pool(
+        e: Env,
+        user: Address,
+        tokens: Vec<Address>,
+        fee_fraction: u32,
+        oracle: Address,
+        assets_config: (Symbol, Symbol),
+    ) -> (BytesN<32>, Address);
+
+    // Get pools for given pair
+    fn get_pools(e: Env, tokens: Vec<Address>) -> Map<BytesN<32>, Address>;
+
+    // Remove pool from the list
+    fn remove_pool(e: Env, user: Address, tokens: Vec<Address>, pool_hash: BytesN<32>);
+
+    // Calculates the number of unique token sets.
+    fn get_tokens_sets_count(e: Env) -> u128;
+
+    // Retrieves tokens at a specified index
+    fn get_tokens(e: Env, index: u128) -> Vec<Address>;
+
+    // Retrieves a lists of pools in batch based on half-open `[..)` range of tokens indexes.
+    //
+    // # Returns
+    //
+    // A list containing tuples containing a vector of addresses of the corresponding tokens
+    // and a mapping of pool hashes to pool addresses.
+    fn get_pools_for_tokens_range(
+        e: Env,
+        start: u128,
+        end: u128,
+    ) -> Vec<(Vec<Address>, Map<BytesN<32>, Address>)>;
+
+    // Returns the protocol fee fraction.
+    fn get_protocol_fee_fraction(e: Env) -> u32;
+
+    // Set the reward thresholds for the pool gauge.
+    // When distributor schedules gauge reward, it should be greater than this value.
+    fn pool_gauge_set_reward_thresholds(
         e: Env,
         admin: Address,
-        assets: (Symbol, Symbol),
-        token_b: Address,
-        synthetic_sac_address: Address,
-        lp_token_info: (String, String),
-        fee_fraction: u32,
-        tier: PoolTier,
-        quote_max_insurance: u128,
+        min_reward_equivalent_day: u128,
+        min_duration_seconds: u64,
+    );
+
+    // Getters for pool gauge reward thresholds
+    fn pool_gauge_get_min_daily_amount(e: Env) -> u128;
+    fn pool_gauge_get_min_duration(e: Env) -> u64;
+
+    // Switches the rewards gauge for a specific pool token.
+    fn pool_gauge_switch_token(e: Env, admin: Address, token: Address, enabled: bool);
+
+    // Checks if the rewards gauge is enabled for a specific pool token.
+    fn pool_gauge_token_enabled(e: Env, token: Address) -> bool;
+
+    // Schedule an extra LP reward for the pool.
+    fn pool_gauge_schedule_reward(
+        e: Env,
+        distributor: Address,
+        pool_tokens: Vec<Address>,
+        pool_hash: BytesN<32>,
+        reward_token: Address,
+        tps: u128,
+        start_at: Option<u64>,
+        duration: u64,
+        swaps_chain_proof: Vec<(Vec<Address>, BytesN<32>, Address)>,
     ) -> Address;
-
-    fn delist_pool(e: Env, admin: Address, asset: Symbol);
-
-    fn remove_pool(e: Env, admin: Address, asset: Symbol);
-
-    //   _______    _______  ___________  ___________  _______   _______    ________
-    //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
-    // (: ( \___) (: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
-    //  \/ \       \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
-    //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
-    // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
-    //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
-
-    fn query_pool_details(e: Env, asset: Symbol) -> PoolInfo;
-
-    fn query_all_pools_details(e: Env) -> Vec<PoolInfo>;
-
-    fn get_pools(e: Env) -> Vec<Address>;
-
-    fn get_total_liquidity_imbalance(e: Env) -> i128;
 }
 
 pub trait PoolPlaneInterface {

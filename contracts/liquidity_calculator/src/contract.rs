@@ -11,7 +11,7 @@ use access_control::management::SingleAddressManagementTrait;
 use access_control::role::{Role, SymbolRepresentation};
 use access_control::transfer::TransferOwnershipTrait;
 use soroban_sdk::{
-    contract, contractimpl, panic_with_error, Address, BytesN, Env, Symbol, Vec, U256,
+    contract, contractimpl, panic_with_error, symbol_short, Address, BytesN, Env, Symbol, Vec, U256,
 };
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
@@ -19,6 +19,9 @@ use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
 
 #[contract]
 pub struct LiquidityCalculator;
+
+const POOL_TYPE_STANDARD: Symbol = symbol_short!("standard");
+const POOL_TYPE_ELASTIC: Symbol = symbol_short!("elastic");
 
 #[contractimpl]
 impl Calculator for LiquidityCalculator {
@@ -60,7 +63,7 @@ impl Calculator for LiquidityCalculator {
 
     // Calculates and returns the liquidity of the provided pools.
     // It interacts with the `PoolPlaneClient` to get the data for the pools
-    // and then calculates the liquidity.
+    // and then calculates the liquidity based on the pool type (standard or stableswap).
     //
     // # Arguments
     //
@@ -74,19 +77,32 @@ impl Calculator for LiquidityCalculator {
         let data = plane_client.get(&pools);
         let mut result = Vec::new(&e);
         for pool_idx in 0..pools.len() {
-            let (init_args, reserves) = data.get(pool_idx).unwrap();
+            let (pool_type, init_args, reserves) = data.get(pool_idx).unwrap();
 
             let mut out = U256::from_u32(&e, 0);
-
-            let (fee, reserves) = parse_standard_data(init_args, reserves);
-            out = out.add(&U256::from_u128(
-                &e,
-                standard_pool::get_liquidity(&e, fee, &reserves, 0, 1),
-            ));
-            out = out.add(&U256::from_u128(
-                &e,
-                standard_pool::get_liquidity(&e, fee, &reserves, 1, 0),
-            ));
+            if pool_type == POOL_TYPE_STANDARD {
+                let (fee, reserves) = parse_standard_data(init_args, reserves);
+                out = out.add(&U256::from_u128(
+                    &e,
+                    standard_pool::get_liquidity(&e, fee, &reserves, 0, 1),
+                ));
+                out = out.add(&U256::from_u128(
+                    &e,
+                    standard_pool::get_liquidity(&e, fee, &reserves, 1, 0),
+                ));
+            } else if pool_type == POOL_TYPE_ELASTIC {
+                let (fee, reserves) = parse_standard_data(init_args, reserves);
+                out = out.add(&U256::from_u128(
+                    &e,
+                    standard_pool::get_liquidity(&e, fee, &reserves, 0, 1),
+                ));
+                out = out.add(&U256::from_u128(
+                    &e,
+                    standard_pool::get_liquidity(&e, fee, &reserves, 1, 0),
+                ));
+            } else {
+                panic!("unknown pool type");
+            };
 
             result.push_back(out);
         }
@@ -104,6 +120,11 @@ impl UpgradeableContract for LiquidityCalculator {
     // The version of the contract as a u32.
     fn version() -> u32 {
         100
+    }
+
+    // Get contract type symbolic name
+    fn contract_name(e: Env) -> Symbol {
+        Symbol::new(&e, "LiquidityCalculator")
     }
 
     // Commits a new wasm hash for a future upgrade.
