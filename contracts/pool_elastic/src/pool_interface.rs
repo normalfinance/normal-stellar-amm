@@ -1,0 +1,289 @@
+use soroban_sdk::{Address, BytesN, Env, Map, Symbol, Val, Vec};
+use utils::state::oracle::{HistoricalOracleData, OracleGuardRails, OraclePriceData};
+
+pub trait ElasticPoolCrunch {
+    // Initialize pool completely to reduce calculations cost
+    fn initialize_all(
+        e: Env,
+        admin: Address,
+        privileged_addrs: (Address, Address, Address, Address, Vec<Address>, Address),
+        router: Address,
+        oracle: Address,
+        lp_token_wasm_hash: BytesN<32>,
+        tokens: Vec<Address>,
+        fees_config: (u32, u32),
+        assets_config: (Symbol, Symbol),
+        extra_addrs: (Address, Address, Address),
+    );
+}
+
+pub trait ElasticPoolTrait {
+    // Get symbolic explanation of pool type.
+    fn pool_type(e: Env) -> Symbol;
+
+    // Sets the token contract addresses for this pool
+    fn initialize(
+        e: Env,
+        admin: Address,
+        privileged_addrs: (Address, Address, Address, Address, Vec<Address>, Address),
+        router: Address,
+        oracle: Address,
+        lp_token_wasm_hash: BytesN<32>,
+        tokens: Vec<Address>,
+        fees_config: (u32, u32),
+        assets_config: (Symbol, Symbol),
+    );
+
+    // fn get_pool_price(e: Env, token_a: bool) -> u128;
+
+    // fn get_oracle_price(e: Env, base: bool) -> OraclePriceData;
+
+    // fn get_historical_oracle_price(e: Env, base: bool) -> HistoricalOracleData;
+
+    // fn get_peg_price(e: Env) -> u128;
+
+    // Returns the token contract address for the pool share token
+    fn share_id(e: Env) -> Address;
+
+    // Returns the total amount of shares
+    fn get_total_shares(e: Env) -> u128;
+
+    fn get_tokens(e: Env) -> Vec<Address>;
+
+    // Deposits token_a and token_b. Also mints pool shares for the "to" Identifier. The amount minted
+    // is determined based on the difference between the reserves stored by this contract, and
+    // the actual balance of token_a and token_b for this contract.
+    fn deposit(
+        e: Env,
+        user: Address,
+        desired_amounts: Vec<u128>,
+        min_shares: u128,
+    ) -> (Vec<u128>, u128);
+
+    // Perform an exchange between two coins.
+    // in_idx: Index value for the coin to send
+    // out_idx: Index value of the coin to receive
+    // in_amount: Amount of in_idx being exchanged
+    // out_min: Minimum amount of out_idx to receive
+    // Returns the actual amount of coin out_idx received. Index values can be found via the get_tokens public getter method.
+    fn swap(
+        e: Env,
+        user: Address,
+        in_idx: u32,
+        out_idx: u32,
+        in_amount: u128,
+        out_min: u128,
+    ) -> u128;
+
+    // Estimate amount of coins to retrieve using swap function
+    fn estimate_swap(e: Env, in_idx: u32, out_idx: u32, in_amount: u128) -> u128;
+
+    // Perform an exchange between two coins with strict amount to receive.
+    // in_idx: Index value for the coin to send
+    // out_idx: Index value of the coin to receive
+    // out_amount: Amount of out_idx being exchanged
+    // in_max: Maximum amount of in_idx to send
+    fn swap_strict_receive(
+        e: Env,
+        user: Address,
+        in_idx: u32,
+        out_idx: u32,
+        out_amount: u128,
+        in_max: u128,
+    ) -> u128;
+
+    // Estimate amount of coins to retrieve using swap_strict_receive function
+    fn estimate_swap_strict_receive(e: Env, in_idx: u32, out_idx: u32, out_amount: u128) -> u128;
+
+    // Claims the vested bonus for the user.
+    // Returns the amount of bonus tokens transferred to the user.
+    fn claim_bonus(e: Env, user: Address) -> u128;
+
+    // Returns bonus information for the user including amount, vesting status, etc.
+    fn get_bonus_info(e: Env, user: Address) -> Map<Symbol, Val>;
+
+    // Transfers share_amount of pool share tokens to this contract,
+    // burns all pools share tokens in this contracts, and sends
+    // the corresponding amount of tokens to user.
+    // Returns amount of tokens withdrawn
+    fn withdraw(e: Env, user: Address, share_amount: u128, min_amounts: Vec<u128>) -> Vec<u128>;
+
+    // Get pool reserves
+    fn get_reserves(e: Env) -> Vec<u128>;
+
+    // Fee fraction getter. 1 = 0.01%
+    fn get_fee_fraction(e: Env) -> u32;
+
+    // Returns part of the fee that goes to the protocol
+    fn get_protocol_fee_fraction(e: Env) -> u32;
+
+    // Get dictionary of basic pool information: type, fee, special parameters if any.
+    fn get_info(e: Env) -> Map<Symbol, Val>;
+}
+
+pub trait AdminInterfaceTrait {
+    // Set privileged addresses
+    fn set_privileged_addrs(
+        e: Env,
+        admin: Address,
+        rewards_admin: Address,
+        operations_admin: Address,
+        pause_admin: Address,
+        emergency_pause_admins: Vec<Address>,
+        system_fee_admin: Address,
+    );
+
+    // Get map of privileged roles
+    fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>>;
+
+    // Oracle
+    fn set_oracle_guard_rails(
+        e: Env,
+        admin: Address,
+        twap_divergence: u64,
+        stale_limit: u64,
+        too_volatile_ratio: u64,
+    );
+
+    fn get_oracle_guard_rails(e: Env) -> OracleGuardRails;
+
+    // Stop pool instantly
+    fn kill_deposit(e: Env, admin: Address);
+    fn kill_swap(e: Env, admin: Address);
+    fn kill_claim(e: Env, admin: Address);
+    fn kill_tax(e: Env, admin: Address);
+    fn kill_bonus(e: Env, admin: Address);
+
+    // Resume pool
+    fn unkill_deposit(e: Env, admin: Address);
+    fn unkill_swap(e: Env, admin: Address);
+    fn unkill_claim(e: Env, admin: Address);
+    fn unkill_tax(e: Env, admin: Address);
+    fn unkill_bonus(e: Env, admin: Address);
+
+    // Get killswitch status
+    fn get_is_killed_deposit(e: Env) -> bool;
+    fn get_is_killed_swap(e: Env) -> bool;
+    fn get_is_killed_claim(e: Env) -> bool;
+    fn get_is_killed_tax(e: Env) -> bool;
+    fn get_is_killed_bonus(e: Env) -> bool;
+
+    // Sets the protocol fraction of total fee for the pool.
+    fn set_protocol_fee_fraction(e: Env, admin: Address, new_fraction: u32);
+
+    // Returns the protocol fees accumulated in the pool.
+    fn get_protocol_fees(e: Env) -> Vec<u128>;
+
+    // Claims the protocol fees accumulated in the pool.
+    fn claim_protocol_fees(e: Env, admin: Address, destination: Address) -> Vec<u128>;
+
+    // Sets the rebate fraction of for the pool.
+    fn set_fee_rebate_fraction(e: Env, admin: Address, new_fraction: u32);
+
+    // Tax
+    fn set_base_tax_fraction(e: Env, admin: Address, tax_fraction: u32);
+
+    fn set_tax_incline(e: Env, admin: Address, tax_incline: u32);
+
+    fn set_max_tax_fraction(e: Env, admin: Address, max_tax_fraction: u32);
+
+    fn get_tax_config(e: Env) -> (u32, u32, u32);
+
+    fn claim_protocol_tax(e: Env, admin: Address, destination: Address) -> u128;
+
+    // Tax Rate Table - configurable deviation -> tax rate mappings
+    fn set_tax_rate_table(e: Env, admin: Address, table: soroban_sdk::Vec<(u128, u32)>);
+
+    fn get_tax_rate_table(e: Env) -> soroban_sdk::Vec<(u128, u32)>;
+
+    // Bonus configuration
+    fn set_bonus_vesting_period(e: Env, admin: Address, vesting_period: u64);
+
+    fn set_max_bonus_fraction(e: Env, admin: Address, max_bonus_fraction: u32);
+
+    fn get_bonus_config(e: Env) -> (u32, u64, u128);
+
+    fn get_bonus_reserve(e: Env) -> u128;
+
+    // Bonus Rate Table - configurable deviation -> bonus rate mappings
+    fn set_bonus_rate_table(e: Env, admin: Address, table: soroban_sdk::Vec<(u128, u32)>);
+
+    fn get_bonus_rate_table(e: Env) -> soroban_sdk::Vec<(u128, u32)>;
+}
+
+pub trait UpgradeableContract {
+    // Get contract version
+    fn version() -> u32;
+
+    // Get contract type symbolic name
+    fn contract_name(e: Env) -> Symbol;
+
+    // Upgrade contract with new wasm code
+    fn commit_upgrade(
+        e: Env,
+        admin: Address,
+        new_wasm_hash: BytesN<32>,
+        new_token_wasm_hash: BytesN<32>,
+        gauges_new_wasm_hash: BytesN<32>,
+    );
+    fn apply_upgrade(e: Env, admin: Address) -> (BytesN<32>, BytesN<32>);
+    fn revert_upgrade(e: Env, admin: Address);
+
+    // Emergency mode - bypass upgrade deadline
+    fn set_emergency_mode(e: Env, admin: Address, value: bool);
+    fn get_emergency_mode(e: Env) -> bool;
+}
+
+pub trait RewardsTrait {
+    // Initialize rewards token address
+    fn initialize_rewards_config(e: Env, reward_token: Address);
+
+    // Configure rewards for pool. Every second tps of coins
+    // being distributed across all liquidity providers
+    // after expired_at timestamp distribution ends
+    fn set_rewards_config(e: Env, admin: Address, expired_at: u64, tps: u128);
+
+    // Calculate reward token surplus
+    fn get_unused_reward(e: Env) -> u128;
+
+    // Return reward token above the configured amount back to the router
+    fn return_unused_reward(e: Env, admin: Address) -> u128;
+
+    // Get rewards status for the pool,
+    // including amount available for the user
+    fn get_rewards_info(e: Env, user: Address) -> Map<Symbol, i128>;
+
+    // Get amount of reward tokens available for the user to claim.
+    fn get_user_reward(e: Env, user: Address) -> u128;
+
+    // Checkpoints the reward for the user.
+    // Useful when user moves funds by itself to avoid re-entrancy issue.
+    // Can be called only by the token contract to notify pool external changes happened.
+    fn checkpoint_reward(e: Env, token_contract: Address, user: Address, user_shares: u128);
+
+    // Checkpoints total working balance and the working balance for the user.
+    // Useful when user moves funds by itself to avoid re-entrancy issue.
+    // Can be called only by the token contract to notify pool external changes happened.
+    fn checkpoint_working_balance(
+        e: Env,
+        token_contract: Address,
+        user: Address,
+        user_shares: u128,
+    );
+
+    // Get total amount of accumulated reward for the pool
+    fn get_total_accumulated_reward(e: Env) -> u128;
+
+    // Get total amount of generated plus configured reward for the pool
+    fn get_total_configured_reward(e: Env) -> u128;
+
+    // Adjust total configured reward for the pool.
+    fn adjust_total_accumulated_reward(e: Env, admin: Address, diff: i128);
+
+    // Get total amount of claimed reward for the pool
+    fn get_total_claimed_reward(e: Env) -> u128;
+
+    // Claim reward as a user.
+    // returns amount of tokens rewarded to the user
+    fn claim(e: Env, user: Address) -> u128;
+}

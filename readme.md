@@ -29,10 +29,9 @@ Normal is a synthetic asset protocol enabling investors to trade any crypto asse
 ## Smart Contracts
 
 - **pool** - A constant product AMM for synthetic assets that automatically mints/burns the synthetic asset to maintain an oracle price peg
+- **pool_elastic** - A constant product AMM for synthetic assets that automatically mints/burns the synthetic asset to maintain an oracle price peg
 - **pool_router** - entry point and catalogue of liquidity pools which is capable to deploy new pools if necessary
-- **insurance_fund** - Additional backstop for liquidity deficits. Funded via liquidity provider staking deposits
-- **oracle_registry** - Oracle aggegation and price validation making it easier for pools to source reliable oracle prices
-- **pool_swap_fee** - A proxy for the `PoolRouter` that handles swap fee collection and distribution.
+- **sink** - Additional backstop for liquidity deficits. Funded via liquidity provider staking deposits
 - **pool_plane** - contract designed to store minimum information about any pool: type, parameters, reserves. being updated on every action with the pool (deposit, swap, withdraw, parameters update, etc)
 - **liquidity_calculator** - smart contract containing pools liquidity calculation logic which is capable to compare many pools at once
 - **lp_token** - [SEP-0041](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0041.md) compatible token smart contract designed for liquidity pool share management
@@ -41,8 +40,7 @@ Normal is a synthetic asset protocol enabling investors to trade any crypto asse
 ## Modules
 
 - **access_control** - Handles permissioned access to contracts using role-based access control (RBAC)
-- **incentives** - Handles how liquidity provider fees and pool rewards are calculated and claimed
-- **reentrancy_guard** - Handles utilities helping prevent re-entrant calls (even though they're technically impossible on Soroban)
+- **rewards** - Handles how liquidity provider fees and pool rewards are calculated and claimed
 - **token_lp** - Handles LP token utilities
 - **token_synthetic** - Handles synthetic token (`Pool.token_a`) utilities
 - **upgrade** - Handles contract upgrades

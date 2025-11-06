@@ -1,571 +1,78 @@
-use core::cmp::max;
-
-use crate::errors::PoolError;
-use crate::events::Events as LiquidityPoolEvents;
-use crate::events::PoolEvents;
-use crate::storage::get_last_trade_ts;
-use crate::storage::get_mint_cap_fraction;
-use crate::storage::get_oracle_registry;
-use crate::storage::get_volume_30d;
-use crate::storage::set_last_trade_ts;
-use crate::storage::set_volume_30d;
-use crate::storage::{get_reserve_a, get_reserve_b, set_reserve_a};
-use soroban_fixed_point_math::FixedPoint;
-use token_synthetic::{burn_synthetic_tokens, get_total_synthetic_tokens, mint_synthetic_tokens};
-
-use soroban_sdk::Symbol;
-use soroban_sdk::Vec;
+use crate::constants::FEE_MULTIPLIER;
+use crate::storage::get_fee_fraction;
+use pool_validation_errors::PoolValidationError;
+use soroban_fixed_point_math::SorobanFixedPoint;
 use soroban_sdk::{panic_with_error, Env};
 
-use utils::constant::PRICE_PRECISION;
-use utils::constant::PRICE_PRECISION_I64;
-use utils::constant::PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO_I128;
-use utils::constant::TWENTY_FOUR_HOUR;
-use utils::math::safe_math::{SafeMath, SafeConversion, PrecisionMath};
-use utils::math::stats::calculate_rolling_sum;
-use utils::state::oracle_registry::HistoricalOracleData;
-use utils::state::oracle_registry::NormalAction;
-use utils::state::oracle_registry::OracleGuardRails;
-use utils::state::oracle_registry::OracleValidity;
-
-// Calculates the net liquidity imbalance between base and quote assets in the pool.
-//
-// Computes the value of synthetic base tokens using the base oracle price, and compares it to
-// the value of reserve Token B using the quote oracle price. A positive result means excess
-// quote-side liquidity; negative means excess synthetic base.
-//
-// # Arguments
-// * `e` - Soroban environment reference.
-// * `base_oracle_price` - Oracle price of the base (synthetic) asset.
-// * `quote_oracle_price` - Oracle price of the quote asset (Token B).
-//
-// # Returns
-// * `i128` — The imbalance: `quote_value - base_value`. Positive means excess quote asset.
-pub fn get_net_liquidity_imbalance(
+pub fn get_deposit_amounts(
     e: &Env,
-    base_oracle_price: u128,
-    quote_oracle_price: u128,
-) -> i128 {
-    let base_token_supply = get_total_synthetic_tokens(&e);
-    let reserve_b = get_reserve_b(e);
-
-    // Use safe conversions to prevent overflow during type conversion
-    let base_token_supply_i128 = base_token_supply.safe_to_i128(e);
-    let base_oracle_price_i128 = base_oracle_price.safe_to_i128(e);
-    let reserve_b_i128 = reserve_b.safe_to_i128(e);
-    let quote_oracle_price_i128 = quote_oracle_price.safe_to_i128(e);
-    
-    let net_base_asset_value = base_token_supply_i128
-        .safe_mul(e, base_oracle_price_i128)
-        .safe_div(e, PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO_I128);
-
-    let net_quote_asset_value = reserve_b_i128
-        .safe_mul(e, quote_oracle_price_i128)
-        .safe_div(e, PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO_I128);
-
-    net_quote_asset_value.safe_sub(e, net_base_asset_value)
-}
-
-// Invokes the external Oracle Registry contract to fetch the current price for a given asset.
-//
-// This performs a cross-contract call to the `get_price` method on the Oracle Registry,
-// passing the asset and action context.
-//
-// # Arguments
-// * `e` - Soroban environment reference.
-// * `asset` - Symbol representing the asset to price.
-// * `action` - The context in which the price is being fetched (e.g. Swap, Rebalance).
-//
-// # Returns
-// * `HistoricalOracleData` — The current oracle price and delay since publication.
-pub fn get_oracle_price(e: &Env, asset: &Symbol, action: NormalAction) -> HistoricalOracleData {
-    let (historical_oracle_data, oracle_validity): (HistoricalOracleData, OracleValidity) = e
-        .invoke_contract(
-            &get_oracle_registry(e),
-            &Symbol::new(e, "get_price"),
-            Vec::from_array(e, [asset.to_val()]),
-        );
-
-    let oracle_valid_for_action = is_oracle_valid_for_action(oracle_validity, Some(action));
-
-    if !oracle_valid_for_action {
-        panic_with_error!(e, PoolError::InvalidOracle);
-    }
-
-    historical_oracle_data
-}
-
-pub fn validate_oracle_price_with_pool(
-    e: &Env,
-    base_oracle_price_twap: u128,
-    quote_oracle_price_twap: u128,
-    action: NormalAction,
-) {
-    if action == NormalAction::PoolInit {
-        return;
-    }
-
-    let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
-
-    let peg_price = peg_price(e, base_oracle_price_twap, quote_oracle_price_twap);
-
-    let pool_price = if reserve_a == 0 || reserve_b == 0 {
-        peg_price
-    } else {
-        reserve_b
-            .fixed_div_floor(reserve_a, PRICE_PRECISION)
-            .unwrap()
-    };
-
-    // Find % difference b/t pool price and oracle price
-    let oracle_pool_price_spread_pct =
-        calculate_oracle_twap_price_spread_pct(e, pool_price, peg_price);
-
-    // Check if the oracle price is too divergent
-    let oracle_guard_rails: OracleGuardRails = e.invoke_contract(
-        &get_oracle_registry(e),
-        &Symbol::new(e, "get_oracle_guard_rails"),
-        Vec::from_array(e, []),
-    );
-
-    let is_oracle_price_too_divergent =
-        is_oracle_price_too_divergent(oracle_pool_price_spread_pct, oracle_guard_rails);
-
-    if is_oracle_price_too_divergent {
-        panic_with_error!(e, PoolError::InvalidOracle);
-    }
-}
-
-// Calculates the percentage difference between the pool price and oracle TWAP.
-//
-// Used to evaluate whether the oracle data is in line with internal pricing,
-// expressed as a percentage spread for risk assessment.
-//
-// # Arguments
-// * `e` - Soroban environment reference.
-// * `pool_price` - The current pool price.
-// * `last_oracle_price_twap` - Oracle's last TWAP.
-//
-// # Returns
-// - The price spread as a percentage (scaled by `PRICE_PRECISION_U64`).
-pub fn calculate_oracle_twap_price_spread_pct(
-    e: &Env,
-    pool_price: u128,
-    last_oracle_price_twap: u128,
-) -> i64 {
-    // Use safe conversions to prevent overflow
-    let pool_price_i128 = pool_price.safe_to_i128(e);
-    let oracle_price_i128 = last_oracle_price_twap.safe_to_i128(e);
-    
-    let price_spread_i128 = pool_price_i128.safe_sub(e, oracle_price_i128);
-    
-    // Safe conversion to i64 with overflow protection
-    let price_spread = price_spread_i128.safe_to_i64(e);
-    let pool_price_i64 = pool_price.safe_to_i64(e);
-
-    // Calculate (price_spread * PRICE_PRECISION_I64) / pool_price_i64 using safe arithmetic
-    let numerator = price_spread.safe_mul(e, PRICE_PRECISION_I64);
-    numerator.safe_div(e, pool_price_i64)
-}
-
-// Determines whether the oracle price diverges too far from the reserve price.
-//
-// Uses protocol-defined guard rails to decide if the deviation is outside
-// acceptable limits (e.g., >10%) and may indicate manipulation or lag.
-//
-//
-// # Arguments
-// * `price_spread_pct` - Absolute spread percentage between oracle and reserve.
-// * `oracle_guard_rails` - .
-//
-// # Returns
-// - `true` if the spread exceeds the maximum allowed divergence.
-pub fn is_oracle_price_too_divergent(
-    price_spread_pct: i64,
-    oracle_guard_rails: OracleGuardRails,
-) -> bool {
-    let max_divergence = oracle_guard_rails
-        .price_divergence
-        .oracle_twap_percent_divergence;
-
-    price_spread_pct.unsigned_abs() > max_divergence
-}
-
-/// Determines whether the oracle data is valid for a specific contract action.
-///
-/// The oracle validity is evaluated based on the context of the action:
-///
-/// - `AddLiquidity` / `RemoveLiquidity`: Allowed if oracle data is valid or mildly stale.
-/// - `Swap`: Requires strictly valid oracle data.
-/// - `UpdateTwap`: Allowed if oracle price is positive.
-/// - `Rebalance`: Requires strictly valid oracle data.
-/// - `ClaimInsurance`: Disallowed if oracle is too volatile or non-positive.
-///
-/// If no action is provided, it defaults to requiring strictly valid oracle data.
-///
-/// # Arguments
-/// * `oracle_validity` - Classification of the current oracle state.
-/// * `action` - The protocol action being evaluated (optional).
-///
-/// # Returns
-/// - `true` if the oracle data meets the criteria for the specified action.
-/// - `false` if the action should be blocked due to stale, volatile, or invalid data.
-pub fn is_oracle_valid_for_action(
-    oracle_validity: OracleValidity,
-    action: Option<NormalAction>,
-) -> bool {
-    let is_ok = match action {
-        Some(action) => match action {
-            NormalAction::PoolInit => matches!(oracle_validity, OracleValidity::Valid),
-            NormalAction::AddLiquidity => matches!(
-                oracle_validity,
-                OracleValidity::Valid | OracleValidity::StaleForPool
-            ),
-            NormalAction::RemoveLiquidity => matches!(
-                oracle_validity,
-                OracleValidity::Valid | OracleValidity::StaleForPool
-            ),
-            NormalAction::Swap => matches!(oracle_validity, OracleValidity::Valid),
-            NormalAction::UpdateTwap => !matches!(oracle_validity, OracleValidity::NonPositive),
-            NormalAction::Rebalance => {
-                matches!(oracle_validity, OracleValidity::Valid)
-            }
-            NormalAction::ClaimInsurance => !matches!(
-                oracle_validity,
-                OracleValidity::NonPositive | OracleValidity::TooVolatile
-            ),
-        },
-        None => {
-            matches!(oracle_validity, OracleValidity::Valid)
-        }
-    };
-
-    is_ok
-}
-
-// Calculates the peg price between the base and quote assets based on oracle prices.
-//
-// Returns `quote / base` to represent the current price ratio. If either price is zero,
-// returns 0 to indicate an invalid state.
-//
-// # Arguments
-// * `e` - Soroban environment reference.
-// * `base_oracle_price` - Oracle price of the base asset.
-// * `quote_oracle_price` - Oracle price of the quote asset.
-//
-// # Returns
-// * `u128` — The derived peg price (scaled by `PRICE_PRECISION`), or 0 if invalid.
-pub fn peg_price(e: &Env, base_oracle_price: u128, quote_oracle_price: u128) -> u128 {
-    if base_oracle_price == 0 || quote_oracle_price == 0 {
-        return 0;
-    }
-
-    // Calculate quote_oracle_price / base_oracle_price with round-to-nearest to reduce bias
-    quote_oracle_price.safe_fixed_div_round(e, base_oracle_price, PRICE_PRECISION)
-}
-
-// Updates the 30 day trading volume metric for the pool using a rolling average.
-//
-// Uses the time since the last trade and the current quote asset volume to update
-// the 30 day volume accumulator. Also updates the last trade timestamp.
-//
-// # Arguments
-// * `e` - Soroban environment reference.
-// * `quote_asset_amount` - Amount of quote asset involved in the trade.
-// * `now` - Current ledger timestamp.
-pub fn update_volume_30d(e: &Env, quote_asset_amount: u128, now: u64) {
-    let since_last = max(1_u64, now.safe_sub(&e, get_last_trade_ts(e)));
-    let volume_30d = get_volume_30d(e);
-
-    if volume_30d == 0 {
-        set_volume_30d(e, &quote_asset_amount);
-    } else {
-        let sum = calculate_rolling_sum(
-            e,
-            volume_30d,
-            quote_asset_amount,
-            since_last,
-            TWENTY_FOUR_HOUR,
-        );
-
-        set_volume_30d(e, &sum);
-    }
-
-    set_last_trade_ts(e, &now);
-}
-
-// Computes the delta needed to re-peg reserve A (synthetic base token) to match the target peg price.
-//
-// Uses current reserves and oracle prices to calculate the ideal reserve A value,
-// then subtracts the actual reserve A to determine how much must be minted or burned.
-//
-// # Arguments
-// * `e` - Soroban environment reference.
-// * `base_oracle_price` - Oracle price of the base asset.
-// * `quote_oracle_price` - Oracle price of the quote asset.
-//
-// # Returns
-// * `i128` — The difference: `target_reserve_a - actual_reserve_a`.
-// Positive means mint, negative means burn.
-pub fn get_delta_a(
-    e: &Env,
+    desired_a: u128,
+    min_a: u128,
+    desired_b: u128,
+    min_b: u128,
     reserve_a: u128,
     reserve_b: u128,
-    base_oracle_price: u128,
-    quote_oracle_price: u128,
-) -> i128 {
-    let peg_price = peg_price(e, base_oracle_price, quote_oracle_price);
-    
-    // Calculate target reserve with precision-aware smoothing
-    let target_reserve_a = calculate_target_reserve_with_smoothing(
-        e, 
-        reserve_a,
-        reserve_b, 
-        peg_price
-    );
-    
-    // Safe conversion using our SafeConversion utilities
-    let target_reserve_a_i128 = target_reserve_a.safe_to_i128(e);
-    let reserve_a_i128 = reserve_a.safe_to_i128(e);
-    
-    let delta_a_raw = target_reserve_a_i128
-        .checked_sub(reserve_a_i128)
-        .unwrap_or_else(|| {
-            panic_with_error!(e, PoolError::ArithmeticOverflow);
-        });
-    
-    // Apply per-ledger delta cap to prevent excessive rebalancing
-    let max_delta_per_ledger = reserve_a.safe_to_i128(e) / 20; // Max 5% change per operation
-    let delta_a = if delta_a_raw.abs() > max_delta_per_ledger {
-        if delta_a_raw > 0 {
-            max_delta_per_ledger
-        } else {
-            -max_delta_per_ledger
-        }
-    } else {
-        delta_a_raw
-    };
+) -> (u128, u128) {
+    if reserve_a == 0 && reserve_b == 0 {
+        return (desired_a, desired_b);
+    }
 
-    delta_a
+    let amount_b = desired_a.fixed_mul_floor(e, &reserve_b, &reserve_a);
+    if amount_b <= desired_b {
+        if amount_b < min_b {
+            panic_with_error!(e, PoolValidationError::InvalidDepositAmount);
+        }
+        (desired_a, amount_b)
+    } else {
+        let amount_a = desired_b.fixed_mul_floor(&e, &reserve_a, &reserve_b);
+        if amount_a > desired_a || amount_a < min_a {
+            panic_with_error!(e, PoolValidationError::InvalidDepositAmount);
+        }
+        (amount_a, desired_b)
+    }
 }
 
-// Calculates target reserve A with epsilon-based smoothing to prevent precision attacks.
-//
-// For very small relative changes in price (< 0.01%), treats delta_a as 0 to prevent
-// discontinuous jumps that could be exploited by precision attacks.
-//
-// # Arguments
-// * `e` - Soroban environment reference.
-// * `current_reserve_a` - Current reserve A amount.
-// * `reserve_b` - Current reserve B amount.
-// * `peg_price` - Current peg price.
-//
-// # Returns
-// * `u128` — The smoothed target reserve A amount.
-fn calculate_target_reserve_with_smoothing(
+pub fn get_amount_out(
     e: &Env,
-    current_reserve_a: u128,
-    reserve_b: u128,
-    peg_price: u128,
-) -> u128 {
-    // Use round-to-nearest to prevent accumulation bias
-    let raw_target_reserve_a = reserve_b.safe_fixed_div_round(e, peg_price, PRICE_PRECISION);
-    
-    // Calculate relative change threshold (0.01% = 100 basis points)
-    let epsilon_threshold = current_reserve_a.safe_div(e, 10_000); // 0.01%
-    
-    // If the change is smaller than epsilon, don't rebalance to prevent micro-adjustments
-    let delta_abs = if raw_target_reserve_a > current_reserve_a {
-        raw_target_reserve_a - current_reserve_a
-    } else {
-        current_reserve_a - raw_target_reserve_a
-    };
-    
-    if delta_abs <= epsilon_threshold {
-        // Change is too small, maintain current reserve to prevent precision attacks
-        current_reserve_a
-    } else {
-        // Change is significant enough to warrant rebalancing
-        raw_target_reserve_a
-    }
-}
-
-// Mints or burns synthetic tokens (reserve A) to restore the peg between base and quote assets.
-//
-// Uses oracle prices to calculate the required change in synthetic token supply to match
-// the peg. Adjusts the pool's reserve A accordingly and emits a rebalance event.
-// In ReduceOnly mode, prevents minting new synthetic tokens to avoid increasing synthetic asset exposure.
-//
-// # Arguments
-// * `e` - Soroban environment reference.
-// * `base_oracle_price` - Oracle price of the synthetic base asset.
-// * `quote_oracle_price` - Oracle price of the quote asset.
-// * `pool_status` - Current pool status to determine if minting should be restricted.
-pub fn rebalance(e: &Env, base_oracle_price: u128, quote_oracle_price: u128, reduce_only: bool) {
-    let (reserve_a, reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
-
-    // Find the ideal reserve_a amount such that the pool's price is equal to the oracle price
-    let delta_a = get_delta_a(
-        &e,
-        reserve_a,
-        reserve_b,
-        base_oracle_price,
-        quote_oracle_price,
-    );
-    if delta_a != 0 {
-        if delta_a > 0 {
-            if reduce_only {
-                LiquidityPoolEvents::new(&e).capped_mint(
-                    base_oracle_price,
-                    quote_oracle_price,
-                    delta_a,
-                );
-
-                // allow minting up to 0.1 % of current supply per ledger
-                // Use safe arithmetic and conversions
-                let total_supply = get_total_synthetic_tokens(&e);
-                let mint_cap_fraction_u32 = get_mint_cap_fraction(&e);
-                // Safe conversion from u32 to u128 (always safe as u32 fits in u128)
-                // Can still consider using safe conversion here for consistency
-                let mint_cap_fraction = mint_cap_fraction_u32 as u128;
-                let mint_cap_u128 = total_supply.safe_div(e, mint_cap_fraction);
-                let mint_cap = mint_cap_u128.safe_to_i128(e);
-
-                if delta_a > mint_cap {
-                    panic_with_error!(&e, PoolError::SwapReduceOnly);
-                }
-            } else {
-                mint_synthetic_tokens(&e, &e.current_contract_address(), delta_a);
-                set_reserve_a(&e, &(reserve_a + (delta_a as u128)));
-            }
-        }
-        if delta_a < 0 {
-            burn_synthetic_tokens(&e, &e.current_contract_address(), delta_a.abs() as u128);
-            set_reserve_a(&e, &(reserve_a - (delta_a.abs() as u128)));
-        }
-
-        let (new_reserve_a, new_reserve_b) = (get_reserve_a(&e), get_reserve_b(&e));
-
-        LiquidityPoolEvents::new(&e).rebalance(
-            reserve_a,
-            reserve_b,
-            new_reserve_a,
-            new_reserve_b,
-            delta_a,
-        );
-    }
-}
-
-/// Calculates the output amount of tokens for a swap given input and pool reserves.
-///
-/// This function implements a constant product AMM–style formula with fees applied externally (using PoolSwapFee).
-/// The calculation follows:
-///
-/// ```text
-/// out = in * reserve_buy / (reserve_sell + in) - fee
-/// ```
-///
-/// The `fee` portion is not handled inside this function—it must be deducted by the caller
-/// after receiving the raw output value.
-///
-/// # Arguments
-///
-/// * `in_amount` – The amount of input tokens being sold into the pool.
-/// * `reserve_sell` – The current reserve of the token being sold (the pool’s supply of the input token).
-/// * `reserve_buy` – The current reserve of the token being bought (the pool’s supply of the output token).
-///
-/// # Returns
-///
-/// A u128 `amount_out`:
-/// * `amount_out` – The number of output tokens the user would receive before fee deduction.
-///
-/// Returns `0` if `in_amount == 0`.
-///
-/// # Examples
-///
-/// ```rust
-/// // Example reserves
-/// let reserve_sell: u128 = 1_000_000;
-/// let reserve_buy: u128 = 500_000;
-/// let in_amount: u128 = 10_000;
-///
-/// // Calculate output before fee
-/// let out = contract.get_amount_out(&e, in_amount, reserve_sell, reserve_buy);
-///
-/// assert!(out > 0);
-/// ```
-pub fn get_amount_out(e: &Env, in_amount: u128, reserve_sell: u128, reserve_buy: u128) -> u128 {
+    in_amount: u128,    // dx  – exact tokens the trader wants to sell
+    reserve_sell: u128, // x
+    reserve_buy: u128,  // y
+) -> (u128, u128) {
     if in_amount == 0 {
-        return 0;
+        return (0, 0);
     }
 
-    // +1 just in case there were some rounding errors & convert to real units in place
-    // Use floor for user payouts (conservative for protocol)
-    let result = in_amount
-        .safe_fixed_mul_floor(&e, reserve_buy, reserve_sell.safe_add(&e, in_amount))
-        + 1;
-
-    result
+    let fee_fraction = get_fee_fraction(e) as u128; // e.g. 30 => 0.3 %
+    let in_after_fee = in_amount * (FEE_MULTIPLIER - fee_fraction) / FEE_MULTIPLIER;
+    let raw_out = in_after_fee.fixed_mul_floor(e, &reserve_buy, &(reserve_sell + in_after_fee));
+    (raw_out, in_amount - in_after_fee) // fee is taken on input
 }
 
-/// Calculates the required input amount for a **strict receive** swap given
-/// a desired output amount and current pool reserves.
-///
-/// This function computes how much of the *sell token* must be provided in
-/// order to guarantee receiving exactly `out_amount` of the *buy token*,
-/// assuming a constant product AMM invariant.  
-///
-/// The calculation uses a floor division (`fixed_mul_floor`) and then adds
-/// `+1` to the result to guard against rounding errors, ensuring the pool
-/// always receives enough input tokens to cover the desired output.
-///
-/// # Arguments
-///
-/// * `out_amount` – The amount of output tokens the trader wishes to receive.  
-/// * `reserve_sell` – The current reserve of the token being sold
-///   (the pool’s input-side liquidity).  
-/// * `reserve_buy` – The current reserve of the token being bought
-///   (the pool’s output-side liquidity).  
-///
-/// # Returns
-///
-/// * `u128` – The minimum required input amount of the sell token
-///   needed to guarantee the `out_amount` is fulfilled.  
-///   Returns `0` if `out_amount == 0`.  
-///
-/// # Notes
-///
-/// * The extra `+1` ensures rounding errors never result in underpayment.  
-/// * The function does **not** apply protocol or trading fees — callers
-///   must account for those separately if required.  
-///
-/// # Examples
-///
-/// ```rust
-/// let reserve_sell: u128 = 1_000_000;
-/// let reserve_buy: u128 = 500_000;
-/// let desired_out: u128 = 10_000;
-///
-/// // Compute required input for a strict receive
-/// let required_in = contract::get_amount_out_strict_receive(desired_out, reserve_sell, reserve_buy);
-///
-/// assert!(required_in > 0);
-/// ```
 pub fn get_amount_out_strict_receive(
-    out_amount: u128,
-    reserve_sell: u128,
-    reserve_buy: u128,
-) -> u128 {
+    e: &Env,
+    out_amount: u128,   // dy  – exact tokens the trader wants to receive
+    reserve_sell: u128, // x
+    reserve_buy: u128,  // y
+) -> (u128, u128) {
     if out_amount == 0 {
-        return 0;
+        return (0, 0);
+    }
+    if out_amount >= reserve_buy {
+        panic_with_error!(e, PoolValidationError::InsufficientBalance);
     }
 
-    // +1 just in case there were some rounding errors & convert to real units in place
-    let result = reserve_buy
-        .fixed_mul_floor(reserve_sell, reserve_buy)
-        .unwrap()
-        - reserve_sell
-        + 1;
+    let fee_fraction = get_fee_fraction(&e) as u128;
 
-    result
+    // ----------  Step 1: dx_after_fee = ceil(x·dy / (y-dy))  ----------
+    let dx_after_fee = reserve_sell.fixed_mul_ceil(e, &out_amount, &(reserve_buy - out_amount));
+
+    // ----------  Step 2: gross-up for fee on *input* side  -------------
+    // dx_before_fee = ceil( dx_after_fee / (1-f) )
+    let dx_before_fee =
+        dx_after_fee.fixed_mul_ceil(e, &FEE_MULTIPLIER, &(FEE_MULTIPLIER - fee_fraction));
+
+    // ----------  Step 3: fee = dx_before_fee - dx_after_fee -----------
+    let fee = dx_before_fee - dx_after_fee;
+
+    (dx_before_fee, fee)
 }

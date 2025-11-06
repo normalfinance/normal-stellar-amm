@@ -3,15 +3,16 @@ set -e
 
 # Check if the arguments are provided
 # Required: identity_string, network, asset, share_amount
-if [ "$#" -lt 4 ]; then
-    echo "Usage: $0 <identity_string> <network> <asset> <share_amount>"
+if [ "$#" -lt 5 ]; then
+    echo "Usage: $0 <identity_string> <network> <normal_token> <pool_index> <share_amount>"
     exit 1
 fi
 
 IDENTITY_STRING=$1
 NETWORK=$2
-ASSET=$3
-SHARE_AMOUNT=$4
+NORMAL_TOKEN=$3
+POOL_INDEX=$4
+SHARE_AMOUNT=$5
 
 # Load env vars dynamically
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -28,7 +29,7 @@ fi
 
 echo "Withdraw liquidity into pool..."
 
-stellar contract invoke \
+RESPONSE=$(stellar contract invoke \
     --id $POOL_ROUTER_ADDR \
     --source $IDENTITY_STRING \
     --network $NETWORK \
@@ -38,7 +39,10 @@ stellar contract invoke \
     -- \
     withdraw \
     --user $ADMIN_ADDRESS \
-    --asset $ASSET \
-    --share_amount $SHARE_AMOUNT
+    --tokens "[\"$NORMAL_TOKEN\", \"$USDC_ADDRESS\"]" \
+    --pool_index $POOL_INDEX \
+    --share_amount $SHARE_AMOUNT \
+    --min_amounts "[\"0\", \"0\"]")
 
+echo "$RESPONSE"
 echo "Pool withdrawal complete."

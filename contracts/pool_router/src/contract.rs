@@ -1,18 +1,28 @@
+use crate::constants::{CONSTANT_PRODUCT_FEE_AVAILABLE, ELASTIC_MAX_FEE};
 use crate::errors::PoolRouterError;
 use crate::events::{Events, PoolRouterEvents};
-use crate::incentives::get_incentives_manager;
 use crate::liquidity_calculator::LiquidityCalculatorClient;
 use crate::pool_interface::{
-    IncentivesInterfaceTrait, PoolInterfaceTrait, PoolPlaneInterface, PoolsManagementTrait,
+    PoolInterfaceTrait, PoolPlaneInterface, PoolsManagementTrait, RewardsInterfaceTrait,
 };
-use crate::pool_utils::{deploy_pool, get_total_liquidity};
+use crate::pool_utils::{
+    assert_tokens_sorted, deploy_elastic_pool, deploy_standard_pool, get_elastic_pool_salt,
+    get_standard_pool_salt, get_tokens_salt, get_total_liquidity, validate_tokens_contracts,
+};
+use crate::rewards::get_rewards_manager;
+use crate::rewards_gauge::{
+    calculate_equivalent_reward, deploy_rewards_gauge, gauge_get_reward_duration_threshold,
+    gauge_get_reward_per_day_threshold, gauge_set_reward_duration_threshold,
+    gauge_set_reward_per_day_threshold,
+};
 use crate::router_interface::AdminInterface;
 use crate::storage::{
-    get_insurance_fund, get_liquidity_calculator, get_pool, get_pool_base, get_pool_plane,
-    get_pools_vec, get_reward_tokens, get_reward_tokens_detailed, get_rewards_config, remove_pool,
-    set_insurance_fund, set_liquidity_calculator, set_lp_token_hash, set_oracle_registry,
-    set_pool_hash, set_pool_plane, set_pools_vec, set_reward_tokens, set_reward_tokens_detailed,
-    set_rewards_config, GlobalRewardsConfig, PoolRewardInfo,
+    get_gauge_rewards_enabled_for, get_liquidity_calculator, get_pool, get_pool_plane,
+    get_pools_plain, get_reward_tokens, get_reward_tokens_detailed, get_rewards_config,
+    get_tokens_set, get_tokens_set_count, has_pool, set_constant_product_pool_hash,
+    set_elastic_pool_hash, set_gauge_rewards_enabled_for, set_liquidity_calculator, set_pool_plane,
+    set_protocol_fee_fraction, set_reward_tokens, set_reward_tokens_detailed, set_rewards_config,
+    set_token_hash, DataKey, GlobalRewardsConfig, LiquidityPoolRewardInfo,
 };
 use access_control::access::{AccessControl, AccessControlTrait};
 use access_control::emergency::{get_emergency_mode, set_emergency_mode};
@@ -23,23 +33,20 @@ use access_control::management::{MultipleAddressesManagementTrait, SingleAddress
 use access_control::role::Role;
 use access_control::role::SymbolRepresentation;
 use access_control::transfer::TransferOwnershipTrait;
-use access_control::utils::{
-    require_admin, require_operations_admin_or_owner, require_rewards_admin_or_owner,
-};
-use incentives::storage::RewardTokenStorageTrait;
-use reentrancy_guard::{enter, exit};
+use access_control::utils::{require_operations_admin_or_owner, require_rewards_admin_or_owner};
+use pool_config_storage as config_storage;
+use pool_config_storage::interface::ConfigStorageInterface;
+use rewards::storage::RewardTokenStorageTrait;
+use soroban_sdk::auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation};
 use soroban_sdk::token::Client as SorobanTokenClient;
 use soroban_sdk::{
-    contract, contractimpl, panic_with_error, symbol_short, Address, BytesN, Env, IntoVal, Map,
-    String, Symbol, Val, Vec, U256,
+    contract, contractimpl, panic_with_error, symbol_short, vec, Address, BytesN, Env, IntoVal,
+    Map, Symbol, Val, Vec, U256,
 };
 use upgrade::events::Events as UpgradeEvents;
 use upgrade::interface::UpgradeableContract;
 use upgrade::{apply_upgrade, commit_upgrade, revert_upgrade};
-use utils::constant::MAX_POOL_FEE;
-use utils::math::safe_math::SafeMath;
-use utils::state::pool::{PoolInfo, PoolTier, SwapDirection};
-use utils::token::{transfer_token, transfer_token_from};
+use utils::errors::storage_errors::StorageError;
 use utils::validation::ensure_non_zero_u128;
 
 #[contract]
@@ -48,114 +55,195 @@ pub struct PoolRouter;
 // The `PoolInterfaceTrait` trait provides the interface for interacting with a liquidity pool.
 #[contractimpl]
 impl PoolInterfaceTrait for PoolRouter {
-    //  ___      ___       __        __    _____  ___
-    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
-    //  \   \  //   |    /    \     ||  | |.\\   \    |
-    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
-    // |: \.        |  //  __'  \   |.  | |.  \    \. |
-    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
-    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
-
-    // Deposits Token B into the liquidity pool associated with a given synthetic asset.
-    //
-    // This function is called through the pool router to forward user deposits to the
-    // correct pool contract. It performs authentication, retrieves the pool address for
-    // the specified asset, and invokes the pool's `deposit` method.
+    // Returns the type of the pool.
     //
     // # Arguments
-    // * `e` - The current Soroban environment.
-    // * `user` - The address of the user initiating the deposit (must authorize the call).
-    // * `asset` - The symbol representing the synthetic asset the pool is tied to.
-    // * `token_b_amount` - The amount of Token B to deposit.
+    //
+    // * `e` - The environment.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
     //
     // # Returns
-    // * `(u128, u128)` - A tuple containing:
-    //     - The amount of Token B deposited.
-    //     - The number of liquidity provider (LP) shares minted to the user.
     //
-    // # Behavior
-    // * Calls `get_pool` to fetch the associated pool contract for the asset.
-    // * Forwards the deposit call to the underlying pool contract via cross-contract invocation.
-    // * Emits a `deposit` event with the asset, user, pool address, and deposit details.
-    //
-    // # Panics
-    // * If the user does not authorize the operation.
-    // * If the asset has no associated pool registered.
-
-    fn deposit(e: Env, user: Address, asset: Symbol, token_b_amount: u128) -> (u128, u128) {
-        user.require_auth();
-
-        ensure_non_zero_u128(&e, token_b_amount);
-
-        enter(&e);
-
-        let pool = get_pool(&e, &asset);
-
-        let (amount, share_amount, delta_a): (u128, u128, i128) = e.invoke_contract(
-            &pool,
-            &symbol_short!("deposit"),
-            Vec::from_array(&e, [user.clone().into_val(&e), token_b_amount.into_val(&e)]),
-        );
-        Events::new(&e).deposit_liquidity(asset, pool, user, amount, share_amount, delta_a);
-
-        exit(&e);
-
-        (amount, share_amount)
+    // The type of the pool as a Symbol.
+    fn pool_type(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Symbol {
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
+        e.invoke_contract(&pool_id, &Symbol::new(&e, "pool_type"), Vec::new(&e))
     }
 
-    // Executes a token swap within the liquidity pool associated with a synthetic asset.
-    //
-    // This router function locates the pool for the given asset and forwards the swap request
-    // to that pool contract. It supports flexible token indexing using the `tokens` vector to
-    // determine input and output indices.
+    // Returns information about the pool.
     //
     // # Arguments
-    // * `e` - The current Soroban environment.
-    // * `user` - The address of the user performing the swap (must authorize the call).
-    // * `asset` - The synthetic asset symbol identifying the pool to use.
-    // * `token_in` - The token address being sold (input).
-    // * `token_out` - The token address being bought (output).
-    // * `in_amount` - The amount of the input token to swap.
-    // * `out_min` - The minimum acceptable amount of the output token.
+    //
+    // * `e` - The environment.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
     //
     // # Returns
-    // * `u128` - The amount of output token received from the swap.
     //
-    // # Behavior
-    // * Validates the user's authorization.
-    // * Resolves the correct pool for the given asset using `get_pool`.
-    // * Determines `in_idx` and `out_idx` from the `tokens` vector.
-    // * Forwards the swap call to the identified pool contract.
-    // * Emits a `swap` event with full context of the operation.
+    // A map of Symbols to Vals representing the pool's information.
+    fn get_info(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Map<Symbol, Val> {
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
+        e.invoke_contract(&pool_id, &Symbol::new(&e, "get_info"), Vec::new(&e))
+    }
+
+    // Returns the pool's address.
     //
-    // # Panics
-    // * If the user does not authorize the transaction.
-    // * If the token addresses are not found in the `tokens` vector.
-    // * If the pool contract is not registered for the given asset.
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    //
+    // # Returns
+    //
+    // The address of the pool.
+    fn get_pool(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Address {
+        assert_tokens_sorted(&e, &tokens);
+        get_pool(&e, &tokens, pool_index)
+    }
+
+    // Returns the pool's share token address.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    //
+    // # Returns
+    //
+    // The pool's share token as an Address.
+    fn share_id(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Address {
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
+        e.invoke_contract(&pool_id, &Symbol::new(&e, "share_id"), Vec::new(&e))
+    }
+
+    // Returns the total shares of the pool.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    //
+    // # Returns
+    //
+    // The total shares of the pool as a u128.
+    fn get_total_shares(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
+        e.invoke_contract(&pool_id, &Symbol::new(&e, "get_total_shares"), Vec::new(&e))
+    }
+
+    // Returns the pool's reserves.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    //
+    // # Returns
+    //
+    // A vector of u128s representing the pool's reserves.
+    fn get_reserves(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> Vec<u128> {
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
+        e.invoke_contract(&pool_id, &Symbol::new(&e, "get_reserves"), Vec::new(&e))
+    }
+
+    // Deposits tokens into the pool.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `user` - The address of the user depositing the tokens.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    // * `amounts` - A vector of u128s representing the amounts of each token to deposit.
+    // * `min_mint_amount` - The minimum amount of pool tokens to mint.
+    //
+    // # Returns
+    //
+    // A tuple containing a vector of u128s representing the amounts of each token deposited and a u128 representing the amount of pool tokens minted.
+    fn deposit(
+        e: Env,
+        user: Address,
+        tokens: Vec<Address>,
+        pool_index: BytesN<32>,
+        desired_amounts: Vec<u128>,
+        min_shares: u128,
+    ) -> (Vec<u128>, u128) {
+        user.require_auth();
+        assert_tokens_sorted(&e, &tokens);
+
+        let pool_id = get_pool(&e, &tokens, pool_index);
+
+        let (amounts, share_amount): (Vec<u128>, u128) = e.invoke_contract(
+            &pool_id,
+            &symbol_short!("deposit"),
+            Vec::from_array(
+                &e,
+                [
+                    user.clone().into_val(&e),
+                    desired_amounts.into_val(&e),
+                    min_shares.into_val(&e),
+                ],
+            ),
+        );
+        Events::new(&e).deposit(tokens, user, pool_id, amounts.clone(), share_amount);
+        (amounts, share_amount)
+    }
+
+    // Swaps tokens in the pool.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `user` - The address of the user swapping the tokens.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    // * `token_in` - The address of the input token to be swapped.
+    // * `token_out` - The address of the output token to be received.
+    // * `in_amount` - The amount of the input token to be swapped.
+    // * `min_out_amount` - The minimum amount of the output token to be received.
+    //
+    // # Returns
+    //
+    // The amount of the output token received.
     fn swap(
         e: Env,
         user: Address,
-        asset: Symbol,
-        direction: SwapDirection,
+        tokens: Vec<Address>,
+        token_in: Address,
+        token_out: Address,
+        pool_index: BytesN<32>,
         in_amount: u128,
         out_min: u128,
     ) -> u128 {
         user.require_auth();
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
 
-        ensure_non_zero_u128(&e, in_amount);
-
-        enter(&e);
-
-        let pool_address = get_pool(&e, &asset);
-
-        let (out_amount, delta_a_pre, delta_a_post): (u128, i128, i128) = e.invoke_contract(
-            &pool_address,
+        let out_amt = e.invoke_contract(
+            &pool_id,
             &symbol_short!("swap"),
             Vec::from_array(
                 &e,
                 [
                     user.clone().into_val(&e),
-                    direction.into_val(&e),
+                    tokens
+                        .first_index_of(token_in.clone())
+                        .unwrap()
+                        .into_val(&e),
+                    tokens
+                        .first_index_of(token_out.clone())
+                        .unwrap()
+                        .into_val(&e),
                     in_amount.into_val(&e),
                     out_min.into_val(&e),
                 ],
@@ -163,187 +251,114 @@ impl PoolInterfaceTrait for PoolRouter {
         );
 
         Events::new(&e).swap(
-            asset,
-            pool_address,
-            user,
-            direction,
-            in_amount,
-            out_amount,
-            delta_a_pre,
-            delta_a_post,
+            tokens, user, pool_id, token_in, token_out, in_amount, out_amt,
         );
-
-        exit(&e);
-
-        out_amount
+        out_amt
     }
 
-    // Estimates the output amount and fee for a token swap without executing it.
-    //
-    // This function queries the associated pool contract for a synthetic asset to simulate a swap
-    // from `token_in` to `token_out`, based on the provided input amount. It is useful for frontend
-    // price discovery, slippage estimation, and swap previews.
+    // Estimates the result of a swap operation.
     //
     // # Arguments
-    // * `e` - The current Soroban environment.
-    // * `asset` - The synthetic asset symbol representing the target liquidity pool.
-    // * `in_amount` - The amount of input token to simulate a swap for.
+    //
+    // * `e` - The environment.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    // * `token_in` - The address of the input token to be swapped.
+    // * `token_out` - The address of the output token to be received.
+    // * `in_amount` - The amount of the input token to be swapped.
     //
     // # Returns
-    // * `(u128, i128)` - A tuple containing:
-    //     - The estimated amount of output token received.
-    //     - The estimated delta_a (can be negative or positive depending on implementation).
     //
-    // # Panics
-    // * If `token_in` or `token_out` are not found in the `tokens` vector.
-    // * If no pool is registered for the provided `asset`.
-    //
-    // # Notes
-    // * This call does not mutate state and is intended for off-chain estimation.
-    // * Token ordering must match the pool's internal ordering for index lookups to work correctly.
+    // The estimated amount of the output token that would be received.
     fn estimate_swap(
         e: Env,
-        asset: Symbol,
-        direction: SwapDirection,
+        tokens: Vec<Address>,
+        token_in: Address,
+        token_out: Address,
+        pool_index: BytesN<32>,
         in_amount: u128,
-    ) -> (u128, i128) {
-        ensure_non_zero_u128(&e, in_amount);
+    ) -> u128 {
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
 
-        let pool_address = get_pool(&e, &asset);
-
-        e.invoke_contract(
-            &pool_address,
-            &Symbol::new(&e, "estimate_swap"),
-            Vec::from_array(&e, [direction.into_val(&e), in_amount.into_val(&e)]),
-        )
-    }
-
-    // Withdraws liquidity from the pool associated with a synthetic asset.
-    //
-    // This function delegates the withdrawal request to the pool contract linked with the specified `asset`,
-    // burning the user's share tokens and transferring the corresponding amount of underlying tokens back to the user.
-    //
-    // # Arguments
-    // * `e` - The current Soroban environment.
-    // * `user` - The address of the user initiating the withdrawal.
-    // * `asset` - The symbol of the synthetic asset tied to the pool.
-    // * `share_amount` - The number of LP (liquidity provider) shares the user wishes to redeem.
-    //
-    // # Returns
-    // * `u128` - The amount of underlying token (usually Token B) returned to the user upon withdrawal.
-    //
-    // # Panics
-    // * If the `user` is not authorized.
-    // * If no pool is registered for the specified `asset`.
-    //
-    // # Emits
-    // * A `withdraw` event recording the asset, user, pool, withdrawn amount, and share amount.
-    fn withdraw(e: Env, user: Address, asset: Symbol, share_amount: u128) -> u128 {
-        user.require_auth();
-
-        ensure_non_zero_u128(&e, share_amount);
-
-        enter(&e);
-
-        let pool_address = get_pool(&e, &asset);
-
-        let (amount, delta_a): (u128, i128) = e.invoke_contract(
-            &pool_address,
-            &symbol_short!("withdraw"),
-            Vec::from_array(&e, [user.clone().into_val(&e), share_amount.into_val(&e)]),
-        );
-
-        Events::new(&e).withdraw_liquidity(
-            asset,
-            pool_address,
-            user,
-            share_amount,
-            amount,
-            delta_a,
-        );
-
-        exit(&e);
-
-        amount
-    }
-
-    //   _______    _______  ___________  ___________  _______   _______    ________
-    //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
-    // (: ( \___) (: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
-    //  \/ \       \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
-    //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
-    // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
-    //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
-
-    // Returns a map of privileged roles.
-    fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>> {
-        let access_control = AccessControl::new(&e);
-        let mut result: Map<Symbol, Vec<Address>> = Map::new(&e);
-        for role in [
-            Role::Admin,
-            Role::EmergencyAdmin,
-            Role::RewardsAdmin,
-            Role::OperationsAdmin,
-            Role::PauseAdmin,
-        ] {
-            result.set(
-                role.as_symbol(&e),
-                match access_control.get_role_safe(&role) {
-                    Some(v) => Vec::from_array(&e, [v]),
-                    None => Vec::new(&e),
-                },
-            );
-        }
-
-        result.set(
-            Role::EmergencyPauseAdmin.as_symbol(&e),
-            access_control.get_role_addresses(&Role::EmergencyPauseAdmin),
-        );
-
-        result
-    }
-
-    fn get_info(e: Env, asset: Symbol) -> Map<Symbol, Val> {
-        let pool_id = get_pool(&e, &asset);
-        e.invoke_contract(&pool_id, &Symbol::new(&e, "get_info"), Vec::new(&e))
-    }
-
-    fn get_pool(e: Env, asset: Symbol) -> Address {
-        get_pool(&e, &asset)
-    }
-
-    fn share_id(e: Env, asset: Symbol) -> Address {
-        let pool_id = get_pool(&e, &asset);
-        e.invoke_contract(&pool_id, &Symbol::new(&e, "share_id"), Vec::new(&e))
-    }
-
-    fn get_total_shares(e: Env, asset: Symbol) -> u128 {
-        let pool_id = get_pool(&e, &asset);
-        e.invoke_contract(&pool_id, &Symbol::new(&e, "get_total_shares"), Vec::new(&e))
-    }
-
-    fn get_reserves(e: Env, asset: Symbol) -> Vec<u128> {
-        let pool_id = get_pool(&e, &asset);
-        e.invoke_contract(&pool_id, &Symbol::new(&e, "get_reserves"), Vec::new(&e))
-    }
-
-    fn get_fee_fraction(e: Env, asset: Symbol) -> u32 {
-        let pool_id = get_pool(&e, &asset);
-        e.invoke_contract(&pool_id, &Symbol::new(&e, "get_fee_fraction"), Vec::new(&e))
-    }
-
-    fn get_insurance_coverage(e: Env, asset: Symbol) -> u128 {
-        let pool_id = get_pool(&e, &asset);
         e.invoke_contract(
             &pool_id,
-            &Symbol::new(&e, "get_insurance_coverage"),
-            Vec::new(&e),
+            &Symbol::new(&e, "estimate_swap"),
+            Vec::from_array(
+                &e,
+                [
+                    tokens
+                        .first_index_of(token_in.clone())
+                        .unwrap()
+                        .into_val(&e),
+                    tokens
+                        .first_index_of(token_out.clone())
+                        .unwrap()
+                        .into_val(&e),
+                    in_amount.into_val(&e),
+                ],
+            ),
         )
+    }
+
+    // Withdraws tokens from the pool.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `user` - The address of the user withdrawing the tokens.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    // * `burn_amount` - The amount of pool tokens to burn.
+    // * `min_amounts` - A vector of u128s representing the minimum amounts of each token to be received.
+    //
+    // # Returns
+    //
+    // A vector of u128s representing the amounts of each token withdrawn.
+    fn withdraw(
+        e: Env,
+        user: Address,
+        tokens: Vec<Address>,
+        pool_index: BytesN<32>,
+        share_amount: u128,
+        min_amounts: Vec<u128>,
+    ) -> Vec<u128> {
+        user.require_auth();
+        assert_tokens_sorted(&e, &tokens);
+
+        let pool_id = get_pool(&e, &tokens, pool_index);
+
+        let amounts: Vec<u128> = e.invoke_contract(
+            &pool_id,
+            &symbol_short!("withdraw"),
+            Vec::from_array(
+                &e,
+                [
+                    user.clone().into_val(&e),
+                    share_amount.into_val(&e),
+                    min_amounts.into_val(&e),
+                ],
+            ),
+        );
+
+        Events::new(&e).withdraw(tokens, user, pool_id, amounts.clone(), share_amount);
+        amounts
     }
 
     // Returns the total liquidity of the pool.
-    fn get_liquidity(e: Env, asset: Symbol) -> U256 {
-        let pool_id = get_pool(&e, &asset);
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
+    //
+    // # Returns
+    //
+    // The total liquidity of the pool as a U256.
+    fn get_liquidity(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> U256 {
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
 
         let calculator = get_liquidity_calculator(&e);
         match LiquidityCalculatorClient::new(&e, &calculator)
@@ -355,8 +370,31 @@ impl PoolInterfaceTrait for PoolRouter {
         }
     }
 
+    // Returns the address of the liquidity calculator.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    //
+    // # Returns
+    //
+    // The address of the liquidity calculator.
     fn get_liquidity_calculator(e: Env) -> Address {
         get_liquidity_calculator(&e)
+    }
+
+    // Sets the liquidity calculator.
+    //
+    // # Arguments
+    //
+    // * `e` - The environment.
+    // * `admin` - The address of the admin user.
+    // * `calculator` - The address of the liquidity calculator.
+    fn set_liquidity_calculator(e: Env, admin: Address, calculator: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+
+        set_liquidity_calculator(&e, &calculator);
     }
 }
 
@@ -370,6 +408,11 @@ impl UpgradeableContract for PoolRouter {
     // The version of the contract as a u32.
     fn version() -> u32 {
         100
+    }
+
+    // Get contract type symbolic name
+    fn contract_name(e: Env) -> Symbol {
+        Symbol::new(&e, "AMMRouter")
     }
 
     // Commits a new wasm hash for a future upgrade.
@@ -454,14 +497,16 @@ impl AdminInterface for PoolRouter {
         access_control.set_role_address(&Role::Admin, &account);
     }
 
-    //   ________  _______  ___________  ___________  _______   _______    ________
-    //  /"       )/"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
-    // (:   \___/(: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
-    //  \___  \   \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
-    //   __/  \\  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
-    //  /" \   :)(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
-    // (_______/  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
-
+    // Sets the privileged addresses.
+    //
+    // # Arguments
+    //
+    // * `admin` - The address of the admin.
+    // * `rewards_admin` - The address of the rewards admin.
+    // * `operations_admin` - The address of the operations admin.
+    // * `pause_admin` - The address of the pause admin.
+    // * `emergency_pause_admin` - The addresses of the emergency pause admins.
+    // * `system_fee_admin` - The address of the system fee admin.
     fn set_privileged_addrs(
         e: Env,
         admin: Address,
@@ -469,6 +514,7 @@ impl AdminInterface for PoolRouter {
         operations_admin: Address,
         pause_admin: Address,
         emergency_pause_admins: Vec<Address>,
+        system_fee_admin: Address,
     ) {
         admin.require_auth();
         let access_control = AccessControl::new(&e);
@@ -478,71 +524,123 @@ impl AdminInterface for PoolRouter {
         access_control.set_role_address(&Role::OperationsAdmin, &operations_admin);
         access_control.set_role_address(&Role::PauseAdmin, &pause_admin);
         access_control.set_role_addresses(&Role::EmergencyPauseAdmin, &emergency_pause_admins);
+        access_control.set_role_address(&Role::SystemFeeAdmin, &system_fee_admin);
         AccessControlEvents::new(&e).set_privileged_addrs(
             rewards_admin,
             operations_admin,
             pause_admin,
             emergency_pause_admins,
+            system_fee_admin,
         );
     }
 
-    fn set_insurance_fund(e: Env, admin: Address, insurance_fund: Address) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-        set_insurance_fund(&e, &insurance_fund);
-    }
+    // Returns a map of privileged roles.
+    //
+    // # Returns
+    //
+    // A map of privileged roles to their respective addresses.
+    fn get_privileged_addrs(e: Env) -> Map<Symbol, Vec<Address>> {
+        let access_control = AccessControl::new(&e);
+        let mut result: Map<Symbol, Vec<Address>> = Map::new(&e);
+        for role in [
+            Role::Admin,
+            Role::EmergencyAdmin,
+            Role::RewardsAdmin,
+            Role::OperationsAdmin,
+            Role::PauseAdmin,
+            Role::SystemFeeAdmin,
+        ] {
+            result.set(
+                role.as_symbol(&e),
+                match access_control.get_role_safe(&role) {
+                    Some(v) => Vec::from_array(&e, [v]),
+                    None => Vec::new(&e),
+                },
+            );
+        }
 
-    fn set_liquidity_calculator(e: Env, admin: Address, calculator: Address) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-        set_liquidity_calculator(&e, &calculator);
-    }
+        result.set(
+            Role::EmergencyPauseAdmin.as_symbol(&e),
+            access_control.get_role_addresses(&Role::EmergencyPauseAdmin),
+        );
 
-    fn set_oracle_registry(e: Env, admin: Address, oracle_registry: Address) {
-        admin.require_auth();
-        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-        set_oracle_registry(&e, &oracle_registry);
+        result
     }
 
     // Sets the liquidity pool share token wasm hash.
-    fn set_lp_token_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
+    //
+    // # Arguments
+    //
+    // * `new_hash` - The token wasm hash.
+    fn set_token_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-        set_lp_token_hash(&e, &new_hash);
+        set_token_hash(&e, &new_hash);
     }
 
-    // Sets the pool wasm hash.
+    // Sets the standard pool wasm hash.
+    //
+    // # Arguments
+    //
+    // * `new_hash` - The standard pool wasm hash.
     fn set_pool_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-        set_pool_hash(&e, &new_hash);
+        set_constant_product_pool_hash(&e, &new_hash);
+    }
+
+    // Sets the elastic pool wasm hash.
+    //
+    // # Arguments
+    //
+    // * `new_hash` - The new elastic pool wasm hash.
+    fn set_elastic_pool_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        set_elastic_pool_hash(&e, &new_hash);
+    }
+
+    // Sets the rewards gauge wasm hash.
+    //
+    // # Arguments
+    //
+    // * `new_hash` - The new rewards gauge wasm hash.
+    fn set_rewards_gauge_hash(e: Env, admin: Address, new_hash: BytesN<32>) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        config_storage::operations::set_value(
+            &e,
+            &admin,
+            DataKey::GaugeWASM.into_val(&e),
+            new_hash.into(),
+        );
     }
 
     // Sets the reward token.
+    //
+    // # Arguments
+    //
+    // * `reward_token` - The address of the reward token.
     fn set_reward_token(e: Env, admin: Address, reward_token: Address) {
         admin.require_auth();
         AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
-        get_incentives_manager(&e)
+        get_rewards_manager(&e)
             .storage()
             .put_reward_token(reward_token);
     }
 
-    //   _______    _______  ___________  ___________  _______   _______    ________
-    //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
-    // (: ( \___) (: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
-    //  \/ \       \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
-    //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
-    // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
-    //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
-
-    fn get_insurance_fund(e: Env) -> Address {
-        get_insurance_fund(&e)
+    // Sets the protocol fraction of total fee for the pool.
+    fn set_protocol_fee_fraction(e: Env, admin: Address, new_fraction: u32) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+        set_protocol_fee_fraction(&e, &new_fraction);
+        Events::new(&e).set_protocol_fee_fraction(new_fraction);
     }
 }
 
 // The `RewardsInterfaceTrait` trait provides the interface for interacting with rewards.
 #[contractimpl]
-impl IncentivesInterfaceTrait for PoolRouter {
+impl RewardsInterfaceTrait for PoolRouter {
     // Retrieves the global rewards configuration and returns it as a `Map`.
     //
     // This function fetches the global rewards configuration from the contract's state.
@@ -552,7 +650,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
     //
     // A `Map` where each key is a `Symbol` representing a configuration parameter, and the value is the corresponding value.
     // The keys are "tps" and "expired_at".
-    fn get_incentives_config(e: Env) -> Map<Symbol, i128> {
+    fn get_rewards_config(e: Env) -> Map<Symbol, i128> {
         let rewards_config = get_rewards_config(&e);
         let mut result = Map::new(&e);
         result.set(symbol_short!("tps"), rewards_config.tps as i128);
@@ -564,29 +662,40 @@ impl IncentivesInterfaceTrait for PoolRouter {
     //
     // # Returns
     //
-    // A `Map` where each key is a `Symbol` representing an oracle id, and the value is a tuple
-    // `(bool, U256)`. The tuple elements represent the processed status, and total liquidity
+    // A `Map` where each key is a `Vec<Address>` representing a set of token addresses, and the value is a tuple
+    // `(u32, bool, U256)`. The tuple elements represent the voting share, processed status, and total liquidity
     // of the tokens respectively.
-    fn get_tokens_for_reward(e: Env) -> Map<Symbol, (bool, U256)> {
+    fn get_tokens_for_reward(e: Env) -> Map<Vec<Address>, (u32, bool, U256)> {
         let tokens = get_reward_tokens(&e);
         let mut result = Map::new(&e);
         for (key, value) in tokens {
-            result.set(key, (value.processed, value.total_liquidity));
+            result.set(
+                key,
+                (value.voting_share, value.processed, value.total_liquidity),
+            );
         }
         result
     }
 
     // Sums up the liquidity of all pools for given tokens set and returns the total liquidity
     //
+    // # Arguments
+    //
+    // * `tokens` - A vector of token addresses for which to calculate the total liquidity.
+    //
     // # Returns
     //
     // A `U256` value representing the total liquidity for the given set of tokens.
-    fn get_total_liquidity(e: Env, asset: Symbol) -> U256 {
-        let pool = get_pool(&e, &asset);
+    fn get_total_liquidity(e: Env, tokens: Vec<Address>) -> U256 {
+        assert_tokens_sorted(&e, &tokens);
+        let tokens_salt = get_tokens_salt(&e, &tokens);
+        let pools = get_pools_plain(&e, tokens_salt);
 
         let calculator = get_liquidity_calculator(&e);
         let mut pools_vec: Vec<Address> = Vec::new(&e);
-        pools_vec.push_back(pool.clone());
+        for (_key, value) in pools {
+            pools_vec.push_back(value.clone());
+        }
 
         let pools_liquidity =
             LiquidityCalculatorClient::new(&e, &calculator).get_liquidity(&pools_vec);
@@ -595,49 +704,46 @@ impl IncentivesInterfaceTrait for PoolRouter {
             result = result.add(&liquidity);
         }
         result
-
-        // let pools_vec = get_pools_vec(&e);
-
-        // let calculator = get_liquidity_calculator(&e);
-
-        // let pools_liquidity = LiquidityCalculatorClient::new(&e, &calculator).get_liquidity(
-        //     &pools_vec
-        // );
-        // let mut result = U256::from_u32(&e, 0);
-        // for liquidity in pools_liquidity {
-        //     result = result.add(&liquidity);
-        // }
-        // result
     }
 
     // Configures the global rewards for the liquidity pool.
     //
     // # Arguments
     //
-    // * `user` - This user must be authenticated and have admin or operator privileges.
+    // * `admin` - This user must be authenticated and have admin or operator privileges.
     // * `reward_tps` - The rewards per second. This value is scaled by 1e7 for precision.
     // * `expired_at` - The timestamp at which the rewards configuration will expire.
+    // * `tokens_votes` - A vector of tuples, where each tuple contains a vector of token addresses and a voting share.
+    //   The voting share is a value between 0 and 1, scaled by 1e7 for precision.
     fn config_global_rewards(
         e: Env,
         user: Address,
         reward_tps: u128, // value with 7 decimal places. example: 600_0000000
         expired_at: u64,  // timestamp
-        assets: Vec<Symbol>,
+        tokens_votes: Vec<(Vec<Address>, u32)>, // {[token1, token2]: voting_percentage}, voting percentage 0_0000000 .. 1_0000000
     ) {
         user.require_auth();
         require_rewards_admin_or_owner(&e, &user);
 
-        enter(&e);
-
         let mut tokens_with_liquidity = Map::new(&e);
-        for asset in assets {
+        for (tokens, voting_share) in tokens_votes {
+            assert_tokens_sorted(&e, &tokens);
+
             tokens_with_liquidity.set(
-                asset,
-                PoolRewardInfo {
+                tokens,
+                LiquidityPoolRewardInfo {
+                    voting_share,
                     processed: false,
                     total_liquidity: U256::from_u32(&e, 0),
                 },
             );
+        }
+        let mut sum = 0;
+        for (_, reward_info) in tokens_with_liquidity.iter() {
+            sum += reward_info.voting_share;
+        }
+        if sum > 1_0000000 {
+            panic_with_error!(e, PoolRouterError::VotingShareExceedsMax);
         }
 
         set_reward_tokens(&e, &tokens_with_liquidity);
@@ -647,32 +753,31 @@ impl IncentivesInterfaceTrait for PoolRouter {
                 tps: reward_tps,
                 expired_at,
             }),
-        );
-
-        exit(&e);
+        )
     }
 
-    // Fills the aggregated liquidity information for a given asset.
+    // Fills the aggregated liquidity information for a given set of tokens.
     //
     // # Arguments
     //
-    // * `user` - The address of the user.
-    // * `asset` - A vector of token addresses for which to fill the liquidity.
-    fn fill_liquidity(e: Env, user: Address, asset: Symbol) {
-        user.require_auth();
-        require_rewards_admin_or_owner(&e, &user);
+    // * `admin` - This user must be authenticated and have admin or operator privileges.
+    // * `tokens` - A vector of token addresses for which to fill the liquidity.
+    fn fill_liquidity(e: Env, admin: Address, tokens: Vec<Address>) {
+        admin.require_auth();
+        require_rewards_admin_or_owner(&e, &admin);
 
+        assert_tokens_sorted(&e, &tokens);
+        let tokens_salt = get_tokens_salt(&e, &tokens);
         let calculator = get_liquidity_calculator(&e);
-        let total_liquidity = get_total_liquidity(&e, asset.clone(), calculator);
+        let (pools, total_liquidity) = get_total_liquidity(&e, &tokens, calculator);
 
-        if total_liquidity == U256::from_u32(&e, 0) {
-            return;
+        let mut pools_with_processed_info = Map::new(&e);
+        for (key, value) in pools {
+            pools_with_processed_info.set(key, (value, false));
         }
 
-        let pool_with_processed_info = (total_liquidity.clone(), false);
-
         let mut tokens_with_liquidity = get_reward_tokens(&e);
-        let mut token_data = match tokens_with_liquidity.get(asset.clone()) {
+        let mut token_data = match tokens_with_liquidity.get(tokens.clone()) {
             Some(v) => v,
             None => panic_with_error!(e, PoolRouterError::TokensAreNotForReward),
         };
@@ -681,9 +786,9 @@ impl IncentivesInterfaceTrait for PoolRouter {
         }
         token_data.processed = true;
         token_data.total_liquidity = total_liquidity;
-        tokens_with_liquidity.set(asset.clone(), token_data);
+        tokens_with_liquidity.set(tokens, token_data);
         set_reward_tokens(&e, &tokens_with_liquidity);
-        set_reward_tokens_detailed(&e, &asset, &pool_with_processed_info);
+        set_reward_tokens_detailed(&e, tokens_salt, &pools_with_processed_info);
     }
 
     // Configures the rewards for a specific pool.
@@ -693,8 +798,9 @@ impl IncentivesInterfaceTrait for PoolRouter {
     //
     // # Arguments
     //
-    // * `user` - The address of the user.
-    // * `asset` - A vector of token addresses that the pool consists of.
+    // * `admin` - This user must be authenticated and have admin or operator privileges.
+    // * `tokens` - A vector of token addresses that the pool consists of.
+    // * `pool_index` - The index of the pool.
     //
     // # Returns
     //
@@ -707,19 +813,28 @@ impl IncentivesInterfaceTrait for PoolRouter {
     // * The pool does not exist.
     // * The tokens are not found in the current rewards configuration.
     // * The liquidity for the tokens has not been filled.
-    fn config_pool_rewards(e: Env, user: Address, asset: Symbol) -> u128 {
-        user.require_auth();
-        require_rewards_admin_or_owner(&e, &user);
+    fn config_pool_rewards(
+        e: Env,
+        admin: Address,
+        tokens: Vec<Address>,
+        pool_index: BytesN<32>,
+    ) -> u128 {
+        admin.require_auth();
+        require_rewards_admin_or_owner(&e, &admin);
 
-        let pool_id = get_pool(&e, &asset);
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index.clone());
 
         let rewards_config = get_rewards_config(&e);
-        let tokens_detailed = get_reward_tokens_detailed(&e, asset.clone());
+        let tokens_salt = get_tokens_salt(&e, &tokens);
+        let mut tokens_detailed = get_reward_tokens_detailed(&e, tokens_salt.clone());
         let tokens_reward = get_reward_tokens(&e);
-        let tokens_reward_info = tokens_reward.get(asset.clone());
+        let tokens_reward_info = tokens_reward.get(tokens.clone());
 
         let (pool_liquidity, pool_configured) = if tokens_reward_info.is_some() {
             tokens_detailed
+                .get(pool_index.clone())
+                .unwrap_or((U256::from_u32(&e, 0), false))
         } else {
             (U256::from_u32(&e, 0), false)
         };
@@ -731,7 +846,8 @@ impl IncentivesInterfaceTrait for PoolRouter {
         let reward_info = match tokens_reward_info {
             Some(v) => v,
             // if tokens not found in current config, deactivate them
-            None => PoolRewardInfo {
+            None => LiquidityPoolRewardInfo {
+                voting_share: 0,
                 processed: true,
                 total_liquidity: U256::from_u32(&e, 0),
             },
@@ -743,7 +859,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
         // it's safe to convert tps to u128 since it cannot be bigger than total tps which is u128
         let pool_tps = if pool_liquidity > U256::from_u32(&e, 0) {
             U256::from_u128(&e, rewards_config.tps)
-                // .mul(&U256::from_u32(&e, reward_info.voting_share))
+                .mul(&U256::from_u32(&e, reward_info.voting_share))
                 .mul(&pool_liquidity)
                 .div(&reward_info.total_liquidity)
                 .div(&U256::from_u32(&e, 1_0000000))
@@ -755,7 +871,7 @@ impl IncentivesInterfaceTrait for PoolRouter {
 
         e.invoke_contract::<Val>(
             &pool_id,
-            &Symbol::new(&e, "set_incentives_config"),
+            &Symbol::new(&e, "set_rewards_config"),
             Vec::from_array(
                 &e,
                 [
@@ -768,31 +884,39 @@ impl IncentivesInterfaceTrait for PoolRouter {
 
         if pool_tps > 0 {
             // mark pool as configured to avoid reentrancy
-            set_reward_tokens_detailed(&e, &asset, &(pool_liquidity, true));
+            tokens_detailed.set(pool_index, (pool_liquidity, true));
+            set_reward_tokens_detailed(&e, tokens_salt, &tokens_detailed);
         }
 
-        Events::new(&e).config_rewards(asset, pool_id, pool_tps, rewards_config.expired_at);
+        Events::new(&e).config_rewards(tokens, pool_id, pool_tps, rewards_config.expired_at);
 
         pool_tps
     }
 
-    // Get incentives status for the pool, including amount available for the user
+    // Get rewards status for the pool, including amount available for the user
     //
     // # Arguments
     //
     // * `e` - The environment.
     // * `user` - The address of the user.
-    // * `oracle_id` - The pool oracle_id.
+    // * `tokens` - A vector of token addresses.
+    // * `pool_index` - The pool index hash.
     //
     // # Returns
     //
     // A map of symbols to integers representing the rewards info.
-    fn get_incentives_info(e: Env, user: Address, asset: Symbol) -> Map<Symbol, i128> {
-        let pool_id = get_pool(&e, &asset);
+    fn get_rewards_info(
+        e: Env,
+        user: Address,
+        tokens: Vec<Address>,
+        pool_index: BytesN<32>,
+    ) -> Map<Symbol, i128> {
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
 
         e.invoke_contract(
             &pool_id,
-            &Symbol::new(&e, "get_incentives_info"),
+            &Symbol::new(&e, "get_rewards_info"),
             Vec::from_array(&e, [user.clone().into_val(&e)]),
         )
     }
@@ -809,34 +933,18 @@ impl IncentivesInterfaceTrait for PoolRouter {
     // # Returns
     //
     // The user reward as a u128.
-    fn get_user_reward(e: Env, user: Address, asset: Symbol) -> u128 {
-        let pool_id = get_pool(&e, &asset);
+    fn get_user_reward(
+        e: Env,
+        user: Address,
+        tokens: Vec<Address>,
+        pool_index: BytesN<32>,
+    ) -> u128 {
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
 
         e.invoke_contract(
             &pool_id,
             &Symbol::new(&e, "get_user_reward"),
-            Vec::from_array(&e, [user.clone().into_val(&e)]),
-        )
-    }
-
-    // Get amount of LP fees available for the user to claim.
-    //
-    // # Arguments
-    //
-    // * `e` - The environment.
-    // * `user` - The address of the user.
-    // * `tokens` - A vector of token addresses.
-    // * `pool_index` - The pool index hash.
-    //
-    // # Returns
-    //
-    // The user LP fee as a u128.
-    fn get_user_fees(e: Env, user: Address, asset: Symbol) -> u128 {
-        let pool_id = get_pool(&e, &asset);
-
-        e.invoke_contract(
-            &pool_id,
-            &Symbol::new(&e, "get_user_fees"),
             Vec::from_array(&e, [user.clone().into_val(&e)]),
         )
     }
@@ -852,8 +960,9 @@ impl IncentivesInterfaceTrait for PoolRouter {
     // # Returns
     //
     // The total accumulated reward as a u128.
-    fn get_total_accumulated_reward(e: Env, asset: Symbol) -> u128 {
-        let pool_id = get_pool(&e, &asset);
+    fn get_total_accumulated_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
 
         e.invoke_contract(
             &pool_id,
@@ -873,8 +982,9 @@ impl IncentivesInterfaceTrait for PoolRouter {
     // # Returns
     //
     // The total configured reward as a u128.
-    fn get_total_configured_reward(e: Env, asset: Symbol) -> u128 {
-        let pool_id = get_pool(&e, &asset);
+    fn get_total_configured_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
 
         e.invoke_contract(
             &pool_id,
@@ -894,8 +1004,9 @@ impl IncentivesInterfaceTrait for PoolRouter {
     // # Returns
     //
     // The total claimed reward as a u128.
-    fn get_total_claimed_reward(e: Env, asset: Symbol) -> u128 {
-        let pool_id = get_pool(&e, &asset);
+    fn get_total_claimed_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
 
         e.invoke_contract(
             &pool_id,
@@ -906,8 +1017,9 @@ impl IncentivesInterfaceTrait for PoolRouter {
 
     // Calculate difference between total configured reward and total claimed reward.
     // Helps to estimate the amount of missing reward tokens pool has configured to distribute
-    fn get_total_outstanding_reward(e: Env, asset: Symbol) -> u128 {
-        let pool_id = get_pool(&e, &asset);
+    fn get_total_outstanding_reward(e: Env, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
+        assert_tokens_sorted(&e, &tokens);
+        let pool_id = get_pool(&e, &tokens, pool_index);
 
         let configured_reward: u128 = e.invoke_contract(
             &pool_id,
@@ -920,48 +1032,64 @@ impl IncentivesInterfaceTrait for PoolRouter {
             Vec::new(&e),
         );
 
-        let incentives = get_incentives_manager(&e);
-        let reward_token = incentives.storage().get_reward_token();
+        let rewards = get_rewards_manager(&e);
+        let reward_token = rewards.storage().get_reward_token();
         let reward_token_client = SorobanTokenClient::new(&e, &reward_token);
-        let pool_reward_balance = reward_token_client.balance(&pool_id) as u128;
+        let mut pool_reward_balance = reward_token_client.balance(&pool_id) as u128;
 
-        configured_reward.safe_sub(&e, claimed_reward + pool_reward_balance)
+        // handle edge case - if pool has reward token in reserves
+        match tokens.first_index_of(reward_token) {
+            Some(i) => {
+                let pool_reserves: Vec<u128> =
+                    e.invoke_contract(&pool_id, &Symbol::new(&e, "get_reserves"), Vec::new(&e));
+                let protocol_fees: Vec<u128> = e.invoke_contract(
+                    &pool_id,
+                    &Symbol::new(&e, "get_protocol_fees"),
+                    Vec::new(&e),
+                );
+                pool_reward_balance =
+                    pool_reward_balance.saturating_sub(pool_reserves.get(i).unwrap());
+                pool_reward_balance =
+                    pool_reward_balance.saturating_sub(protocol_fees.get(i).unwrap());
+            }
+            None => {}
+        }
+        configured_reward.saturating_sub(claimed_reward + pool_reward_balance)
     }
 
     // Transfer outstanding reward to the pool
-    fn distribute_outstanding_reward(e: Env, user: Address, from: Address, asset: Symbol) -> u128 {
+    fn distribute_outstanding_reward(
+        e: Env,
+        user: Address,
+        from: Address,
+        tokens: Vec<Address>,
+        pool_index: BytesN<32>,
+    ) -> u128 {
         user.require_auth();
         require_rewards_admin_or_owner(&e, &user);
+        assert_tokens_sorted(&e, &tokens);
 
-        enter(&e);
+        let pool_id = get_pool(&e, &tokens, pool_index.clone());
 
-        let pool_id = get_pool(&e, &asset);
-
-        let outstanding_reward = Self::get_total_outstanding_reward(e.clone(), asset.clone());
-        let incentives = get_incentives_manager(&e);
-        let reward_token = incentives.storage().get_reward_token();
+        let outstanding_reward =
+            Self::get_total_outstanding_reward(e.clone(), tokens.clone(), pool_index.clone());
+        let rewards = get_rewards_manager(&e);
+        let reward_token = rewards.storage().get_reward_token();
 
         if from != e.current_contract_address() {
-            transfer_token_from(
-                &e,
-                &reward_token,
+            SorobanTokenClient::new(&e, &reward_token).transfer_from(
                 &e.current_contract_address(),
                 &from,
                 &pool_id,
                 &(outstanding_reward as i128),
             );
         } else {
-            transfer_token(
-                &e,
-                &reward_token,
+            SorobanTokenClient::new(&e, &reward_token).transfer(
                 &e.current_contract_address(),
                 &pool_id,
                 &(outstanding_reward as i128),
             );
         }
-
-        exit(&e);
-
         outstanding_reward
     }
 
@@ -977,12 +1105,11 @@ impl IncentivesInterfaceTrait for PoolRouter {
     // # Returns
     //
     // The amount of tokens rewarded to the user as a u128.
-    fn claim(e: Env, user: Address, asset: Symbol) -> u128 {
+    fn claim(e: Env, user: Address, tokens: Vec<Address>, pool_index: BytesN<32>) -> u128 {
         user.require_auth();
+        assert_tokens_sorted(&e, &tokens);
 
-        enter(&e);
-
-        let pool_id = get_pool(&e, &asset);
+        let pool_id = get_pool(&e, &tokens, pool_index);
 
         let amount = e.invoke_contract(
             &pool_id,
@@ -991,14 +1118,12 @@ impl IncentivesInterfaceTrait for PoolRouter {
         );
 
         Events::new(&e).claim(
-            asset,
+            tokens,
             user,
             pool_id,
-            get_incentives_manager(&e).storage().get_reward_token(),
+            get_rewards_manager(&e).storage().get_reward_token(),
             amount,
         );
-
-        exit(&e);
 
         amount
     }
@@ -1007,167 +1132,295 @@ impl IncentivesInterfaceTrait for PoolRouter {
 // The `PoolsManagementTrait` trait provides the interface for managing liquidity pools.
 #[contractimpl]
 impl PoolsManagementTrait for PoolRouter {
-    //  ___      ___       __        __    _____  ___
-    // |"  \    /"  |     /""\      |" \  (\"   \|"  \
-    //  \   \  //   |    /    \     ||  | |.\\   \    |
-    //  /\\  \/.    |   /' /\  \    |:  | |: \.   \\  |
-    // |: \.        |  //  __'  \   |.  | |.  \    \. |
-    // |.  \    /:  | /   /  \\  \  /\  |\|    \    \ |
-    // |___|\__/|___|(___/    \___)(__\_|_)\___|\____\)
-
-    // Initializes a pool with custom arguments.
+    // Initializes a standard pool with custom arguments.
     //
     // # Arguments
     //
-    // * `admin` - The address of the admin initializing the pool.
-    // * `assets` - A tuple of the base and quote asset Oracle Registry assets.
-    // * `token_b` - A token address of the pool's quote token.
-    // * `synthetic_sac_address` - .
-    // * `lp_token_info` - A tuple of the LP token name and symbol.
-    // * `fee_fraction` - The fee fraction for the pool (in basis points).
-    // * `tier` - The risk tier of the target asset.
-    // * `quote_max_insurance` - The max coverage the pool may claim from the Insurance Fund.
+    // * `user` - The address of the user initializing the pool.
+    // * `tokens` - A vector of token addresses that the pool consists of.
+    // * `fee_fraction` - The fee fraction for the pool. Should match pre-defined set of values: 0.1%, 0.3%, 1%.
     //
     // # Returns
     //
     // A tuple containing:
     // * The pool index hash.
     // * The address of the pool.
-    fn init_pool(
+    fn init_standard_pool(
         e: Env,
-        admin: Address,
-        assets: (Symbol, Symbol),
-        token_b: Address,
-        synthetic_sac_address: Address,
-        lp_token_info: (String, String),
+        user: Address,
+        tokens: Vec<Address>,
         fee_fraction: u32,
-        tier: PoolTier,
-        quote_max_insurance: u128,
-    ) -> Address {
-        admin.require_auth();
-        require_admin(&e, &admin);
+    ) -> (BytesN<32>, Address) {
+        user.require_auth();
+        validate_tokens_contracts(&e, &tokens);
+        assert_tokens_sorted(&e, &tokens);
 
-        if fee_fraction > MAX_POOL_FEE {
+        if !CONSTANT_PRODUCT_FEE_AVAILABLE.contains(&fee_fraction) {
             panic_with_error!(&e, PoolRouterError::BadFee);
         }
 
-        let (base_asset, _) = assets.clone();
+        let salt = get_tokens_salt(&e, &tokens);
+        let pools = get_pools_plain(&e, salt);
+        let pool_index = get_standard_pool_salt(&e, &fee_fraction);
 
-        match get_pool_base(&e, base_asset.clone()) {
-            Some(pool_address) => pool_address,
-            None => deploy_pool(
-                &e,
-                &token_b,
-                &assets,
-                &synthetic_sac_address,
-                &lp_token_info,
-                fee_fraction,
-                &tier,
-                quote_max_insurance,
-            ),
+        match pools.get(pool_index.clone()) {
+            Some(pool_address) => (pool_index, pool_address),
+            None => deploy_standard_pool(&e, &tokens, fee_fraction),
         }
     }
 
-    fn delist_pool(e: Env, admin: Address, asset: Symbol) {
-        admin.require_auth();
-        require_admin(&e, &admin);
+    // Initializes an elastic supply pool with custom arguments.
+    //
+    // # Arguments
+    //
+    // * `user` - The address of the user initializing the pool.
+    // * `tokens` - A vector of token addresses that the pool consists of.
+    // * `fee_fraction` - The fee fraction for the pool. Has denominator 10000; 1 = 0.01%, 10 = 0.1%, 100 = 1%.
+    // * `oracle` - The address...
+    //
+    // # Returns
+    //
+    // A tuple containing:
+    // * The pool index hash.
+    // * The address of the pool.
+    fn init_elastic_pool(
+        e: Env,
+        user: Address,
+        tokens: Vec<Address>,
+        fee_fraction: u32,
+        oracle: Address,
+        assets_config: (Symbol, Symbol),
+    ) -> (BytesN<32>, Address) {
+        user.require_auth();
+        validate_tokens_contracts(&e, &tokens);
+        assert_tokens_sorted(&e, &tokens);
 
-        let pool = get_pool(&e, &asset);
-
-        let response: u128 = e.invoke_contract(
-            &pool,
-            &Symbol::new(&e, "delist"),
-            Vec::from_array(&e, [admin.clone().into_val(&e), asset.into_val(&e)]),
-        );
-
-        Events::new(&e).delist_pool(asset, pool);
-    }
-
-    fn remove_pool(e: Env, admin: Address, asset: Symbol) {
-        admin.require_auth();
-        require_admin(&e, &admin);
-
-        let now = e.ledger().timestamp();
-        let pool = get_pool(&e, &asset);
-
-        let pool_info: PoolInfo =
-            e.invoke_contract(&pool, &Symbol::new(&e, "get_info"), Vec::from_array(&e, []));
-
-        let pool_in_settlement = pool_info.pool_response.pool.is_in_settlement(now);
-        let pool_reserves_empty = pool_info.pool_response.token_a.amount == 0
-            && pool_info.pool_response.token_b.amount == 0;
-
-        // Only remove the Pool if it's in settlement and has emptied it's reserves
-        if pool_in_settlement && pool_reserves_empty {
-            remove_pool(&e, &asset);
-
-            let mut pools_vec = get_pools_vec(&e);
-            for i in 0..pools_vec.len() {
-                if let Some(existing) = pools_vec.get(i) {
-                    if existing == pool {
-                        pools_vec.remove_unchecked(i);
-                    }
-                }
-            }
-            set_pools_vec(&e, &pools_vec);
-
-            set_reward_tokens_detailed(&e, &asset, &(U256::from_u32(&e, 0), false));
+        if fee_fraction > ELASTIC_MAX_FEE {
+            panic_with_error!(&e, PoolRouterError::BadFee);
         }
 
-        Events::new(&e).remove_pool(asset, pool);
+        let salt = get_tokens_salt(&e, &tokens);
+        let pools = get_pools_plain(&e, salt);
+        let pool_index = get_elastic_pool_salt(&e);
+
+        match pools.get(pool_index.clone()) {
+            Some(pool_address) => (pool_index, pool_address),
+            None => deploy_elastic_pool(&e, &tokens, fee_fraction, &oracle, &assets_config),
+        }
     }
 
-    //   _______    _______  ___________  ___________  _______   _______    ________
-    //  /" _   "|  /"     "|("     _   ")("     _   ")/"     "| /"      \  /"       )
-    // (: ( \___) (: ______) )__/  \\__/  )__/  \\__/(: ______)|:        |(:   \___/
-    //  \/ \       \/    |      \\_ /        \\_ /    \/    |  |_____/   ) \___  \
-    //  //  \ ___  // ___)_     |.  |        |.  |    // ___)_  //      /   __/  \\
-    // (:   _(  _|(:      "|    \:  |        \:  |   (:      "||:  __   \  /" \   :)
-    //  \_______)  \_______)     \__|         \__|    \_______)|__|  \___)(_______/
-
-    fn query_pool_details(e: Env, asset: Symbol) -> PoolInfo {
-        let pool_id = get_pool(&e, &asset);
-
-        let pool_response: PoolInfo =
-            e.invoke_contract(&pool_id, &Symbol::new(&e, "get_info"), Vec::new(&e));
-        pool_response
+    // Returns a map of pools for given set of tokens.
+    //
+    // # Arguments
+    //
+    // * `tokens` - A vector of token addresses that the pair consists of.
+    //
+    // # Returns
+    //
+    // A map of pool index hashes to pool addresses.
+    fn get_pools(e: Env, tokens: Vec<Address>) -> Map<BytesN<32>, Address> {
+        assert_tokens_sorted(&e, &tokens);
+        let salt = get_tokens_salt(&e, &tokens);
+        get_pools_plain(&e, salt)
     }
 
-    fn query_all_pools_details(e: Env) -> Vec<PoolInfo> {
-        let pools_vec = get_pools_vec(&e);
+    // Returns a map of pools for given set of tokens.
+    //
+    // # Arguments
+    //
+    // * `tokens` - A vector of token addresses that the pair consists of.
+    //
+    // # Returns
+    //
+    // A map of pool index hashes to pool addresses.
+    fn remove_pool(e: Env, user: Address, tokens: Vec<Address>, pool_hash: BytesN<32>) {
+        user.require_auth();
+        require_operations_admin_or_owner(&e, &user);
+        assert_tokens_sorted(&e, &tokens);
 
+        let salt = get_tokens_salt(&e, &tokens);
+        if has_pool(&e, salt.clone(), pool_hash.clone()) {
+            crate::storage::remove_pool(&e, salt, pool_hash)
+        }
+    }
+
+    // Returns the number of unique token sets.
+    //
+    // # Returns
+    //
+    // The number of unique token sets.
+    fn get_tokens_sets_count(e: Env) -> u128 {
+        get_tokens_set_count(&e)
+    }
+
+    // Retrieves tokens at a specified index.
+    //
+    // # Arguments
+    //
+    // * `index` - The index of the token set to retrieve.
+    //
+    // # Returns
+    //
+    // A vector of token addresses at the specified index.
+    fn get_tokens(e: Env, index: u128) -> Vec<Address> {
+        get_tokens_set(&e, index)
+    }
+
+    // Retrieves a list of pools in batch based on half-open `[..)` range of tokens indexes.
+    //
+    // # Arguments
+    //
+    // * `start` - The start index of the range.
+    // * `end` - The end index of the range.
+    //
+    // # Returns
+    //
+    // A list containing tuples containing a vector of addresses of the corresponding tokens
+    // and a mapping of pool hashes to pool addresses.
+    fn get_pools_for_tokens_range(
+        e: Env,
+        start: u128,
+        end: u128,
+    ) -> Vec<(Vec<Address>, Map<BytesN<32>, Address>)> {
+        // chained operation for better efficiency
         let mut result = Vec::new(&e);
-        for pool in pools_vec {
-            let pool_response: PoolInfo =
-                e.invoke_contract(&pool, &Symbol::new(&e, "get_info"), Vec::new(&e));
-
-            result.push_back(pool_response);
+        for index in start..end {
+            let tokens = Self::get_tokens(e.clone(), index);
+            result.push_back((tokens.clone(), Self::get_pools(e.clone(), tokens)));
         }
-
         result
     }
 
-    fn get_pools(e: Env) -> Vec<Address> {
-        get_pools_vec(&e)
+    // Returns the protocol fee fraction.
+    fn get_protocol_fee_fraction(e: Env) -> u32 {
+        crate::storage::get_protocol_fee_fraction(&e)
     }
 
-    fn get_total_liquidity_imbalance(e: Env) -> i128 {
-        let pools = get_pools_vec(&e);
+    // Set the reward thresholds for the pool gauge.
+    // When distributor schedules gauge reward, it should be greater than this value.
+    fn pool_gauge_set_reward_thresholds(
+        e: Env,
+        admin: Address,
+        min_reward_equivalent_day: u128,
+        min_duration_seconds: u64,
+    ) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
 
-        let mut total_liquidity_imbalance = 0_i128;
+        gauge_set_reward_per_day_threshold(&e, &admin, min_reward_equivalent_day);
+        gauge_set_reward_duration_threshold(&e, &admin, min_duration_seconds);
+    }
 
-        for idx in 0..pools.len() {
-            let pool_address = pools.get(idx).unwrap();
-            let pool_liquidity_imbalance: i128 = e.invoke_contract(
-                &pool_address,
-                &Symbol::new(&e, "get_liquidity_imbalance"),
-                Vec::new(&e),
-            );
-            total_liquidity_imbalance =
-                total_liquidity_imbalance.safe_add(&e, pool_liquidity_imbalance);
+    // Getters for pool gauge reward thresholds
+    fn pool_gauge_get_min_daily_amount(e: Env) -> u128 {
+        gauge_get_reward_per_day_threshold(&e)
+    }
+
+    fn pool_gauge_get_min_duration(e: Env) -> u64 {
+        gauge_get_reward_duration_threshold(&e)
+    }
+
+    // Switches the rewards gauge for a specific pool token.
+    fn pool_gauge_switch_token(e: Env, admin: Address, token: Address, enabled: bool) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+        set_gauge_rewards_enabled_for(&e, token.clone(), enabled);
+        Events::new(&e).pool_gauge_switch_token(token, enabled);
+    }
+
+    // Checks if the rewards gauge is enabled for a specific pool token.
+    fn pool_gauge_token_enabled(e: Env, token: Address) -> bool {
+        get_gauge_rewards_enabled_for(&e, token)
+    }
+
+    // Schedules an additional LP reward for a specific pool through rewards gauge.
+    fn pool_gauge_schedule_reward(
+        e: Env,
+        distributor: Address,
+        pool_tokens: Vec<Address>,
+        pool_hash: BytesN<32>,
+        distribute_token: Address,
+        tps: u128,
+        start_at: Option<u64>,
+        duration: u64,
+        swaps_chain_proof: Vec<(Vec<Address>, BytesN<32>, Address)>,
+    ) -> Address {
+        distributor.require_auth();
+
+        let pool = get_pool(&e, &pool_tokens, pool_hash);
+
+        for token in pool_tokens {
+            if !get_gauge_rewards_enabled_for(&e, token) {
+                panic_with_error!(&e, PoolRouterError::GaugeRewardsDisabledForPool);
+            }
         }
 
-        total_liquidity_imbalance
+        let gauges_map: Map<Address, Address> =
+            e.invoke_contract(&pool, &Symbol::new(&e, "get_gauges"), Vec::new(&e));
+        let rewards_gauge = match gauges_map.get(distribute_token.clone()) {
+            Some(gauge_address) => gauge_address,
+            None => {
+                // deploy new gauge
+                let rewards_gauge =
+                    deploy_rewards_gauge(&e, pool.clone(), distribute_token.clone());
+
+                // attach deployed gauge to the pool
+                e.invoke_contract::<Val>(
+                    &pool,
+                    &symbol_short!("gauge_add"),
+                    Vec::from_array(
+                        &e,
+                        [
+                            e.current_contract_address().to_val(),
+                            rewards_gauge.clone().into_val(&e),
+                        ],
+                    ),
+                );
+                rewards_gauge
+            }
+        };
+
+        // verify duration against minimum threshold
+        if duration < gauge_get_reward_duration_threshold(&e) {
+            panic_with_error!(e, PoolRouterError::RewardDurationTooShort);
+        }
+
+        // verify equivalent reward per day in reward token using swaps chain proof
+        let reward_equivalent_per_day = calculate_equivalent_reward(
+            &e,
+            &distribute_token,
+            tps * 86400, // reward per day
+            swaps_chain_proof,
+        );
+        if reward_equivalent_per_day < gauge_get_reward_per_day_threshold(&e) {
+            panic_with_error!(e, PoolRouterError::RewardAmountTooLow);
+        }
+
+        // fn gauge_schedule_reward(
+        //         e: Env,
+        //         router: Address,
+        //         distributor: Address,
+        //         gauge: Address,
+        //         start_at: Option<u64>,
+        //         duration: u64,
+        //         tps: u128,
+        //     )
+        e.invoke_contract::<Val>(
+            &pool,
+            &Symbol::new(&e, "gauge_schedule_reward"),
+            Vec::from_array(
+                &e,
+                [
+                    e.current_contract_address().to_val(),
+                    distributor.into_val(&e),
+                    rewards_gauge.into_val(&e),
+                    start_at.into_val(&e),
+                    duration.into_val(&e),
+                    tps.into_val(&e),
+                ],
+            ),
+        );
+        rewards_gauge
     }
 }
 
@@ -1273,5 +1526,14 @@ impl TransferableContract for PoolRouter {
             },
             _ => access_control.get_future_address(&role),
         }
+    }
+}
+
+#[contractimpl]
+impl ConfigStorageInterface for PoolRouter {
+    fn init_config_storage(e: Env, admin: Address, config_storage: Address) {
+        admin.require_auth();
+        AccessControl::new(&e).assert_address_has_role(&admin, &Role::Admin);
+        config_storage::operations::init_config_storage(&e, &config_storage);
     }
 }

@@ -250,6 +250,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "config-storage"
+version = "1.0.0"
+dependencies = [
+ "access_control",
+ "soroban-sdk",
+ "upgrade",
+ "utils",
+]
+
+[[package]]
 name = "const-oid"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -653,15 +663,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
-name = "incentives"
-version = "1.0.0"
-dependencies = [
- "soroban-fixed-point-math",
- "soroban-sdk",
- "utils",
-]
-
-[[package]]
 name = "indexmap"
 version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -690,26 +691,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e04e2fd2b8188ea827b32ef11de88377086d690286ab35747ef7f9bf3ccb590"
 
 [[package]]
-name = "insurance-fund"
-version = "1.0.0"
-dependencies = [
- "access_control",
- "paste",
- "reentrancy_guard",
- "soroban-fixed-point-math",
- "soroban-sdk",
- "upgrade",
- "utils",
-]
-
-[[package]]
 name = "integration-tests"
 version = "1.0.0"
 dependencies = [
- "sep-40-oracle",
  "soroban-sdk",
- "token_lp",
- "utils",
 ]
 
 [[package]]
@@ -777,7 +762,6 @@ dependencies = [
  "soroban-fixed-point-math",
  "soroban-sdk",
  "upgrade",
- "utils",
 ]
 
 [[package]]
@@ -785,17 +769,6 @@ name = "log"
 version = "0.4.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5e6163cb8c49088c2c36f57875e58ccd8c87c7427f7fbd50ea6710b2f3f2e8f"
-
-[[package]]
-name = "lp-token"
-version = "1.0.0"
-dependencies = [
- "access_control",
- "soroban-sdk",
- "soroban-token-sdk",
- "upgrade",
- "utils",
-]
 
 [[package]]
 name = "num-bigint"
@@ -845,20 +818,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
 
 [[package]]
-name = "oracle-registry"
-version = "1.0.0"
-dependencies = [
- "access_control",
- "paste",
- "reentrancy_guard",
- "sep-40-oracle",
- "soroban-fixed-point-math",
- "soroban-sdk",
- "upgrade",
- "utils",
-]
-
-[[package]]
 name = "p256"
 version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -891,17 +850,53 @@ name = "pool"
 version = "1.0.0"
 dependencies = [
  "access_control",
- "incentives",
  "paste",
- "rand",
- "reentrancy_guard",
+ "pool-config-storage",
+ "pool-events",
+ "pool-rewards-gauge",
+ "pool-validation-errors",
+ "rewards",
+ "soroban-fixed-point-math",
+ "soroban-sdk",
+ "token_share",
+ "upgrade",
+ "utils",
+]
+
+[[package]]
+name = "pool-config-storage"
+version = "1.0.0"
+dependencies = [
+ "paste",
+ "soroban-sdk",
+ "utils",
+]
+
+[[package]]
+name = "pool-elastic"
+version = "1.0.0"
+dependencies = [
+ "access_control",
+ "paste",
+ "pool-config-storage",
+ "pool-events",
+ "pool-rewards-gauge",
+ "pool-validation-errors",
+ "rewards",
  "sep-40-oracle",
  "soroban-fixed-point-math",
  "soroban-sdk",
- "token_lp",
+ "token_share",
  "token_synthetic",
  "upgrade",
  "utils",
+]
+
+[[package]]
+name = "pool-events"
+version = "1.0.0"
+dependencies = [
+ "soroban-sdk",
 ]
 
 [[package]]
@@ -911,6 +906,14 @@ dependencies = [
  "access_control",
  "soroban-sdk",
  "upgrade",
+]
+
+[[package]]
+name = "pool-rewards-gauge"
+version = "1.0.0"
+dependencies = [
+ "paste",
+ "soroban-sdk",
  "utils",
 ]
 
@@ -919,30 +922,21 @@ name = "pool-router"
 version = "1.0.0"
 dependencies = [
  "access_control",
- "incentives",
  "paste",
- "reentrancy_guard",
+ "pool-config-storage",
+ "rewards",
  "sep-40-oracle",
  "soroban-sdk",
- "token_lp",
+ "token_share",
  "upgrade",
  "utils",
 ]
 
 [[package]]
-name = "pool-swap-fee"
+name = "pool-validation-errors"
 version = "1.0.0"
 dependencies = [
- "access_control",
- "incentives",
- "paste",
- "reentrancy_guard",
- "sep-40-oracle",
- "soroban-fixed-point-math",
  "soroban-sdk",
- "token_lp",
- "upgrade",
- "utils",
 ]
 
 [[package]]
@@ -1025,10 +1019,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "reentrancy_guard"
+name = "rewards"
 version = "1.0.0"
 dependencies = [
+ "soroban-fixed-point-math",
  "soroban-sdk",
+ "utils",
+]
+
+[[package]]
+name = "rewards-gauge"
+version = "1.0.0"
+dependencies = [
+ "access_control",
+ "paste",
+ "soroban-fixed-point-math",
+ "soroban-sdk",
+ "upgrade",
  "utils",
 ]
 
@@ -1533,7 +1540,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "token_lp"
+name = "token-share"
+version = "1.0.0"
+dependencies = [
+ "access_control",
+ "soroban-sdk",
+ "soroban-token-sdk",
+ "upgrade",
+ "utils",
+]
+
+[[package]]
+name = "token_share"
 version = "1.0.0"
 dependencies = [
  "soroban-sdk",

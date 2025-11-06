@@ -1,8 +1,14 @@
+#![allow(dead_code)]
 #![cfg(test)]
 
 use crate::LiquidityCalculatorClient;
 use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
-use soroban_sdk::{Address, Env, Symbol};
+use soroban_sdk::{Address, BytesN, Env, Symbol};
+
+pub fn install_dummy_wasm<'a>(e: &Env) -> BytesN<32> {
+    soroban_sdk::contractimport!(file = "../../wasm/dummy_contract.wasm");
+    e.deployer().upload_contract_wasm(WASM)
+}
 
 pub fn create_contract<'a>(e: &Env) -> LiquidityCalculatorClient<'a> {
     let client =
