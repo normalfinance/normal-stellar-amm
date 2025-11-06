@@ -3,28 +3,23 @@ use soroban_sdk::Env;
 use utils::constant::PRICE_PRECISION;
 use utils::math::safe_math::{PrecisionMath, SafeConversion, SafeMath};
 
-use crate::storage::{get_base_tax_fraction, get_max_tax_fraction, get_tax_incline};
+use crate::storage::{get_base_tax_fraction, get_max_tax_fraction, get_tax_incline, get_tax_rate_table};
 
 
-//TODO: Make this table configurable in storage
-/// Tax curve based on exponential deviation from peg.
-/// Example reference points:
+
 /// | Deviation | Tax rate |
 /// |-----------|----------|
 /// | 0%        | 0.10%    |
 /// | 2%        | 1.1%     |
 /// | 5%        | 5.5%     |
 /// | 10%       | 27%      |
-/// | 20%       | 49%      |
+/// | 20%   
+///   45    | 65%      |
 pub fn calculate_tax_rate(e: &Env, pool_price: u128, peg_price: u128) -> u32 {
     // Guard against zero division
     if peg_price == 0 || pool_price == 0 {
         return get_base_tax_fraction(e);
     }
-
-    let base_tax = get_base_tax_fraction(e);
-    let max_tax = get_max_tax_fraction(e);
-    let k = get_tax_incline(e);
 
     // Calculate absolute deviation: |pool_price - peg_price| / peg_price
     let price_diff = if pool_price > peg_price {
@@ -35,6 +30,39 @@ pub fn calculate_tax_rate(e: &Env, pool_price: u128, peg_price: u128) -> u32 {
 
     // abs_deviation = |price_diff| / peg_price (scaled by PRICE_PRECISION)
     let abs_deviation = price_diff.safe_fixed_div_round(e, peg_price, PRICE_PRECISION);
+
+    // Check if we have a configured rate table
+    let rate_table = get_tax_rate_table(e);
+    
+    if rate_table.len() > 0 {
+        // Use table lookup with step function
+        // Find the entry with the highest deviation <= actual deviation
+        let mut best_rate = 0_u32;
+        let mut found = false;
+        
+        for i in 0..rate_table.len() {
+            let entry = rate_table.get(i).unwrap();
+            if entry.deviation <= abs_deviation {
+                best_rate = entry.rate;
+                found = true;
+            } else {
+                break; // Table should be sorted, so we can stop here
+            }
+        }
+        
+        // If deviation is below all table points, return 0
+        // If deviation matches or exceeds a point, return that rate
+        if found {
+            return best_rate;
+        } else {
+            return 0;
+        }
+    }
+
+    // Fall back to exponential formula (backward compatibility)
+    let base_tax = get_base_tax_fraction(e);
+    let max_tax = get_max_tax_fraction(e);
+    let k = get_tax_incline(e);
 
     // For small deviations, return base tax
     if abs_deviation == 0 {
@@ -229,5 +257,136 @@ mod test {
         // Verify tax amount is within valid bounds (at least base tax, less than half of trade)
         assert!(tax_amount_with_dev >= base_tax_amount);
         assert!(tax_amount_with_dev < trade_amount / 2); // Less than 50% of trade amount
+    }
+
+    #[test]
+    fn test_calculate_tax_rate_with_empty_table() {
+        // Test that empty table falls back to exponential formula
+        let (e, contract_id) = test_env_with_contract();
+
+        let tax_rate = e.as_contract(&contract_id, || {
+            // Verify table is empty
+            let table = crate::storage::get_tax_rate_table(&e);
+            assert_eq!(table.len(), 0);
+            
+            // Calculate with 5% deviation
+            calculate_tax_rate(&e, 1_0500000, 1_0000000)
+        });
+
+        // Should use exponential formula
+        assert!(tax_rate > 100); // Should be more than base tax
+    }
+
+    #[test]
+    fn test_calculate_tax_rate_with_configured_table() {
+        use crate::storage::{set_tax_rate_table, RateTableEntry};
+        use soroban_sdk::Vec;
+        
+        let (e, contract_id) = test_env_with_contract();
+
+        let tax_rate_2pct = e.as_contract(&contract_id, || {
+            // Configure a simple table
+            let mut table = Vec::new(&e);
+            // 0% deviation -> 100 (0.10%)
+            table.push_back(RateTableEntry { deviation: 0, rate: 100 });
+            // 2% deviation (0.02 * PRICE_PRECISION) -> 1100 (1.1%)
+            table.push_back(RateTableEntry { deviation: 200000, rate: 1100 });
+            // 5% deviation -> 5500 (5.5%)
+            table.push_back(RateTableEntry { deviation: 500000, rate: 5500 });
+            // 10% deviation -> 27000 (27%)
+            table.push_back(RateTableEntry { deviation: 1000000, rate: 27000 });
+            
+            set_tax_rate_table(&e, &table);
+            
+            // Test exact match at 2%
+            calculate_tax_rate(&e, 1_0200000, 1_0000000)
+        });
+
+        // Should return exact rate for 2% deviation
+        assert_eq!(tax_rate_2pct, 1100);
+    }
+
+    #[test]
+    fn test_calculate_tax_rate_step_function() {
+        use crate::storage::{set_tax_rate_table, RateTableEntry};
+        use soroban_sdk::Vec;
+        
+        let (e, contract_id) = test_env_with_contract();
+
+        let (rate_1_5pct, rate_3pct, rate_between) = e.as_contract(&contract_id, || {
+            // Configure table
+            let mut table = Vec::new(&e);
+            table.push_back(RateTableEntry { deviation: 0, rate: 100 });
+            table.push_back(RateTableEntry { deviation: 200000, rate: 1100 }); // 2%
+            table.push_back(RateTableEntry { deviation: 500000, rate: 5500 }); // 5%
+            
+            set_tax_rate_table(&e, &table);
+            
+            // Test step function: 1.5% deviation (between 0 and 2%)
+            let rate_1_5pct = calculate_tax_rate(&e, 1_0150000, 1_0000000);
+            
+            // Test 3% deviation (between 2% and 5%)
+            let rate_3pct = calculate_tax_rate(&e, 1_0300000, 1_0000000);
+            
+            // Test deviation between table points uses nearest lower
+            let rate_between = calculate_tax_rate(&e, 1_0250000, 1_0000000);
+            
+            (rate_1_5pct, rate_3pct, rate_between)
+        });
+
+        // 1.5% should use rate for 0% (step function)
+        assert_eq!(rate_1_5pct, 100);
+        
+        // 3% should use rate for 2% (nearest lower point)
+        assert_eq!(rate_3pct, 1100);
+        
+        // 2.5% should also use rate for 2%
+        assert_eq!(rate_between, 1100);
+    }
+
+    #[test]
+    fn test_calculate_tax_rate_above_all_table_entries() {
+        use crate::storage::{set_tax_rate_table, RateTableEntry};
+        use soroban_sdk::Vec;
+        
+        let (e, contract_id) = test_env_with_contract();
+
+        let rate_high = e.as_contract(&contract_id, || {
+            // Configure table with max at 10%
+            let mut table = Vec::new(&e);
+            table.push_back(RateTableEntry { deviation: 0, rate: 100 });
+            table.push_back(RateTableEntry { deviation: 1000000, rate: 27000 }); // 10%
+            
+            set_tax_rate_table(&e, &table);
+            
+            // Test 20% deviation (above all entries)
+            calculate_tax_rate(&e, 1_2000000, 1_0000000)
+        });
+
+        // Should return the highest rate in table
+        assert_eq!(rate_high, 27000);
+    }
+
+    #[test]
+    fn test_calculate_tax_rate_below_all_table_entries() {
+        use crate::storage::{set_tax_rate_table, RateTableEntry};
+        use soroban_sdk::Vec;
+        
+        let (e, contract_id) = test_env_with_contract();
+
+        let rate_low = e.as_contract(&contract_id, || {
+            // Configure table starting at 2%
+            let mut table = Vec::new(&e);
+            table.push_back(RateTableEntry { deviation: 200000, rate: 1100 }); // 2%
+            table.push_back(RateTableEntry { deviation: 500000, rate: 5500 }); // 5%
+            
+            set_tax_rate_table(&e, &table);
+            
+            // Test 1% deviation (below all entries)
+            calculate_tax_rate(&e, 1_0100000, 1_0000000)
+        });
+
+        // Should return 0 when below all table points
+        assert_eq!(rate_low, 0);
     }
 }

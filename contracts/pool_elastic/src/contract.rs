@@ -1487,6 +1487,130 @@ impl AdminInterfaceTrait for ElasticPool {
     fn get_bonus_reserve(e: Env) -> u128 {
         crate::storage::get_bonus_reserve_b(&e)
     }
+
+    // Tax Rate Table configuration
+    fn set_tax_rate_table(e: Env, admin: Address, table: Vec<(u128, u32)>) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+
+        // Validate and sort the table
+        let mut entries = Vec::new(&e);
+        
+        // Convert tuples to RateTableEntry and validate
+        for i in 0..table.len() {
+            let (deviation, rate) = table.get(i).unwrap();
+            
+            // Validate rate is within bounds (0-100%)
+            if rate > 100000 {
+                panic_with_error!(&e, PoolValidationError::FeeOutOfBounds);
+            }
+            
+            // Validate deviation is positive (first entry can be 0)
+            if deviation == 0 && entries.len() > 0 {
+                panic_with_error!(&e, PoolValidationError::WrongInputVecSize);
+            }
+            
+            entries.push_back(crate::storage::RateTableEntry { deviation, rate });
+        }
+        
+        for i in 0..entries.len() {
+            for j in 0..(entries.len() - i - 1) {
+                let curr = entries.get(j).unwrap();
+                let next = entries.get(j + 1).unwrap();
+                if curr.deviation > next.deviation {
+                    entries.set(j, next);
+                    entries.set(j + 1, curr);
+                }
+            }
+        }
+        
+        // Check for duplicate deviations
+        for i in 1..entries.len() {
+            let prev = entries.get(i - 1).unwrap();
+            let curr = entries.get(i).unwrap();
+            if prev.deviation == curr.deviation {
+                panic_with_error!(&e, PoolValidationError::WrongInputVecSize);
+            }
+        }
+        
+        crate::storage::set_tax_rate_table(&e, &entries);
+        let events = PoolEvents::new(&e);
+        events.set_tax_rate_table(entries.len() as u32);
+    }
+
+    fn get_tax_rate_table(e: Env) -> Vec<(u128, u32)> {
+        let entries = crate::storage::get_tax_rate_table(&e);
+        let mut result = Vec::new(&e);
+        
+        for i in 0..entries.len() {
+            let entry = entries.get(i).unwrap();
+            result.push_back((entry.deviation, entry.rate));
+        }
+        
+        result
+    }
+
+    // Bonus Rate Table configuration
+    fn set_bonus_rate_table(e: Env, admin: Address, table: Vec<(u128, u32)>) {
+        admin.require_auth();
+        require_operations_admin_or_owner(&e, &admin);
+
+        // Validate and sort the table
+        let mut entries = Vec::new(&e);
+        
+        // Convert tuples to RateTableEntry and validate
+        for i in 0..table.len() {
+            let (deviation, rate) = table.get(i).unwrap();
+            
+            // Validate rate is within bounds (0-100%)
+            if rate > 100000 {
+                panic_with_error!(&e, PoolValidationError::FeeOutOfBounds);
+            }
+            
+            // Validate deviation is positive (first entry can be 0)
+            if deviation == 0 && entries.len() > 0 {
+                panic_with_error!(&e, PoolValidationError::WrongInputVecSize);
+            }
+            
+            entries.push_back(crate::storage::RateTableEntry { deviation, rate });
+        }
+        
+        for i in 0..entries.len() {
+            for j in 0..(entries.len() - i - 1) {
+                let curr = entries.get(j).unwrap();
+                let next = entries.get(j + 1).unwrap();
+                if curr.deviation > next.deviation {
+                    entries.set(j, next);
+                    entries.set(j + 1, curr);
+                }
+            }
+        }
+        
+        // Check for duplicate deviations
+        for i in 1..entries.len() {
+            let prev = entries.get(i - 1).unwrap();
+            let curr = entries.get(i).unwrap();
+            if prev.deviation == curr.deviation {
+                panic_with_error!(&e, PoolValidationError::WrongInputVecSize);
+            }
+        }
+        
+        crate::storage::set_bonus_rate_table(&e, &entries);
+        let events = PoolEvents::new(&e);
+        events.set_bonus_rate_table(entries.len() as u32);
+    }
+
+    fn get_bonus_rate_table(e: Env) -> Vec<(u128, u32)> {
+        let entries = crate::storage::get_bonus_rate_table(&e);
+        let mut result = Vec::new(&e);
+        
+        for i in 0..entries.len() {
+            let entry = entries.get(i).unwrap();
+            result.push_back((entry.deviation, entry.rate));
+        }
+        
+        result
+    }
 }
 
 // The `UpgradeableContract` trait provides the interface for upgrading the contract.

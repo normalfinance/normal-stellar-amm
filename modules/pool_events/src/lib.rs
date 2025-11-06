@@ -77,6 +77,11 @@ pub trait LiquidityPoolEvents {
 
     // Bonus
     fn claim_bonus(&self, user: Address, token: Address, amount: u128);
+
+    // Rate Tables
+    fn set_tax_rate_table(&self, num_entries: u32);
+
+    fn set_bonus_rate_table(&self, num_entries: u32);
 }
 
 // This trait is used to emit events related to liquidity pool operations.
@@ -374,5 +379,35 @@ impl LiquidityPoolEvents for Events {
         let e = self.env();
         e.events()
             .publish((Symbol::new(e, "claim_bonus"), user, token), amount as i128);
+    }
+
+    fn set_tax_rate_table(&self, num_entries: u32) {
+        // topics
+        // [
+        //   "set_tax_rate_table": Symbol, // event identifier
+        // ]
+        //
+        // body
+        // [
+        //   num_entries: u32                    // number of entries in the table
+        // ]
+        let e = self.env();
+        e.events()
+            .publish((Symbol::new(e, "set_tax_rate_table"),), (num_entries,));
+    }
+
+    fn set_bonus_rate_table(&self, num_entries: u32) {
+        // topics
+        // [
+        //   "set_bonus_rate_table": Symbol, // event identifier
+        // ]
+        //
+        // body
+        // [
+        //   num_entries: u32                      // number of entries in the table
+        // ]
+        let e = self.env();
+        e.events()
+            .publish((Symbol::new(e, "set_bonus_rate_table"),), (num_entries,));
     }
 }

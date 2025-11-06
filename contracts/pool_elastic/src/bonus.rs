@@ -4,17 +4,18 @@ use utils::constant::PRICE_PRECISION;
 use utils::math::safe_math::{PrecisionMath, SafeConversion, SafeMath};
 
 use crate::storage::{
-    get_bonus_escrow, get_bonus_reserve_b, get_bonus_vesting_period, get_max_bonus_fraction,
+    get_bonus_escrow, get_bonus_rate_table, get_bonus_reserve_b, get_bonus_vesting_period, get_max_bonus_fraction,
     put_bonus_escrow, set_bonus_reserve_b, BonusEscrow,
 };
 
 
+/// Bonus curve based on configurable table or exponential deviation from peg.
+/// If a rate table is configured, uses step function lookup.
+/// Otherwise falls back to exponential formula with k = 25 to incentivize larger corrections.
 pub fn calculate_bonus_rate(e: &Env, pool_price: u128, peg_price: u128) -> u32 {
     if pool_price == 0 || peg_price == 0 {
         return 0;
     }
-
-    let max_bonus = get_max_bonus_fraction(e);
     
     // Calculate absolute deviation: |pool_price - peg_price| / peg_price
     let price_diff = if pool_price > peg_price {
@@ -30,6 +31,37 @@ pub fn calculate_bonus_rate(e: &Env, pool_price: u128, peg_price: u128) -> u32 {
     if abs_deviation == 0 {
         return 0;
     }
+
+    // Check if we have a configured rate table
+    let rate_table = get_bonus_rate_table(e);
+    
+    if rate_table.len() > 0 {
+        // Use table lookup with step function
+        // Find the entry with the highest deviation <= actual deviation
+        let mut best_rate = 0_u32;
+        let mut found = false;
+        
+        for i in 0..rate_table.len() {
+            let entry = rate_table.get(i).unwrap();
+            if entry.deviation <= abs_deviation {
+                best_rate = entry.rate;
+                found = true;
+            } else {
+                break; // Table should be sorted, so we can stop here
+            }
+        }
+        
+        // If deviation is below all table points, return 0
+        // If deviation matches or exceeds a point, return that rate
+        if found {
+            return best_rate;
+        } else {
+            return 0;
+        }
+    }
+
+    // Fall back to exponential formula (backward compatibility)
+    let max_bonus = get_max_bonus_fraction(e);
 
     // Bonus curve: max_bonus * (1 - e^(-k * abs_dev))
     // Using a steeper curve for bonus (k = 25) to incentivize larger corrections
@@ -323,5 +355,159 @@ mod test {
         if first_amount > 0 {
             assert!(second_total >= first_amount);
         }
+    }
+
+    #[test]
+    fn test_calculate_bonus_rate_with_empty_table() {
+        // Test that empty table falls back to exponential formula
+        let (e, contract_id) = test_env_with_contract();
+
+        let bonus_rate = e.as_contract(&contract_id, || {
+            // Verify table is empty
+            let table = crate::storage::get_bonus_rate_table(&e);
+            assert_eq!(table.len(), 0);
+            
+            // Calculate with 5% deviation
+            calculate_bonus_rate(&e, 1_0500000, 1_0000000)
+        });
+
+        // Should use exponential formula (with default max_bonus_fraction)
+        assert!(bonus_rate > 0);
+    }
+
+    #[test]
+    fn test_calculate_bonus_rate_with_configured_table() {
+        use crate::storage::{set_bonus_rate_table, RateTableEntry};
+        use soroban_sdk::Vec;
+        
+        let (e, contract_id) = test_env_with_contract();
+
+        let bonus_rate_5pct = e.as_contract(&contract_id, || {
+            // Configure a simple table
+            let mut table = Vec::new(&e);
+            // 2% deviation -> 2000 (2%)
+            table.push_back(RateTableEntry { deviation: 200000, rate: 2000 });
+            // 5% deviation -> 5000 (5%)
+            table.push_back(RateTableEntry { deviation: 500000, rate: 5000 });
+            // 10% deviation -> 10000 (10%)
+            table.push_back(RateTableEntry { deviation: 1000000, rate: 10000 });
+            
+            set_bonus_rate_table(&e, &table);
+            
+            // Test exact match at 5%
+            calculate_bonus_rate(&e, 1_0500000, 1_0000000)
+        });
+
+        // Should return exact rate for 5% deviation
+        assert_eq!(bonus_rate_5pct, 5000);
+    }
+
+    #[test]
+    fn test_calculate_bonus_rate_step_function() {
+        use crate::storage::{set_bonus_rate_table, RateTableEntry};
+        use soroban_sdk::Vec;
+        
+        let (e, contract_id) = test_env_with_contract();
+
+        let (rate_3pct, rate_7pct) = e.as_contract(&contract_id, || {
+            // Configure table
+            let mut table = Vec::new(&e);
+            table.push_back(RateTableEntry { deviation: 200000, rate: 2000 }); // 2%
+            table.push_back(RateTableEntry { deviation: 500000, rate: 5000 }); // 5%
+            table.push_back(RateTableEntry { deviation: 1000000, rate: 10000 }); // 10%
+            
+            set_bonus_rate_table(&e, &table);
+            
+            // Test 3% deviation (between 2% and 5%)
+            let rate_3pct = calculate_bonus_rate(&e, 1_0300000, 1_0000000);
+            
+            // Test 7% deviation (between 5% and 10%)
+            let rate_7pct = calculate_bonus_rate(&e, 1_0700000, 1_0000000);
+            
+            (rate_3pct, rate_7pct)
+        });
+
+        // 3% should use rate for 2% (nearest lower point)
+        assert_eq!(rate_3pct, 2000);
+        
+        // 7% should use rate for 5% (nearest lower point)
+        assert_eq!(rate_7pct, 5000);
+    }
+
+    #[test]
+    fn test_calculate_bonus_rate_above_all_table_entries() {
+        use crate::storage::{set_bonus_rate_table, RateTableEntry};
+        use soroban_sdk::Vec;
+        
+        let (e, contract_id) = test_env_with_contract();
+
+        let rate_high = e.as_contract(&contract_id, || {
+            // Configure table with max at 10%
+            let mut table = Vec::new(&e);
+            table.push_back(RateTableEntry { deviation: 500000, rate: 5000 }); // 5%
+            table.push_back(RateTableEntry { deviation: 1000000, rate: 10000 }); // 10%
+            
+            set_bonus_rate_table(&e, &table);
+            
+            // Test 20% deviation (above all entries)
+            calculate_bonus_rate(&e, 1_2000000, 1_0000000)
+        });
+
+        // Should return the highest rate in table
+        assert_eq!(rate_high, 10000);
+    }
+
+    #[test]
+    fn test_calculate_bonus_rate_below_all_table_entries() {
+        use crate::storage::{set_bonus_rate_table, RateTableEntry};
+        use soroban_sdk::Vec;
+        
+        let (e, contract_id) = test_env_with_contract();
+
+        let rate_low = e.as_contract(&contract_id, || {
+            // Configure table starting at 5%
+            let mut table = Vec::new(&e);
+            table.push_back(RateTableEntry { deviation: 500000, rate: 5000 }); // 5%
+            table.push_back(RateTableEntry { deviation: 1000000, rate: 10000 }); // 10%
+            
+            set_bonus_rate_table(&e, &table);
+            
+            // Test 2% deviation (below all entries)
+            calculate_bonus_rate(&e, 1_0200000, 1_0000000)
+        });
+
+        // Should return 0 when below all table points
+        assert_eq!(rate_low, 0);
+    }
+
+    #[test]
+    fn test_calculate_bonus_rate_at_zero_deviation() {
+        use crate::storage::{set_bonus_rate_table, RateTableEntry};
+        use soroban_sdk::Vec;
+        
+        let (e, contract_id) = test_env_with_contract();
+
+        let (rate_with_table, rate_without_table) = e.as_contract(&contract_id, || {
+            // Test without table (should use formula)
+            let rate_without_table = calculate_bonus_rate(&e, 1_0000000, 1_0000000);
+            
+            // Configure table with entry at 0
+            let mut table = Vec::new(&e);
+            table.push_back(RateTableEntry { deviation: 0, rate: 100 });
+            table.push_back(RateTableEntry { deviation: 500000, rate: 5000 }); // 5%
+            
+            set_bonus_rate_table(&e, &table);
+            
+            // Test at peg with table
+            let rate_with_table = calculate_bonus_rate(&e, 1_0000000, 1_0000000);
+            
+            (rate_with_table, rate_without_table)
+        });
+
+        // Without table, should return 0 (no deviation)
+        assert_eq!(rate_without_table, 0);
+        
+        // With table, should return 0 even with entry (0 deviation means no bonus)
+        assert_eq!(rate_with_table, 0);
     }
 }

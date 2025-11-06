@@ -191,6 +191,11 @@ pub trait AdminInterfaceTrait {
 
     fn claim_protocol_tax(e: Env, admin: Address, destination: Address) -> u128;
 
+    // Tax Rate Table - configurable deviation -> tax rate mappings
+    fn set_tax_rate_table(e: Env, admin: Address, table: soroban_sdk::Vec<(u128, u32)>);
+
+    fn get_tax_rate_table(e: Env) -> soroban_sdk::Vec<(u128, u32)>;
+
     // Bonus configuration
     fn set_bonus_vesting_period(e: Env, admin: Address, vesting_period: u64);
 
@@ -199,6 +204,11 @@ pub trait AdminInterfaceTrait {
     fn get_bonus_config(e: Env) -> (u32, u64, u128);
 
     fn get_bonus_reserve(e: Env) -> u128;
+
+    // Bonus Rate Table - configurable deviation -> bonus rate mappings
+    fn set_bonus_rate_table(e: Env, admin: Address, table: soroban_sdk::Vec<(u128, u32)>);
+
+    fn get_bonus_rate_table(e: Env) -> soroban_sdk::Vec<(u128, u32)>;
 }
 
 pub trait UpgradeableContract {

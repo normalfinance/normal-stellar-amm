@@ -1,5 +1,5 @@
 use paste::paste;
-use soroban_sdk::{contracttype, panic_with_error, Address, BytesN, Env, Symbol};
+use soroban_sdk::{contracttype, panic_with_error, Address, BytesN, Env, Symbol, Vec};
 pub use utils::bump::bump_instance;
 use utils::bump::bump_persistent;
 use utils::errors::storage_errors::StorageError;
@@ -10,6 +10,14 @@ use utils::{
     generate_instance_storage_getter_and_setter_with_default,
     generate_instance_storage_getter_with_default, generate_instance_storage_setter,
 };
+
+// Rate Table Entry for configurable tax/bonus tables
+#[derive(Clone)]
+#[contracttype]
+pub struct RateTableEntry {
+    pub deviation: u128, // Price deviation scaled by PRICE_PRECISION
+    pub rate: u32,       // Tax/bonus rate fraction
+}
 
 #[derive(Clone)]
 #[contracttype]
@@ -43,12 +51,14 @@ pub enum DataKey {
     TaxIncline, // steepness
     MaxTaxFraction,
     ProtocolTaxB,
+    TaxRateTable, // Configurable table of deviation -> tax rate mappings
 
     // Bonus
     MaxBonusFraction,
     BonusVestingPeriod,
     BonusEscrow(Address),
     BonusReserveB,
+    BonusRateTable, // Configurable table of deviation -> bonus rate mappings
 
     // Paused Ops
     IsKilledSwap,
@@ -186,6 +196,33 @@ generate_instance_storage_getter_and_setter_with_default!(
     u128,
     0
 );
+
+// Rate Tables
+pub fn get_tax_rate_table(e: &Env) -> Vec<RateTableEntry> {
+    bump_instance(e);
+    e.storage()
+        .instance()
+        .get(&DataKey::TaxRateTable)
+        .unwrap_or(Vec::new(e))
+}
+
+pub fn set_tax_rate_table(e: &Env, table: &Vec<RateTableEntry>) {
+    bump_instance(e);
+    e.storage().instance().set(&DataKey::TaxRateTable, table);
+}
+
+pub fn get_bonus_rate_table(e: &Env) -> Vec<RateTableEntry> {
+    bump_instance(e);
+    e.storage()
+        .instance()
+        .get(&DataKey::BonusRateTable)
+        .unwrap_or(Vec::new(e))
+}
+
+pub fn set_bonus_rate_table(e: &Env, table: &Vec<RateTableEntry>) {
+    bump_instance(e);
+    e.storage().instance().set(&DataKey::BonusRateTable, table);
+}
 
 // Addresses
 generate_instance_storage_getter_and_setter!(router, DataKey::Router, Address);
