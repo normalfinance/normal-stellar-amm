@@ -12,49 +12,26 @@ use utils::state::oracle_registry::{
 use utils::state::oracle_registry::{MutableOracleInfo, NormalAction, OracleInfo};
 use utils::test_utils::jump;
 
-// #[test]
-// #[should_panic(expected = "Error(Contract, #103)")]
-// fn test_initialize_twice() {
-//     let setup = Setup::default();
-//     setup
-//         .registry
-//         .initialize(&setup.admin, &setup.emergency_admin);
-// }
+#[test]
+#[should_panic(expected = "Error(Contract, #103)")]
+fn test_initialize_twice() {
+    let setup = Setup::default();
+    setup
+        .registry
+        .initialize(&setup.admin, &setup.emergency_admin);
+}
 
-// // get price
+// get price
 
 #[test]
 fn test_get_price() {
     let setup = Setup::default();
-    let new_oracle_price = 50250_0000000_i128; //(setup.init_btc_price * 102) / 100;
-    let now = setup.env.ledger().timestamp();
-
-    let (prices, validity) = setup.registry.get_price(&setup.btc_asset_id);
-    assert_eq!(validity, OracleValidity::Valid);
-    assert_eq!(prices.last_oracle_price, 0);
-
-    // Fetch oracle
-    // let oracle_info = setup.registry.get_oracle(&setup.btc_asset_id);
-
-    // jump(&setup.env, TWENTY_FOUR_HOUR as u64);
-    // Set mock price
-    // setup
-    //     .oracle_client
-    //     .set_price(&Vec::from_array(&setup.env, [new_oracle_price]), &now);
 
     // Fetch price from registry
-    // let oracle_price_data = setup.registry.get_price(&setup.btc_asset_id);
+    let (oracle_price_data, oracle_validity) = setup.registry.get_price(&setup.btc_symbol);
 
-    // assert_eq!(oracle_price_data.price, new_oracle_price as u128);
-    // assert_eq!(oracle_price_data.delay.as_seconds(), 0);
-
-    // Ensure historical data is updated
-    // let last_price_info = setup.registry.get_last_price(&setup.btc_asset_id);
-    // assert_eq!(last_price_info, HistoricalOracleData {
-    //     last_oracle_price: new_oracle_price as u128,
-    //     last_oracle_price_twap: new_oracle_price as u128,
-    //     last_oracle_price_twap_ts: now,
-    // })
+    assert_eq!(oracle_validity, OracleValidity::Valid);
+    assert_eq!(oracle_price_data.last_oracle_price, setup.initial_btc_price);
 }
 
 // #[test]
@@ -62,16 +39,6 @@ fn test_get_price() {
 // fn test_get_price_with_invalid_asset_id() {
 //     let setup = Setup::default();
 //     setup.registry.get_price(&setup.unregistered_asset_id, &false);
-// }
-
-// #[test]
-// fn test_get_price_cached() {
-//     let setup = Setup::default();
-//     let oracle_price_data = setup.registry.get_price(&setup.asset_id, &true);
-
-//     // TODO: price should come from historical oracle data
-//     assert_eq!(oracle_price_data.price, 100);
-//     assert_eq!(oracle_price_data.delay.as_seconds(), 0);
 // }
 
 // #[test]
@@ -141,28 +108,28 @@ fn test_get_price() {
 
 // // register oracle
 
-#[test]
-fn test_register_oracle() {
-    let setup = Setup::default();
-    // jump(&setup.env, 100);
-    // setup
-    //     .registry
-    //     .register_oracle(&setup.admin, &setup.eth_asset_id, &setup.oracle, &14, &1);
-    // assert_eq!(
-    //     setup.registry.get_oracle(&setup.eth_asset_id),
-    //     OracleInfo {
-    //         address: setup.oracle,
-    //         decimals: 14,
-    //         frozen: false,
-    //         sanitize_clamp_denominator: 1,
-    //         last_updated: setup.env.ledger().timestamp(),
-    //     }
-    // );
+// #[test]
+// fn test_register_oracle() {
+//     let setup = Setup::default();
+// jump(&setup.env, 100);
+// setup
+//     .registry
+//     .register_oracle(&setup.admin, &setup.eth_asset_id, &setup.oracle, &14, &1);
+// assert_eq!(
+//     setup.registry.get_oracle(&setup.eth_asset_id),
+//     OracleInfo {
+//         address: setup.oracle,
+//         decimals: 14,
+//         frozen: false,
+//         sanitize_clamp_denominator: 1,
+//         last_updated: setup.env.ledger().timestamp(),
+//     }
+// );
 
-    setup.registry.get_price(&setup.btc_asset_id);
-    setup.registry.get_oracle(&setup.btc_asset_id);
-    setup.registry.get_last_price(&setup.btc_asset_id);
-}
+// setup.registry.get_price(&setup.btc_asset_id);
+// setup.registry.get_oracle(&setup.btc_asset_id);
+// setup.registry.get_last_price(&setup.btc_asset_id);
+// }
 
 // #[test]
 // #[should_panic(expected = "Error(Contract, #25)")]
